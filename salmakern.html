@@ -1,0 +1,2590 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Salmaker'n</title>
+<!-- oppdatert -->
+<meta name="theme-color" content="#09090b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Salmaker'n">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:100vh}
+
+/* LOGIN */
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:20px;padding:16px}
+.pin-dots{font-size:36px;letter-spacing:12px;min-height:52px;text-align:center;font-weight:800}
+.pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:260px;width:100%}
+.pin-btn{background:#18181b;border:1px solid #27272a;color:#f4f4f5;border-radius:16px;padding:18px;font-size:22px;cursor:pointer;transition:background 0.1s;font-family:Arial,sans-serif}
+.pin-btn:active,.pin-btn:hover{background:#27272a}
+
+/* LAYOUT */
+#appScreen{display:none}
+.top{position:sticky;top:0;background:#09090b;border-bottom:1px solid #27272a;z-index:50;padding:12px 16px}
+.top-inner{max-width:1200px;margin:auto}
+.wrap{max-width:1200px;margin:auto;padding:16px}
+.brand{display:inline-block;background:#18181b;border:1px solid #27272a;border-radius:16px;padding:8px 14px;font-weight:800;font-size:16px}
+.brand span{color:#f87171}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* BUTTONS */
+button{cursor:pointer;font-family:Arial,sans-serif}
+.tab,.btn{border:1px solid #27272a;background:#18181b;color:#f4f4f5;border-radius:14px;padding:9px 14px;font-size:13px}
+.tab.active{border-color:#ef4444;color:#fca5a5;background:#ef444420}
+.tab:hover,.btn:hover{border-color:#52525b}
+.btn.red{background:#dc2626;border-color:#dc2626;color:#fff}
+.btn.red:hover{background:#b91c1c}
+.btn.red:disabled{background:#7f1d1d;border-color:#7f1d1d;opacity:0.6;cursor:not-allowed}
+.btn.green{background:#16a34a;border-color:#16a34a;color:#fff}
+.btn.sm{padding:6px 10px;font-size:12px}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+
+/* GRID */
+.grid{display:grid;gap:12px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g5{grid-template-columns:repeat(5,1fr)}
+.g2l{grid-template-columns:2fr 1fr}
+
+/* CARDS */
+.card{background:#18181b;border:1px solid #27272a;border-radius:22px;padding:16px;margin-bottom:12px}
+.box{background:#0f0f12;border:1px solid #27272a;border-radius:16px;padding:12px}
+
+/* TYPE */
+.title{font-size:22px;font-weight:800}
+.h{font-size:17px;font-weight:800;margin-bottom:2px}
+.muted{color:#a1a1aa}
+.small{font-size:12px}
+.ok-text{color:#86efac}
+.err-text{color:#fca5a5}
+
+/* ORDER CARDS */
+.order-card{width:100%;text-align:left;background:#111114;color:#f4f4f5;border:2px solid #ef4444;border-radius:16px;padding:12px;cursor:pointer;transition:opacity 0.15s;display:block}
+.order-card.green{border-color:#22c55e}
+.order-card:hover{opacity:0.8}
+
+/* PILLS */
+.pill{display:inline-block;border-radius:999px;border:1px solid #27272a;padding:4px 10px;font-size:12px;margin:2px}
+.pill.ok{background:#16a34a20;color:#86efac;border-color:#16a34a60}
+.pill.bad{background:#ef444420;color:#fca5a5;border-color:#ef444460}
+.pill.warn{background:#ca8a0420;color:#fde68a;border-color:#ca8a0460}
+
+/* PAGES */
+.page{display:none}.page.active{display:block}
+
+/* FORMS */
+input,select,textarea{width:100%;padding:9px 12px;border-radius:12px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;font-family:Arial,sans-serif;font-size:13px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#ef4444}
+label{font-size:11px;color:#a1a1aa;display:block;margin-bottom:3px;margin-top:8px}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:#a1a1aa;font-size:11px;padding:6px 6px;border-bottom:1px solid #27272a;font-weight:normal}
+td{padding:3px 4px}
+td input{padding:6px 8px;border-radius:8px;font-size:12px}
+tr:first-child td{padding-top:8px}
+
+/* PHOTOS */
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.photo-box{background:#0f0f12;border:1px solid #27272a;border-radius:12px;padding:8px;text-align:center;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;font-size:12px;color:#a1a1aa}
+.photo-box img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px}
+.photo-box .hover-del{position:absolute;bottom:0;left:0;right:0;background:#000c;display:flex;align-items:center;justify-content:center;gap:2px;padding:4px;border-radius:0 0 8px 8px}
+.hover-del button{background:none;border:none;cursor:pointer;font-size:18px;padding:3px 6px;border-radius:6px;line-height:1}
+.hover-del button:hover{background:#ffffff22}
+.hover-del button:active{background:#ffffff44}
+/* LIGHTBOX */
+#lightbox{position:fixed;inset:0;background:#000d;z-index:999;display:none;align-items:center;justify-content:center;padding:16px}
+#lightbox.show{display:flex}
+#lightbox img{max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 40px #000}
+#lightbox-close{position:fixed;top:16px;right:20px;font-size:32px;color:#fff;cursor:pointer;background:none;border:none;line-height:1;z-index:1000}
+
+/* CLOCK */
+.clock{height:240px;width:240px;border-radius:50%;border:14px solid #27272a;background:#111;margin:auto;display:flex;align-items:center;justify-content:center;text-align:center;transition:border-color 0.4s}
+.clock.running{border-color:#16a34a;box-shadow:0 0 24px #16a34a40}
+.clock.stopped{border-color:#ef4444}
+
+/* CANVAS */
+canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:#0f0f12}
+
+/* MODAL */
+.modal{position:fixed;inset:0;background:#0009;display:none;align-items:flex-start;justify-content:center;padding:16px;z-index:999;overflow-y:auto}
+.modal.show{display:flex}
+.modal-box{max-width:680px;width:100%;background:#18181b;border:1px solid #27272a;border-radius:22px;padding:20px;margin-top:40px}
+
+/* CALENDAR */
+.cal-wrap{border:1px solid #27272a;border-radius:16px;overflow:hidden;margin-top:12px;background:#18181b}
+.cal-head{display:flex;background:#18181b;border-bottom:1px solid #27272a}
+.cal-gutter{width:52px;flex-shrink:0;border-right:1px solid #27272a}
+.cal-col-head{flex:1;text-align:center;padding:8px 4px;border-left:1px solid #27272a;min-width:0}
+.cal-col-head.cal-today{background:#ef444410}
+.cal-day-name{font-size:10px;color:#a1a1aa;text-transform:uppercase;letter-spacing:.5px}
+.cal-day-num{font-size:20px;font-weight:700;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:2px auto 0;color:#f4f4f5}
+.cal-day-num.cal-today-num{background:#ef4444;color:#fff}
+.cal-body-scroll{overflow-y:auto;max-height:520px;background:#09090b}
+.cal-body{display:flex}
+.cal-times{width:52px;flex-shrink:0;border-right:1px solid #27272a;background:#09090b}
+.cal-hour-lbl{height:60px;font-size:10px;color:#52525b;padding:2px 6px 0;text-align:right;border-top:1px solid #27272a}
+.cal-cols{flex:1;display:flex}
+.cal-day-col{flex:1;border-left:1px solid #27272a;position:relative;min-width:0;background:#09090b}
+.cal-day-col.cal-today-col{background:#ef444408}
+.cal-slot{height:60px;border-top:1px solid #27272a;cursor:pointer}
+.cal-slot:hover{background:#18181b}
+.cal-now{position:absolute;left:0;right:0;height:2px;background:#ef4444;pointer-events:none;z-index:3}
+.cal-now::before{content:'';position:absolute;left:-5px;top:-4px;width:10px;height:10px;background:#ef4444;border-radius:50%}
+.cal-event{position:absolute;left:3px;right:3px;background:#16a34a;border:1px solid #22c55e;border-radius:6px;padding:4px 6px;cursor:pointer;overflow:visible;z-index:1}
+.cal-event:hover{opacity:0.9}
+.cal-event-regnr{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.cal-event-info{font-size:11px;color:#bbf7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#09090b}
+::-webkit-scrollbar-thumb{background:#27272a;border-radius:4px}
+
+@media(max-width:860px){.g2l,.g3,.g5{grid-template-columns:1fr}.g2{grid-template-columns:1fr 1fr}.clock{height:200px;width:200px}}
+@media(max-width:480px){.g2{grid-template-columns:1fr}.photo-grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" style="display:flex;position:fixed;inset:0;background:#09090b;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div class="brand" style="font-size:22px"><span>S</span>almaker'n</div>
+  <div class="muted small">Kobler til database...</div>
+  <div style="width:40px;height:40px;border:3px solid #27272a;border-top-color:#ef4444;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<!-- ═══════════════ LOGIN ═══════════════ -->
+<div id="loginScreen">
+  <div class="brand" style="font-size:20px"><span>S</span>almaker'n</div>
+  <div class="muted small">Tast inn din PIN-kode</div>
+  <div class="pin-dots" id="pinDots">· · · ·</div>
+  <div class="pin-grid">
+    <button class="pin-btn" onclick="pinPress(1)">1</button>
+    <button class="pin-btn" onclick="pinPress(2)">2</button>
+    <button class="pin-btn" onclick="pinPress(3)">3</button>
+    <button class="pin-btn" onclick="pinPress(4)">4</button>
+    <button class="pin-btn" onclick="pinPress(5)">5</button>
+    <button class="pin-btn" onclick="pinPress(6)">6</button>
+    <button class="pin-btn" onclick="pinPress(7)">7</button>
+    <button class="pin-btn" onclick="pinPress(8)">8</button>
+    <button class="pin-btn" onclick="pinPress(9)">9</button>
+    <button class="pin-btn" onclick="pinClear()" style="font-size:13px">Slett alt</button>
+    <button class="pin-btn" onclick="pinPress(0)">0</button>
+    <button class="pin-btn" onclick="pinBack()" style="font-size:18px">⌫</button>
+  </div>
+  <div id="pinErr" class="err-text small" style="min-height:18px;text-align:center"></div>
+  <div class="muted small" style="text-align:center">Demo-PINer: Per=1234 · Kari=5678 · Admin=0000</div>
+</div>
+
+<!-- ═══════════════ APP ═══════════════ -->
+<div id="appScreen">
+  <div class="top">
+    <div class="top-inner">
+      <div class="row">
+        <div class="brand"><span>S</span>almaker'n</div>
+        <div class="muted small" id="headerUser"></div>
+        <div class="row" style="gap:8px">
+          <span class="ok-text small">✔ Lagret</span>
+          <button class="btn sm" onclick="doLogout()">Logg ut</button>
+        </div>
+      </div>
+      <div class="tabs" style="margin-top:10px">
+        <button class="tab active" onclick="showPage('oversikt',this)">Oversikt</button>
+        <button class="tab" onclick="showPage('ordre',this)">Ordre</button>
+        <button class="tab" onclick="showPage('timer',this)">Timer</button>
+        <button class="tab" onclick="showPage('arkiv',this)">Ordrearkiv</button>
+        <button class="tab" onclick="showPage('mer',this)">Mer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- ── OVERSIKT ── -->
+    <section id="oversikt" class="page active">
+      <div class="card" style="margin-bottom:12px">
+        <div class="row">
+          <div class="h">Ukeoversikt 07:30–15:30</div>
+          <div class="muted small">Klikk på tidspunkt for å sette en ordre</div>
+        </div>
+        <div id="weekCal"></div>
+      </div>
+      <div class="grid g3" style="margin-bottom:12px">
+        <div class="card" style="margin-bottom:0"><div class="muted small">Biler denne måneden</div><div class="title" id="s1">0</div></div>
+        <div class="card" style="margin-bottom:0"><div class="muted small">Ferdigstilt</div><div class="title" id="s2">0</div></div>
+        <div class="card" style="margin-bottom:0"><div class="muted small">Aktive ordrer</div><div class="title" id="s3">0</div></div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div><div class="h">Aktive ordrer</div><div class="muted small">Ordrer satt i kalender</div></div>
+          <input style="max-width:230px" placeholder="Søk reg.nr / kunde" oninput="renderOversikt(this.value)" id="sokInput">
+        </div>
+        <div class="grid g3" style="margin-top:12px" id="activeList"></div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div><div class="h">Ikke påbegynt</div><div class="muted small">Venter på kalender</div></div>
+          <button class="btn red" onclick="openModal('nyOrdre')">+ Ny ordre</button>
+        </div>
+        <div class="grid g3" style="margin-top:12px" id="pendingList"></div>
+      </div>
+    </section>
+
+    <!-- ── ORDRE DETAIL ── -->
+    <section id="ordre" class="page">
+      <div id="ordreList" style="display:none"></div>
+      <div id="ordreDetail"></div>
+    </section>
+
+    <!-- ── TIMER ── -->
+    <section id="timer" class="page">
+      <div class="card">
+        <div class="row">
+          <div><div class="title">Timer til lønn</div><div class="muted small" id="timerDatoLbl"></div></div>
+          <button class="btn red" onclick="lagreTimer()">Lagre</button>
+        </div>
+        <div style="margin:14px 0;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="ttype_normal" onclick="setTimerType('normal')">Normal</button>
+          <button class="btn" id="ttype_manuell" onclick="setTimerType('manuell')">Manuell</button>
+          <button class="btn" id="ttype_syk" onclick="setTimerType('syk')">Syk</button>
+          <button class="btn" id="ttype_egenmelding" onclick="setTimerType('egenmelding')">Egenmelding</button>
+          <button class="btn" id="ttype_ferie" onclick="setTimerType('ferie')">Ferie</button>
+          <button class="btn" id="ttype_permisjon" onclick="setTimerType('permisjon')">Permisjon</button>
+        </div>
+        <div class="clock" id="clockEl">
+          <div>
+            <div class="muted small">Registrert tid</div>
+            <div class="title" id="clockTime">00 t 00 min</div>
+            <div class="muted small" id="clockRange">--:-- – --:--</div>
+            <div class="muted small" id="clockPause" style="margin-top:4px"></div>
+          </div>
+        </div>
+        <div style="margin-top:18px;display:flex;gap:10px;justify-content:center">
+          <button class="btn green" id="startBtn" onclick="startTimer()">▶ Start</button>
+          <button class="btn" id="stoppBtn" onclick="stoppTimer()" disabled>⏹ Stopp</button>
+        </div>
+        <div id="manuellFelt" style="display:none;margin-top:14px">
+          <div class="grid g2">
+            <div><label>Fra kl.</label><input type="time" id="mFra" value="07:30"></div>
+            <div><label>Til kl.</label><input type="time" id="mTil" value="15:30"></div>
+          </div>
+        </div>
+        <div id="ferieFelt" style="display:none;margin-top:14px">
+          <div class="box" style="margin-bottom:8px">
+            <div class="small muted" style="margin-bottom:6px">Velg periode — én registrering per hverdag opprettes automatisk.</div>
+            <div class="grid g2">
+              <div><label>Fra dato</label><input type="date" id="fFra"></div>
+              <div><label>Til dato</label><input type="date" id="fTil"></div>
+            </div>
+          </div>
+        </div>
+        <div id="timerHistorikk" style="margin-top:16px"></div>
+      </div>
+      <div class="card" id="timerMaanedCard">
+        <div class="row" style="margin-bottom:12px">
+          <div class="h">Mine timer</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn sm" onclick="timerMaanedNaviger(-1)">◀</button>
+            <span id="timerMaanedLbl" style="min-width:120px;text-align:center"></span>
+            <button class="btn sm" onclick="timerMaanedNaviger(1)">▶</button>
+          </div>
+        </div>
+        <div id="timerMaanedSammendrag" style="margin-bottom:12px"></div>
+        <div id="timerMaanedListe"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:14px">
+          <button class="btn sm" onclick="eksportCSV()">Last ned CSV (Fiken)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ARKIV ── -->
+    <section id="arkiv" class="page">
+      <div class="card" style="margin-bottom:14px">
+        <div class="row">
+          <div class="h">Søk i arkiv</div>
+          <input id="arkivSok" style="max-width:320px" placeholder="Reg.nr, chassisnummer eller kunde..." oninput="renderArkiv()">
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card"><div class="h">Aktive</div><div id="arkivAktiv" style="margin-top:10px"></div></div>
+        <div class="card"><div class="h">Arkiv</div><div id="arkivFerdig" style="margin-top:10px"></div></div>
+      </div>
+    </section>
+
+    <!-- ── MER ── -->
+    <section id="mer" class="page">
+      <div class="grid g3">
+        <div class="card" id="merAnsatteKort" style="display:none">
+          <div class="h">Ansatte</div>
+          <div class="muted small" style="margin-bottom:10px">Admin oppretter og deaktiverer.</div>
+          <div id="ansatteListe"></div>
+          <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
+        </div>
+        <div class="card" id="merPINKort" style="display:none">
+          <div class="h">Dagens PIN</div>
+          <div class="title" id="dagensPINVal" style="margin:8px 0">----</div>
+          <div class="muted small" style="margin-bottom:8px">Brukes som overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
+          <button class="btn sm" onclick="genPIN()">Generer ny PIN</button>
+          <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px">
+            <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
+            <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+              <label style="margin:0;white-space:nowrap">Radius (m):</label>
+              <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
+                onchange="endreGPSRadius(this.value)">
+            </div>
+            <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
+          </div>
+        </div>
+        <div class="card" id="merKontakter">
+          <div class="row">
+            <div class="h">Kontakter</div>
+            <div id="merKontaktAdminBtn"></div>
+          </div>
+          <div id="kontaktListe" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="card" id="merGodkjKort" style="display:none"><div class="h">Til godkjenning</div><div id="tilGodkj" style="margin-top:8px"></div></div>
+      <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
+      <div class="card" id="merTimerOversikt" style="display:none">
+        <div class="row">
+          <div class="h">Timer og overtid – alle ansatte</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn sm" onclick="adminStatNaviger(-1)">◀</button>
+            <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700"></span>
+            <button class="btn sm" onclick="adminStatNaviger(1)">▶</button>
+          </div>
+        </div>
+        <div id="adminStatInnhold" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card" id="merBeskjeder">
+        <div class="row">
+          <div class="h">Beskjeder</div>
+          <div id="merBeskjedAdminBtn"></div>
+        </div>
+        <div id="beskjedListe" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <div class="h">Fraværskalender</div>
+        <div id="fravarKalender" style="margin-top:10px"></div>
+      </div>
+
+
+      <div class="card" id="merOrdreRapport" style="display:none">
+        <div class="h">Ordrerapport</div>
+        <div id="ordreRapportInnhold" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" id="merDrivstoffSatser" style="display:none">
+        <div class="row">
+          <div class="h">Drivstoff-satser</div>
+          <button class="btn sm red" onclick="openModal('nyDrivstoffSats')">+ Ny sats</button>
+        </div>
+        <div class="muted small" style="margin-bottom:8px">Satser som beregner kundepris fra pumpepris.</div>
+        <div id="drivstoffSatsListe" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" id="merUtstyrMaler" style="display:none">
+        <div class="row">
+          <div class="h">Utstyr-maler (ankomst)</div>
+          <button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Ny mal</button>
+        </div>
+        <div class="muted small" style="margin-bottom:8px">Maler for hva som skal sjekkes ved ankomst av bil. Knyttes til biltype.</div>
+        <div id="utstyrMalListe" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="h">HMS-logg</div>
+          <button class="btn sm red" onclick="openModal('nyHMS')">+ Registrer</button>
+        </div>
+        <div id="hmsListe" style="margin-top:10px"></div>
+      </div>
+
+    </section>
+
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" onclick="event.stopPropagation()">
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+
+<div class="modal" id="nyOrdre">
+  <div class="modal-box">
+    <div class="h">Ny ordre</div>
+    <div class="small muted" style="margin-top:10px;margin-bottom:8px">Fyll inn reg.nr <b>eller</b> chassis-nr – minst ett av dem kreves.</div>
+    <div class="grid g2" style="margin-top:4px">
+      <div>
+        <label>Reg.nr</label>
+        <input id="n_regnr" placeholder="AB12345" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+      </div>
+      <div>
+        <label>Chassis-nr (VIN)</label>
+        <input id="n_chassis" placeholder="VF1-123456789">
+      </div>
+      <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
+      <div><label>Kundenavn (firma)</label><input id="n_kunde" placeholder="Telemark Bygg AS"></div>
+      <div><label>Eier (person)</label><input id="n_eier" placeholder="Ola Nordmann"></div>
+      <div><label>Biltype / merke</label><input id="n_type" placeholder="Toyota HiAce"></div>
+      <div><label>Variant</label><input id="n_variant" placeholder="L2H1"></div>
+      <div><label>Versjon</label><input id="n_versjon" placeholder="2022"></div>
+    </div>
+    <div class="box" style="margin-top:10px"><span class="small muted">Sett kunde = eier:</span> <button class="btn sm" onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">Kopier</button></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn red" onclick="opprettOrdre()">Opprett ordre</button>
+      <button class="btn" onclick="closeModal('nyOrdre')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="flytt">
+  <div class="modal-box">
+    <div class="h">Flytt til kalender</div>
+    <div class="grid g2" style="margin-top:12px">
+      <div><label>Dato</label><input type="date" id="fl_dato"></div>
+      <div><label>Tid</label><input type="time" id="fl_tid" value="09:30"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="bekreftFlytt()">Flytt</button>
+      <button class="btn" onclick="closeModal('flytt')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="sign">
+  <div class="modal-box">
+    <div class="h">Signer med finger</div>
+    <div class="muted small" id="signNavn" style="margin-bottom:8px"></div>
+    <canvas id="signCanvas" height="200" style="width:100%"></canvas>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn red" onclick="lagreSignatur()">Lagre signatur</button>
+      <button class="btn" onclick="clearCanvas()">Tøm</button>
+      <button class="btn" onclick="closeModal('sign')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="godkjenn">
+  <div class="modal-box">
+    <div class="h">Godkjenn og lukk ordre</div>
+    <div class="muted small" style="margin:8px 0">Kun godkjenner/admin kan lukke. Tast PIN.</div>
+    <input type="password" inputmode="numeric" maxlength="4" id="godkjPIN" placeholder="PIN" style="letter-spacing:8px;text-align:center;font-size:22px;max-width:200px">
+    <div id="godkjErr" class="err-text small" style="margin-top:6px;min-height:18px"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="bekreftGodkjenn()">Godkjenn og lukk</button>
+      <button class="btn" onclick="closeModal('godkjenn')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyAnsatt">
+  <div class="modal-box">
+    <div class="h">Ny ansatt</div>
+    <div style="margin-top:12px">
+      <label>Navn *</label><input id="na_navn" placeholder="Fornavn Etternavn">
+      <label>PIN (4 sifre) *</label><input type="password" inputmode="numeric" maxlength="4" id="na_pin" placeholder="1234">
+      <label>Rolle</label>
+      <select id="na_rolle">
+        <option value="ansatt">Ansatt</option>
+        <option value="godkjenner">Godkjenner</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="opprettAnsatt()">Opprett</button>
+      <button class="btn" onclick="closeModal('nyAnsatt')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="timerPIN">
+  <div class="modal-box">
+    <div class="h">GPS-verifisering</div>
+    <div class="muted small" id="timerPINMsg" style="margin:10px 0;line-height:1.5"></div>
+    <label>Dagens PIN</label>
+    <input type="password" inputmode="numeric" maxlength="4" id="timerPINInput"
+      placeholder="· · · ·" style="letter-spacing:8px;text-align:center;font-size:22px;max-width:180px"
+      onkeydown="if(event.key==='Enter')bekreftTimerPIN()">
+    <div id="timerPINErr" class="err-text small" style="margin-top:6px;min-height:18px"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="bekreftTimerPIN()">Start timer</button>
+      <button class="btn" onclick="closeModal('timerPIN')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyBeskjed">
+  <div class="modal-box">
+    <div class="h">Ny beskjed</div>
+    <label style="margin-top:12px">Melding</label>
+    <textarea id="bTekst" rows="4" placeholder="Skriv melding til alle ansatte..."></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreBeskjed()">Send</button>
+      <button class="btn" onclick="closeModal('nyBeskjed')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyKontakt">
+  <div class="modal-box">
+    <div class="h">Ny kontakt</div>
+    <div class="grid g2" style="margin-top:12px">
+      <div><label>Navn *</label><input id="kNavn" placeholder="Firma / person"></div>
+      <div><label>Type</label><select id="kType"><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Annet</option></select></div>
+      <div><label>Telefon</label><input id="kTlf" type="tel" placeholder="000 00 000"></div>
+      <div><label>E-post</label><input id="kEpost" type="email" placeholder="post@firma.no"></div>
+    </div>
+    <label>Notat</label><textarea id="kNotat" rows="2" placeholder="Valgfri merknad..."></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreKontakt()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyKontakt')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyDrivstoffSats">
+  <div class="modal-box">
+    <div class="h">Ny drivstoff-sats</div>
+    <label style="margin-top:12px">Navn på sats *</label>
+    <input id="dsNavn" placeholder="F.eks. Bedriftskunde, Statens sats, Privat uten MVA">
+    <label>Type beregning *</label>
+    <select id="dsType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="toggleDsVerdi()">
+      <option value="prosent">Prosent av pumpepris (f.eks. 85%)</option>
+      <option value="uten_moms">Uten MVA (pumpepris ÷ 1,25)</option>
+      <option value="fast_pris">Fast literpris (uavhengig av pumpe)</option>
+    </select>
+    <div id="dsVerdiWrap">
+      <label id="dsVerdiLbl">Prosent (f.eks. 85 = 85% av pumpepris)</label>
+      <input id="dsVerdi" type="number" step="0.01" placeholder="85">
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreDrivstoffSats()">Lagre sats</button>
+      <button class="btn" onclick="closeModal('nyDrivstoffSats')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyUtstyrMal">
+  <div class="modal-box">
+    <div class="h">Ny utstyr-mal (ankomst)</div>
+    <label style="margin-top:12px">Navn på mal *</label>
+    <input id="uMalNavn" placeholder="F.eks. HiAce standard ankomst">
+    <label>Biltype / modell (valgfri — la stå tom for alle biler)</label>
+    <input id="uMalBiltype" placeholder="F.eks. Toyota HiAce, VW Crafter...">
+    <label>Utstyrspunkter (ett per linje) *</label>
+    <textarea id="uMalPunkter" rows="8" placeholder="Takstativ&#10;Hyllesystem&#10;Gulvplate&#10;LED lys&#10;Slepenøkkel&#10;Reservehjul&#10;Varselstrikant&#10;Førstehjelpskrin"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreUtstyrMal()">Lagre mal</button>
+      <button class="btn" onclick="closeModal('nyUtstyrMal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyHMS">
+  <div class="modal-box">
+    <div class="h">Registrer HMS-avvik</div>
+    <div style="margin-top:12px">
+      <label>Type</label>
+      <select id="hmsType">
+        <option>Nesten-ulykke</option>
+        <option>Avvik</option>
+        <option>Skade</option>
+        <option>HMS-tiltak</option>
+        <option>Annet</option>
+      </select>
+      <label>Beskrivelse *</label>
+      <textarea id="hmsBesk" rows="4" placeholder="Hva skjedde / hva ble observert?"></textarea>
+      <label>Tiltak</label>
+      <textarea id="hmsTiltak" rows="3" placeholder="Hva ble gjort eller bør gjøres?"></textarea>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreHMS()">Registrer</button>
+      <button class="btn" onclick="closeModal('nyHMS')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// CONFIG & STATE
+// ════════════════════════════════════════════════════
+const SUPA_URL = 'https://qoqpenbfdxeduylxirwk.supabase.co';
+const SUPA_KEY = 'sb_publishable_46JAdcBUbQYS8NbDwP-MXg_zKWA8Ojz';
+const STORE    = 'salmakern_v2';
+const STATUSER = [
+  {id:'paa_vei',        lbl:'På vei',              border:'#f472b6', bg:'#50072488', txt:'#fce7f3'},
+  {id:'ikke_paabegynt', lbl:'Ikke påbegynt',        border:'#ef4444', bg:'#450a0a88', txt:'#fca5a5'},
+  {id:'paabegynt',      lbl:'Påbegynt',             border:'#60a5fa', bg:'#17255488', txt:'#bfdbfe'},
+  {id:'ikke_veid',      lbl:'Ikke veid',            border:'#facc15', bg:'#42200688', txt:'#fef08a'},
+  {id:'klar_visning',   lbl:'Klar for visning',     border:'#22c55e', bg:'#052e1688', txt:'#86efac'},
+  {id:'vist_biltilsyn', lbl:'Vist på biltilsynet',  border:'#f97316', bg:'#43140788', txt:'#fed7aa'},
+  {id:'klar_henting',   lbl:'Klar for henting',     border:'#a1a1aa', bg:'#09090b88', txt:'#e4e4e7'},
+];
+function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
+
+let db = null;
+let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
+let me = null;
+let activeOrdreId = null;
+let flyttOrdreId  = null;
+let signOrdreId   = null;
+let timerStart    = null;
+let timerType     = 'normal';
+let timerTick     = null;
+let calWeekOffset = 0;
+
+// ════════════════════════════════════════════════════
+// STARTUP
+// ════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  try {
+    db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    await loadFromSupabase();
+    subscribeRealtime();
+  } catch(e) {
+    console.warn('Supabase feil, bruker lokal data:', e.message);
+    try { const c = localStorage.getItem(STORE); if(c) S = JSON.parse(c); else S = defaultData(); }
+    catch(_){ S = defaultData(); }
+    // Sikre at alle felt finnes etter localStorage-lasting
+    S.utstyrMaler      = S.utstyrMaler      || [];
+    S.drivstoffSatser  = S.drivstoffSatser  || [];
+    S.beskjeder        = S.beskjeder        || [];
+    S.kontakter        = S.kontakter        || [];
+    S.hms              = S.hms              || [];
+    S.ordrer = (S.ordrer||[]).map(o => ({
+      ...o,
+      utstyrSjekkliste:   o.utstyrSjekkliste   || [],
+      utstyrMalNavn:      o.utstyrMalNavn       || '',
+      visningsSjekkliste: o.visningsSjekkliste  || [],
+      visningsMalNavn:    o.visningsMalNavn      || '',
+      bilderAnkomst:      o.bilderAnkomst        || [null,null,null,null,null,null],
+      bilderLevering:     o.bilderLevering       || [null,null,null,null,null,null],
+      ansatteSignert:     o.ansatteSignert       || [],
+      endringer:          o.endringer            || [],
+    }));
+  }
+  document.getElementById('loadingOverlay').style.display = 'none';
+});
+
+async function loadFromSupabase() {
+  const [aR,oR,tR,sR] = await Promise.all([
+    db.from('ansatte').select('*').order('id'),
+    db.from('ordrer').select('*').order('created_at'),
+    db.from('timer_entries').select('*').order('created_at',{ascending:false}).limit(300),
+    db.from('innstillinger').select('*').eq('id',1).maybeSingle()
+  ]);
+  if (aR.error) throw new Error(aR.error.message);
+  S.ansatte   = aR.data || [];
+  S.ordrer    = (oR.data||[]).map(dbToOrdre);
+  S.timer     = (tR.data||[]).map(dbToTimer);
+  S.dagensPIN = sR.data?.dagens_pin || '1234';
+  S.gps       = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
+  S.nextId    = 100 + S.ordrer.length;
+}
+
+function dbToOrdre(r) {
+  const dv = {totalvekt:{a:'',e:'',v:''},vogntog:{a:'',e:'',v:''},foraksel:{a:'',e:'',v:''},bakaksel:{a:'',e:'',v:''}};
+  return {
+    id:r.id, regnr:r.regnr, kunde:r.kunde||'', eier:r.eier||'',
+    type:r.type||'', variant:r.variant||'', versjon:r.versjon||'', chassis:r.chassis||'',
+    ankomstdato:r.ankomstdato||'', status:r.status||'aktiv',
+    ordreStatus:r.ordre_status||'ikke_paabegynt',
+    kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
+    vekter:r.vekter||dv, drivstoff:r.drivstoff||{literpris:'',liter:'',satsId:''},
+    utstyr:r.utstyr||{har:'',skalHa:''},
+    bilderAnkomst:r.bilder_ankomst||[null,null,null,null,null,null],
+    bilderLevering:r.bilder_levering||[null,null,null,null,null,null],
+    ansatteSignert:r.ansatte_signert||[], signatur:r.signatur||null,
+    godkjent:r.godkjent||false, godkjennerNavn:r.godkjenner_navn||'',
+    fakturert:r.fakturert||false, fakturertAv:r.fakturert_av||'',
+    ordreStart:r.ordre_start||null, ordreStopp:r.ordre_stopp||null,
+    notater:r.notater||'', endringer:r.endringer||[],
+    utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
+    visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||''
+  };
+}
+function ordreToDb(o) {
+  return {
+    id:o.id, regnr:o.regnr, kunde:o.kunde, eier:o.eier, type:o.type,
+    variant:o.variant, versjon:o.versjon, chassis:o.chassis, ankomstdato:o.ankomstdato||null,
+    status:o.status, ordre_status:o.ordreStatus||'ikke_paabegynt',
+    kalender_dato:o.kalenderDato||null, kalender_tid:o.kalenderTid,
+    vekter:o.vekter, drivstoff:o.drivstoff, utstyr:o.utstyr,
+    bilder_ankomst:o.bilderAnkomst, bilder_levering:o.bilderLevering,
+    ansatte_signert:o.ansatteSignert, signatur:o.signatur||null,
+    godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn,
+    fakturert:o.fakturert, fakturert_av:o.fakturertAv,
+    ordre_start:o.ordreStart, ordre_stopp:o.ordreStopp,
+    notater:o.notater, endringer:o.endringer,
+    utstyr_sjekkliste:o.utstyrSjekkliste||[], utstyr_mal_navn:o.utstyrMalNavn||'',
+    visnings_sjekkliste:o.visningsSjekkliste||[], visnings_mal_navn:o.visningsMalNavn||'',
+    updated_at:new Date().toISOString()
+  };
+}
+function dbToTimer(r) {
+  return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
+    type:r.type,start:r.start_tid,stopp:r.stopp_tid,mins:r.minutter};
+}
+
+function subscribeRealtime() {
+  if (!db) return;
+  db.channel('salmakern_live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
+      if (p.eventType==='INSERT'&&!S.ordrer.find(o=>o.id===p.new.id)) {
+        S.ordrer.push(dbToOrdre(p.new)); renderAll();
+      } else if (p.eventType==='UPDATE') {
+        const i=S.ordrer.findIndex(o=>o.id===p.new.id);
+        if(i>=0){S.ordrer[i]=dbToOrdre(p.new);renderAll();if(activeOrdreId===p.new.id)buildOrdreDetail();}
+      }
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'ansatte'}, p => {
+      if(p.eventType==='INSERT'&&!S.ansatte.find(a=>a.id===p.new.id)){S.ansatte.push(p.new);}
+      else if(p.eventType==='UPDATE'){const i=S.ansatte.findIndex(a=>a.id===p.new.id);if(i>=0)S.ansatte[i]=p.new;}
+      if(me) renderMer();
+    })
+    .subscribe();
+}
+
+function defaultData() {
+  return {
+    ansatte: [
+      {id:1, navn:'Per Hansen',   pin:'1234', rolle:'ansatt',     aktiv:true},
+      {id:2, navn:'Kari Lien',    pin:'5678', rolle:'godkjenner', aktiv:true},
+      {id:3, navn:'Admin Bruker', pin:'0000', rolle:'admin',      aktiv:true}
+    ],
+    ordrer: [
+      mkOrdre('ord1','AB12345','Telemark Bygg AS','Ola Nordmann','Toyota HiAce','2022 L2H1','2026-04-20','2026-04-22','09:30','Takstativ','Innredning\nLED lys'),
+      mkOrdre('ord2','CD56789','Vestfold Transport','Erik Johansen','VW Crafter','L3H2 2023','2026-04-21','','','','Hyllesystem\nGulvplate')
+    ],
+    timer: [],
+    nextId: 10,
+    dagensPIN: String(Math.floor(1000+Math.random()*9000)),
+    gps: {lat:null, lng:null, radius:300},
+    beskjeder: [], kontakter: [], hms: [], utstyrMaler: [], drivstoffSatser: []
+  };
+}
+
+function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa) {
+  return {
+    id, regnr, kunde, eier, type, variant, versjon:'', chassis:'',
+    ankomstdato: ankomst, status:'aktiv', ordreStatus:'ikke_paabegynt',
+    kalenderDato: kDato, kalenderTid: kTid,
+    vekter: {
+      totalvekt:{a:'',e:'',v:''}, vogntog:{a:'',e:'',v:''},
+      foraksel:{a:'',e:'',v:''}, bakaksel:{a:'',e:'',v:''}
+    },
+    drivstoff:{literpris:'',liter:'',satsId:''},
+    utstyr:{har, skalHa},
+    bilderAnkomst:[null,null,null,null,null,null],
+    bilderLevering:[null,null,null,null,null,null],
+    ansatteSignert:[], signatur:null,
+    godkjent:false, godkjennerNavn:'',
+    fakturert:false, fakturertAv:'',
+    ordreStart:null, ordreStopp:null,
+    notater:'', endringer:[],
+    utstyrSjekkliste:[], utstyrMalNavn:'',
+    visningsSjekkliste:[], visningsMalNavn:''
+  };
+}
+
+function save(ordreId) {
+  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch(e) {}
+  if (!db || !ordreId) return;
+  const o = S.ordrer.find(x=>x.id===ordreId);
+  if (o) db.from('ordrer').upsert(ordreToDb(o))
+    .then(r=>{ if(r.error) console.error('Lagringsfeil:', r.error.message); });
+}
+
+// ════════════════════════════════════════════════════
+// PIN LOGIN
+// ════════════════════════════════════════════════════
+let pinBuf = '';
+
+function pinPress(d) {
+  if (pinBuf.length >= 4) return;
+  pinBuf += d;
+  refreshPinDots();
+  if (pinBuf.length === 4) setTimeout(tryLogin, 120);
+}
+function pinBack() { pinBuf = pinBuf.slice(0,-1); refreshPinDots(); }
+function pinClear() { pinBuf = ''; refreshPinDots(); document.getElementById('pinErr').textContent=''; }
+function refreshPinDots() {
+  const filled = '●'.repeat(pinBuf.length);
+  const empty  = '·'.repeat(4-pinBuf.length);
+  document.getElementById('pinDots').textContent = (filled+empty).split('').join(' ');
+}
+function tryLogin() {
+  const user = S.ansatte.find(a => a.pin===pinBuf && a.aktiv);
+  if (user) {
+    me = user;
+    pinBuf = '';
+    refreshPinDots();
+    document.getElementById('loginScreen').style.display='none';
+    document.getElementById('appScreen').style.display='block';
+    document.getElementById('headerUser').textContent = me.navn + ' · ' + me.rolle;
+    initTimerPage();
+    renderAll();
+  } else {
+    document.getElementById('pinErr').textContent = 'Feil PIN – prøv igjen';
+    pinBuf = '';
+    refreshPinDots();
+  }
+}
+function doLogout() {
+  me = null;
+  if (timerTick) clearInterval(timerTick);
+  timerTick = null; timerStart = null;
+  document.getElementById('appScreen').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+}
+
+// ════════════════════════════════════════════════════
+// PAGE ROUTING
+// ════════════════════════════════════════════════════
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if (id==='oversikt') renderOversikt();
+  if (id==='ordre')    renderOrdreList();
+  if (id==='timer')    { renderTimerHistorikk(); renderTimerMaaned(); }
+  if (id==='arkiv')    renderArkiv();
+  if (id==='mer')      renderMer();
+}
+function renderAll() { renderOversikt(); renderArkiv(); renderMer(); }
+
+function renderOrdreList() {
+  const listEl   = document.getElementById('ordreList');
+  const detailEl = document.getElementById('ordreDetail');
+  if (activeOrdreId) {
+    listEl.style.display = 'none';
+    detailEl.style.display = 'block';
+    buildOrdreDetail();
+    return;
+  }
+  detailEl.style.display = 'none';
+  listEl.style.display   = 'block';
+  const alle = S.ordrer.filter(o => o.status === 'aktiv');
+  listEl.innerHTML = `
+    <div class="card">
+      <div class="row">
+        <div><div class="h">Alle ordrer</div><div class="muted small">Klikk for å åpne</div></div>
+        <button class="btn red" onclick="openModal('nyOrdre')">+ Ny ordre</button>
+      </div>
+      <div class="grid g3" style="margin-top:12px">
+        ${alle.length ? alle.map(o=>{
+          const si = statusInfo(o.ordreStatus);
+          return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:5px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+              <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
+              ${statusDropdown(o.id, o.ordreStatus)}
+            </div>
+            <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</div>
+            <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
+          </div>`;
+        }).join('') : '<div class="muted small">Ingen aktive ordrer</div>'}
+      </div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════
+// OVERSIKT
+// ════════════════════════════════════════════════════
+function renderOversikt(q) {
+  q = q || (document.getElementById('sokInput')||{}).value || '';
+  const now = new Date();
+  const mnd = now.getMonth(), yr = now.getFullYear();
+  const denneMnd = S.ordrer.filter(o=>{const d=new Date(o.ankomstdato);return d.getMonth()===mnd&&d.getFullYear()===yr;});
+  document.getElementById('s1').textContent = denneMnd.length;
+  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.godkjent).length;
+  document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&o.kalenderDato).length;
+
+  const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
+  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&o.kalenderDato&&match(o));
+  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&!o.kalenderDato&&match(o));
+
+  const activeEl = document.getElementById('activeList');
+  activeEl.innerHTML = aktive.length
+    ? aktive.map(o => {
+        const si = statusInfo(o.ordreStatus);
+        return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+            <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
+            ${statusDropdown(o.id, o.ordreStatus)}
+          </div>
+          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</div>
+          ${o.ankomstdato?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato}</div>`:''}
+          <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">📅 ${o.kalenderDato} ${o.kalenderTid}</div>
+        </div>`;
+      }).join('')
+    : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
+
+  const pendEl = document.getElementById('pendingList');
+  pendEl.innerHTML = pending.length
+    ? pending.map(o => {
+        const si = statusInfo(o.ordreStatus);
+        return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
+            <b>${ordreLabel(o)}</b>
+            ${statusDropdown(o.id, o.ordreStatus)}
+          </div>
+          <div class="small muted">${o.type}${o.variant?' · '+o.variant:''}</div>
+          ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
+          <div class="small" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>
+          <div style="margin-top:8px;display:flex;gap:6px">
+            <button class="btn sm" onclick="openOrdre('${o.id}')">Åpne</button>
+            <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div class="muted small">Ingen ventende ordrer</div>';
+
+  renderWeek();
+}
+
+function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }
+function calIdag()       { calWeekOffset = 0;    renderWeek(); }
+
+function renderWeek() {
+  const el = document.getElementById('weekCal');
+  const DAY_NAMES = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
+  const START_H = 7, END_H = 16;
+  const SLOT_PX = 28;
+  const HOUR_PX = SLOT_PX * 2;
+
+  const now = new Date();
+  const base = new Date(now);
+  base.setDate(now.getDate() + calWeekOffset * 7);
+  const mon = new Date(base);
+  const dow = base.getDay();
+  mon.setDate(base.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const dates = DAY_NAMES.map((_, i) => {
+    const d = new Date(mon); d.setDate(mon.getDate() + i); return d;
+  });
+  const todayStr = now.toISOString().split('T')[0];
+  const nowFrac  = now.getHours() + now.getMinutes() / 60;
+  const nowTop   = Math.max(0, (nowFrac - (START_H + 0.5)) * HOUR_PX);
+
+  // Date range label e.g. "21.–25. april 2026"
+  const fri = dates[4];
+  const mndNavn = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+  const rangeLabel = mon.getDate()+'.'+(mon.getMonth()!==fri.getMonth()?' '+mndNavn[mon.getMonth()]:'')+' – '+fri.getDate()+'. '+mndNavn[fri.getMonth()]+' '+fri.getFullYear();
+
+  const slots30 = [];
+  for (let h = START_H; h < END_H; h++) {
+    if (h === START_H) {
+      slots30.push({h, m:30, label:`${String(h).padStart(2,'0')}:30`});
+    } else {
+      slots30.push({h, m:0,  label:`${String(h).padStart(2,'0')}:00`});
+      slots30.push({h, m:30, label:''});
+    }
+  }
+  const START_MIN = START_H * 60 + 30; // 07:30
+
+  const timeCol = slots30.map(s =>
+    `<div class="cal-hour-lbl" style="height:${SLOT_PX}px">${s.label}</div>`
+  ).join('');
+
+  const dayCols = dates.map((dt) => {
+    const ds      = dt.toISOString().split('T')[0];
+    const isToday = ds === todayStr;
+    const orders  = S.ordrer.filter(o => o.kalenderDato === ds && o.status === 'aktiv');
+
+    const slotEls = slots30.map(s =>
+      `<div class="cal-slot" style="height:${SLOT_PX}px" onclick="quickFlytt('${ds}','${String(s.h).padStart(2,'0')}:${s.m===0?'00':'30'}')"></div>`
+    ).join('');
+
+    const nowLine = (isToday && nowFrac >= START_H && nowFrac <= END_H)
+      ? `<div class="cal-now" style="top:${nowTop}px"></div>` : '';
+
+    const events = orders.map(o => {
+      const si = statusInfo(o.ordreStatus);
+      const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
+      const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
+      const height = Math.max(52, SLOT_PX); // min height so text fits
+      return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
+          <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0;overflow:hidden">
+            <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabel(o)}</div>
+            <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid} · ${statusInfo(o.ordreStatus).lbl}</div>
+          </div>
+          <div style="position:relative;flex-shrink:0">
+            <button onclick="event.stopPropagation();toggleCalMenu('${o.id}')" style="background:none;border:none;color:${si.txt};font-size:18px;line-height:1;padding:0 2px;cursor:pointer" title="Valg">⋯</button>
+            <div id="calMenu_${o.id}" style="display:none;position:absolute;top:22px;right:0;background:#18181b;border:1px solid #3f3f46;border-radius:12px;padding:6px;z-index:200;min-width:150px;box-shadow:0 4px 20px #000a">
+              <button onclick="event.stopPropagation();closeCalMenu();openFlyttKalender('${o.id}')" style="display:block;width:100%;text-align:left;background:none;border:none;color:#f4f4f5;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='none'">✎ Flytt</button>
+              <button onclick="event.stopPropagation();closeCalMenu();fjernFraKalender('${o.id}')" style="display:block;width:100%;text-align:left;background:none;border:none;color:#fca5a5;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='none'">✕ Fjern fra kalender</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="cal-day-col${isToday?' cal-today-col':''}">${slotEls}${nowLine}${events}</div>`;
+  }).join('');
+
+  const headCols = dates.map((dt, i) => {
+    const ds      = dt.toISOString().split('T')[0];
+    const isToday = ds === todayStr;
+    return `<div class="cal-col-head${isToday?' cal-today':''}">
+      <div class="cal-day-name">${DAY_NAMES[i]}</div>
+      <div class="cal-day-num${isToday?' cal-today-num':''}">${dt.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn sm" onclick="calNaviger(-1)">◀</button>
+    <button class="btn sm" onclick="calIdag()">I dag</button>
+    <button class="btn sm" onclick="calNaviger(1)">▶</button>
+    <span class="small muted" style="margin-left:4px">${rangeLabel}</span>
+  </div>
+  <div class="cal-wrap">
+    <div class="cal-head"><div class="cal-gutter"></div>${headCols}</div>
+    <div class="cal-body-scroll">
+      <div class="cal-body">
+        <div class="cal-times">${timeCol}</div>
+        <div class="cal-cols">${dayCols}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function endreStatus(id, nyStatus) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.ordreStatus = nyStatus;
+  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl);
+  save(id); renderOversikt(); renderWeek();
+  if (activeOrdreId===id) buildOrdreDetail();
+}
+
+function statusDropdown(ordreId, currentStatus, extraStyle='') {
+  const si = statusInfo(currentStatus);
+  return `<select onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
+    ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
+  </select>`;
+}
+
+let _openCalMenu = null;
+function toggleCalMenu(id) {
+  const el = document.getElementById('calMenu_'+id);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  closeCalMenu();
+  if (!isOpen) { el.style.display = 'block'; _openCalMenu = id; }
+}
+function closeCalMenu() {
+  if (_openCalMenu) {
+    const el = document.getElementById('calMenu_'+_openCalMenu);
+    if (el) el.style.display = 'none';
+    _openCalMenu = null;
+  }
+}
+document.addEventListener('click', closeCalMenu);
+
+function fjernFraKalender(id) {
+  const o = S.ordrer.find(x => x.id === id); if (!o) return;
+  o.kalenderDato = ''; o.kalenderTid = '';
+  logChange(o, 'Fjernet fra kalender');
+  save(id); renderOversikt();
+}
+
+function openFlyttKalender(id) {
+  flyttOrdreId = id;
+  const o = S.ordrer.find(x => x.id === id);
+  if (o && o.kalenderDato) {
+    document.getElementById('fl_dato').value = o.kalenderDato;
+    document.getElementById('fl_tid').value  = o.kalenderTid || '09:00';
+  }
+  openModal('flytt');
+}
+
+function quickFlytt(dato, tid) {
+  document.getElementById('fl_dato').value = dato;
+  document.getElementById('fl_tid').value  = tid;
+  // if there's only one unscheduled order, move it directly; otherwise open modal
+  const unscheduled = S.ordrer.filter(o => o.status === 'aktiv' && !o.kalenderDato);
+  if (unscheduled.length === 1) {
+    flyttOrdreId = unscheduled[0].id;
+    bekreftFlytt();
+  } else if (activeOrdreId) {
+    flyttOrdreId = activeOrdreId;
+    bekreftFlytt();
+  } else {
+    openModal('flytt');
+  }
+}
+
+// ════════════════════════════════════════════════════
+// ORDRE DETAIL
+// ════════════════════════════════════════════════════
+function openOrdre(id) {
+  activeOrdreId = id;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('ordre').classList.add('active');
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.getElementById('ordreList').style.display   = 'none';
+  document.getElementById('ordreDetail').style.display = 'block';
+  buildOrdreDetail();
+}
+
+function tilbakeOrdreList() {
+  activeOrdreId = null;
+  document.getElementById('ordreDetail').style.display = 'none';
+  document.getElementById('ordreList').style.display   = 'block';
+  renderOrdreList();
+}
+
+function utstyrMalDropdown(ordreId, selectId, applyFn, biltype) {
+  const bt = (biltype||'').toLowerCase();
+  const maler = (S.utstyrMaler||[]).filter(m => !m.biltype || bt.includes(m.biltype.toLowerCase()));
+  if (!maler.length) return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+    <span class="muted small">Ingen maler opprettet ennå.</span>
+    ${me&&me.rolle==='admin'?`<button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Lag mal</button>`:'<span class="muted small">Admin kan lage maler under Mer.</span>'}
+  </div>`;
+  return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+    <select id="${selectId}" style="flex:1;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px;font-size:12px">
+      <option value="">– Velg mal –</option>
+      ${maler.map(m=>`<option value="${m.id}">${m.navn}${m.biltype?' ('+m.biltype+')':''}</option>`).join('')}
+    </select>
+    <button class="btn sm red" onclick="${applyFn}('${ordreId}',document.getElementById('${selectId}').value)">Bruk</button>
+  </div>`;
+}
+
+function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
+  if (!sjekk.length) return `<div class="muted small" style="margin-top:6px;padding:8px 0">Velg en mal over for å legge inn punkter.</div>`;
+  const ok = sjekk.filter(p=>p.ok).length;
+  return `<div style="margin-top:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span class="small muted">${malNavn}</span>
+      <span class="pill ${ok===sjekk.length?'ok':'warn'}">${ok}/${sjekk.length} ✓</span>
+    </div>
+    ${sjekk.map((p,i)=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30;cursor:pointer">
+        <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+        <span style="${p.ok?'text-decoration:line-through;color:#52525b':''};font-size:13px">${esc(p.punkt)}</span>
+      </label>`).join('')}
+  </div>`;
+}
+
+function buildOrdreDetail() {
+  try {
+  const o = S.ordrer.find(x=>x.id===activeOrdreId);
+  if (!o) return;
+  const tf = tvangsflyt(o);
+  const kanLukke = tf.every(t=>t.ok);
+  const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+
+  document.getElementById('ordreDetail').innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <button class="btn sm" onclick="tilbakeOrdreList()">← Alle ordrer</button>
+    ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">🗑 Slett ordre</button>` : ''}
+  </div>
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="title">${ordreLabel(o)}</div>
+        ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${o.chassis}</div>`:''}
+        <div class="muted" style="margin-top:2px">${o.type}${o.variant?' – '+o.variant:''}</div>
+        <div class="small muted">Eier: ${o.eier||'–'}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:7px 12px;')}
+        <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g2l">
+    <div>
+
+      <div class="card">
+        <div class="h">Kunde og bilinfo</div>
+
+        <div class="grid g2" style="gap:8px;margin-top:10px">
+          <div><label>Kundenavn</label><input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)"></div>
+          <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
+          <div><label>Merke</label><input value="${esc(o.type)}" onchange="sf('${o.id}','type',this.value)" placeholder="Toyota HiAce"></div>
+          <div><label>Type / variant</label><input value="${esc(o.variant)}" onchange="sf('${o.id}','variant',this.value)" placeholder="L2H1"></div>
+          <div><label>Modell / versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)" placeholder="2022"></div>
+          <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
+        </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Identifikasjon</div>
+          <div class="grid g2" style="gap:8px">
+            <div>
+              <label>Reg.nr</label>
+              <div style="display:flex;gap:6px">
+                <input id="regnr_${o.id}" value="${esc(o.regnr)}" onchange="sf('${o.id}','regnr',this.value.toUpperCase());this.value=this.value.toUpperCase()" placeholder="AB12345" style="text-transform:uppercase">
+                <button class="btn sm red" onclick="slaOppRegnr('${o.id}')" title="Hent bilinfo fra Statens vegvesen" style="white-space:nowrap;flex-shrink:0">🔍 Søk</button>
+              </div>
+              <div id="regnrStatus_${o.id}" class="small" style="margin-top:4px"></div>
+            </div>
+            <div>
+              <label>Chassis-nr (VIN)</label>
+              <input value="${esc(o.chassis)}" onchange="sf('${o.id}','chassis',this.value)" placeholder="VF1-123456789">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h">Vekter (kg)</div>
+        <table><thead><tr><th></th><th>Ved ankomst</th><th>Endring</th><th>Før visning</th></tr></thead><tbody>
+          ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,lbl])=>`<tr>
+            <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
+            <td><input value="${o.vekter[k].a}" onchange="sv('${o.id}','${k}','a',this.value)" placeholder="0"></td>
+            <td><input value="${o.vekter[k].e}" onchange="sv('${o.id}','${k}','e',this.value)" placeholder="0"></td>
+            <td><input value="${o.vekter[k].v}" onchange="sv('${o.id}','${k}','v',this.value)" placeholder="0"></td>
+          </tr>`).join('')}
+        </tbody></table>
+      </div>
+
+      <div class="card">
+        <div class="h">Drivstoff</div>
+        <div class="grid g2" style="margin-top:8px">
+          <div>
+            <label>Literpris ved pumpe (kr/L)</label>
+            <input type="number" step="0.01" value="${o.drivstoff?.literpris||''}" onchange="sd('${o.id}','literpris',this.value)" placeholder="0,00">
+            <div class="small muted" style="margin-top:4px">Original pris</div>
+          </div>
+          <div>
+            <label>Antall liter</label>
+            <input type="number" step="0.1" value="${o.drivstoff?.liter||''}" onchange="sd('${o.id}','liter',this.value)" placeholder="0">
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <label>Sats / kurs</label>
+          <select onchange="sd('${o.id}','satsId',this.value)" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;margin-top:4px">
+            <option value="">– Ingen sats –</option>
+            ${(S.drivstoffSatser||[]).map(s=>`<option value="${s.id}" ${o.drivstoff?.satsId===s.id?'selected':''}>${s.navn}</option>`).join('')}
+          </select>
+        </div>
+        ${(()=>{
+          const df=o.drivstoff||{};
+          const literpris=parseFloat(df.literpris)||0;
+          const liter=parseFloat(df.liter)||0;
+          const sats=(S.drivstoffSatser||[]).find(s=>s.id===df.satsId);
+          let kundeLiterpris=literpris;
+          if(sats){
+            if(sats.type==='prosent')   kundeLiterpris=literpris*(sats.verdi/100);
+            if(sats.type==='uten_moms') kundeLiterpris=literpris/1.25;
+            if(sats.type==='fast_pris') kundeLiterpris=sats.verdi;
+          }
+          const kr=n=>n.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
+          const totalpumpe=literpris*liter;
+          const kundetotal=kundeLiterpris*liter;
+          if(!literpris&&!liter&&!sats) return '';
+          return `<div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="box" style="text-align:center">
+              <div class="small muted">Original pris (pumpe)</div>
+              <div style="font-size:20px;font-weight:800;margin-top:4px">${literpris?kr(literpris)+' kr/L':'–'}</div>
+              ${totalpumpe?`<div class="small muted" style="margin-top:2px">Totalt: ${kr(totalpumpe)} kr</div>`:''}
+            </div>
+            <div class="box" style="text-align:center;${sats?'border-color:#16a34a66;background:#052e1688':''}">
+              <div class="small muted">${sats?sats.navn:'Kundepris'}</div>
+              <div style="font-size:20px;font-weight:800;margin-top:4px;${sats?'color:#86efac':''}">${sats?kr(kundeLiterpris)+' kr/L':'–'}</div>
+              ${sats&&kundetotal?`<div class="small" style="margin-top:2px;color:#86efac">Totalt: ${kr(kundetotal)} kr</div>`:''}
+            </div>
+          </div>
+          ${sats&&totalpumpe&&kundetotal?`<div class="small muted" style="text-align:center;margin-top:6px">Besparelse: ${kr(totalpumpe-kundetotal)} kr</div>`:''}`;
+        })()}
+      </div>
+
+      <div class="card">
+        <div class="h">Utstyr – Har ved ankomst</div>
+        ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'')}
+        ${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}
+      </div>
+
+      <div class="card">
+        <div class="h">Utstyr – Skal ha etter visning</div>
+        <textarea rows="4" style="margin-top:8px" placeholder="Hva skal bilen ha etter visning..." onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+      </div>
+
+      <div class="card">
+        <div class="h">Bilder – Ankomst (${o.bilderAnkomst.filter(Boolean).length}/6)</div>
+        <div class="photo-grid">${['Front','Høyre','Venstre','Bak','Div 1','Div 2'].map((lbl,i)=>`
+          <div class="photo-box" onclick="${o.bilderAnkomst[i]?`openLightbox('fo_a_${i}_src')`:`document.getElementById('fo_a_${i}').click()`}">
+            ${o.bilderAnkomst[i]
+              ? `<img id="fo_a_${i}_src" src="${o.bilderAnkomst[i]}" style="bottom:32px;border-radius:8px 8px 0 0">
+                 <div class="hover-del" onclick="event.stopPropagation()">
+                   <button onclick="openLightbox('fo_a_${i}_src')" title="Vis fullt bilde">🔍</button>
+                   <button onclick="document.getElementById('fo_a_${i}').click()" title="Bytt bilde">📷</button>
+                   <button onclick="slettFoto('${o.id}','a',${i})" title="Slett">🗑</button>
+                 </div>`
+              : `<div style="font-size:22px">📷</div><div>${lbl}</div>`}
+          </div>
+          <input type="file" id="fo_a_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','a',${i})">`).join('')}</div>
+      </div>
+
+      <div class="card">
+        <div class="h">Bilder – Levering (${o.bilderLevering.filter(Boolean).length}/6)</div>
+        <div class="photo-grid">${['Front','Høyre','Venstre','Bak','Div 1','Div 2'].map((lbl,i)=>`
+          <div class="photo-box" onclick="${o.bilderLevering[i]?`openLightbox('fo_l_${i}_src')`:`document.getElementById('fo_l_${i}').click()`}">
+            ${o.bilderLevering[i]
+              ? `<img id="fo_l_${i}_src" src="${o.bilderLevering[i]}" style="bottom:32px;border-radius:8px 8px 0 0">
+                 <div class="hover-del" onclick="event.stopPropagation()">
+                   <button onclick="openLightbox('fo_l_${i}_src')" title="Vis fullt bilde">🔍</button>
+                   <button onclick="document.getElementById('fo_l_${i}').click()" title="Bytt bilde">📷</button>
+                   <button onclick="slettFoto('${o.id}','l',${i})" title="Slett">🗑</button>
+                 </div>`
+              : `<div style="font-size:22px">📷</div><div>${lbl}</div>`}
+          </div>
+          <input type="file" id="fo_l_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','l',${i})">`).join('')}</div>
+      </div>
+
+      <div class="card">
+        <div class="h">Ordretid</div>
+        <div class="muted small">Start/stopp for denne ordren (ikke lønnstid).</div>
+        <div class="grid g2" style="margin-top:10px">
+          <div class="box"><div class="small muted">Start</div><div class="title">${o.ordreStart?fmt(new Date(o.ordreStart)):'–'}</div>
+            <button class="btn sm" style="margin-top:6px" onclick="startOrdreTimer('${o.id}')" ${o.ordreStart?'disabled':''}>Start</button></div>
+          <div class="box"><div class="small muted">Stopp</div><div class="title">${o.ordreStopp?fmt(new Date(o.ordreStopp)):'–'}</div>
+            <button class="btn sm" style="margin-top:6px" onclick="stoppOrdreTimer('${o.id}')" ${!o.ordreStart||o.ordreStopp?'disabled':''}>Stopp</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h">Notater</div>
+        <textarea rows="3" style="margin-top:8px" placeholder="Interne notater..." onchange="sf('${o.id}','notater',this.value)">${esc(o.notater)}</textarea>
+      </div>
+
+      <div class="card">
+        <div class="h">Endringer</div>
+        ${o.endringer.length?o.endringer.slice(-8).reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div>
+      <div class="card">
+        <div class="h">Tvangsflyt</div>
+        <div style="margin-top:6px">${tf.map(t=>`<span class="pill ${t.ok?'ok':'bad'}">${t.lbl}</span>`).join('')}</div>
+      </div>
+
+      <div class="card">
+        <div class="h">Kalender</div>
+        <div class="grid g2" style="margin-top:8px">
+          <div><label>Dato</label><input type="date" value="${o.kalenderDato||''}" onchange="sf('${o.id}','kalenderDato',this.value);renderOversikt()"></div>
+          <div><label>Tid</label><input type="time" value="${o.kalenderTid||''}" onchange="sf('${o.id}','kalenderTid',this.value)"></div>
+        </div>
+        <button class="btn sm" style="margin-top:8px" onclick="openFlytt('${o.id}')">Sett i kalender</button>
+      </div>
+
+      <div class="card">
+        <div class="h">Ansatte på ordren</div>
+        <div style="margin-top:6px" id="ansOrdre">${renderAnsOrdre(o)}</div>
+        ${!o.ansatteSignert.find(a=>a.id===me.id)?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`:'<div class="small ok-text" style="margin-top:6px">Du er meldt på</div>'}
+      </div>
+
+      <div class="card">
+        <div class="h">Signatur</div>
+        ${o.signatur?`<img src="${o.signatur}" style="width:100%;border-radius:10px;border:1px solid #27272a;margin-top:6px"><button class="btn sm" style="margin-top:6px" onclick="openSign('${o.id}')">Endre</button>`:`<div class="muted small" style="margin-bottom:6px">Ingen signatur</div><button class="btn sm" onclick="openSign('${o.id}')">Signer med finger</button>`}
+      </div>
+
+      <div class="card">
+        <div class="h">Godkjenning</div>
+        ${o.godkjent?`<span class="pill ok">Godkjent av ${o.godkjennerNavn}</span>`:`
+          <div class="muted small" style="margin-bottom:8px">Godkjenner kontrollerer arbeidet og lukker ordren.</div>
+          ${!kanLukke?`<div class="muted small" style="margin-bottom:6px">Fullfør tvangsflyt først:</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
+          <button class="btn red" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?'Godkjenn og lukk':'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
+      </div>
+
+      <div class="card">
+        <div class="h">PDF / Rapport</div>
+        <div class="muted small" style="margin-bottom:8px">Vekter, bilder, signatur og info.</div>
+        <button class="btn" onclick="genPDF('${o.id}')">Last ned PDF</button>
+      </div>
+
+      ${me&&me.rolle==='admin'?`
+      <div class="card">
+        <div class="h">Fakturering</div>
+        <div style="margin-top:8px">
+          ${o.fakturert
+            ? `<span class="pill ok">✔ Fakturert av ${o.fakturertAv}</span>
+               <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleFakturert('${o.id}')">Merk som ikke fakturert</button>`
+            : `<div class="muted small" style="margin-bottom:8px">Ikke fakturert</div>
+               <button class="btn sm red" style="width:100%" onclick="toggleFakturert('${o.id}')">✔ Merk som fakturert</button>`}
+        </div>
+      </div>`:''}
+
+      ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
+    </div>
+  </div>`;
+  } catch(err) {
+    document.getElementById('ordreDetail').innerHTML = `<div class="card"><div class="err-text">Feil ved lasting av ordre: ${err.message}</div><button class="btn sm" style="margin-top:8px" onclick="tilbakeOrdreList()">← Tilbake</button></div>`;
+  }
+}
+
+function toggleFakturert(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.fakturert = !o.fakturert;
+  o.fakturertAv = o.fakturert ? me.navn : '';
+  logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
+  save(id); buildOrdreDetail();
+}
+
+function renderAnsOrdre(o) {
+  if (!o.ansatteSignert.length) return '<div class="small muted">Ingen ansatte meldt på</div>';
+  return o.ansatteSignert.map(a=>`<div class="small" style="margin-bottom:3px">${a.navn} – ${a.tid}</div>`).join('');
+}
+
+function tvangsflyt(o) {
+  return [
+    {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
+    {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
+    {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
+    {lbl:'Signatur',          ok: !!o.signatur},
+    {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a}
+  ];
+}
+
+// ════════════════════════════════════════════════════
+// SAVE HELPERS
+// ════════════════════════════════════════════════════
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function ordreLabel(o){ return o.regnr || (o.chassis ? 'Chassis: '+o.chassis : 'Uten reg.nr'); }
+function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
+
+function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
+
+function sf(id, field, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o[field]=val; logChange(o,field+' oppdatert'); save(id);
+}
+function sv(id,k,col,val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.vekter[k][col]=val; save(id);
+}
+function sd(id,f,val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if(!o.drivstoff) o.drivstoff={literpris:'',liter:'',satsId:''};
+  o.drivstoff[f]=val; save(id);
+  // oppdater beregning uten full rebuild
+  const el = document.getElementById('drivstoffBeregning_'+id);
+  if (el) el.innerHTML = beregnDrivstoffHTML(o.drivstoff, true);
+}
+
+// ════════════════════════════════════════════════════
+// DRIVSTOFF-SATSER
+// ════════════════════════════════════════════════════
+function toggleDsVerdi() {
+  const type = document.getElementById('dsType')?.value;
+  const wrap = document.getElementById('dsVerdiWrap');
+  const lbl  = document.getElementById('dsVerdiLbl');
+  if (!wrap) return;
+  if (type==='uten_moms') { wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  lbl.textContent = type==='prosent'
+    ? 'Prosent (f.eks. 85 = 85% av pumpepris)'
+    : 'Fast literpris (kr/L)';
+}
+
+function lagreDrivstoffSats() {
+  const navn  = document.getElementById('dsNavn').value.trim();
+  const type  = document.getElementById('dsType').value;
+  const verdi = parseFloat(document.getElementById('dsVerdi').value)||0;
+  if (!navn) { alert('Navn er påkrevd'); return; }
+  if (type!=='uten_moms' && !verdi) { alert('Verdi er påkrevd'); return; }
+  S.drivstoffSatser.push({id:'ds'+(++S.nextId), navn, type, verdi});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('nyDrivstoffSats');
+  ['dsNavn','dsVerdi'].forEach(i=>{ const el=document.getElementById(i); if(el) el.value=''; });
+  renderDrivstoffSatser();
+}
+
+function slettDrivstoffSats(id) {
+  if (!confirm('Slette denne satsen?')) return;
+  S.drivstoffSatser = S.drivstoffSatser.filter(s=>s.id!==id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderDrivstoffSatser();
+}
+
+function renderDrivstoffSatser() {
+  const el = document.getElementById('drivstoffSatsListe'); if(!el) return;
+  if (!S.drivstoffSatser.length) { el.innerHTML='<div class="muted small">Ingen satser lagt inn ennå</div>'; return; }
+  const typeNavn = {prosent:'Prosent','uten_moms':'Uten MVA',fast_pris:'Fast pris'};
+  el.innerHTML = S.drivstoffSatser.map(s=>`
+    <div class="box" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div>
+        <b>${s.navn}</b>
+        <span class="pill" style="font-size:11px;margin-left:4px">${typeNavn[s.type]||s.type}</span>
+        <div class="small muted" style="margin-top:3px">
+          ${s.type==='prosent'?`${s.verdi}% av pumpepris`:s.type==='uten_moms'?'Pumpepris ÷ 1,25':`Fast ${s.verdi} kr/L`}
+        </div>
+      </div>
+      <button onclick="slettDrivstoffSats('${s.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:18px;padding:0">✕</button>
+    </div>`).join('');
+}
+
+function beregnDrivstoffHTML(df, innhold=false) {
+  if (!df) return '';
+  const literpris = parseFloat(df.literpris)||0;
+  const liter     = parseFloat(df.liter)||0;
+  const sats      = (S.drivstoffSatser||[]).find(s=>s.id===df.satsId);
+  if (!literpris && !liter && !sats) return innhold ? '' : `<div id="drivstoffBeregning_" style="margin-top:10px"></div>`;
+
+  const totalpumpe = literpris * liter;
+  let kundeLiterpris = literpris;
+  let forklaring = '';
+  if (sats) {
+    if (sats.type==='prosent')     { kundeLiterpris = literpris*(sats.verdi/100); forklaring=`${sats.verdi}% av pumpepris`; }
+    if (sats.type==='uten_moms')   { kundeLiterpris = literpris/1.25; forklaring='Uten MVA (÷1,25)'; }
+    if (sats.type==='fast_pris')   { kundeLiterpris = sats.verdi; forklaring=`Fast pris ${sats.verdi} kr/L`; }
+  }
+  const kundetotal   = kundeLiterpris * liter;
+  const besparelse   = totalpumpe - kundetotal;
+  const kr = n => n.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  const html = `
+    <div style="background:#0f0f12;border:1px solid #27272a;border-radius:12px;padding:12px;margin-top:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${literpris?`<div class="small muted">Pumpepris</div><div class="small" style="text-align:right">${kr(literpris)} kr/L</div>`:''}
+        ${liter?`<div class="small muted">Antall liter</div><div class="small" style="text-align:right">${kr(liter)} L</div>`:''}
+        ${totalpumpe?`<div class="small muted">Totalt ved pumpe</div><div class="small" style="text-align:right;font-weight:700">${kr(totalpumpe)} kr</div>`:''}
+        ${sats?`<div class="small muted">Sats</div><div class="small" style="text-align:right;color:#fde68a">${sats.navn}${forklaring?' · '+forklaring:''}</div>`:''}
+        ${sats&&liter?`<div class="small muted">Kundepris per liter</div><div class="small" style="text-align:right">${kr(kundeLiterpris)} kr/L</div>`:''}
+        ${sats&&liter?`<div class="small muted" style="font-weight:700">Kundepris totalt</div><div style="text-align:right;font-weight:800;font-size:15px;color:#86efac">${kr(kundetotal)} kr</div>`:''}
+        ${sats&&besparelse>0?`<div class="small muted">Besparelse</div><div class="small" style="text-align:right;color:#a1a1aa">–${kr(besparelse)} kr</div>`:''}
+      </div>
+    </div>`;
+  if (innhold) return html;
+  return `<div id="drivstoffBeregning_">${html}</div>`;
+}
+function su(id,f,val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.utstyr[f]=val; save(id);
+}
+
+// ════════════════════════════════════════════════════
+// ORDRE ACTIONS
+// ════════════════════════════════════════════════════
+function meldPaa(id) {
+  const o = S.ordrer.find(x=>x.id===id);
+  if (!o || o.ansatteSignert.find(a=>a.id===me.id)) return;
+  o.ansatteSignert.push({id:me.id, navn:me.navn, tid:fmt(new Date())});
+  logChange(o, me.navn+' meldt på'); save(id); buildOrdreDetail();
+}
+function startOrdreTimer(id) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o||o.ordreStart) return;
+  o.ordreStart=Date.now(); logChange(o,'Ordretid startet'); save(id); buildOrdreDetail();
+}
+function stoppOrdreTimer(id) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o||!o.ordreStart||o.ordreStopp) return;
+  o.ordreStopp=Date.now(); logChange(o,'Ordretid stoppet'); save(id); buildOrdreDetail();
+}
+function arkiver(id) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.status='arkivert'; logChange(o,'Arkivert'); save(id); renderAll(); tilbakeOrdreList();
+}
+function opprettOrdre() {
+  const regnr  = document.getElementById('n_regnr').value.trim().toUpperCase();
+  const chassis= document.getElementById('n_chassis').value.trim();
+  if (!regnr && !chassis){ alert('Fyll inn enten reg.nr eller chassis-nr'); return; }
+  const id='ord_'+Date.now();
+  const ny=mkOrdre(id,regnr,
+    document.getElementById('n_kunde').value.trim(),
+    document.getElementById('n_eier').value.trim(),
+    document.getElementById('n_type').value.trim(),
+    document.getElementById('n_variant').value.trim(),
+    document.getElementById('n_dato').value||new Date().toISOString().split('T')[0],'','','','');
+  ny.versjon = document.getElementById('n_versjon').value.trim();
+  ny.chassis  = chassis;
+  S.ordrer.push(ny);
+  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('nyOrdre'); renderAll();
+  ['n_regnr','n_chassis','n_kunde','n_eier','n_type','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
+  openOrdre(id);
+}
+
+// ════════════════════════════════════════════════════
+// FLYTT
+// ════════════════════════════════════════════════════
+function openFlytt(id) {
+  flyttOrdreId=id;
+  document.getElementById('fl_dato').value=new Date().toISOString().split('T')[0];
+  openModal('flytt');
+}
+function bekreftFlytt() {
+  const o=S.ordrer.find(x=>x.id===flyttOrdreId); if(!o) return;
+  o.kalenderDato=document.getElementById('fl_dato').value;
+  o.kalenderTid=document.getElementById('fl_tid').value;
+  logChange(o,'Flyttet til kalender: '+o.kalenderDato+' '+o.kalenderTid);
+  save(flyttOrdreId); closeModal('flytt'); renderAll();
+  if (activeOrdreId===flyttOrdreId) buildOrdreDetail();
+}
+
+// ════════════════════════════════════════════════════
+// SIGNATUR
+// ════════════════════════════════════════════════════
+let drawing=false, lastX=0, lastY=0, signCtx=null;
+
+function openSign(id) {
+  signOrdreId=id;
+  document.getElementById('signNavn').textContent='Ansatt: '+me.navn;
+  openModal('sign');
+  const c=document.getElementById('signCanvas');
+  c.width=c.offsetWidth||600;
+  signCtx=c.getContext('2d');
+  signCtx.strokeStyle='#f4f4f5'; signCtx.lineWidth=2.5; signCtx.lineCap='round';
+  clearCanvas();
+  const pos=(e)=>{
+    const r=c.getBoundingClientRect(), t=e.touches?e.touches[0]:e;
+    return {x:(t.clientX-r.left)*(c.width/r.width), y:(t.clientY-r.top)*(c.height/r.height)};
+  };
+  c.onmousedown=e=>{drawing=true;const p=pos(e);lastX=p.x;lastY=p.y;};
+  c.onmousemove=e=>{if(!drawing)return;const p=pos(e);signCtx.beginPath();signCtx.moveTo(lastX,lastY);signCtx.lineTo(p.x,p.y);signCtx.stroke();lastX=p.x;lastY=p.y;};
+  c.onmouseup=c.onmouseleave=()=>{drawing=false;};
+  c.ontouchstart=e=>{e.preventDefault();drawing=true;const p=pos(e);lastX=p.x;lastY=p.y;};
+  c.ontouchmove=e=>{e.preventDefault();if(!drawing)return;const p=pos(e);signCtx.beginPath();signCtx.moveTo(lastX,lastY);signCtx.lineTo(p.x,p.y);signCtx.stroke();lastX=p.x;lastY=p.y;};
+  c.ontouchend=()=>{drawing=false;};
+}
+function clearCanvas() { if(signCtx) signCtx.clearRect(0,0,signCtx.canvas.width,signCtx.canvas.height); }
+function lagreSignatur() {
+  const c=document.getElementById('signCanvas');
+  const o=S.ordrer.find(x=>x.id===signOrdreId); if(!o) return;
+  o.signatur=c.toDataURL();
+  logChange(o,'Signatur lagret av '+me.navn);
+  save(signOrdreId); closeModal('sign'); buildOrdreDetail();
+}
+
+// ════════════════════════════════════════════════════
+// GODKJENNING
+// ════════════════════════════════════════════════════
+function bekreftGodkjenn() {
+  const pin=document.getElementById('godkjPIN').value;
+  const godkjenner=S.ansatte.find(a=>a.pin===pin&&(a.rolle==='godkjenner'||a.rolle==='admin')&&a.aktiv);
+  if (!godkjenner){document.getElementById('godkjErr').textContent='Feil PIN eller ikke godkjenner';return;}
+  const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o) return;
+  o.godkjent=true; o.godkjennerNavn=godkjenner.navn;
+  logChange(o,'Godkjent og lukket av '+godkjenner.navn);
+  save(activeOrdreId); closeModal('godkjenn'); buildOrdreDetail(); renderAll();
+  document.getElementById('godkjPIN').value='';
+  document.getElementById('godkjErr').textContent='';
+}
+
+// ════════════════════════════════════════════════════
+// FOTO
+// ════════════════════════════════════════════════════
+function openLightbox(imgId) {
+  const img = document.getElementById(imgId);
+  if (!img) return;
+  document.getElementById('lightbox-img').src = img.src;
+  document.getElementById('lightbox').classList.add('show');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+  document.getElementById('lightbox-img').src = '';
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
+
+async function slaOppRegnr(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  const regnr = (document.getElementById('regnr_'+ordreId)?.value || o.regnr || '').trim().toUpperCase().replace(/\s/g,'');
+  const statusEl = document.getElementById('regnrStatus_'+ordreId);
+  if (!regnr) { if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Skriv inn reg.nr først</span>'; return; }
+  if(statusEl) statusEl.innerHTML='<span style="color:#a1a1aa">Søker...</span>';
+  try {
+    const res = await fetch(`https://www.vegvesen.no/ws/no/vegvesen/kjoretoy/felles/datautlevering/enkeltoppslag/kjoretoydata?kjennemerke=${regnr}`,
+      {headers:{'SVV-Authorization':'Apikey na'}});
+    if (!res.ok) throw new Error('Ikke funnet');
+    const data = await res.json();
+    const kjt = data?.kjoretoydataListe?.[0];
+    if (!kjt) throw new Error('Ingen data');
+    const td = kjt.godkjenning?.tekniskGodkjenning?.tekniskeData;
+    const merke    = td?.generelt?.merke?.[0]?.merke || '';
+    const modell   = td?.generelt?.handelsbetegnelse?.[0] || '';
+    const aar      = kjt.forstegangsregistrering?.registrertForstegangNorgeDato?.substring(0,4) || '';
+    const chassis  = kjt.kjennemerke?.understellsnummer || o.chassis || '';
+    const eier     = kjt.eier?.person?.etternavn ? (kjt.eier.person.fornavn||'')+' '+(kjt.eier.person.etternavn||'') : o.eier;
+    if (merke)   { o.type    = merke+(modell?' '+modell:''); }
+    if (aar)     { o.versjon = aar; }
+    if (chassis) { o.chassis = chassis; }
+    if (eier && eier.trim()) { o.eier = eier.trim(); }
+    logChange(o, 'Bilinfo hentet fra Statens vegvesen: '+merke+' '+modell);
+    save(ordreId); buildOrdreDetail();
+    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${merke} ${modell} ${aar}</span>`;
+  } catch(e) {
+    if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Ikke funnet – fyll inn manuelt</span>';
+  }
+}
+
+function lastOppFoto(e, id, side, idx) {
+  const file=e.target.files[0]; if(!file) return;
+  const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    if (side==='a') o.bilderAnkomst[idx]=ev.target.result;
+    else            o.bilderLevering[idx]=ev.target.result;
+    logChange(o,'Bilde lastet opp');
+    save(id); buildOrdreDetail();
+  };
+  reader.readAsDataURL(file);
+}
+function slettFoto(id, side, idx) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (side==='a') o.bilderAnkomst[idx]=null;
+  else            o.bilderLevering[idx]=null;
+  save(id); buildOrdreDetail();
+}
+
+// ════════════════════════════════════════════════════
+// TIMER (LØNN)
+// ════════════════════════════════════════════════════
+function initTimerPage() {
+  const d=new Date();
+  document.getElementById('timerDatoLbl').textContent=d.toLocaleDateString('no',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  timerType='normal';
+  highlightTimerType();
+  renderTimerHistorikk();
+}
+
+function setTimerType(t) {
+  timerType=t;
+  highlightTimerType();
+  document.getElementById('manuellFelt').style.display=t==='manuell'?'block':'none';
+  document.getElementById('ferieFelt').style.display=(t==='ferie'||t==='permisjon')?'block':'none';
+  const today=new Date().toISOString().split('T')[0];
+  if(t==='ferie'||t==='permisjon'){
+    document.getElementById('fFra').value=today;
+    document.getElementById('fTil').value=today;
+  }
+}
+
+function highlightTimerType() {
+  ['normal','manuell','syk','egenmelding','ferie','permisjon'].forEach(t=>{
+    const el=document.getElementById('ttype_'+t);
+    if(el) el.style.borderColor=t===timerType?'#ef4444':'#27272a';
+  });
+}
+
+// ── GPS HELPERS ──
+function haversine(lat1,lng1,lat2,lng2) {
+  const R=6371000, dL=(lat2-lat1)*Math.PI/180, dG=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function settGPSLokasjon() {
+  if(!navigator.geolocation){alert('GPS ikke støttet på denne enheten');return;}
+  const btn=document.getElementById('gpsSettBtn');
+  if(btn){btn.textContent='Henter posisjon...';btn.disabled=true;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    S.gps.lat=pos.coords.latitude; S.gps.lng=pos.coords.longitude;
+    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+    if(db) db.from('innstillinger').upsert({id:'main',dagens_pin:S.dagensPIN,gps_lat:S.gps.lat,gps_lng:S.gps.lng,gps_radius:S.gps.radius})
+      .then(r=>{if(r.error)console.error(r.error.message);});
+    renderMer();
+  }, ()=>{
+    alert('Kunne ikke hente GPS-posisjon. Prøv igjen.');
+    if(btn){btn.textContent='Sett arbeidsplasslokasjon';btn.disabled=false;}
+  },{timeout:10000});
+}
+
+function endreGPSRadius(val) {
+  S.gps.radius=Number(val);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('innstillinger').upsert({id:'main',dagens_pin:S.dagensPIN,gps_lat:S.gps.lat,gps_lng:S.gps.lng,gps_radius:S.gps.radius})
+    .then(r=>{if(r.error)console.error(r.error.message);});
+}
+
+function startTimer() {
+  // No GPS configured → start directly
+  if(!S.gps||!S.gps.lat) { doStartTimer('Ingen GPS konfigurert'); return; }
+  if(!navigator.geolocation) { openTimerPIN('GPS ikke støttet på denne enheten'); return; }
+  const btn=document.getElementById('startBtn');
+  if(btn){btn.textContent='⏳ Sjekker GPS...';btn.disabled=true;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const dist=haversine(pos.coords.latitude,pos.coords.longitude,S.gps.lat,S.gps.lng);
+    if(dist<=S.gps.radius){ doStartTimer('GPS verifisert ('+Math.round(dist)+'m)'); }
+    else { openTimerPIN(`Du er ${Math.round(dist)} m fra arbeidsplassen (maks ${S.gps.radius} m). Tast inn dagens PIN for å overstyre.`); }
+  }, ()=>{ openTimerPIN('GPS ikke tilgjengelig. Tast inn dagens PIN for å starte timer.'); },
+  {timeout:8000,maximumAge:30000});
+}
+
+function openTimerPIN(melding) {
+  const btn=document.getElementById('startBtn');
+  if(btn){btn.textContent='▶ Start';btn.disabled=false;}
+  document.getElementById('timerPINMsg').textContent=melding;
+  document.getElementById('timerPINInput').value='';
+  document.getElementById('timerPINErr').textContent='';
+  openModal('timerPIN');
+}
+
+function bekreftTimerPIN() {
+  const pin=document.getElementById('timerPINInput').value;
+  if(pin!==S.dagensPIN){document.getElementById('timerPINErr').textContent='Feil PIN – prøv igjen';return;}
+  closeModal('timerPIN');
+  doStartTimer('Startet med PIN-overstyring');
+}
+
+function doStartTimer(notat) {
+  const btn=document.getElementById('startBtn');
+  if(btn){btn.textContent='▶ Start';btn.disabled=true;}
+  timerStart=Date.now();
+  document.getElementById('stoppBtn').disabled=false;
+  document.getElementById('clockEl').classList.add('running');
+  timerTick=setInterval(updateClock,1000);
+  updateClock();
+  console.log('Timer startet:',notat);
+}
+
+function stoppTimer() {
+  if(timerTick){clearInterval(timerTick);timerTick=null;}
+  document.getElementById('startBtn').disabled=false;
+  document.getElementById('stoppBtn').disabled=true;
+  document.getElementById('clockEl').classList.remove('running');
+  document.getElementById('clockEl').classList.add('stopped');
+}
+
+function updateClock() {
+  if(!timerStart) return;
+  const ms=Date.now()-timerStart;
+  const mins=Math.floor(ms/60000);
+  const pause=mins>=480?30:(mins>=240?0:0); // 30 min pause if >=8 hours
+  const netto=Math.max(0,mins-pause);
+  const t=h=>h.toString().padStart(2,'0');
+  document.getElementById('clockTime').textContent=`${t(Math.floor(netto/60))} t ${t(netto%60)} min`;
+  const startStr=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
+  const nowStr=new Date().toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('clockRange').textContent=`${startStr} – ${nowStr}`;
+  document.getElementById('clockPause').textContent=pause>0?`(−${pause} min pause)`:'';
+}
+
+function lagreTimer() {
+  if(!me) return;
+  let start='', stopp='', mins=0;
+  if (timerType==='manuell') {
+    start=document.getElementById('mFra').value;
+    stopp=document.getElementById('mTil').value;
+    if(start&&stopp){const [sh,sm]=start.split(':').map(Number);const [eh,em]=stopp.split(':').map(Number);mins=(eh*60+em)-(sh*60+sm)-30;}
+  } else if (timerStart) {
+    const ms=Date.now()-timerStart;
+    mins=Math.floor(ms/60000);
+    const pause=mins>=480?30:0;
+    mins=Math.max(0,mins-pause);
+    start=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
+    stopp=new Date().toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
+  } else if (['ferie','permisjon'].includes(timerType)) {
+    // Date range — create one entry per weekday
+    const fra=document.getElementById('fFra').value;
+    const til=document.getElementById('fTil').value;
+    if(!fra||!til){alert('Velg fra- og til-dato');return;}
+    const entries=[];
+    let cur=new Date(fra);
+    const end=new Date(til);
+    while(cur<=end){
+      const dag=cur.getDay();
+      if(dag!==0&&dag!==6){ // skip weekends
+        entries.push({
+          id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+          dato:cur.toISOString().split('T')[0], type:timerType,
+          start:'–', stopp:'–', mins:0
+        });
+      }
+      cur.setDate(cur.getDate()+1);
+    }
+    if(!entries.length){alert('Ingen hverdager i valgt periode');return;}
+    entries.forEach(e=>{
+      S.timer.push(e);
+      if(db) db.from('timer_entries').insert({id:e.id,ansatt_id:me.id,ansatt:me.navn,dato:e.dato,type:timerType,start:'–',stopp:'–',mins:0})
+        .then(r=>{if(r.error)console.error('Timer lagringsfeil:',r.error.message);});
+    });
+    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+    renderTimerHistorikk(); renderTimerMaaned();
+    return;
+  } else if (['syk','egenmelding'].includes(timerType)) {
+    mins=0; start='–'; stopp='–';
+  } else { alert('Start timer først'); return; }
+  const timerEntry={
+    id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+    dato:new Date().toISOString().split('T')[0], type:timerType,
+    start, stopp, mins
+  };
+  S.timer.push(timerEntry);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('timer_entries').insert({
+    id:timerEntry.id, ansatt_id:me.id, ansatt:me.navn,
+    dato:timerEntry.dato, type:timerType, start, stopp, mins
+  }).then(r=>{if(r.error)console.error('Timer lagringsfeil:',r.error.message);});
+  renderTimerHistorikk();
+  stoppTimer();
+  timerStart=null;
+  document.getElementById('clockEl').classList.remove('stopped');
+  document.getElementById('clockTime').textContent='00 t 00 min';
+  document.getElementById('clockRange').textContent='--:-- – --:--';
+  document.getElementById('clockPause').textContent='';
+}
+
+function renderTimerHistorikk() {
+  if(!me) return;
+  const el=document.getElementById('timerHistorikk'); if(!el) return;
+  const today=new Date().toISOString().split('T')[0];
+  const mine=S.timer.filter(t=>t.ansattId===me.id&&t.dato===today);
+  if(!mine.length){el.innerHTML='<div class="muted small">Ingen timer registrert i dag</div>';return;}
+  el.innerHTML='<div class="h" style="margin-bottom:8px">Registrert i dag</div>'+
+    mine.map(t=>`<div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+      <div><div class="small"><b>${t.dato}</b> – ${t.type}</div><div class="small muted">${t.start} – ${t.stopp}</div></div>
+      <div class="small">${t.mins?Math.floor(t.mins/60)+'t '+t.mins%60+'m':'–'}</div>
+    </div>`).join('');
+  renderTimerMaaned();
+}
+
+let timerMaanedOffset=0; // 0=nåværende måned, -1=forrige, osv
+
+function erHelg(datoStr) {
+  const d = new Date(datoStr);
+  const dag = d.getDay(); // 0=søn, 6=lør
+  return dag === 0 || dag === 6;
+}
+
+function beregnOvertid(mins, datoStr) {
+  if (erHelg(datoStr)) {
+    return {normal: 0, ot50: 0, ot100: mins};
+  }
+  const normal = Math.min(mins, 450);   // 7.5 timer = 450 min
+  const rest   = Math.max(0, mins - 450);
+  const ot50   = Math.min(rest, 270);   // neste 4.5 timer = 270 min (til 12 timer totalt)
+  const ot100  = Math.max(0, rest - 270);
+  return {normal, ot50, ot100};
+}
+
+function timerMaanedNaviger(dir) {
+  timerMaanedOffset+=dir;
+  renderTimerMaaned();
+}
+
+function renderTimerMaaned() {
+  if(!me) return;
+  const now=new Date();
+  const year=new Date(now.getFullYear(), now.getMonth()+timerMaanedOffset, 1).getFullYear();
+  const month=new Date(now.getFullYear(), now.getMonth()+timerMaanedOffset, 1).getMonth();
+  const prefix=`${year}-${String(month+1).padStart(2,'0')}`;
+  const maanedNavn=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+  const lbl=document.getElementById('timerMaanedLbl');
+  const sammendrag=document.getElementById('timerMaanedSammendrag');
+  const liste=document.getElementById('timerMaanedListe');
+  if(!lbl||!sammendrag||!liste) return;
+
+  lbl.textContent=`${maanedNavn[month]} ${year}`;
+
+  const mine=S.timer.filter(t=>t.ansattId===me.id&&t.dato?.startsWith(prefix));
+
+  const totMins=mine.filter(t=>t.mins>0).reduce((s,t)=>s+t.mins,0);
+  const arbDager=new Set(mine.filter(t=>['normal','manuell'].includes(t.type)).map(t=>t.dato)).size;
+  const sykDager=mine.filter(t=>t.type==='syk'||t.type==='egenmelding').length;
+  const ferieDager=mine.filter(t=>t.type==='ferie').length;
+
+  let totNormal = 0, totOt50 = 0, totOt100 = 0;
+  mine.filter(t=>t.mins>0).forEach(t => {
+    const ot = beregnOvertid(t.mins, t.dato);
+    totNormal += ot.normal;
+    totOt50   += ot.ot50;
+    totOt100  += ot.ot100;
+  });
+
+  sammendrag.innerHTML=`<div class="grid g3" style="margin-bottom:10px;gap:8px">
+    <div class="box" style="text-align:center">
+      <div class="muted small">Total arbeidstid</div>
+      <div class="title">${Math.floor(totMins/60)}<span style="font-size:14px;font-weight:400"> t </span>${totMins%60}<span style="font-size:14px;font-weight:400"> min</span></div>
+    </div>
+    <div class="box" style="text-align:center">
+      <div class="muted small">Arbeidsdager</div>
+      <div class="title">${arbDager}</div>
+    </div>
+    <div class="box" style="text-align:center">
+      <div class="muted small">Syk / egenmelding</div>
+      <div class="title">${sykDager}</div>
+    </div>
+    <div class="box" style="text-align:center">
+      <div class="muted small">Normal tid</div>
+      <div class="title">${Math.floor(totNormal/60)}<span style="font-size:14px;font-weight:400"> t</span></div>
+    </div>
+    <div class="box" style="text-align:center">
+      <div class="muted small" style="color:#facc15">50% overtid</div>
+      <div class="title" style="color:#facc15">${Math.floor(totOt50/60)}<span style="font-size:14px;font-weight:400"> t </span>${totOt50%60}<span style="font-size:14px;font-weight:400"> min</span></div>
+    </div>
+    <div class="box" style="text-align:center">
+      <div class="muted small" style="color:#f97316">100% overtid</div>
+      <div class="title" style="color:#f97316">${Math.floor(totOt100/60)}<span style="font-size:14px;font-weight:400"> t </span>${totOt100%60}<span style="font-size:14px;font-weight:400"> min</span></div>
+    </div>
+  </div>`;
+
+  if(!mine.length){liste.innerHTML='<div class="muted small">Ingen registreringer denne måneden</div>';return;}
+
+  const sorted=[...mine].sort((a,b)=>b.dato.localeCompare(a.dato));
+  liste.innerHTML=sorted.map(t=>{
+    const ot = beregnOvertid(t.mins||0, t.dato);
+    const otTxt = (ot.ot50>0||ot.ot100>0)
+      ? `<span style="color:#facc15;margin-left:4px">${ot.ot50>0?'+'+Math.round(ot.ot50/60*10)/10+'t 50%':''}</span>`+
+        `<span style="color:#f97316;margin-left:4px">${ot.ot100>0?'+'+Math.round(ot.ot100/60*10)/10+'t 100%':''}</span>`
+      : '';
+    return `
+    <div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="small"><b>${t.dato}</b> &nbsp;<span class="pill" style="font-size:11px;padding:2px 8px">${t.type}</span></div>
+        <div class="small muted">${t.start} – ${t.stopp}</div>
+      </div>
+      <div class="small" style="font-weight:700;text-align:right">${t.mins?Math.floor(t.mins/60)+'t '+t.mins%60+'m':'–'}${otTxt}</div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════
+// ARKIV
+// ════════════════════════════════════════════════════
+function renderArkiv() {
+  const q=(document.getElementById('arkivSok')?.value||'').toLowerCase().trim();
+  const match=o=>!q||o.regnr?.toLowerCase().includes(q)||o.kunde?.toLowerCase().includes(q)||o.chassis?.toLowerCase().includes(q)||o.eier?.toLowerCase().includes(q);
+  const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o));
+  const ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o));
+  document.getElementById('arkivAktiv').innerHTML=aktive.length
+    ?aktive.map(o=>{
+      const si=statusInfo(o.ordreStatus);
+      return `<div style="border:2px solid ${si.border};border-radius:12px;padding:10px;margin-bottom:6px;cursor:pointer;background:#111114" onclick="openOrdre('${o.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
+          <b>${ordreLabel(o)}</b>
+          <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
+        </div>
+        <div class="small muted" style="margin-top:3px">${o.type} ${o.variant} · ${o.kunde}</div>
+      </div>`;
+    }).join('')
+    :'<div class="muted small">Ingen</div>';
+  document.getElementById('arkivFerdig').innerHTML=ferdig.length
+    ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px">
+        <div class="row" style="margin-bottom:4px">
+          <div><b>${ordreLabel(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
+          <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
+        </div>
+        <div class="small muted">${o.kunde}${o.ankomstdato?' · '+o.ankomstdato:''}</div>
+        <div style="margin-top:6px">
+          ${o.fakturert
+            ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${o.fakturertAv}</span>`
+            :`<span class="pill bad" style="font-size:11px">Ikke fakturert</span>`}
+        </div>
+      </div>`).join('')
+    :'<div class="muted small">Ingen arkiverte ordrer</div>';
+}
+
+function slettOrdre(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!confirm(`Sikker på at du vil slette ordren for ${ordreLabel(o)}?\n\nDette kan ikke angres.`)) return;
+  S.ordrer = S.ordrer.filter(x=>x.id!==id);
+  S.timer  = S.timer.filter(t=>t.ordreId!==id);
+  if (db) {
+    db.from('ordrer').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message)});
+    db.from('timer').delete().eq('ordre_id',id).then(r=>{if(r.error)console.error(r.error.message)});
+  }
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  tilbakeOrdreList(); renderAll();
+}
+
+function gjenopprett(id) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.status='aktiv'; logChange(o,'Gjenopprettet');
+  save(); renderArkiv(); renderOversikt();
+}
+
+// ════════════════════════════════════════════════════
+// MER
+// ════════════════════════════════════════════════════
+function renderMer() {
+  const erAdmin = me && me.rolle === 'admin';
+  const erGodkjenner = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
+
+  // Vis/skjul admin-only kort
+  document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
+  document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
+  document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
+
+  if (erAdmin) {
+    document.getElementById('dagensPINVal').textContent = S.dagensPIN;
+    const gpsEl = document.getElementById('gpsStatus');
+    const radEl = document.getElementById('gpsRadius');
+    if (gpsEl) gpsEl.textContent = S.gps?.lat
+      ? `Lokasjon satt: ${S.gps.lat.toFixed(5)}, ${S.gps.lng.toFixed(5)}`
+      : 'Ingen lokasjon satt ennå';
+    if (radEl) radEl.value = S.gps?.radius || 300;
+    const al = document.getElementById('ansatteListe');
+    al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row">
+      <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span></div>
+      <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
+    </div>${!a.aktiv?'<div class="small err-text">Inaktiv</div>':''}</div>`).join('');
+  }
+
+  if (erGodkjenner) {
+    const klar=S.ordrer.filter(o=>tvangsflyt(o).every(t=>t.ok)&&!o.godkjent&&o.status==='aktiv');
+    document.getElementById('tilGodkj').innerHTML=klar.length
+      ?klar.map(o=>`<div class="box" style="margin-bottom:6px"><b>${ordreLabel(o)}</b> er klar for godkjenner. <button class="btn sm" style="margin-left:8px" onclick="openOrdre('${o.id}')">Åpne</button></div>`).join('')
+      :'<div class="muted small">Ingen ordrer venter på godkjenning</div>';
+  }
+
+  const fravarIDag=S.timer.filter(t=>{
+    const d=new Date().toISOString().split('T')[0];
+    return t.dato===d&&['syk','egenmelding','ferie','permisjon'].includes(t.type);
+  });
+  document.getElementById('fravarIDag').innerHTML=fravarIDag.length
+    ?fravarIDag.map(t=>`<div class="box" style="margin-bottom:6px"><b>${t.ansatt}</b> – ${t.type}</div>`).join('')
+    :'<div class="muted small">Ingen fravær registrert i dag</div>';
+
+  // Rollebasert synlighet
+  // Ansatt: Beskjeder, Kontakter, Fraværskalender, HMS-logg
+  // Godkjenner: + Timer og overtid
+  // Admin: alt
+  document.getElementById('merTimerOversikt').style.display = erGodkjenner ? 'block' : 'none';
+  document.getElementById('merOrdreRapport').style.display    = erAdmin ? 'block' : 'none';
+  document.getElementById('merDrivstoffSatser').style.display = erAdmin ? 'block' : 'none';
+  document.getElementById('merUtstyrMaler').style.display     = erAdmin ? 'block' : 'none';
+
+  renderBeskjeder();
+  renderKontakter();
+  renderFravarKalender();
+  renderHMS();
+  if (erGodkjenner) renderTimerOversikt();
+  if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
+}
+
+let adminStatOffset = 0;
+function adminStatNaviger(dir) { adminStatOffset += dir; renderTimerOversikt(); }
+
+function fmtTid(mins) {
+  return `${Math.floor(mins/60)}t ${mins%60}m`;
+}
+
+function renderTimerOversikt() {
+  const maanedNavn = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+  const now = new Date();
+  const dato = new Date(now.getFullYear(), now.getMonth() + adminStatOffset, 1);
+  const prefix = `${dato.getFullYear()}-${String(dato.getMonth()+1).padStart(2,'0')}`;
+  const lbl = document.getElementById('adminStatLbl');
+  if (lbl) lbl.textContent = `${maanedNavn[dato.getMonth()]} ${dato.getFullYear()}`;
+
+  let totalNormal=0, totalOt50=0, totalOt100=0, totalMins=0;
+
+  const rader = S.ansatte.filter(a=>a.aktiv).map(a => {
+    const timer = S.timer.filter(t => t.ansattId===a.id && t.dato?.startsWith(prefix));
+    const arbTimer = timer.filter(t=>t.mins>0);
+    const totMins = arbTimer.reduce((s,t)=>s+t.mins,0);
+    const sykDager = timer.filter(t=>['syk','egenmelding'].includes(t.type)).length;
+    const ferieDager = timer.filter(t=>['ferie','permisjon'].includes(t.type)).length;
+    let normal=0, ot50=0, ot100=0;
+    arbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); normal+=ot.normal; ot50+=ot.ot50; ot100+=ot.ot100; });
+    totalNormal+=normal; totalOt50+=ot50; totalOt100+=ot100; totalMins+=totMins;
+    return `<div class="box" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px">
+        <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span></div>
+        <div class="small" style="font-weight:700;color:#f4f4f5">${fmtTid(totMins)} totalt</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;margin-top:8px">
+        <div style="background:#18181b;border-radius:10px;padding:8px;text-align:center">
+          <div class="small muted">Normal</div>
+          <div style="font-weight:700;font-size:15px;margin-top:2px">${fmtTid(normal)}</div>
+        </div>
+        <div style="background:#42200688;border-radius:10px;padding:8px;text-align:center">
+          <div class="small" style="color:#fde68a">50% overtid</div>
+          <div style="font-weight:700;font-size:15px;color:#facc15;margin-top:2px">${fmtTid(ot50)}</div>
+        </div>
+        <div style="background:#43140788;border-radius:10px;padding:8px;text-align:center">
+          <div class="small" style="color:#fed7aa">100% overtid</div>
+          <div style="font-weight:700;font-size:15px;color:#f97316;margin-top:2px">${fmtTid(ot100)}</div>
+        </div>
+        ${sykDager>0||ferieDager>0?`<div style="background:#09090b;border-radius:10px;padding:8px;text-align:center">
+          <div class="small muted">Fravær</div>
+          <div style="font-size:13px;margin-top:2px">${sykDager>0?`<span style="color:#fca5a5">Syk: ${sykDager}d</span> `:''}${ferieDager>0?`<span style="color:#a1a1aa">Ferie: ${ferieDager}d</span>`:''}</div>
+        </div>`:''}
+      </div>
+    </div>`;
+  });
+
+  // Totallinje
+  const totalRad = totalMins > 0 ? `
+    <div style="background:#18181b;border:1px solid #3f3f46;border-radius:14px;padding:12px;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <b style="font-size:15px">Total – alle ansatte</b>
+        <b style="font-size:15px">${fmtTid(totalMins)}</b>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+        <div style="text-align:center">
+          <div class="small muted">Normal</div>
+          <div style="font-weight:800;font-size:16px;margin-top:2px">${fmtTid(totalNormal)}</div>
+        </div>
+        <div style="text-align:center">
+          <div class="small" style="color:#fde68a">50% overtid</div>
+          <div style="font-weight:800;font-size:16px;color:#facc15;margin-top:2px">${fmtTid(totalOt50)}</div>
+        </div>
+        <div style="text-align:center">
+          <div class="small" style="color:#fed7aa">100% overtid</div>
+          <div style="font-weight:800;font-size:16px;color:#f97316;margin-top:2px">${fmtTid(totalOt100)}</div>
+        </div>
+      </div>
+    </div>` : '';
+
+  document.getElementById('adminStatInnhold').innerHTML =
+    (rader.join('') || '<div class="muted small">Ingen timer registrert denne måneden</div>') + totalRad;
+}
+
+// ════════════════════════════════════════════════════
+// BESKJEDER
+// ════════════════════════════════════════════════════
+function lagreBeskjed() {
+  const tekst = document.getElementById('bTekst').value.trim();
+  if (!tekst) return;
+  S.beskjeder.unshift({id:'b'+(++S.nextId), av:me.navn, avId:me.id, tekst, dato:new Date().toISOString()});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('nyBeskjed');
+  document.getElementById('bTekst').value='';
+  renderBeskjeder();
+}
+
+function slettBeskjed(id) {
+  S.beskjeder = S.beskjeder.filter(b=>b.id!==id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderBeskjeder();
+}
+
+function renderBeskjeder() {
+  const erAdmin = me && me.rolle==='admin';
+  document.getElementById('merBeskjedAdminBtn').innerHTML = erAdmin
+    ? '<button class="btn sm red" onclick="openModal(\'nyBeskjed\')">+ Ny beskjed</button>' : '';
+  const el = document.getElementById('beskjedListe');
+  if (!S.beskjeder.length) { el.innerHTML='<div class="muted small">Ingen beskjeder</div>'; return; }
+  el.innerHTML = S.beskjeder.slice(0,10).map(b=>`
+    <div class="box" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1">${b.tekst.replace(/\n/g,'<br>')}</div>
+        ${erAdmin?`<button onclick="slettBeskjed('${b.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>`:''}
+      </div>
+      <div class="small muted" style="margin-top:6px">${b.av} · ${new Date(b.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════
+// KONTAKTER
+// ════════════════════════════════════════════════════
+function lagreKontakt() {
+  const navn = document.getElementById('kNavn').value.trim();
+  if (!navn) { alert('Navn er påkrevd'); return; }
+  S.kontakter.push({
+    id:'k'+(++S.nextId),
+    navn, type:document.getElementById('kType').value,
+    tlf:document.getElementById('kTlf').value.trim(),
+    epost:document.getElementById('kEpost').value.trim(),
+    notat:document.getElementById('kNotat').value.trim()
+  });
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('nyKontakt');
+  ['kNavn','kTlf','kEpost','kNotat'].forEach(i=>document.getElementById(i).value='');
+  renderKontakter();
+}
+
+function slettKontakt(id) {
+  S.kontakter = S.kontakter.filter(k=>k.id!==id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderKontakter();
+}
+
+function renderKontakter() {
+  const erAdmin = me && me.rolle==='admin';
+  document.getElementById('merKontaktAdminBtn').innerHTML = erAdmin
+    ? '<button class="btn sm red" onclick="openModal(\'nyKontakt\')">+ Ny kontakt</button>' : '';
+  const el = document.getElementById('kontaktListe');
+  if (!S.kontakter.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
+  el.innerHTML = S.kontakter.map(k=>`
+    <div class="box" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div>
+          <div><b>${k.navn}</b> <span class="pill" style="font-size:11px;padding:2px 8px">${k.type}</span></div>
+          ${k.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${k.tlf}" style="color:#ef4444;font-weight:600;text-decoration:none">${k.tlf}</a></div>`:''}
+          ${k.epost?`<div class="small">✉ <a href="mailto:${k.epost}" style="color:#a1a1aa;text-decoration:none">${k.epost}</a></div>`:''}
+          ${k.notat?`<div class="small muted" style="margin-top:4px">${k.notat}</div>`:''}
+        </div>
+        ${erAdmin?`<button onclick="slettKontakt('${k.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>`:''}
+      </div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════
+// FRAVÆRSKALENDER
+// ════════════════════════════════════════════════════
+function renderFravarKalender() {
+  const el = document.getElementById('fravarKalender');
+  const now = new Date();
+  const days = [];
+  for (let i=0; i<14; i++) {
+    const d = new Date(now); d.setDate(now.getDate()+i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  const rows = days.map(dato => {
+    const dag = new Date(dato).getDay();
+    if (dag===0||dag===6) return null;
+    const fravær = S.timer.filter(t=>t.dato===dato&&['syk','egenmelding','ferie','permisjon'].includes(t.type));
+    if (!fravær.length) return null;
+    const datoFmt = new Date(dato).toLocaleDateString('no',{weekday:'short',day:'numeric',month:'short'});
+    return `<div class="box" style="margin-bottom:6px">
+      <div class="small" style="font-weight:700;margin-bottom:4px">${datoFmt}</div>
+      ${fravær.map(f=>`<div class="small muted">${f.ansatt} · <span style="color:#fde68a">${f.type}</span></div>`).join('')}
+    </div>`;
+  }).filter(Boolean);
+  el.innerHTML = rows.length ? rows.join('') : '<div class="muted small">Ingen registrert fravær de neste 14 dagene</div>';
+}
+
+
+// ════════════════════════════════════════════════════
+// ORDRERAPPORT
+// ════════════════════════════════════════════════════
+function renderOrdreRapport() {
+  const el = document.getElementById('ordreRapportInnhold'); if(!el) return;
+  const maanedNavn=['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+  const now = new Date();
+  const rapporter = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const ordrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(prefix));
+    const ferdig = ordrer.filter(o=>o.godkjent).length;
+    rapporter.push({lbl:`${maanedNavn[d.getMonth()]} ${d.getFullYear()}`, tot:ordrer.length, ferdig});
+  }
+  const maxTot = Math.max(1, ...rapporter.map(r=>r.tot));
+  el.innerHTML = rapporter.map(r=>`
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span class="small">${r.lbl}</span>
+        <span class="small muted">${r.tot} biler · ${r.ferdig} ferdig</span>
+      </div>
+      <div style="background:#27272a;border-radius:6px;height:10px;overflow:hidden">
+        <div style="height:100%;background:#ef4444;width:${Math.round(r.tot/maxTot*100)}%;border-radius:6px;transition:width 0.3s"></div>
+      </div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════════════
+// UTSTYR-MALER
+// ════════════════════════════════════════════════════
+function lagreUtstyrMal() {
+  const navn = document.getElementById('uMalNavn').value.trim();
+  const biltype = document.getElementById('uMalBiltype').value.trim();
+  const punkterRaw = document.getElementById('uMalPunkter').value;
+  if (!navn) { alert('Navn er påkrevd'); return; }
+  const punkter = punkterRaw.split('\n').map(p=>p.trim()).filter(Boolean);
+  if (!punkter.length) { alert('Legg til minst ett punkt'); return; }
+  S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('nyUtstyrMal');
+  ['uMalNavn','uMalBiltype','uMalPunkter'].forEach(i=>document.getElementById(i).value='');
+  renderUtstyrMaler();
+}
+
+function slettUtstyrMal(id) {
+  S.utstyrMaler = S.utstyrMaler.filter(m=>m.id!==id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderUtstyrMaler();
+}
+
+function renderUtstyrMaler() {
+  const el = document.getElementById('utstyrMalListe'); if(!el) return;
+  if (!S.utstyrMaler.length) { el.innerHTML='<div class="muted small">Ingen maler opprettet ennå</div>'; return; }
+  el.innerHTML = S.utstyrMaler.map(m=>`
+    <div class="box" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div>
+          <b>${m.navn}</b>
+          ${m.biltype?`<span class="pill" style="font-size:11px;margin-left:4px">${m.biltype}</span>`:'<span class="pill" style="font-size:11px;margin-left:4px">Alle biler</span>'}
+          <div class="small muted" style="margin-top:4px">${m.punkter.length} punkter: ${m.punkter.slice(0,4).join(', ')}${m.punkter.length>4?'...':''}</div>
+        </div>
+        <button onclick="slettUtstyrMal('${m.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function applyUtstyrMal(ordreId, malId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  const mal = S.utstyrMaler.find(m=>m.id===malId); if(!mal) return;
+  if(o.utstyrSjekkliste?.length && !confirm(`Erstatte eksisterende liste (${o.utstyrSjekkliste.length} punkter) med "${mal.navn}"?`)) return;
+  o.utstyrSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
+  o.utstyrMalNavn = mal.navn;
+  logChange(o, 'Utstyr-mal (ankomst) valgt: '+mal.navn);
+  save(ordreId); buildOrdreDetail();
+}
+
+function toggleUtstyrPunkt(ordreId, idx) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  o.utstyrSjekkliste[idx].ok = !o.utstyrSjekkliste[idx].ok;
+  save(ordreId); buildOrdreDetail();
+}
+
+function applyVisningsMal(ordreId, malId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  const mal = S.utstyrMaler.find(m=>m.id===malId); if(!mal) return;
+  if(o.visningsSjekkliste?.length && !confirm(`Erstatte eksisterende liste (${o.visningsSjekkliste.length} punkter) med "${mal.navn}"?`)) return;
+  o.visningsSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
+  o.visningsMalNavn = mal.navn;
+  logChange(o, 'Utstyr-mal (visning) valgt: '+mal.navn);
+  save(ordreId); buildOrdreDetail();
+}
+
+function toggleVisningsPunkt(ordreId, idx) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  o.visningsSjekkliste[idx].ok = !o.visningsSjekkliste[idx].ok;
+  save(ordreId); buildOrdreDetail();
+}
+
+// ════════════════════════════════════════════════════
+// HMS-LOGG
+// ════════════════════════════════════════════════════
+function lagreHMS() {
+  const besk = document.getElementById('hmsBesk').value.trim();
+  if (!besk) { alert('Beskrivelse er påkrevd'); return; }
+  S.hms.unshift({
+    id:'h'+(++S.nextId), av:me.navn, avId:me.id,
+    dato:new Date().toISOString(),
+    type:document.getElementById('hmsType').value,
+    beskrivelse:besk,
+    tiltak:document.getElementById('hmsTiltak').value.trim(),
+    lukket:false
+  });
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('nyHMS');
+  ['hmsBesk','hmsTiltak'].forEach(i=>document.getElementById(i).value='');
+  renderHMS();
+}
+
+function toggleHMSLukket(id) {
+  const h = S.hms.find(x=>x.id===id); if(!h) return;
+  h.lukket=!h.lukket;
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderHMS();
+}
+
+function renderHMS() {
+  const el = document.getElementById('hmsListe'); if(!el) return;
+  const erAdmin = me && me.rolle==='admin';
+  const vis = erAdmin ? S.hms : S.hms.filter(h=>!h.lukket);
+  if (!vis.length) { el.innerHTML='<div class="muted small">Ingen HMS-registreringer</div>'; return; }
+  el.innerHTML = vis.slice(0,20).map(h=>`
+    <div class="box" style="margin-bottom:8px;${h.lukket?'opacity:0.5':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div style="flex:1">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+            <span class="pill warn" style="font-size:11px">${h.type}</span>
+            ${h.lukket?'<span class="pill ok" style="font-size:11px">Lukket</span>':''}
+          </div>
+          <div class="small">${h.beskrivelse}</div>
+          ${h.tiltak?`<div class="small muted" style="margin-top:4px">Tiltak: ${h.tiltak}</div>`:''}
+          <div class="small muted" style="margin-top:4px">${h.av} · ${new Date(h.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
+        </div>
+        ${erAdmin?`<button class="btn sm" onclick="toggleHMSLukket('${h.id}')">${h.lukket?'Gjenåpne':'Lukk'}</button>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function genPIN() {
+  S.dagensPIN=String(Math.floor(1000+Math.random()*9000));
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('innstillinger').upsert({id:'main',dagens_pin:S.dagensPIN})
+    .then(r=>{if(r.error)console.error('PIN lagringsfeil:',r.error.message);});
+  renderMer();
+}
+
+function toggleAnsatt(id) {
+  const a=S.ansatte.find(x=>x.id===id); if(!a) return;
+  a.aktiv=!a.aktiv;
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('ansatte').update({aktiv:a.aktiv}).eq('id',id)
+    .then(r=>{if(r.error)console.error('Ansatt lagringsfeil:',r.error.message);});
+  renderMer();
+}
+
+function opprettAnsatt() {
+  const navn=document.getElementById('na_navn').value.trim();
+  const pin=document.getElementById('na_pin').value.trim();
+  if(!navn||pin.length!==4||isNaN(Number(pin))){alert('Fyll ut navn og 4-sifret PIN');return;}
+  if(S.ansatte.find(a=>a.pin===pin)){alert('Denne PIN er allerede i bruk');return;}
+  const nyA={id:++S.nextId, navn, pin, rolle:document.getElementById('na_rolle').value, aktiv:true};
+  S.ansatte.push(nyA);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('ansatte').insert({id:nyA.id,navn,pin,rolle:nyA.rolle,aktiv:true})
+    .then(r=>{if(r.error)console.error('Ansatt insert feil:',r.error.message);});
+  closeModal('nyAnsatt'); renderMer();
+  ['na_navn','na_pin'].forEach(i=>document.getElementById(i).value='');
+}
+
+// ════════════════════════════════════════════════════
+// CSV EKSPORT
+// ════════════════════════════════════════════════════
+function eksportCSV() {
+  const rows=[['Ansatt','Dato','Type','Fra','Til','Minutter'],...S.timer.map(t=>[t.ansatt,t.dato,t.type,t.start,t.stopp,t.mins])];
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='salmakern_timer_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+}
+
+// ════════════════════════════════════════════════════
+// PDF (enkel utskrift)
+// ════════════════════════════════════════════════════
+function genPDF(id) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  const w=window.open('','_blank');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Ordre ${ordreLabel(o)}</title>
+  <style>body{font-family:Arial,sans-serif;padding:32px;max-width:800px;margin:auto}h1{margin-bottom:4px}h2{margin-top:24px;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:4px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.info{margin-bottom:4px}table{width:100%;border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px 8px;text-align:left}th{background:#f5f5f5}img.sig{max-width:300px;border:1px solid #ccc}img.foto{max-width:100%;max-height:200px;object-fit:cover;border-radius:4px}@media print{button{display:none}}</style></head><body>
+  <h1>Ordre: ${ordreLabel(o)}</h1><div class="info muted">${o.type} ${o.variant} | Chassis: ${o.chassis||'–'} | Reg.nr: ${o.regnr||'–'}</div>
+  <button onclick="window.print()" style="margin:12px 0;padding:8px 16px;cursor:pointer">Skriv ut / Lagre PDF</button>
+  <div class="grid">
+    <div><h2>Kundeinfo</h2><div><b>Kunde:</b> ${o.kunde}</div><div><b>Eier:</b> ${o.eier}</div><div><b>Ankomst:</b> ${o.ankomstdato}</div></div>
+    <div><h2>Utstyr</h2><div><b>Har:</b><br>${(o.utstyr.har||'–').replace(/\n/g,'<br>')}</div><div style="margin-top:8px"><b>Skal ha:</b><br>${(o.utstyr.skalHa||'–').replace(/\n/g,'<br>')}</div></div>
+  </div>
+  <h2>Vekter (kg)</h2><table><tr><th></th><th>Ved ankomst</th><th>Endring</th><th>Før visning</th></tr>
+  ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,l])=>`<tr><td>${l}</td><td>${o.vekter[k].a||'–'}</td><td>${o.vekter[k].e||'–'}</td><td>${o.vekter[k].v||'–'}</td></tr>`).join('')}</table>
+  <h2>Drivstoff</h2><div><b>Pris:</b> ${o.drivstoff.pris||'–'} kr | <b>Sats:</b> ${o.drivstoff.sats||'–'} kr</div>
+  <h2>Bilder – Ankomst</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${o.bilderAnkomst.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'Ingen bilder'}</div>
+  <h2>Bilder – Levering</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${o.bilderLevering.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'Ingen bilder'}</div>
+  <h2>Ansatte</h2>${o.ansatteSignert.map(a=>`<div>${a.navn} – ${a.tid}</div>`).join('')||'Ingen'}
+  <h2>Signatur</h2>${o.signatur?`<img class="sig" src="${o.signatur}">`:'Ingen signatur'}
+  <h2>Godkjenning</h2>${o.godkjent?`Godkjent av ${o.godkjennerNavn}`:'Ikke godkjent'}
+  <h2>Notater</h2><p>${(o.notater||'–').replace(/\n/g,'<br>')}</p>
+  </body></html>`);
+  w.document.close();
+}
+
+// ════════════════════════════════════════════════════
+// MODALS
+// ════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+document.querySelectorAll('.modal').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('show'); });
+});
+</script>
+</body>
+</html>

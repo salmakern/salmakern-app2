@@ -1,0 +1,22 @@
+{
+  "name": "Salmaker'n – Telemark Salmakerverksted",
+  "short_name": "Salmaker'n",
+  "description": "Internverktøy for Telemark Salmakerverksted",
+  "start_url": "/salmakern.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "lang": "nb",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "screenshots": []
+}
