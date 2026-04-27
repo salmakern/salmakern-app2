@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:chatgpt.com)",
+      "Bash(python3 -c ' *)",
+      "Bash(npm --version)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}

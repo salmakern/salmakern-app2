@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Salmaker'n (Python HTTP)",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5500", "--directory", "C:\\Users\\GroAnitaMartinsen\\OneDrive - Telemark Salmakerverksted\\Skrivebord\\Claude app"],
+      "port": 5500
+    }
+  ]
+}
