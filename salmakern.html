@@ -2211,9 +2211,9 @@ function renderTimerOversikt() {
     let normal=0, ot50=0, ot100=0;
     arbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); normal+=ot.normal; ot50+=ot.ot50; ot100+=ot.ot100; });
     totalNormal+=normal; totalOt50+=ot50; totalOt100+=ot100; totalMins+=totMins;
-    return `<div class="box" style="margin-bottom:8px">
+    return `<div class="box" style="margin-bottom:8px;cursor:pointer" onclick="visAnsattDetalj(${a.id})">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px">
-        <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span></div>
+        <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span> <span class="small muted" style="font-size:10px">▶ detaljer</span></div>
         <div class="small" style="font-weight:700;color:#f4f4f5">${fmtTid(totMins)} totalt</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;margin-top:8px">
