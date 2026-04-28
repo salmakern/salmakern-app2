@@ -763,19 +763,40 @@ function subscribeRealtime() {
   if (!db) return;
   db.channel('salmakern_live')
     .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
-      if (p.eventType==='INSERT'&&!S.ordrer.find(o=>o.id===p.new.id)) {
-        S.ordrer.push(dbToOrdre(p.new)); renderAll();
+      if (p.eventType==='INSERT') {
+        if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); renderAll(); }
       } else if (p.eventType==='UPDATE') {
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
-        if(i>=0){S.ordrer[i]=dbToOrdre(p.new);renderAll();if(activeOrdreId===p.new.id)buildOrdreDetail();}
+        if(i>=0){ S.ordrer[i]=dbToOrdre(p.new); renderAll(); if(activeOrdreId===p.new.id) buildOrdreDetail(); }
+      } else if (p.eventType==='DELETE') {
+        S.ordrer = S.ordrer.filter(o=>o.id!==p.old.id);
+        if (activeOrdreId===p.old.id) tilbakeOrdreList();
+        renderAll();
       }
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'ansatte'}, p => {
-      if(p.eventType==='INSERT'&&!S.ansatte.find(a=>a.id===p.new.id)){S.ansatte.push(p.new);}
-      else if(p.eventType==='UPDATE'){const i=S.ansatte.findIndex(a=>a.id===p.new.id);if(i>=0)S.ansatte[i]=p.new;}
+      if (p.eventType==='INSERT') {
+        if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(p.new);
+      } else if (p.eventType==='UPDATE') {
+        const i=S.ansatte.findIndex(a=>a.id===p.new.id); if(i>=0) S.ansatte[i]=p.new;
+      } else if (p.eventType==='DELETE') {
+        S.ansatte = S.ansatte.filter(a=>a.id!==p.old.id);
+      }
       if(me) renderMer();
     })
-    .subscribe();
+    .on('postgres_changes',{event:'*',schema:'public',table:'timer_entries'}, p => {
+      if (p.eventType==='INSERT') {
+        if (!S.timer.find(t=>t.id===p.new.id)) S.timer.unshift(dbToTimer(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.timer.findIndex(t=>t.id===p.new.id); if(i>=0) S.timer[i]=dbToTimer(p.new);
+      } else if (p.eventType==='DELETE') {
+        S.timer = S.timer.filter(t=>t.id!==p.old.id);
+      }
+      renderAll();
+    })
+    .subscribe(status => {
+      if (status==='SUBSCRIBED') console.log('Sanntid: tilkoblet');
+    });
 }
 
 function defaultData() {
