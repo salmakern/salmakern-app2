@@ -2590,6 +2590,89 @@ function slettAnsatt(id) {
 }
 
 // ════════════════════════════════════════════════════
+// ANSATT-DETALJ (klikk på ansatt i timer-oversikt)
+// ════════════════════════════════════════════════════
+let ansattDetaljId = null;
+let ansattDetaljOffset = 0;
+
+function visAnsattDetalj(id) {
+  ansattDetaljId = id;
+  ansattDetaljOffset = 0;
+  openModal('ansattDetaljModal');
+  renderAnsattDetalj();
+}
+
+function ansattDetaljNaviger(dir) {
+  ansattDetaljOffset += dir;
+  if (ansattDetaljOffset > 0) ansattDetaljOffset = 0;
+  renderAnsattDetalj();
+}
+
+function renderAnsattDetalj() {
+  const a = S.ansatte.find(x=>x.id===ansattDetaljId); if(!a) return;
+  const maanedNavn=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+  const now = new Date();
+  const dato = new Date(now.getFullYear(), now.getMonth()+ansattDetaljOffset, 1);
+  const prefix = `${dato.getFullYear()}-${String(dato.getMonth()+1).padStart(2,'0')}`;
+
+  document.getElementById('ansattDetaljNavn').textContent = a.navn;
+  document.getElementById('ansattDetaljLbl').textContent = `${maanedNavn[dato.getMonth()]} ${dato.getFullYear()}`;
+
+  const timer = S.timer.filter(t=>t.ansattId===a.id && t.dato?.startsWith(prefix));
+  const arbTimer = timer.filter(t=>t.mins>0);
+  const totMins = arbTimer.reduce((s,t)=>s+t.mins,0);
+
+  let normal=0,ot50=0,ot100=0;
+  arbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); normal+=ot.normal; ot50+=ot.ot50; ot100+=ot.ot100; });
+
+  const sykDager   = timer.filter(t=>t.type==='syk').length;
+  const egenmDager = timer.filter(t=>t.type==='egenmelding').length;
+  const ferieDager = timer.filter(t=>t.type==='ferie').length;
+  const permDager  = timer.filter(t=>t.type==='permisjon').length;
+  const arbDager   = [...new Set(arbTimer.map(t=>t.dato))].length;
+
+  // Alle dager i måneden med registrering
+  const dagsRader = timer.sort((a,b)=>a.dato?.localeCompare(b.dato)).map(t=>{
+    const ot = t.mins>0 ? beregnOvertid(t.mins,t.dato) : null;
+    const fType = ['syk','egenmelding','ferie','permisjon'].includes(t.type);
+    return `<div style="display:flex;justify-content:space-between;padding:5px 8px;border-radius:6px;background:#18181b;margin-bottom:4px;font-size:13px">
+      <span>${t.dato} ${fType?'<span style="color:#fca5a5">'+t.type+'</span>':t.start+' – '+t.stopp}</span>
+      <span style="color:#f4f4f5;font-weight:600">${t.mins>0?fmtTid(t.mins):''}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ansattDetaljInnhold').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;margin-bottom:14px">
+      <div style="background:#18181b;border-radius:10px;padding:10px;text-align:center">
+        <div class="small muted">Arbeidsdager</div>
+        <div style="font-size:22px;font-weight:700;color:#f4f4f5;margin-top:2px">${arbDager}</div>
+      </div>
+      <div style="background:#18181b;border-radius:10px;padding:10px;text-align:center">
+        <div class="small muted">Timer totalt</div>
+        <div style="font-size:18px;font-weight:700;color:#f4f4f5;margin-top:2px">${fmtTid(totMins)}</div>
+      </div>
+      ${ot50>0?`<div style="background:#42200688;border-radius:10px;padding:10px;text-align:center">
+        <div class="small" style="color:#fde68a">50% OT</div>
+        <div style="font-size:18px;font-weight:700;color:#facc15;margin-top:2px">${fmtTid(ot50)}</div>
+      </div>`:''}
+      ${ot100>0?`<div style="background:#43140788;border-radius:10px;padding:10px;text-align:center">
+        <div class="small" style="color:#fed7aa">100% OT</div>
+        <div style="font-size:18px;font-weight:700;color:#f97316;margin-top:2px">${fmtTid(ot100)}</div>
+      </div>`:''}
+      ${sykDager+egenmDager>0?`<div style="background:#3f0000;border-radius:10px;padding:10px;text-align:center">
+        <div class="small" style="color:#fca5a5">Syk/Egenmeld</div>
+        <div style="font-size:18px;font-weight:700;color:#fca5a5;margin-top:2px">${sykDager+egenmDager} dager</div>
+      </div>`:''}
+      ${ferieDager+permDager>0?`<div style="background:#18181b;border-radius:10px;padding:10px;text-align:center">
+        <div class="small muted">Ferie/Perm</div>
+        <div style="font-size:18px;font-weight:700;color:#a1a1aa;margin-top:2px">${ferieDager+permDager} dager</div>
+      </div>`:''}
+    </div>
+    <div class="small muted" style="margin-bottom:6px">Alle registreringer denne måneden</div>
+    ${dagsRader || '<div class="muted small">Ingen registreringer</div>'}`;
+}
+
+// ════════════════════════════════════════════════════
 // FIKEN-EKSPORT (timelogg for lønn)
 // ════════════════════════════════════════════════════
 function eksportFiken() {
