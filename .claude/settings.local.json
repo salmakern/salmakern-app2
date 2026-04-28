@@ -5,7 +5,8 @@
       "Bash(python3 -c ' *)",
       "Bash(npm --version)",
       "mcp__Claude_Preview__preview_start",
-      "WebFetch(domain:salmakern-app.netlify.app)"
+      "WebFetch(domain:salmakern-app.netlify.app)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
     ]
   }
 }

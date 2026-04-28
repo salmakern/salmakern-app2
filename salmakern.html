@@ -435,6 +435,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div id="utstyrMalListe" style="margin-top:10px"></div>
       </div>
 
+      <div class="card" id="merMigreringKort" style="display:none">
+        <div class="h">📤 Last opp til Supabase</div>
+        <div class="muted small" style="margin-bottom:10px">Last opp all lokal data fra denne enheten til Supabase, slik at alle enheter kan synkronisere.</div>
+        <div id="supabaseKoblingStatus" style="margin-bottom:12px;font-size:13px"></div>
+        <button class="btn" id="migrerBtn" onclick="migrateLocalToSupabase()" style="background:#1e3a2f;border-color:#166534;color:#86efac">Last opp lokal data til Supabase</button>
+        <div id="migreringStatus" style="margin-top:12px;font-size:13px;line-height:1.8"></div>
+      </div>
+
       <div class="card">
         <div class="row">
           <div class="h">HMS-logg</div>
