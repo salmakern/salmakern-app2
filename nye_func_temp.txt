@@ -1,0 +1,10 @@
+﻿
+// ════════════════════════════════════════════════════
+// ORDRERAPPORT – navigering
+// ════════════════════════════════════════════════════
+let rapportOffset = 0;
+function rapportNaviger(dir) {
+  rapportOffset += dir;
+  if (rapportOffset > 0) rapportOffset = 0;
+  renderOrdreRapport();
+}

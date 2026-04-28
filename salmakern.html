@@ -2372,18 +2372,33 @@ function renderFravarKalender() {
 // ════════════════════════════════════════════════════
 // ORDRERAPPORT
 // ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// ORDRERAPPORT – navigering
+// ════════════════════════════════════════════════════
+let rapportOffset = 0;
+function rapportNaviger(dir) {
+  rapportOffset += dir;
+  if (rapportOffset > 0) rapportOffset = 0;
+  renderOrdreRapport();
+}
+
 function renderOrdreRapport() {
   const el = document.getElementById('ordreRapportInnhold'); if(!el) return;
+  const elAar = document.getElementById('ordreRapportAarTotal');
+  const lbl = document.getElementById('rapportLbl');
   const maanedNavn=['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
   const now = new Date();
+  // Vis 6 måneder sentrert rundt rapportOffset (0=nå, -1=forrige halvår osv)
+  const sentrerMaaned = new Date(now.getFullYear(), now.getMonth() + rapportOffset*6, 1);
   const rapporter = [];
   for (let i=5; i>=0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const d = new Date(sentrerMaaned.getFullYear(), sentrerMaaned.getMonth()-i, 1);
     const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     const ordrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(prefix));
     const ferdig = ordrer.filter(o=>o.godkjent).length;
-    rapporter.push({lbl:`${maanedNavn[d.getMonth()]} ${d.getFullYear()}`, tot:ordrer.length, ferdig});
+    rapporter.push({lbl:`${maanedNavn[d.getMonth()]} ${d.getFullYear()}`,tot:ordrer.length,ferdig,aar:d.getFullYear()});
   }
+  if (lbl) lbl.textContent = `${maanedNavn[sentrerMaaned.getMonth()-5<0?0:sentrerMaaned.getMonth()-5]} – ${maanedNavn[sentrerMaaned.getMonth()]} ${sentrerMaaned.getFullYear()}`;
   const maxTot = Math.max(1, ...rapporter.map(r=>r.tot));
   el.innerHTML = rapporter.map(r=>`
     <div style="margin-bottom:10px">
@@ -2395,6 +2410,16 @@ function renderOrdreRapport() {
         <div style="height:100%;background:#ef4444;width:${Math.round(r.tot/maxTot*100)}%;border-radius:6px;transition:width 0.3s"></div>
       </div>
     </div>`).join('');
+  // Årstotal for siste år i visningen
+  const visAar = sentrerMaaned.getFullYear();
+  const aarOrdrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(`${visAar}-`));
+  const aarFerdig = aarOrdrer.filter(o=>o.godkjent).length;
+  if (elAar) elAar.innerHTML = `<div class="small muted" style="margin-bottom:4px">Årstotal ${visAar}</div>
+    <div style="display:flex;gap:16px">
+      <div><span style="font-size:20px;font-weight:700;color:#f4f4f5">${aarOrdrer.length}</span><div class="small muted">biler totalt</div></div>
+      <div><span style="font-size:20px;font-weight:700;color:#22c55e">${aarFerdig}</span><div class="small muted">ferdigstilt</div></div>
+      <div><span style="font-size:20px;font-weight:700;color:#a1a1aa">${aarOrdrer.length-aarFerdig}</span><div class="small muted">pågår</div></div>
+    </div>`;
 }
 
 // ════════════════════════════════════════════════════
