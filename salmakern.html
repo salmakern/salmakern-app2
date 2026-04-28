@@ -2224,6 +2224,19 @@ function renderMer() {
   document.getElementById('merOrdreRapport').style.display    = erAdmin ? 'block' : 'none';
   document.getElementById('merDrivstoffSatser').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merUtstyrMaler').style.display     = erAdmin ? 'block' : 'none';
+  document.getElementById('merMigreringKort').style.display   = erAdmin ? 'block' : 'none';
+  if (erAdmin) {
+    const statusEl = document.getElementById('supabaseKoblingStatus');
+    if (statusEl) {
+      if (db) {
+        statusEl.innerHTML = '<span class="ok-text">✓ Supabase er tilkoblet – klar til opplasting</span>';
+        document.getElementById('migrerBtn').disabled = false;
+      } else {
+        statusEl.innerHTML = '<span class="err-text">⚠️ Supabase er ikke tilkoblet. Gå til <b>app.supabase.com</b> og gjenopprett prosjektet, last siden på nytt etterpå.</span>';
+        document.getElementById('migrerBtn').disabled = true;
+      }
+    }
+  }
 
   renderBeskjeder();
   renderKontakter();
