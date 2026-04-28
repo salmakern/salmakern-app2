@@ -2576,6 +2576,57 @@ function opprettAnsatt() {
 // ════════════════════════════════════════════════════
 // CSV EKSPORT
 // ════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════
+// SLETT ANSATT (admin)
+// ════════════════════════════════════════════════════
+function slettAnsatt(id) {
+  const a = S.ansatte.find(x=>x.id===id); if(!a) return;
+  if (!confirm(`Sikker på at du vil slette ${a.navn}?\n\nAlle timeregistreringer for denne ansatte beholdes, men kobles ikke lenger til personen.`)) return;
+  S.ansatte = S.ansatte.filter(x=>x.id!==id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('ansatte').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message)});
+  renderMer();
+}
+
+// ════════════════════════════════════════════════════
+// FIKEN-EKSPORT (timelogg for lønn)
+// ════════════════════════════════════════════════════
+function eksportFiken() {
+  const maanedNavn=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+  const now = new Date();
+  const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  // Alle timer denne måneden
+  const timer = S.timer.filter(t=>t.dato?.startsWith(prefix));
+  if (!timer.length) { alert('Ingen timer registrert denne måneden.'); return; }
+
+  const linjer = [];
+  linjer.push(['Ansatt','Dato','Type','Fra','Til','Minutter','Timer','Overtid 50%','Overtid 100%']);
+
+  S.ansatte.forEach(a => {
+    const aTimer = timer.filter(t=>t.ansattId===a.id && t.mins>0);
+    aTimer.forEach(t => {
+      const ot = beregnOvertid(t.mins, t.dato);
+      linjer.push([
+        a.navn,
+        t.dato,
+        t.type||'arbeid',
+        t.start||'',
+        t.stopp||'',
+        t.mins,
+        (t.mins/60).toFixed(2).replace('.',','),
+        (ot.ot50/60).toFixed(2).replace('.',','),
+        (ot.ot100/60).toFixed(2).replace('.',',')
+      ]);
+    });
+  });
+
+  const csv = linjer.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const mNavn = maanedNavn[now.getMonth()];
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+  a.download = `fiken_lonn_${mNavn}_${now.getFullYear()}.csv`;
+  a.click();
+}
 function eksportCSV() {
   const rows=[['Ansatt','Dato','Type','Fra','Til','Minutter'],...S.timer.map(t=>[t.ansatt,t.dato,t.type,t.start,t.stopp,t.mins])];
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
