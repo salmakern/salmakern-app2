@@ -2765,6 +2765,7 @@ let ansattDetaljId = null;
 let ansattDetaljOffset = 0;
 
 function visAnsattDetalj(id) {
+  if (!me || me.rolle !== 'admin') return;
   ansattDetaljId = id;
   ansattDetaljOffset = 0;
   openModal('ansattDetaljModal');
