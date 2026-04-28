@@ -1751,6 +1751,13 @@ function meldPaa(id) {
   o.ansatteSignert.push({id:me.id, navn:me.navn, tid:fmt(new Date())});
   logChange(o, me.navn+' meldt på'); save(id); buildOrdreDetail();
 }
+function meldAv(id) {
+  const o = S.ordrer.find(x=>x.id===id);
+  if (!o) return;
+  if (!confirm('Vil du melde deg av denne ordren?')) return;
+  o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==me.id);
+  logChange(o, me.navn+' meldt av'); save(id); buildOrdreDetail();
+}
 function startOrdreTimer(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o||o.ordreStart) return;
   o.ordreStart=Date.now(); logChange(o,'Ordretid startet'); save(id); buildOrdreDetail();
