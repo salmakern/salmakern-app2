@@ -2143,10 +2143,13 @@ function renderMer() {
       : 'Ingen lokasjon satt ennå';
     if (radEl) radEl.value = S.gps?.radius || 300;
     const al = document.getElementById('ansatteListe');
-    al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row">
-      <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span></div>
-      <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
-    </div>${!a.aktiv?'<div class="small err-text">Inaktiv</div>':''}</div>`).join('');
+    al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px">
+      <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
+        <button class="btn sm" onclick="slettAnsatt(${a.id})" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
+      </div>
+    </div></div>`).join('');
   }
 
   if (erGodkjenner) {
