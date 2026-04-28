@@ -596,9 +596,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <input id="dsNavn" placeholder="F.eks. Bedriftskunde, Statens sats, Privat uten MVA">
     <label>Type beregning *</label>
     <select id="dsType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="toggleDsVerdi()">
-      <option value="prosent">Prosent av pumpepris (f.eks. 85%)</option>
+      <option value="kr_rabatt">Kronetrekk per liter (f.eks. 2,00 kr/L)</option>
+      <option value="prosent_rabatt">Prosenttrekk (f.eks. 10% rabatt)</option>
       <option value="uten_moms">Uten MVA (pumpepris ÷ 1,25)</option>
-      <option value="fast_pris">Fast literpris (uavhengig av pumpe)</option>
     </select>
     <div id="dsVerdiWrap">
       <label id="dsVerdiLbl">Prosent (f.eks. 85 = 85% av pumpepris)</label>
@@ -1576,14 +1576,14 @@ function slettDrivstoffSats(id) {
 function renderDrivstoffSatser() {
   const el = document.getElementById('drivstoffSatsListe'); if(!el) return;
   if (!S.drivstoffSatser.length) { el.innerHTML='<div class="muted small">Ingen satser lagt inn ennå</div>'; return; }
-  const typeNavn = {prosent:'Prosent','uten_moms':'Uten MVA',fast_pris:'Fast pris'};
+  const typeNavn = {kr_rabatt:'Kr-trekk',prosent_rabatt:'% rabatt','uten_moms':'Uten MVA'};
   el.innerHTML = S.drivstoffSatser.map(s=>`
     <div class="box" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
       <div>
         <b>${s.navn}</b>
         <span class="pill" style="font-size:11px;margin-left:4px">${typeNavn[s.type]||s.type}</span>
         <div class="small muted" style="margin-top:3px">
-          ${s.type==='prosent'?`${s.verdi}% av pumpepris`:s.type==='uten_moms'?'Pumpepris ÷ 1,25':`Fast ${s.verdi} kr/L`}
+          ${s.type==='kr_rabatt'?`–${s.verdi} kr/L`:s.type==='prosent_rabatt'?`–${s.verdi}%`:s.type==='uten_moms'?'Uten MVA (÷1,25)':''}
         </div>
       </div>
       <button onclick="slettDrivstoffSats('${s.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:18px;padding:0">✕</button>
