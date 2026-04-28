@@ -28,6 +28,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     visOppdateringsToast();
   });
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'NY_VERSJON') visOppdateringsToast();
+  });
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
