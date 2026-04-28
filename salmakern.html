@@ -1601,9 +1601,13 @@ function beregnDrivstoffHTML(df, innhold=false) {
   let kundeLiterpris = literpris;
   let forklaring = '';
   if (sats) {
-    if (sats.type==='prosent')     { kundeLiterpris = literpris*(sats.verdi/100); forklaring=`${sats.verdi}% av pumpepris`; }
-    if (sats.type==='uten_moms')   { kundeLiterpris = literpris/1.25; forklaring='Uten MVA (÷1,25)'; }
-    if (sats.type==='fast_pris')   { kundeLiterpris = sats.verdi; forklaring=`Fast pris ${sats.verdi} kr/L`; }
+    if (sats.type==='kr_rabatt')       { kundeLiterpris = literpris - parseFloat(sats.verdi||0); forklaring=`–${sats.verdi} kr/L rabatt`; }
+    if (sats.type==='prosent_rabatt')  { kundeLiterpris = literpris * (1 - parseFloat(sats.verdi||0)/100); forklaring=`–${sats.verdi}% rabatt`; }
+    if (sats.type==='uten_moms')       { kundeLiterpris = literpris/1.25; forklaring='Uten MVA (÷1,25)'; }
+    // bakoverkompatibilitet med gamle satser
+    if (sats.type==='prosent')         { kundeLiterpris = literpris*(parseFloat(sats.verdi||100)/100); forklaring=`${sats.verdi}% av pumpepris`; }
+    if (sats.type==='fast_pris')       { kundeLiterpris = parseFloat(sats.verdi||0); forklaring=`Fast ${sats.verdi} kr/L`; }
+    if (kundeLiterpris < 0) kundeLiterpris = 0;
   }
   const kundetotal   = kundeLiterpris * liter;
   const besparelse   = totalpumpe - kundetotal;
