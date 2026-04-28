@@ -389,8 +389,16 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 
       <div class="card" id="merOrdreRapport" style="display:none">
-        <div class="h">Ordrerapport</div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <div class="h">Ordrerapport</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn sm" onclick="rapportNaviger(-1)">◀</button>
+            <span id="rapportLbl" style="min-width:130px;text-align:center;font-weight:700"></span>
+            <button class="btn sm" onclick="rapportNaviger(1)">▶</button>
+          </div>
+        </div>
         <div id="ordreRapportInnhold" style="margin-top:10px"></div>
+        <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
       </div>
 
       <div class="card" id="merDrivstoffSatser" style="display:none">
