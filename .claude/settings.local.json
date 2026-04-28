@@ -4,7 +4,8 @@
       "WebFetch(domain:chatgpt.com)",
       "Bash(python3 -c ' *)",
       "Bash(npm --version)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "WebFetch(domain:salmakern-app.netlify.app)"
     ]
   }
 }
