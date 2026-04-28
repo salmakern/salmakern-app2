@@ -2862,6 +2862,21 @@ ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<s
 }
 
 // ════════════════════════════════════════════════════
+// OPPDATERINGSVARSEL (ny appversjon tilgjengelig)
+// ════════════════════════════════════════════════════
+function visOppdateringsToast() {
+  if (document.getElementById('updateToast')) return; // allerede vist
+  const toast = document.createElement('div');
+  toast.id = 'updateToast';
+  toast.className = 'update-toast';
+  toast.innerHTML = `
+    <span>🔄 Ny versjon av appen er klar!</span>
+    <button onclick="window.location.reload()">Oppdater nå</button>
+    <button onclick="this.parentElement.remove()" style="background:transparent;border:1px solid #555;color:#a1a1aa">Senere</button>`;
+  document.body.appendChild(toast);
+}
+
+// ════════════════════════════════════════════════════
 // MODALS
 // ════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('show'); }

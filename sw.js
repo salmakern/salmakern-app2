@@ -13,12 +13,17 @@ self.addEventListener('install', e => {
   self.skipWaiting(); // ta over med en gang
 });
 
-// Aktiver: slett ALLE gamle cacher
+// Aktiver: slett ALLE gamle cacher + varsle klienter om ny versjon
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    ).then(() => {
+      // Varsle alle åpne faner om at ny versjon er klar
+      return self.clients.matchAll({ includeUncontrolled: true }).then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'NY_VERSJON' }));
+      });
+    })
   );
   self.clients.claim();
 });
