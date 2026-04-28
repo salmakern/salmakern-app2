@@ -363,12 +363,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="card" id="merGodkjKort" style="display:none"><div class="h">Til godkjenning</div><div id="tilGodkj" style="margin-top:8px"></div></div>
       <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
       <div class="card" id="merTimerOversikt" style="display:none">
-        <div class="row">
+        <div class="row" style="flex-wrap:wrap;gap:8px">
           <div class="h">Timer og overtid – alle ansatte</div>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <button class="btn sm" onclick="adminStatNaviger(-1)">◀</button>
             <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700"></span>
             <button class="btn sm" onclick="adminStatNaviger(1)">▶</button>
+            <button class="btn sm" onclick="eksportFiken()" style="background:#1e3a2f;border-color:#166534;color:#86efac">📥 Fiken CSV</button>
           </div>
         </div>
         <div id="adminStatInnhold" style="margin-top:12px"></div>
