@@ -779,7 +779,7 @@ function ordreToDb(o) {
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
-    type:r.type,start:r.start_tid,stopp:r.stopp_tid,mins:r.minutter};
+    type:r.type,start:r.start||r.start_tid||'',stopp:r.stopp||r.stopp_tid||'',mins:r.mins||r.minutter||0};
 }
 
 function subscribeRealtime() {
