@@ -822,6 +822,101 @@ function subscribeRealtime() {
     });
 }
 
+// ════════════════════════════════════════════════════
+// MIGRASJON: Lokal data → Supabase
+// ════════════════════════════════════════════════════
+async function migrateLocalToSupabase() {
+  if (!db) {
+    alert('Supabase er ikke tilkoblet. Sjekk at prosjektet er aktivt på app.supabase.com og last siden på nytt.');
+    return;
+  }
+
+  const el = document.getElementById('migreringStatus');
+  const btn = document.getElementById('migrerBtn');
+  btn.disabled = true;
+  el.innerHTML = '<span class="muted">Starter migrasjon...</span>';
+
+  // Les lokal data
+  let lokal;
+  try {
+    const raw = localStorage.getItem(STORE);
+    if (!raw) {
+      el.innerHTML = '<span class="err-text">Ingen lokal data funnet i denne nettleseren.</span>';
+      btn.disabled = false;
+      return;
+    }
+    lokal = JSON.parse(raw);
+  } catch(e) {
+    el.innerHTML = '<span class="err-text">Feil ved lesing av lokal data: ' + e.message + '</span>';
+    btn.disabled = false;
+    return;
+  }
+
+  let feil = 0;
+
+  // 1. Ansatte
+  const antAnsatte = lokal.ansatte?.length || 0;
+  if (antAnsatte > 0) {
+    el.innerHTML += '<br>📋 Laster opp ' + antAnsatte + ' ansatte...';
+    const { error } = await db.from('ansatte').upsert(lokal.ansatte, { onConflict: 'id' });
+    if (error) { el.innerHTML += ' <span class="err-text">Feil: ' + error.message + '</span>'; feil++; }
+    else el.innerHTML += ' <span class="ok-text">✓</span>';
+  }
+
+  // 2. Ordrer
+  const antOrdrer = lokal.ordrer?.length || 0;
+  if (antOrdrer > 0) {
+    el.innerHTML += '<br>🚗 Laster opp ' + antOrdrer + ' ordrer...';
+    const dbOrdrer = lokal.ordrer.map(ordreToDb);
+    const { error } = await db.from('ordrer').upsert(dbOrdrer, { onConflict: 'id' });
+    if (error) { el.innerHTML += ' <span class="err-text">Feil: ' + error.message + '</span>'; feil++; }
+    else el.innerHTML += ' <span class="ok-text">✓</span>';
+  }
+
+  // 3. Timer-registreringer (i bolker på 50)
+  const antTimer = lokal.timer?.length || 0;
+  if (antTimer > 0) {
+    el.innerHTML += '<br>⏱️ Laster opp ' + antTimer + ' timer-registreringer...';
+    const dbTimer = (lokal.timer || []).map(t => ({
+      id: t.id, ansatt_id: t.ansattId, ansatt: t.ansatt,
+      dato: t.dato, type: t.type || 'arbeid',
+      start: t.start || '', stopp: t.stopp || '', mins: t.mins || 0
+    }));
+    let timerFeil = false;
+    for (let i = 0; i < dbTimer.length; i += 50) {
+      const chunk = dbTimer.slice(i, i + 50);
+      const { error } = await db.from('timer_entries').upsert(chunk, { onConflict: 'id' });
+      if (error) { el.innerHTML += ' <span class="err-text">Feil (batch ' + (Math.floor(i/50)+1) + '): ' + error.message + '</span>'; feil++; timerFeil = true; break; }
+    }
+    if (!timerFeil) el.innerHTML += ' <span class="ok-text">✓</span>';
+  }
+
+  // 4. Innstillinger
+  el.innerHTML += '<br>⚙️ Laster opp innstillinger...';
+  const { error: sErr } = await db.from('innstillinger').upsert({
+    id: 1,
+    dagens_pin: lokal.dagensPIN || '1234',
+    gps_lat: lokal.gps?.lat || null,
+    gps_lng: lokal.gps?.lng || null,
+    gps_radius: lokal.gps?.radius || 300
+  }, { onConflict: 'id' });
+  if (sErr) { el.innerHTML += ' <span class="err-text">Feil: ' + sErr.message + '</span>'; feil++; }
+  else el.innerHTML += ' <span class="ok-text">✓</span>';
+
+  // Resultat
+  el.innerHTML += '<br><br>';
+  if (feil === 0) {
+    el.innerHTML += '<b class="ok-text">✅ Ferdig! All data er lastet opp til Supabase og er nå tilgjengelig på alle enheter.</b>';
+    // Reload data fra Supabase for å bekrefte
+    setTimeout(async () => {
+      try { await loadFromSupabase(); renderAll(); } catch(e) {}
+    }, 1500);
+  } else {
+    el.innerHTML += '<b class="err-text">⚠️ Ferdig med ' + feil + ' feil. Noen data ble ikke lastet opp – sjekk at tabellene finnes i Supabase.</b>';
+    btn.disabled = false;
+  }
+}
+
 function defaultData() {
   return {
     ansatte: [
