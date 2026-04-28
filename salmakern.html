@@ -1550,7 +1550,13 @@ function buildOrdreDetail() {
       <div class="card">
         <div class="h">Ansatte på ordren</div>
         <div style="margin-top:6px" id="ansOrdre">${renderAnsOrdre(o)}</div>
-        ${!o.ansatteSignert.find(a=>a.id===me.id)?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`:'<div class="small ok-text" style="margin-top:6px">Du er meldt på</div>'}
+        ${!o.ansatteSignert.find(a=>a.id===me.id)
+          ?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`
+          :`<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+              <span class="small ok-text">✓ Du er meldt på</span>
+              <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
+            </div>`
+        }
       </div>
 
       <div class="card">
