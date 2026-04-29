@@ -755,7 +755,7 @@ function dbToOrdre(r) {
     ankomstdato:r.ankomstdato||'', status:r.status||'aktiv',
     ordreStatus:r.ordre_status||'ikke_paabegynt',
     kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
-    vekter:r.vekter||dv, drivstoff:r.drivstoff||{literpris:'',liter:'',satsId:''},
+    vekter:r.vekter||dv, drivstoff:r.drivstoff||{totalpris:'',satsId:''},
     utstyr:r.utstyr||{har:'',skalHa:''},
     bilderAnkomst:r.bilder_ankomst||[null,null,null,null,null,null],
     bilderLevering:r.bilder_levering||[null,null,null,null,null,null],
@@ -957,7 +957,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
       totalvekt:{a:'',e:'',v:''}, vogntog:{a:'',e:'',v:''},
       foraksel:{a:'',e:'',v:''}, bakaksel:{a:'',e:'',v:''}
     },
-    drivstoff:{literpris:'',liter:'',satsId:''},
+    drivstoff:{totalpris:'',satsId:''},
     utstyr:{har, skalHa},
     bilderAnkomst:[null,null,null,null,null,null],
     bilderLevering:[null,null,null,null,null,null],
