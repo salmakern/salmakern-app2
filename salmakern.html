@@ -856,11 +856,11 @@ async function migrateLocalToSupabase() {
 
   let feil = 0;
 
-  // 1. Ansatte
-  const antAnsatte = lokal.ansatte?.length || 0;
-  if (antAnsatte > 0) {
-    el.innerHTML += '<br>📋 Laster opp ' + antAnsatte + ' ansatte...';
-    const { error } = await db.from('ansatte').upsert(lokal.ansatte, { onConflict: 'id' });
+  // 1. Ansatte (fjern duplikater på id)
+  const uniqAnsatte = Object.values((lokal.ansatte||[]).reduce((acc,a)=>{acc[a.id]=a;return acc;},{}));
+  if (uniqAnsatte.length > 0) {
+    el.innerHTML += '<br>📋 Laster opp ' + uniqAnsatte.length + ' ansatte...';
+    const { error } = await db.from('ansatte').upsert(uniqAnsatte, { onConflict: 'id' });
     if (error) { el.innerHTML += ' <span class="err-text">Feil: ' + error.message + '</span>'; feil++; }
     else el.innerHTML += ' <span class="ok-text">✓</span>';
   }

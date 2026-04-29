@@ -99,3 +99,10 @@ create policy "Alle kan lese ansatte"        on ansatte        for all using (tr
 create policy "Alle kan lese ordrer"         on ordrer         for all using (true) with check (true);
 create policy "Alle kan lese timer_entries"  on timer_entries  for all using (true) with check (true);
 create policy "Alle kan lese innstillinger"  on innstillinger  for all using (true) with check (true);
+
+-- ============================================================
+-- Hvis tabellene allerede finnes: legg til nye kolonner
+-- (Trygt å kjøre selv om tabellen er ny – feiler ikke)
+-- ============================================================
+alter table ordrer add column if not exists merke  text default '';
+alter table ordrer add column if not exists modell text default '';
