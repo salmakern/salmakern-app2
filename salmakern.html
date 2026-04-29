@@ -1633,13 +1633,21 @@ function renderAnsOrdre(o) {
 }
 
 function tvangsflyt(o) {
+  const ombyggingValgt = o.ombygging && Object.values(o.ombygging).some(Boolean);
   return [
     {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
     {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
     {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
     {lbl:'Signatur',          ok: !!o.signatur},
-    {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a}
+    {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
+    {lbl:'Ombygging valgt',   ok: ombyggingValgt}
   ];
+}
+function sfOmbygging(id, felt, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
+  o.ombygging[felt] = val;
+  save(id); buildOrdreDetail();
 }
 
 // ════════════════════════════════════════════════════
