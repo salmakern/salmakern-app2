@@ -742,7 +742,7 @@ function dbToOrdre(r) {
   const dv = {totalvekt:{a:'',e:'',v:''},vogntog:{a:'',e:'',v:''},foraksel:{a:'',e:'',v:''},bakaksel:{a:'',e:'',v:''}};
   return {
     id:r.id, regnr:r.regnr, kunde:r.kunde||'', eier:r.eier||'',
-    type:r.type||'', variant:r.variant||'', versjon:r.versjon||'', chassis:r.chassis||'',
+    merke:r.merke||'', type:r.type||'', modell:r.modell||'', variant:r.variant||'', versjon:r.versjon||'', chassis:r.chassis||'',
     ankomstdato:r.ankomstdato||'', status:r.status||'aktiv',
     ordreStatus:r.ordre_status||'ikke_paabegynt',
     kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
