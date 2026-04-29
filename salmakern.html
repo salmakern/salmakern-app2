@@ -477,12 +477,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <label>Chassis-nr (VIN)</label>
         <input id="n_chassis" placeholder="VF1-123456789">
       </div>
+      <div><label>Kundenavn</label><input id="n_kunde" placeholder="Telemark Bygg AS"></div>
+      <div><label>Eier</label><input id="n_eier" placeholder="Ola Nordmann"></div>
+      <div><label>Merke</label><input id="n_merke" placeholder="Toyota"></div>
+      <div><label>Type</label><input id="n_type" placeholder="HiAce"></div>
+      <div><label>Modell</label><input id="n_modell" placeholder="L2H1 Lang"></div>
+      <div><label>Variant</label><input id="n_variant" placeholder="2.8 D-4D"></div>
       <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
-      <div><label>Kundenavn (firma)</label><input id="n_kunde" placeholder="Telemark Bygg AS"></div>
-      <div><label>Eier (person)</label><input id="n_eier" placeholder="Ola Nordmann"></div>
-      <div><label>Biltype / merke</label><input id="n_type" placeholder="Toyota HiAce"></div>
-      <div><label>Variant</label><input id="n_variant" placeholder="L2H1"></div>
-      <div><label>Versjon</label><input id="n_versjon" placeholder="2022"></div>
+      <div><label>Versjon (år)</label><input id="n_versjon" placeholder="2022"></div>
     </div>
     <div class="box" style="margin-top:10px"><span class="small muted">Sett kunde = eier:</span> <button class="btn sm" onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">Kopier</button></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -761,8 +763,8 @@ function dbToOrdre(r) {
 }
 function ordreToDb(o) {
   return {
-    id:o.id, regnr:o.regnr, kunde:o.kunde, eier:o.eier, type:o.type,
-    variant:o.variant, versjon:o.versjon, chassis:o.chassis, ankomstdato:o.ankomstdato||null,
+    id:o.id, regnr:o.regnr, kunde:o.kunde, eier:o.eier,
+    merke:o.merke||'', type:o.type||'', modell:o.modell||'', variant:o.variant||'', versjon:o.versjon||'', chassis:o.chassis, ankomstdato:o.ankomstdato||null,
     status:o.status, ordre_status:o.ordreStatus||'ikke_paabegynt',
     kalender_dato:o.kalenderDato||null, kalender_tid:o.kalenderTid,
     vekter:o.vekter, drivstoff:o.drivstoff, utstyr:o.utstyr,
@@ -938,7 +940,7 @@ function defaultData() {
 
 function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa) {
   return {
-    id, regnr, kunde, eier, type, variant, versjon:'', chassis:'',
+    id, regnr, kunde, eier, merke:'', type:'', modell:'', variant, versjon:'', chassis:'',
     ankomstdato: ankomst, status:'aktiv', ordreStatus:'ikke_paabegynt',
     kalenderDato: kDato, kalenderTid: kTid,
     vekter: {
