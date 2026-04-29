@@ -792,6 +792,7 @@ function ordreToDb(o) {
     godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn,
     fakturert:o.fakturert, fakturert_av:o.fakturertAv,
     ordre_start:o.ordreStart, ordre_stopp:o.ordreStopp,
+    ordre_timer_sessions:o.ordreTimerSessions||[],
     notater:o.notater, endringer:o.endringer,
     utstyr_sjekkliste:o.utstyrSjekkliste||[], utstyr_mal_navn:o.utstyrMalNavn||'',
     visnings_sjekkliste:o.visningsSjekkliste||[], visnings_mal_navn:o.visningsMalNavn||'',
@@ -975,7 +976,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
     ansatteSignert:[], signatur:null,
     godkjent:false, godkjennerNavn:'',
     fakturert:false, fakturertAv:'',
-    ordreStart:null, ordreStopp:null,
+    ordreStart:null, ordreStopp:null, ordreTimerSessions:[],
     notater:'', endringer:[],
     utstyrSjekkliste:[], utstyrMalNavn:'',
     visningsSjekkliste:[], visningsMalNavn:''
@@ -1500,15 +1501,8 @@ function buildOrdreDetail() {
           <input type="file" id="fo_l_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','l',${i})">`).join('')}</div>
       </div>
 
-      <div class="card">
-        <div class="h">Ordretid</div>
-        <div class="muted small">Start/stopp for denne ordren (ikke lønnstid).</div>
-        <div class="grid g2" style="margin-top:10px">
-          <div class="box"><div class="small muted">Start</div><div class="title">${o.ordreStart?fmt(new Date(o.ordreStart)):'–'}</div>
-            <button class="btn sm" style="margin-top:6px" onclick="startOrdreTimer('${o.id}')" ${o.ordreStart?'disabled':''}>Start</button></div>
-          <div class="box"><div class="small muted">Stopp</div><div class="title">${o.ordreStopp?fmt(new Date(o.ordreStopp)):'–'}</div>
-            <button class="btn sm" style="margin-top:6px" onclick="stoppOrdreTimer('${o.id}')" ${!o.ordreStart||o.ordreStopp?'disabled':''}>Stopp</button></div>
-        </div>
+      <div class="card" id="ordretimerKort_${o.id}">
+        ${ordreTimerKortHTML(o)}
       </div>
 
       <div class="card">
