@@ -1,8 +1,8 @@
 const CACHE = 'salmakern-v' + Date.now(); // ny cache ved hver deploy
 const ASSETS = [
-  '/salmakern.html',
-  '/manifest.json',
-  '/icon.svg'
+  '/salmakern-app2/salmakern.html',
+  '/salmakern-app2/manifest.json',
+  '/salmakern-app2/icon.svg'
 ];
 
 // Installer: cache kjernefiler
