@@ -1638,11 +1638,53 @@ function sv(id,k,col,val) {
 }
 function sd(id,f,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  if(!o.drivstoff) o.drivstoff={literpris:'',liter:'',satsId:''};
+  if(!o.drivstoff) o.drivstoff={totalpris:'',satsId:''};
   o.drivstoff[f]=val; save(id);
-  // oppdater beregning uten full rebuild
-  const el = document.getElementById('drivstoffBeregning_'+id);
-  if (el) el.innerHTML = beregnDrivstoffHTML(o.drivstoff, true);
+  const el = document.getElementById('drivstoffKort_'+id);
+  if (el) el.innerHTML = drivstoffKortHTML(o);
+}
+
+function drivstoffKortHTML(o) {
+  const df = o.drivstoff||{};
+  const totalpris = parseFloat(df.totalpris||df.literpris)||0;
+  const satsId = df.satsId||'';
+  const satser = S.drivstoffSatser||[];
+  const sats = satser.find(s=>s.id===satsId);
+  const kr = n=>n.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
+  let endringHTML = '';
+  if (totalpris && sats) {
+    let kundepris = totalpris;
+    if(sats.type==='kr_rabatt')      kundepris=totalpris-parseFloat(sats.verdi||0);
+    if(sats.type==='prosent_rabatt') kundepris=totalpris*(1-parseFloat(sats.verdi||0)/100);
+    if(sats.type==='uten_moms')      kundepris=totalpris/1.25;
+    if(sats.type==='uten_mva')       kundepris=totalpris*0.8;
+    if(sats.type==='bos')            kundepris=(totalpris*0.8)/0.97;
+    if(sats.type==='prosent')        kundepris=totalpris*(parseFloat(sats.verdi||100)/100);
+    if(sats.type==='fast_pris')      kundepris=parseFloat(sats.verdi||0);
+    if(kundepris<0) kundepris=0;
+    const endring=totalpris-kundepris;
+    endringHTML=`<div style="flex:1;min-width:100px">
+      <label>Endring</label>
+      <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#86efac">–${kr(endring)} kr</div>
+        <div class="small" style="color:#86efac;margin-top:2px">Kunde betaler: ${kr(kundepris)} kr</div>
+      </div>
+    </div>`;
+  }
+  return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px">
+      <label>Totalpris (kr)</label>
+      <input type="number" step="0.01" value="${df.totalpris||df.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)" placeholder="0,00">
+    </div>
+    <div style="flex:2;min-width:160px">
+      <label>Sats</label>
+      <select onchange="sd('${o.id}','satsId',this.value)" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px">
+        <option value="">– Ingen sats –</option>
+        ${satser.map(s=>`<option value="${s.id}" ${satsId===s.id?'selected':''}>${s.navn}</option>`).join('')}
+      </select>
+    </div>
+    ${endringHTML}
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════
