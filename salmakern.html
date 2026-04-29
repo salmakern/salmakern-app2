@@ -1665,9 +1665,7 @@ function drivstoffKortHTML(o) {
     const endring=totalpris-kundepris;
     endringHTML=`<div style="flex:1;min-width:100px">
       <label>Endring</label>
-      <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center">
-        <div style="font-size:18px;font-weight:800;color:#86efac">${kr(kundepris)} kr</div>
-      </div>
+      <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center;font-size:14px;font-weight:800;color:#86efac;line-height:1.4">${kr(kundepris)} kr</div>
     </div>`;
   }
   return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
