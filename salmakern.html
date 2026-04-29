@@ -1380,9 +1380,11 @@ function buildOrdreDetail() {
         <div class="grid g2" style="gap:8px;margin-top:10px">
           <div><label>Kundenavn</label><input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)"></div>
           <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
-          <div><label>Merke</label><input value="${esc(o.type)}" onchange="sf('${o.id}','type',this.value)" placeholder="Toyota HiAce"></div>
-          <div><label>Type / variant</label><input value="${esc(o.variant)}" onchange="sf('${o.id}','variant',this.value)" placeholder="L2H1"></div>
-          <div><label>Modell / versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)" placeholder="2022"></div>
+          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value)" placeholder="Toyota"></div>
+          <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)" placeholder="HiAce"></div>
+          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)" placeholder="L2H1 Lang"></div>
+          <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)" placeholder="2.8 D-4D"></div>
+          <div><label>Versjon (år)</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)" placeholder="2022"></div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
         </div>
 
@@ -1783,13 +1785,15 @@ function opprettOrdre() {
     document.getElementById('n_type').value.trim(),
     document.getElementById('n_variant').value.trim(),
     document.getElementById('n_dato').value||new Date().toISOString().split('T')[0],'','','','');
+  ny.merke   = document.getElementById('n_merke').value.trim();
+  ny.modell  = document.getElementById('n_modell').value.trim();
   ny.versjon = document.getElementById('n_versjon').value.trim();
-  ny.chassis  = chassis;
+  ny.chassis = chassis;
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
-  ['n_regnr','n_chassis','n_kunde','n_eier','n_type','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
+  ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
   openOrdre(id);
 }
 
