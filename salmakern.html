@@ -1793,13 +1793,66 @@ function meldAv(id) {
   o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==me.id);
   logChange(o, me.navn+' meldt av'); save(id); buildOrdreDetail();
 }
+function ordreTimerLoper(o) {
+  const sessions = o.ordreTimerSessions||[];
+  return sessions.length>0 && !sessions[sessions.length-1].stopp;
+}
+function ordreTimerTotalMs(o) {
+  const sessions = o.ordreTimerSessions||[];
+  const now = Date.now();
+  return sessions.reduce((sum,s)=>sum+(s.stopp||now)-s.start, 0);
+}
+function ordreTimerKortHTML(o) {
+  const sessions = o.ordreTimerSessions||[];
+  const loper = ordreTimerLoper(o);
+  const totalMs = ordreTimerTotalMs(o);
+  const h = Math.floor(totalMs/3600000);
+  const m = Math.floor((totalMs%3600000)/60000);
+  const s = Math.floor((totalMs%60000)/1000);
+  const tidStr = totalMs>0 ? `${h>0?h+'t ':''} ${m}min ${s}s` : '–';
+  const fmtTs = ts => new Date(ts).toLocaleString('no-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <div class="h">Ordretid</div>
+        <div style="font-size:28px;font-weight:800;margin-top:4px;color:${loper?'#86efac':'#f4f4f5'}">${tidStr}</div>
+        ${loper?'<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå</div>':''}
+      </div>
+      <div style="display:flex;gap:8px">
+        ${loper
+          ? `<button class="btn red" onclick="stoppOrdreTimer('${o.id}')">⏹ Stopp</button>`
+          : `<button class="btn green" onclick="startOrdreTimer('${o.id}')">▶ Start</button>`}
+      </div>
+    </div>
+    ${sessions.length>0?`
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
+      ${sessions.slice().reverse().map((s,i)=>{
+        const ms=(s.stopp||Date.now())-s.start;
+        const sh=Math.floor(ms/3600000), sm=Math.floor((ms%3600000)/60000), ss=Math.floor((ms%60000)/1000);
+        const dur=`${sh>0?sh+'t ':''} ${sm}min ${ss}s`;
+        return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;font-size:13px">
+          <span class="muted">${fmtTs(s.start)} → ${s.stopp?fmtTs(s.stopp):'<span style="color:#86efac">pågår</span>'}</span>
+          <span style="font-weight:700">${dur}</span>
+        </div>`;
+      }).join('')}
+    </div>`:''}`;
+}
 function startOrdreTimer(id) {
-  const o=S.ordrer.find(x=>x.id===id); if(!o||o.ordreStart) return;
-  o.ordreStart=Date.now(); logChange(o,'Ordretid startet'); save(id); buildOrdreDetail();
+  const o=S.ordrer.find(x=>x.id===id); if(!o||ordreTimerLoper(o)) return;
+  if(!o.ordreTimerSessions) o.ordreTimerSessions=[];
+  o.ordreTimerSessions.push({start:Date.now(), stopp:null});
+  logChange(o,'Ordretid startet'); save(id);
+  const el=document.getElementById('ordretimerKort_'+id);
+  if(el) el.innerHTML=ordreTimerKortHTML(o);
 }
 function stoppOrdreTimer(id) {
-  const o=S.ordrer.find(x=>x.id===id); if(!o||!o.ordreStart||o.ordreStopp) return;
-  o.ordreStopp=Date.now(); logChange(o,'Ordretid stoppet'); save(id); buildOrdreDetail();
+  const o=S.ordrer.find(x=>x.id===id); if(!o||!ordreTimerLoper(o)) return;
+  const sessions=o.ordreTimerSessions||[];
+  const last=sessions[sessions.length-1];
+  if(last&&!last.stopp) last.stopp=Date.now();
+  logChange(o,'Ordretid stoppet'); save(id);
+  const el=document.getElementById('ordretimerKort_'+id);
+  if(el) el.innerHTML=ordreTimerKortHTML(o);
 }
 function arkiver(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
