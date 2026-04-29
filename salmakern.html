@@ -773,6 +773,7 @@ function dbToOrdre(r) {
     godkjent:r.godkjent||false, godkjennerNavn:r.godkjenner_navn||'',
     fakturert:r.fakturert||false, fakturertAv:r.fakturert_av||'',
     ordreStart:r.ordre_start||null, ordreStopp:r.ordre_stopp||null,
+    ordreTimerSessions:r.ordre_timer_sessions||[],
     notater:r.notater||'', endringer:r.endringer||[],
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||''
