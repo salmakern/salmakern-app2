@@ -943,7 +943,9 @@ function defaultData() {
 
 function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa) {
   return {
-    id, regnr, kunde, eier, merke:'', type:'', modell:'', variant, versjon:'', chassis:'',
+    id, regnr, kunde, eier,
+    ombygging:{nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false},
+    merke:'', type:'', modell:'', variant, versjon:'', chassis:'',
     ankomstdato: ankomst, status:'aktiv', ordreStatus:'ikke_paabegynt',
     kalenderDato: kDato, kalenderTid: kTid,
     vekter: {
@@ -1407,6 +1409,18 @@ function buildOrdreDetail() {
               <input value="${esc(o.chassis)}" onchange="sf('${o.id}','chassis',this.value)" placeholder="VF1-123456789">
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h">Ombygging</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+          ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
+            <label style="display:flex;align-items:center;gap:10px;background:#18181b;border:2px solid ${o.ombygging?.[k]?'#ef4444':'#27272a'};border-radius:12px;padding:12px;cursor:pointer">
+              <input type="checkbox" ${o.ombygging?.[k]?'checked':''} onchange="sfOmbygging('${o.id}','${k}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0">
+              <span style="font-weight:600">${lbl}</span>
+            </label>
+          `).join('')}
         </div>
       </div>
 
