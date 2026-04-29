@@ -606,6 +606,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <input id="dsNavn" placeholder="F.eks. Bedriftskunde, Statens sats, Privat uten MVA">
     <label>Type beregning *</label>
     <select id="dsType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="toggleDsVerdi()">
+      <option value="uten_mva">Uten Mva (totalpris × 0,8 = –20%)</option>
+      <option value="bos">BOS ((totalpris × 0,8) ÷ 0,97)</option>
       <option value="kr_rabatt">Kronetrekk per liter (f.eks. 2,00 kr/L)</option>
       <option value="prosent_rabatt">Prosenttrekk (f.eks. 10% rabatt)</option>
       <option value="uten_moms">Uten MVA (pumpepris ÷ 1,25)</option>
@@ -1679,7 +1681,7 @@ function toggleDsVerdi() {
   const wrap = document.getElementById('dsVerdiWrap');
   const lbl  = document.getElementById('dsVerdiLbl');
   if (!wrap) return;
-  if (type==='uten_moms') { wrap.style.display='none'; return; }
+  if (type==='uten_moms' || type==='uten_mva' || type==='bos') { wrap.style.display='none'; return; }
   wrap.style.display='block';
   lbl.textContent = type==='prosent'
     ? 'Prosent (f.eks. 85 = 85% av pumpepris)'
@@ -1691,7 +1693,8 @@ function lagreDrivstoffSats() {
   const type  = document.getElementById('dsType').value;
   const verdi = parseFloat(document.getElementById('dsVerdi').value)||0;
   if (!navn) { alert('Navn er påkrevd'); return; }
-  if (type!=='uten_moms' && !verdi) { alert('Verdi er påkrevd'); return; }
+  const ingenVerdi = ['uten_moms','uten_mva','bos'].includes(type);
+  if (!ingenVerdi && !verdi) { alert('Verdi er påkrevd'); return; }
   S.drivstoffSatser.push({id:'ds'+(++S.nextId), navn, type, verdi});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyDrivstoffSats');
