@@ -1465,6 +1465,8 @@ function buildOrdreDetail() {
             if(sats.type==='kr_rabatt')      kundepris=totalpris-parseFloat(sats.verdi||0);
             if(sats.type==='prosent_rabatt') kundepris=totalpris*(1-parseFloat(sats.verdi||0)/100);
             if(sats.type==='uten_moms')      kundepris=totalpris/1.25;
+            if(sats.type==='uten_mva')       kundepris=totalpris*0.8;
+            if(sats.type==='bos')            kundepris=(totalpris*0.8)/0.97;
             if(sats.type==='prosent')        kundepris=totalpris*(parseFloat(sats.verdi||100)/100);
             if(sats.type==='fast_pris')      kundepris=parseFloat(sats.verdi||0);
             if(kundepris<0) kundepris=0;
