@@ -1443,53 +1443,41 @@ function buildOrdreDetail() {
 
       <div class="card">
         <div class="h">Drivstoff</div>
-        <div class="grid g2" style="margin-top:8px">
-          <div>
-            <label>Literpris ved pumpe (kr/L)</label>
-            <input type="number" step="0.01" value="${o.drivstoff?.literpris||''}" onchange="sd('${o.id}','literpris',this.value)" placeholder="0,00">
-            <div class="small muted" style="margin-top:4px">Original pris</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">
+          <div style="flex:1;min-width:120px">
+            <label>Totalpris (kr)</label>
+            <input type="number" step="0.01" value="${o.drivstoff?.totalpris||o.drivstoff?.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)" placeholder="0,00">
           </div>
-          <div>
-            <label>Antall liter</label>
-            <input type="number" step="0.1" value="${o.drivstoff?.liter||''}" onchange="sd('${o.id}','liter',this.value)" placeholder="0">
+          <div style="flex:2;min-width:160px">
+            <label>Sats</label>
+            <select onchange="sd('${o.id}','satsId',this.value)" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px">
+              <option value="">– Ingen sats –</option>
+              ${(S.drivstoffSatser||[]).map(s=>`<option value="${s.id}" ${o.drivstoff?.satsId===s.id?'selected':''}>${s.navn}</option>`).join('')}
+            </select>
           </div>
+          ${(()=>{
+            const df=o.drivstoff||{};
+            const totalpris=parseFloat(df.totalpris||df.literpris)||0;
+            const sats=(S.drivstoffSatser||[]).find(s=>s.id===df.satsId);
+            if(!totalpris||!sats) return '';
+            const kr=n=>n.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
+            let kundepris=totalpris;
+            if(sats.type==='kr_rabatt')      kundepris=totalpris-parseFloat(sats.verdi||0);
+            if(sats.type==='prosent_rabatt') kundepris=totalpris*(1-parseFloat(sats.verdi||0)/100);
+            if(sats.type==='uten_moms')      kundepris=totalpris/1.25;
+            if(sats.type==='prosent')        kundepris=totalpris*(parseFloat(sats.verdi||100)/100);
+            if(sats.type==='fast_pris')      kundepris=parseFloat(sats.verdi||0);
+            if(kundepris<0) kundepris=0;
+            const endring=totalpris-kundepris;
+            return `<div style="flex:1;min-width:100px">
+              <label>Endring</label>
+              <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:18px;font-weight:800;color:#86efac">–${kr(endring)} kr</div>
+                <div class="small" style="color:#86efac;margin-top:2px">Kunde betaler: ${kr(kundepris)} kr</div>
+              </div>
+            </div>`;
+          })()}
         </div>
-        <div style="margin-top:10px">
-          <label>Sats / kurs</label>
-          <select onchange="sd('${o.id}','satsId',this.value)" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;margin-top:4px">
-            <option value="">– Ingen sats –</option>
-            ${(S.drivstoffSatser||[]).map(s=>`<option value="${s.id}" ${o.drivstoff?.satsId===s.id?'selected':''}>${s.navn}</option>`).join('')}
-          </select>
-        </div>
-        ${(()=>{
-          const df=o.drivstoff||{};
-          const literpris=parseFloat(df.literpris)||0;
-          const liter=parseFloat(df.liter)||0;
-          const sats=(S.drivstoffSatser||[]).find(s=>s.id===df.satsId);
-          let kundeLiterpris=literpris;
-          if(sats){
-            if(sats.type==='prosent')   kundeLiterpris=literpris*(sats.verdi/100);
-            if(sats.type==='uten_moms') kundeLiterpris=literpris/1.25;
-            if(sats.type==='fast_pris') kundeLiterpris=sats.verdi;
-          }
-          const kr=n=>n.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
-          const totalpumpe=literpris*liter;
-          const kundetotal=kundeLiterpris*liter;
-          if(!literpris&&!liter&&!sats) return '';
-          return `<div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="box" style="text-align:center">
-              <div class="small muted">Original pris (pumpe)</div>
-              <div style="font-size:20px;font-weight:800;margin-top:4px">${literpris?kr(literpris)+' kr/L':'–'}</div>
-              ${totalpumpe?`<div class="small muted" style="margin-top:2px">Totalt: ${kr(totalpumpe)} kr</div>`:''}
-            </div>
-            <div class="box" style="text-align:center;${sats?'border-color:#16a34a66;background:#052e1688':''}">
-              <div class="small muted">${sats?sats.navn:'Kundepris'}</div>
-              <div style="font-size:20px;font-weight:800;margin-top:4px;${sats?'color:#86efac':''}">${sats?kr(kundeLiterpris)+' kr/L':'–'}</div>
-              ${sats&&kundetotal?`<div class="small" style="margin-top:2px;color:#86efac">Totalt: ${kr(kundetotal)} kr</div>`:''}
-            </div>
-          </div>
-          ${sats&&totalpumpe&&kundetotal?`<div class="small muted" style="text-align:center;margin-top:6px">Besparelse: ${kr(totalpumpe-kundetotal)} kr</div>`:''}`;
-        })()}
       </div>
 
       <div class="card">
