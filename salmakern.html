@@ -736,9 +736,14 @@ async function loadFromSupabase() {
   S.ansatte   = aR.data || [];
   S.ordrer    = (oR.data||[]).map(dbToOrdre);
   S.timer     = (tR.data||[]).map(dbToTimer);
-  S.dagensPIN = sR.data?.dagens_pin || '1234';
-  S.gps       = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
-  S.nextId    = 100 + S.ordrer.length;
+  S.dagensPIN      = sR.data?.dagens_pin || '1234';
+  S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
+  S.utstyrMaler    = sR.data?.utstyr_maler    || [];
+  S.drivstoffSatser= sR.data?.drivstoff_satser|| [];
+  S.beskjeder      = sR.data?.beskjeder       || [];
+  S.kontakter      = sR.data?.kontakter       || [];
+  S.hms            = sR.data?.hms             || [];
+  S.nextId         = 100 + S.ordrer.length;
 }
 
 function dbToOrdre(r) {
