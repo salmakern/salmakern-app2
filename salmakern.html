@@ -1709,14 +1709,14 @@ function slettDrivstoffSats(id) {
 function renderDrivstoffSatser() {
   const el = document.getElementById('drivstoffSatsListe'); if(!el) return;
   if (!S.drivstoffSatser.length) { el.innerHTML='<div class="muted small">Ingen satser lagt inn ennå</div>'; return; }
-  const typeNavn = {kr_rabatt:'Kr-trekk',prosent_rabatt:'% rabatt','uten_moms':'Uten MVA'};
+  const typeNavn = {kr_rabatt:'Kr-trekk',prosent_rabatt:'% rabatt',uten_moms:'Uten MVA (÷1,25)',uten_mva:'Uten Mva (×0,8)',bos:'BOS'};
   el.innerHTML = S.drivstoffSatser.map(s=>`
     <div class="box" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
       <div>
         <b>${s.navn}</b>
         <span class="pill" style="font-size:11px;margin-left:4px">${typeNavn[s.type]||s.type}</span>
         <div class="small muted" style="margin-top:3px">
-          ${s.type==='kr_rabatt'?`–${s.verdi} kr/L`:s.type==='prosent_rabatt'?`–${s.verdi}%`:s.type==='uten_moms'?'Uten MVA (÷1,25)':''}
+          ${s.type==='kr_rabatt'?`–${s.verdi} kr/L`:s.type==='prosent_rabatt'?`–${s.verdi}%`:s.type==='uten_moms'?'÷1,25':s.type==='uten_mva'?'×0,8 (–20%)':s.type==='bos'?'(×0,8)÷0,97':''}
         </div>
       </div>
       <button onclick="slettDrivstoffSats('${s.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:18px;padding:0">✕</button>
