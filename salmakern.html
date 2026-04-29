@@ -612,8 +612,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <option value="prosent_rabatt">Prosenttrekk (f.eks. 10% rabatt)</option>
       <option value="uten_moms">Uten MVA (pumpepris ÷ 1,25)</option>
     </select>
-    <div id="dsVerdiWrap">
-      <label id="dsVerdiLbl">Prosent (f.eks. 85 = 85% av pumpepris)</label>
+    <div id="dsVerdiWrap" style="display:none">
+      <label id="dsVerdiLbl">Verdi</label>
       <input id="dsVerdi" type="number" step="0.01" placeholder="85">
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
@@ -746,6 +746,14 @@ async function loadFromSupabase() {
   S.kontakter      = sR.data?.kontakter       || [];
   S.hms            = sR.data?.hms             || [];
   S.nextId         = 100 + S.ordrer.length;
+  // Pre-populate standard satser hvis ingen finnes
+  if (!S.drivstoffSatser.length) {
+    S.drivstoffSatser = [
+      {id:'ds_uten_mva', navn:'Uten Mva', type:'uten_mva', verdi:0},
+      {id:'ds_bos',      navn:'BOS',      type:'bos',      verdi:0}
+    ];
+    saveInnstillinger();
+  }
 }
 
 function dbToOrdre(r) {
@@ -1683,9 +1691,11 @@ function toggleDsVerdi() {
   if (!wrap) return;
   if (type==='uten_moms' || type==='uten_mva' || type==='bos') { wrap.style.display='none'; return; }
   wrap.style.display='block';
-  lbl.textContent = type==='prosent'
-    ? 'Prosent (f.eks. 85 = 85% av pumpepris)'
-    : 'Fast literpris (kr/L)';
+  lbl.textContent = type==='prosent_rabatt'
+    ? 'Prosent rabatt (f.eks. 10 = 10% trekk)'
+    : type==='kr_rabatt'
+    ? 'Kr-trekk per liter (f.eks. 2,00)'
+    : 'Verdi';
 }
 
 function lagreDrivstoffSats() {
