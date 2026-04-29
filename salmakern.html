@@ -2630,6 +2630,26 @@ function renderOrdreRapport() {
 }
 
 // ════════════════════════════════════════════════════
+// LAGRE INNSTILLINGER TIL SUPABASE
+// ════════════════════════════════════════════════════
+function saveInnstillinger() {
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if (!db) return;
+  db.from('innstillinger').upsert({
+    id: 1,
+    dagens_pin: S.dagensPIN,
+    gps_lat: S.gps?.lat||null,
+    gps_lng: S.gps?.lng||null,
+    gps_radius: S.gps?.radius||300,
+    utstyr_maler: S.utstyrMaler||[],
+    drivstoff_satser: S.drivstoffSatser||[],
+    beskjeder: S.beskjeder||[],
+    kontakter: S.kontakter||[],
+    hms: S.hms||[]
+  }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
+}
+
+// ════════════════════════════════════════════════════
 // UTSTYR-MALER
 // ════════════════════════════════════════════════════
 function lagreUtstyrMal() {
@@ -2640,7 +2660,7 @@ function lagreUtstyrMal() {
   const punkter = punkterRaw.split('\n').map(p=>p.trim()).filter(Boolean);
   if (!punkter.length) { alert('Legg til minst ett punkt'); return; }
   S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   closeModal('nyUtstyrMal');
   ['uMalNavn','uMalBiltype','uMalPunkter'].forEach(i=>document.getElementById(i).value='');
   renderUtstyrMaler();
@@ -2648,7 +2668,7 @@ function lagreUtstyrMal() {
 
 function slettUtstyrMal(id) {
   S.utstyrMaler = S.utstyrMaler.filter(m=>m.id!==id);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   renderUtstyrMaler();
 }
 
