@@ -1838,6 +1838,16 @@ function ordreTimerKortHTML(o) {
       }).join('')}
     </div>`:''}`;
 }
+function startOrdreTimerTick(id) {
+  if (ordreTimerTick) clearInterval(ordreTimerTick);
+  ordreTimerTick = setInterval(()=>{
+    const o=S.ordrer.find(x=>x.id===id); if(!o) { clearInterval(ordreTimerTick); return; }
+    const el=document.getElementById('ordretimerKort_'+id);
+    if(!el) { clearInterval(ordreTimerTick); return; }
+    if(!ordreTimerLoper(o)) { clearInterval(ordreTimerTick); ordreTimerTick=null; return; }
+    el.innerHTML=ordreTimerKortHTML(o);
+  },1000);
+}
 function startOrdreTimer(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o||ordreTimerLoper(o)) return;
   if(!o.ordreTimerSessions) o.ordreTimerSessions=[];
@@ -1845,12 +1855,14 @@ function startOrdreTimer(id) {
   logChange(o,'Ordretid startet'); save(id);
   const el=document.getElementById('ordretimerKort_'+id);
   if(el) el.innerHTML=ordreTimerKortHTML(o);
+  startOrdreTimerTick(id);
 }
 function stoppOrdreTimer(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o||!ordreTimerLoper(o)) return;
   const sessions=o.ordreTimerSessions||[];
   const last=sessions[sessions.length-1];
   if(last&&!last.stopp) last.stopp=Date.now();
+  if(ordreTimerTick){clearInterval(ordreTimerTick);ordreTimerTick=null;}
   logChange(o,'Ordretid stoppet'); save(id);
   const el=document.getElementById('ordretimerKort_'+id);
   if(el) el.innerHTML=ordreTimerKortHTML(o);
