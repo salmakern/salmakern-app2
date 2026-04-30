@@ -106,3 +106,4 @@ create policy "Alle kan lese innstillinger"  on innstillinger  for all using (tr
 -- ============================================================
 alter table ordrer add column if not exists merke  text default '';
 alter table ordrer add column if not exists modell text default '';
+alter table ordrer add column if not exists ordre_timer_sessions jsonb default '[]';
