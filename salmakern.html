@@ -2729,7 +2729,7 @@ function lagreUtstyrMal() {
   const punkter = punkterRaw.split('\n').map(p=>p.trim()).filter(Boolean);
   if (!punkter.length) { alert('Legg til minst ett punkt'); return; }
   if (editId) {
-    const idx = S.utstyrMaler.findIndex(m=>m.id===editId);
+    const idx = S.utstyrMaler.findIndex(m=>String(m.id)===String(editId));
     if (idx>=0) S.utstyrMaler[idx] = {...S.utstyrMaler[idx], navn, biltype, punkter};
   } else {
     S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter});
@@ -2742,7 +2742,7 @@ function lagreUtstyrMal() {
 }
 
 function redigerUtstyrMal(id) {
-  const m = S.utstyrMaler.find(x=>x.id===id); if(!m) return;
+  const m = S.utstyrMaler.find(x=>String(x.id)===String(id)); if(!m) return;
   document.getElementById('uMalEditId').value = m.id;
   document.getElementById('uMalNavn').value = m.navn;
   document.getElementById('uMalBiltype').value = m.biltype||'';
