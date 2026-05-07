@@ -1336,8 +1336,7 @@ function tilbakeOrdreList() {
 }
 
 function utstyrMalDropdown(ordreId, selectId, applyFn, biltype) {
-  const bt = (biltype||'').toLowerCase();
-  const maler = (S.utstyrMaler||[]).filter(m => !m.biltype || bt.includes(m.biltype.toLowerCase()));
+  const maler = (S.utstyrMaler||[]);
   if (!maler.length) return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
     <span class="muted small">Ingen maler opprettet ennå.</span>
     ${me&&me.rolle==='admin'?`<button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Lag mal</button>`:'<span class="muted small">Admin kan lage maler under Mer.</span>'}
