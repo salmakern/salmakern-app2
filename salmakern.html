@@ -2760,7 +2760,7 @@ function slettUtstyrMal(id) {
 function renderUtstyrMaler() {
   const el = document.getElementById('utstyrMalListe'); if(!el) return;
   if (!S.utstyrMaler.length) { el.innerHTML='<div class="muted small">Ingen maler opprettet ennå</div>'; return; }
-  el.innerHTML = S.utstyrMaler.map(m=>`
+  el.innerHTML = S.utstyrMaler.map((m,i)=>`
     <div class="box" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div>
@@ -2769,11 +2769,29 @@ function renderUtstyrMaler() {
           <div class="small muted" style="margin-top:4px">${m.punkter.length} punkter: ${m.punkter.slice(0,4).join(', ')}${m.punkter.length>4?'...':''}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button onclick="redigerUtstyrMal('${m.id}')" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:15px;padding:0" title="Rediger">✏️</button>
-          <button onclick="slettUtstyrMal('${m.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0" title="Slett">✕</button>
+          <button onclick="redigerUtstyrMalIdx(${i})" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:15px;padding:0" title="Rediger">✏️</button>
+          <button onclick="slettUtstyrMalIdx(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0" title="Slett">✕</button>
         </div>
       </div>
     </div>`).join('');
+}
+
+function redigerUtstyrMalIdx(i) {
+  const m = S.utstyrMaler[i]; if(!m) return;
+  document.getElementById('uMalEditId').value = String(m.id);
+  document.getElementById('uMalNavn').value = m.navn;
+  document.getElementById('uMalBiltype').value = m.biltype||'';
+  document.getElementById('uMalPunkter').value = m.punkter.join('\n');
+  document.getElementById('uMalTittel').textContent = 'Rediger utstyr-mal';
+  openModal('nyUtstyrMal');
+}
+
+function slettUtstyrMalIdx(i) {
+  const m = S.utstyrMaler[i]; if(!m) return;
+  if (!confirm(`Slette malen "${m.navn}"?`)) return;
+  S.utstyrMaler.splice(i, 1);
+  saveInnstillinger();
+  renderUtstyrMaler();
 }
 
 function applyUtstyrMal(ordreId, malId) {
