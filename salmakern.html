@@ -625,7 +625,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 <div class="modal" id="nyUtstyrMal">
   <div class="modal-box">
-    <div class="h">Ny utstyr-mal (ankomst)</div>
+    <div class="h" id="uMalTittel">Ny utstyr-mal (ankomst)</div>
+    <input type="hidden" id="uMalEditId" value="">
     <label style="margin-top:12px">Navn på mal *</label>
     <input id="uMalNavn" placeholder="F.eks. HiAce standard ankomst">
     <label>Biltype / modell (valgfri — la stå tom for alle biler)</label>
@@ -2723,14 +2724,31 @@ function lagreUtstyrMal() {
   const navn = document.getElementById('uMalNavn').value.trim();
   const biltype = document.getElementById('uMalBiltype').value.trim();
   const punkterRaw = document.getElementById('uMalPunkter').value;
+  const editId = document.getElementById('uMalEditId').value;
   if (!navn) { alert('Navn er påkrevd'); return; }
   const punkter = punkterRaw.split('\n').map(p=>p.trim()).filter(Boolean);
   if (!punkter.length) { alert('Legg til minst ett punkt'); return; }
-  S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter});
+  if (editId) {
+    const idx = S.utstyrMaler.findIndex(m=>m.id===editId);
+    if (idx>=0) S.utstyrMaler[idx] = {...S.utstyrMaler[idx], navn, biltype, punkter};
+  } else {
+    S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter});
+  }
   saveInnstillinger();
   closeModal('nyUtstyrMal');
-  ['uMalNavn','uMalBiltype','uMalPunkter'].forEach(i=>document.getElementById(i).value='');
+  ['uMalNavn','uMalBiltype','uMalPunkter','uMalEditId'].forEach(i=>{ const el=document.getElementById(i); if(el) el.value=''; });
+  document.getElementById('uMalTittel').textContent='Ny utstyr-mal (ankomst)';
   renderUtstyrMaler();
+}
+
+function redigerUtstyrMal(id) {
+  const m = S.utstyrMaler.find(x=>x.id===id); if(!m) return;
+  document.getElementById('uMalEditId').value = m.id;
+  document.getElementById('uMalNavn').value = m.navn;
+  document.getElementById('uMalBiltype').value = m.biltype||'';
+  document.getElementById('uMalPunkter').value = m.punkter.join('\n');
+  document.getElementById('uMalTittel').textContent = 'Rediger utstyr-mal';
+  openModal('nyUtstyrMal');
 }
 
 function slettUtstyrMal(id) {
@@ -2750,7 +2768,10 @@ function renderUtstyrMaler() {
           ${m.biltype?`<span class="pill" style="font-size:11px;margin-left:4px">${m.biltype}</span>`:'<span class="pill" style="font-size:11px;margin-left:4px">Alle biler</span>'}
           <div class="small muted" style="margin-top:4px">${m.punkter.length} punkter: ${m.punkter.slice(0,4).join(', ')}${m.punkter.length>4?'...':''}</div>
         </div>
-        <button onclick="slettUtstyrMal('${m.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button onclick="redigerUtstyrMal('${m.id}')" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:15px;padding:0" title="Rediger">✏️</button>
+          <button onclick="slettUtstyrMal('${m.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0" title="Slett">✕</button>
+        </div>
       </div>
     </div>`).join('');
 }
