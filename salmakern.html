@@ -3256,6 +3256,34 @@ ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<s
   </div>
 </div>
 
+<div class="modal" id="adminTimerModal">
+  <div class="modal-box">
+    <div class="h" style="margin-bottom:12px">Rediger registrering</div>
+    <input type="hidden" id="adminTimerId">
+    <label>Dato</label>
+    <input type="date" id="adminTimerDato">
+    <label>Type</label>
+    <select id="adminTimerType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="adminTimerTypeToggle()">
+      <option value="normal">Normal arbeid</option>
+      <option value="manuell">Manuell</option>
+      <option value="syk">Syk</option>
+      <option value="egenmelding">Egenmelding</option>
+      <option value="ferie">Ferie</option>
+      <option value="permisjon">Permisjon</option>
+    </select>
+    <div id="adminTimerTidWrap">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+        <div><label>Fra kl.</label><input type="time" id="adminTimerFra"></div>
+        <div><label>Til kl.</label><input type="time" id="adminTimerTil"></div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="adminLagreTimer()">Lagre</button>
+      <button class="btn" onclick="closeModal('adminTimerModal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 </body></html>`;
 
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
