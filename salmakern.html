@@ -295,6 +295,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn" id="stoppBtn" onclick="stoppTimer()" disabled>⏹ Stopp</button>
         </div>
         <div id="manuellFelt" style="display:none;margin-top:14px">
+          <div style="margin-bottom:8px">
+            <label>Dato</label>
+            <input type="date" id="mDato">
+          </div>
           <div class="grid g2">
             <div><label>Fra kl.</label><input type="time" id="mFra" value="07:30"></div>
             <div><label>Til kl.</label><input type="time" id="mTil" value="15:30"></div>
@@ -2043,6 +2047,9 @@ function setTimerType(t) {
   document.getElementById('manuellFelt').style.display=t==='manuell'?'block':'none';
   document.getElementById('ferieFelt').style.display=(t==='ferie'||t==='permisjon')?'block':'none';
   const today=new Date().toISOString().split('T')[0];
+  if(t==='manuell'){
+    const mDato=document.getElementById('mDato'); if(mDato&&!mDato.value) mDato.value=today;
+  }
   if(t==='ferie'||t==='permisjon'){
     document.getElementById('fFra').value=today;
     document.getElementById('fTil').value=today;
