@@ -2113,7 +2113,35 @@ function bekreftTimerPIN() {
   const pin=document.getElementById('timerPINInput').value;
   if(pin!==S.dagensPIN){document.getElementById('timerPINErr').textContent='Feil PIN – prøv igjen';return;}
   closeModal('timerPIN');
-  doStartTimer('Startet med PIN-overstyring');
+  if(timerPINMode==='manuell') {
+    doLagreManuellTimer();
+  } else {
+    doStartTimer('Startet med PIN-overstyring');
+  }
+}
+
+function doLagreManuellTimer() {
+  if(!me) return;
+  const start=document.getElementById('mFra').value;
+  const stopp=document.getElementById('mTil').value;
+  const [sh,sm]=start.split(':').map(Number);
+  const [eh,em]=stopp.split(':').map(Number);
+  const mins=Math.max(0,(eh*60+em)-(sh*60+sm)-30);
+  const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
+  const entry={
+    id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+    dato, type:'manuell', start, stopp, mins
+  };
+  S.timer.push(entry);
+  if(db) db.from('timer_entries').insert({
+    id:entry.id,ansatt_id:me.id,ansatt:me.navn,
+    dato:entry.dato,type:'manuell',start,stopp,mins
+  }).then(r=>{if(r.error)console.error('Timer feil:',r.error.message);});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderTimerHistorikk(); renderTimerMaaned();
+  document.getElementById('mFra').value='';
+  document.getElementById('mTil').value='';
+  timerPINMode='gps';
 }
 
 function doStartTimer(notat) {
@@ -2155,7 +2183,13 @@ function lagreTimer() {
   if (timerType==='manuell') {
     start=document.getElementById('mFra').value;
     stopp=document.getElementById('mTil').value;
-    if(start&&stopp){const [sh,sm]=start.split(':').map(Number);const [eh,em]=stopp.split(':').map(Number);mins=(eh*60+em)-(sh*60+sm)-30;}
+    if(!start||!stopp){alert('Fyll inn fra- og til-tid');return;}
+    const [sh,sm]=start.split(':').map(Number);const [eh,em]=stopp.split(':').map(Number);
+    mins=(eh*60+em)-(sh*60+sm)-30;
+    // Krev dagens PIN for manuell registrering
+    timerPINMode='manuell';
+    openTimerPIN('Tast inn dagens PIN for å bekrefte manuell timeregistrering');
+    return;
   } else if (timerStart) {
     const ms=Date.now()-timerStart;
     mins=Math.floor(ms/60000);
