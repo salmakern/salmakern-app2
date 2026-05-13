@@ -2076,10 +2076,10 @@ function settGPSLokasjon() {
   if(btn){btn.textContent='Henter posisjon...';btn.disabled=true;}
   navigator.geolocation.getCurrentPosition(pos=>{
     S.gps.lat=pos.coords.latitude; S.gps.lng=pos.coords.longitude;
-    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-    if(db) db.from('innstillinger').upsert({id:'main',dagens_pin:S.dagensPIN,gps_lat:S.gps.lat,gps_lng:S.gps.lng,gps_radius:S.gps.radius})
-      .then(r=>{if(r.error)console.error(r.error.message);});
+    saveInnstillinger();
+    if(btn){btn.textContent='Sett arbeidsplasslokasjon';btn.disabled=false;}
     renderMer();
+    alert('✅ GPS-lokasjon lagret!');
   }, ()=>{
     alert('Kunne ikke hente GPS-posisjon. Prøv igjen.');
     if(btn){btn.textContent='Sett arbeidsplasslokasjon';btn.disabled=false;}
@@ -2088,9 +2088,7 @@ function settGPSLokasjon() {
 
 function endreGPSRadius(val) {
   S.gps.radius=Number(val);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-  if(db) db.from('innstillinger').upsert({id:'main',dagens_pin:S.dagensPIN,gps_lat:S.gps.lat,gps_lng:S.gps.lng,gps_radius:S.gps.radius})
-    .then(r=>{if(r.error)console.error(r.error.message);});
+  saveInnstillinger();
 }
 
 function startTimer() {
