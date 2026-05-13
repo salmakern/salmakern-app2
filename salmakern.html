@@ -3104,11 +3104,46 @@ function adminSlettTimer(id) {
   renderAnsattDetalj();
 }
 
-function adminEndreTimerType(id, nyType) {
+function adminRedigerTimer(id) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
-  t.type = nyType;
-  if(db) db.from('timer_entries').update({type:nyType}).eq('id',id).then(r=>{if(r.error)console.error(r.error.message);});
+  document.getElementById('adminTimerId').value = id;
+  document.getElementById('adminTimerDato').value = t.dato||'';
+  document.getElementById('adminTimerType').value = t.type||'normal';
+  document.getElementById('adminTimerFra').value = t.start!=='–'?t.start:'';
+  document.getElementById('adminTimerTil').value = t.stopp!=='–'?t.stopp:'';
+  adminTimerTypeToggle();
+  openModal('adminTimerModal');
+}
+
+function adminTimerTypeToggle() {
+  const type = document.getElementById('adminTimerType').value;
+  const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
+  document.getElementById('adminTimerTidWrap').style.display = fraværTyper.includes(type)?'none':'block';
+}
+
+function adminLagreTimer() {
+  const id = document.getElementById('adminTimerId').value;
+  const t = S.timer.find(x=>x.id===id); if(!t) return;
+  const dato = document.getElementById('adminTimerDato').value;
+  const type = document.getElementById('adminTimerType').value;
+  const fra  = document.getElementById('adminTimerFra').value;
+  const til  = document.getElementById('adminTimerTil').value;
+  const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
+  let mins = t.mins;
+  let start = t.start, stopp = t.stopp;
+  if (!fraværTyper.includes(type) && fra && til) {
+    const [sh,sm]=fra.split(':').map(Number);
+    const [eh,em]=til.split(':').map(Number);
+    mins = Math.max(0,(eh*60+em)-(sh*60+sm)-30);
+    start=fra; stopp=til;
+  } else if (fraværTyper.includes(type)) {
+    mins=0; start='–'; stopp='–';
+  }
+  t.dato=dato; t.type=type; t.start=start; t.stopp=stopp; t.mins=mins;
+  if(db) db.from('timer_entries').update({dato,type,start,stopp,mins}).eq('id',id)
+    .then(r=>{if(r.error)console.error(r.error.message);});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  closeModal('adminTimerModal');
   renderAnsattDetalj();
 }
 
