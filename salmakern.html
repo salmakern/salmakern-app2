@@ -3335,15 +3335,24 @@ ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<s
 // OPPDATERINGSVARSEL (ny appversjon tilgjengelig)
 // ════════════════════════════════════════════════════
 function visOppdateringsToast() {
-  if (document.getElementById('updateToast')) return; // allerede vist
+  // Auto-reload hvis ingen modal er åpen og ingen input er aktiv
+  const modalApen = document.querySelector('.modal.show');
+  const inputAktiv = document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+  if (!modalApen && !inputAktiv) {
+    window.location.reload();
+    return;
+  }
+  // Ellers vis toast slik at brukeren kan velge tidspunkt
+  if (document.getElementById('updateToast')) return;
   const toast = document.createElement('div');
   toast.id = 'updateToast';
   toast.className = 'update-toast';
   toast.innerHTML = `
-    <span>🔄 Ny versjon av appen er klar!</span>
-    <button onclick="window.location.reload()">Oppdater nå</button>
-    <button onclick="this.parentElement.remove()" style="background:transparent;border:1px solid #555;color:#a1a1aa">Senere</button>`;
+    <span>🔄 Ny versjon klar!</span>
+    <button onclick="window.location.reload()">Oppdater nå</button>`;
   document.body.appendChild(toast);
+  // Auto-reload etter 10 sek uansett
+  setTimeout(()=>window.location.reload(), 10000);
 }
 
 // ════════════════════════════════════════════════════
