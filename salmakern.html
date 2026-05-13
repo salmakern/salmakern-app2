@@ -3005,12 +3005,20 @@ function renderAnsattDetalj() {
   const arbDager   = [...new Set(arbTimer.map(t=>t.dato))].length;
 
   // Alle dager i måneden med registrering
+  const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
   const dagsRader = timer.sort((a,b)=>a.dato?.localeCompare(b.dato)).map(t=>{
-    const ot = t.mins>0 ? beregnOvertid(t.mins,t.dato) : null;
-    const fType = ['syk','egenmelding','ferie','permisjon'].includes(t.type);
-    return `<div style="display:flex;justify-content:space-between;padding:5px 8px;border-radius:6px;background:#18181b;margin-bottom:4px;font-size:13px">
-      <span>${t.dato} ${fType?'<span style="color:#fca5a5">'+t.type+'</span>':t.start+' – '+t.stopp}</span>
-      <span style="color:#f4f4f5;font-weight:600">${t.mins>0?fmtTid(t.mins):''}</span>
+    const fType = fraværTyper.includes(t.type);
+    const typeLabel = fType
+      ? `<select onchange="adminEndreTimerType('${t.id}',this.value)" style="background:#27272a;color:#fca5a5;border:1px solid #3f3f46;border-radius:6px;padding:2px 4px;font-size:12px">
+          ${fraværTyper.map(ty=>`<option value="${ty}" ${t.type===ty?'selected':''}>${ty}</option>`).join('')}
+         </select>`
+      : `<span>${t.start} – ${t.stopp}</span>`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:#18181b;margin-bottom:4px;font-size:13px">
+      <span style="display:flex;align-items:center;gap:6px">${t.dato} ${typeLabel}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span style="color:#f4f4f5;font-weight:600">${t.mins>0?fmtTid(t.mins):''}</span>
+        <button onclick="adminSlettTimer('${t.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0" title="Slett">✕</button>
+      </span>
     </div>`;
   }).join('');
 
