@@ -1491,8 +1491,7 @@ function buildOrdreDetail() {
 
       <div class="card">
         <div class="h">Utstyr – Har ved ankomst</div>
-        <div class="small muted" style="margin-top:4px">VER:SI ${S.utstyrMaler.map((m,i)=>i+':'+m.navn).join(' | ')}</div>
-        ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrMalNavn||'')}
+${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrMalNavn||'')}
         ${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}
       </div>
 
