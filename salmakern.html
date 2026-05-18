@@ -691,6 +691,7 @@ let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
 let me = null;
 let activeOrdreId = null;
+const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
 let flyttOrdreId  = null;
 let signOrdreId   = null;
 let timerStart    = null;
@@ -752,7 +753,24 @@ async function loadFromSupabase() {
   S.beskjeder      = sR.data?.beskjeder       || [];
   S.kontakter      = sR.data?.kontakter       || [];
   S.hms            = sR.data?.hms             || [];
-  S.nextId         = 100 + S.ordrer.length;
+  // Sett nextId til høyere enn alle eksisterende ID-er
+  const alleIds = [
+    ...S.ansatte.map(a=>Number(a.id)||0),
+    ...S.timer.map(t=>Number(String(t.id).replace(/\D/g,''))||0),
+    ...(S.utstyrMaler||[]).map(m=>Number(String(m.id).replace(/\D/g,''))||0)
+  ];
+  S.nextId = Math.max(100, ...alleIds) + 1;
+  // Fiks duplikat-ID-er i utstyrMaler
+  let malIdFikset = false;
+  const seenMalIds = new Set();
+  (S.utstyrMaler||[]).forEach(m => {
+    if (!m.id || seenMalIds.has(String(m.id))) {
+      m.id = 'u' + (++S.nextId);
+      malIdFikset = true;
+    }
+    seenMalIds.add(String(m.id));
+  });
+  if (malIdFikset) saveInnstillinger();
   // Pre-populate standard satser hvis ingen finnes
   if (!S.drivstoffSatser.length) {
     S.drivstoffSatser = [
@@ -818,6 +836,7 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); renderAll(); }
       } else if (p.eventType==='UPDATE') {
+        if (ignorerRealtimeFor.has(p.new.id)) return; // vi lagret nettopp selv, ignorer
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
         if(i>=0){ S.ordrer[i]=dbToOrdre(p.new); renderAll(); if(activeOrdreId===p.new.id) buildOrdreDetail(); }
       } else if (p.eventType==='DELETE') {
@@ -994,8 +1013,13 @@ function save(ordreId) {
   try { localStorage.setItem(STORE, JSON.stringify(S)); } catch(e) {}
   if (!db || !ordreId) return;
   const o = S.ordrer.find(x=>x.id===ordreId);
-  if (o) db.from('ordrer').upsert(ordreToDb(o))
-    .then(r=>{ if(r.error) console.error('Lagringsfeil:', r.error.message); });
+  if (o) {
+    // Ignorer Realtime-oppdatering for denne ordren i 3 sekunder
+    ignorerRealtimeFor.add(ordreId);
+    setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 3000);
+    db.from('ordrer').upsert(ordreToDb(o))
+      .then(r=>{ if(r.error) console.error('Lagringsfeil:', r.error.message); });
+  }
 }
 
 // ════════════════════════════════════════════════════
@@ -1340,18 +1364,19 @@ function tilbakeOrdreList() {
   renderOrdreList();
 }
 
-function utstyrMalDropdown(ordreId, selectId, applyFn, biltype) {
+function utstyrMalDropdown(ordreId, selectId, applyFn, biltype, gjeldendeMalNavn) {
   const maler = (S.utstyrMaler||[]);
   if (!maler.length) return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
     <span class="muted small">Ingen maler opprettet ennå.</span>
     ${me&&me.rolle==='admin'?`<button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Lag mal</button>`:'<span class="muted small">Admin kan lage maler under Mer.</span>'}
   </div>`;
+  const gjeldendeIdx = gjeldendeMalNavn ? maler.findIndex(m=>m.navn===gjeldendeMalNavn) : -1;
   return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
     <select id="${selectId}" style="flex:1;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px;font-size:12px">
       <option value="">– Velg mal –</option>
-      ${maler.map(m=>`<option value="${m.id}">${m.navn}${m.biltype?' ('+m.biltype+')':''}</option>`).join('')}
+      ${maler.map((m,i)=>`<option value="${i}" ${i===gjeldendeIdx?'selected':''}>${m.navn}${m.biltype?' ('+m.biltype+')':''}</option>`).join('')}
     </select>
-    <button class="btn sm red" onclick="${applyFn}('${ordreId}',document.getElementById('${selectId}').value)">Bruk</button>
+    <button class="btn sm red" onclick="const si=document.getElementById('${selectId}').selectedIndex-1; if(si>=0) ${applyFn}('${ordreId}',si)">Bruk</button>
   </div>`;
 }
 
@@ -1466,7 +1491,8 @@ function buildOrdreDetail() {
 
       <div class="card">
         <div class="h">Utstyr – Har ved ankomst</div>
-        ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'')}
+        <div class="small muted" style="margin-top:4px">VER:SI ${S.utstyrMaler.map((m,i)=>i+':'+m.navn).join(' | ')}</div>
+        ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrMalNavn||'')}
         ${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}
       </div>
 
@@ -1476,11 +1502,11 @@ function buildOrdreDetail() {
       </div>
 
       <div class="card">
-        <div class="h">Bilder – Ankomst (${o.bilderAnkomst.filter(Boolean).length}/6)</div>
+        <div class="h">Bilder – Ankomst (<span id="bildeTeller_a_${o.id}">${o.bilderAnkomst.filter(Boolean).length}/6</span>)</div>
         <div class="photo-grid">${['Front','Høyre','Venstre','Bak','Div 1','Div 2'].map((lbl,i)=>`
-          <div class="photo-box" onclick="${o.bilderAnkomst[i]?`openLightbox('fo_a_${i}_src')`:`document.getElementById('fo_a_${i}').click()`}">
+          <div class="photo-box" id="foboks_a_${i}" onclick="${o.bilderAnkomst[i]?`openLightbox('fo_a_${i}_src')`:`document.getElementById('fo_a_${i}').click()`}">
             ${o.bilderAnkomst[i]
-              ? `<img id="fo_a_${i}_src" src="${o.bilderAnkomst[i]}" style="bottom:32px;border-radius:8px 8px 0 0">
+              ? `<img id="fo_a_${i}_src" src="${o.bilderAnkomst[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
                  <div class="hover-del" onclick="event.stopPropagation()">
                    <button onclick="openLightbox('fo_a_${i}_src')" title="Vis fullt bilde">🔍</button>
                    <button onclick="document.getElementById('fo_a_${i}').click()" title="Bytt bilde">📷</button>
@@ -1492,11 +1518,11 @@ function buildOrdreDetail() {
       </div>
 
       <div class="card">
-        <div class="h">Bilder – Levering (${o.bilderLevering.filter(Boolean).length}/6)</div>
+        <div class="h">Bilder – Levering (<span id="bildeTeller_l_${o.id}">${o.bilderLevering.filter(Boolean).length}/6</span>)</div>
         <div class="photo-grid">${['Front','Høyre','Venstre','Bak','Div 1','Div 2'].map((lbl,i)=>`
-          <div class="photo-box" onclick="${o.bilderLevering[i]?`openLightbox('fo_l_${i}_src')`:`document.getElementById('fo_l_${i}').click()`}">
+          <div class="photo-box" id="foboks_l_${i}" onclick="${o.bilderLevering[i]?`openLightbox('fo_l_${i}_src')`:`document.getElementById('fo_l_${i}').click()`}">
             ${o.bilderLevering[i]
-              ? `<img id="fo_l_${i}_src" src="${o.bilderLevering[i]}" style="bottom:32px;border-radius:8px 8px 0 0">
+              ? `<img id="fo_l_${i}_src" src="${o.bilderLevering[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
                  <div class="hover-del" onclick="event.stopPropagation()">
                    <button onclick="openLightbox('fo_l_${i}_src')" title="Vis fullt bilde">🔍</button>
                    <button onclick="document.getElementById('fo_l_${i}').click()" title="Bytt bilde">📷</button>
@@ -2011,20 +2037,106 @@ async function slaOppRegnr(ordreId) {
   }
 }
 
-function lastOppFoto(e, id, side, idx) {
+async function lastOppFoto(e, id, side, idx) {
   const file=e.target.files[0]; if(!file) return;
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    if (side==='a') o.bilderAnkomst[idx]=ev.target.result;
-    else            o.bilderLevering[idx]=ev.target.result;
-    logChange(o,'Bilde lastet opp');
-    save(id); buildOrdreDetail();
-  };
-  reader.readAsDataURL(file);
+
+  // Vis lasteindikator i fotoboksen
+  const boksId = `foboks_${side}_${idx}`;
+  const boks = document.getElementById(boksId);
+  if(boks) boks.innerHTML = '<div style="font-size:22px">⏳</div><div style="font-size:11px">Laster opp...</div>';
+
+  const komprimert = await komprimer(file, 1200, 0.82);
+
+  let url = null;
+  if (db) {
+    try {
+      const filnavn = `${id}/${side}_${idx}_${Date.now()}.jpg`;
+      const { error } = await db.storage.from('bilder').upload(filnavn, komprimert, {contentType:'image/jpeg', upsert:true});
+      if (!error) {
+        const { data } = db.storage.from('bilder').getPublicUrl(filnavn);
+        url = data.publicUrl;
+      } else {
+        console.warn('Storage feil, bruker base64:', error.message);
+      }
+    } catch(err) {
+      console.warn('Storage unntak, bruker base64:', err);
+    }
+  }
+  // Fallback til base64 hvis Storage ikke fungerte
+  if (!url) {
+    url = await new Promise(res=>{
+      const reader=new FileReader();
+      reader.onload=ev=>res(ev.target.result);
+      reader.readAsDataURL(komprimert);
+    });
+  }
+
+  if (side==='a') o.bilderAnkomst[idx]=url;
+  else            o.bilderLevering[idx]=url;
+  logChange(o,'Bilde lastet opp');
+  save(id);
+
+  // Oppdater kun denne fotoboksen — ikke full rebuild
+  oppdaterFotoboks(o, side, idx);
+  // Oppdater telleren i korttittelen
+  const ankomstTeller = document.getElementById(`bildeTeller_a_${id}`);
+  const leveringTeller = document.getElementById(`bildeTeller_l_${id}`);
+  if(ankomstTeller) ankomstTeller.textContent = o.bilderAnkomst.filter(Boolean).length+'/6';
+  if(leveringTeller) leveringTeller.textContent = o.bilderLevering.filter(Boolean).length+'/6';
 }
-function slettFoto(id, side, idx) {
+
+function oppdaterFotoboks(o, side, idx) {
+  const boksId = `foboks_${side}_${idx}`;
+  const boks = document.getElementById(boksId);
+  if(!boks) return;
+  const url = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
+  const imgId = `fo_${side}_${idx}_src`;
+  if(url) {
+    boks.innerHTML = `<img id="${imgId}" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+      <div class="hover-del" onclick="event.stopPropagation()">
+        <button onclick="openLightbox('${imgId}')" title="Vis">🔍</button>
+        <button onclick="document.getElementById('fo_${side}_${idx}').click()" title="Bytt">📷</button>
+        <button onclick="slettFoto('${o.id}','${side}',${idx})" title="Slett">🗑</button>
+      </div>`;
+    boks.onclick = ()=>openLightbox(imgId);
+  } else {
+    const lbl = side==='a'
+      ? ['Front','Høyre','Venstre','Bak','Div 1','Div 2'][idx]
+      : ['Front','Høyre','Venstre','Bak','Div 1','Div 2'][idx];
+    boks.innerHTML = `<div style="font-size:22px">📷</div><div>${lbl}</div>`;
+    boks.onclick = ()=>document.getElementById(`fo_${side}_${idx}`).click();
+  }
+}
+
+function komprimer(file, maxPx, kvalitet) {
+  return new Promise(resolve=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      let w=img.width, h=img.height;
+      if(w>maxPx||h>maxPx){
+        if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}
+        else{w=Math.round(w*maxPx/h);h=maxPx;}
+      }
+      const c=document.createElement('canvas');
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      c.toBlob(b=>resolve(b),'image/jpeg',kvalitet);
+    };
+    img.src=url;
+  });
+}
+
+async function slettFoto(id, side, idx) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  const url = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
+  // Slett fra Supabase Storage hvis det er en URL (ikke base64)
+  if (db && url && url.startsWith('http')) {
+    const filnavn = url.split('/bilder/')[1];
+    if (filnavn) await db.storage.from('bilder').remove([filnavn]);
+  }
   if (side==='a') o.bilderAnkomst[idx]=null;
   else            o.bilderLevering[idx]=null;
   save(id); buildOrdreDetail();
@@ -2833,9 +2945,10 @@ function slettUtstyrMalIdx(i) {
   renderUtstyrMaler();
 }
 
-function applyUtstyrMal(ordreId, malId) {
+function applyUtstyrMal(ordreId, malIdx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const mal = S.utstyrMaler.find(m=>m.id===malId); if(!mal) return;
+  const mal = S.utstyrMaler[parseInt(malIdx)];
+  if(!mal) return;
   if(o.utstyrSjekkliste?.length && !confirm(`Erstatte eksisterende liste (${o.utstyrSjekkliste.length} punkter) med "${mal.navn}"?`)) return;
   o.utstyrSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
   o.utstyrMalNavn = mal.navn;
@@ -2849,9 +2962,9 @@ function toggleUtstyrPunkt(ordreId, idx) {
   save(ordreId); buildOrdreDetail();
 }
 
-function applyVisningsMal(ordreId, malId) {
+function applyVisningsMal(ordreId, malIdx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const mal = S.utstyrMaler.find(m=>m.id===malId); if(!mal) return;
+  const mal = S.utstyrMaler[parseInt(malIdx)]; if(!mal) return;
   if(o.visningsSjekkliste?.length && !confirm(`Erstatte eksisterende liste (${o.visningsSjekkliste.length} punkter) med "${mal.navn}"?`)) return;
   o.visningsSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
   o.visningsMalNavn = mal.navn;
@@ -2940,7 +3053,14 @@ function opprettAnsatt() {
   S.ansatte.push(nyA);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   if(db) db.from('ansatte').insert({id:nyA.id,navn,pin,rolle:nyA.rolle,aktiv:true})
-    .then(r=>{if(r.error)console.error('Ansatt insert feil:',r.error.message);});
+    .then(r=>{
+      if(r.error){
+        console.error('Ansatt insert feil:',r.error.message);
+        alert('Feil ved lagring av ansatt: '+r.error.message);
+        S.ansatte=S.ansatte.filter(a=>a.id!==nyA.id);
+        renderMer(); return;
+      }
+    });
   closeModal('nyAnsatt'); renderMer();
   ['na_navn','na_pin'].forEach(i=>document.getElementById(i).value='');
 }
