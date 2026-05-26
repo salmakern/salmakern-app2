@@ -7,6 +7,6 @@
       <stop offset="100%" stop-color="#09090b"/>
     </linearGradient>
   </defs>
-  <text x="256" y="340" font-family="Arial Black, Arial" font-weight="900" font-size="280" fill="#ef4444" text-anchor="middle">S</text>
+  <text x="256" y="256" font-family="Arial Black, Arial" font-weight="900" font-size="280" fill="#ef4444" text-anchor="middle" dominant-baseline="middle">S</text>
   <text x="256" y="430" font-family="Arial, sans-serif" font-weight="700" font-size="68" fill="#ffffff" text-anchor="middle" opacity="0.85">almaker'n</text>
 </svg>
