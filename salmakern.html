@@ -753,7 +753,7 @@ async function loadFromSupabase() {
     db.from('innstillinger').select('*').eq('id',1).maybeSingle()
   ]);
   if (aR.error) throw new Error(aR.error.message);
-  S.ansatte   = aR.data || [];
+  S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false}));
   S.ordrer    = (oR.data||[]).map(dbToOrdre);
   S.timer     = (tR.data||[]).map(dbToTimer);
   S.dagensPIN      = sR.data?.dagens_pin || '1234';
@@ -858,10 +858,11 @@ function subscribeRealtime() {
       }
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'ansatte'}, p => {
+      const mapA = a => ({...a, kanForeLonn: a.kan_fore_lonn !== false});
       if (p.eventType==='INSERT') {
-        if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(p.new);
+        if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(mapA(p.new));
       } else if (p.eventType==='UPDATE') {
-        const i=S.ansatte.findIndex(a=>a.id===p.new.id); if(i>=0) S.ansatte[i]=p.new;
+        const i=S.ansatte.findIndex(a=>a.id===p.new.id); if(i>=0) S.ansatte[i]=mapA(p.new);
       } else if (p.eventType==='DELETE') {
         S.ansatte = S.ansatte.filter(a=>a.id!==p.old.id);
       }
