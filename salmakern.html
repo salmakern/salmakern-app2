@@ -3230,14 +3230,17 @@ function genPIN() {
 }
 
 function toggleKanForeLonn(id) {
-  const a=S.ansatte.find(x=>x.id===id); if(!a) return;
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
   a.kanForeLonn = a.kanForeLonn===false ? true : false;
   ignorerRealtimeAnsatt.add(String(id));
   setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
   if(db) db.from('ansatte').update({kan_fore_lonn: a.kanForeLonn}).eq('id',id)
-    .then(r=>{if(r.error)console.error(r.error.message);});
+    .then(r=>{
+      if(r.error){ alert('Feil ved lagring: '+r.error.message); }
+    });
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   renderMer();
+  if(me?.rolle==='admin'||me?.rolle==='godkjenner') renderTimerOversikt();
 }
 
 function toggleAnsatt(id) {
