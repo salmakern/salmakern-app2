@@ -870,6 +870,25 @@ function subscribeRealtime() {
     });
 }
 
+// Koble til igjen og oppdater data når appen kommer tilbake i forgrunnen
+let sisteVarSynlig = Date.now();
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    const borte = Date.now() - sisteVarSynlig;
+    if (borte > 10000 && db && me) { // mer enn 10 sekunder borte
+      try {
+        await loadFromSupabase();
+        renderAll();
+        if (activeOrdreId) buildOrdreDetail();
+        // Koble til realtime på nytt
+        subscribeRealtime();
+      } catch(e) { console.warn('Oppdatering feilet:', e); }
+    }
+  } else {
+    sisteVarSynlig = Date.now();
+  }
+});
+
 // ════════════════════════════════════════════════════
 // MIGRASJON: Lokal data → Supabase
 // ════════════════════════════════════════════════════
