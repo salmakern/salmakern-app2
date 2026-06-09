@@ -829,9 +829,11 @@ function dbToTimer(r) {
     type:r.type,start:r.start||r.start_tid||'',stopp:r.stopp||r.stopp_tid||'',mins:r.mins||r.minutter||0};
 }
 
+let realtimeChannel = null;
 function subscribeRealtime() {
   if (!db) return;
-  db.channel('salmakern_live')
+  if (realtimeChannel) { db.removeChannel(realtimeChannel); realtimeChannel = null; }
+  realtimeChannel = db.channel('salmakern_live')
     .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
       if (p.eventType==='INSERT') {
         if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); renderAll(); }
@@ -868,6 +870,7 @@ function subscribeRealtime() {
     .subscribe(status => {
       if (status==='SUBSCRIBED') console.log('Sanntid: tilkoblet');
     });
+  return realtimeChannel;
 }
 
 // Koble til igjen og oppdater data når appen kommer tilbake i forgrunnen
