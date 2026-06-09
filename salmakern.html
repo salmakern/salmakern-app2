@@ -468,6 +468,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 <!-- ═══════════════ MODALS ═══════════════ -->
 
+<div class="modal" id="kundeHistorikk">
+  <div class="modal-box">
+    <div class="h" id="kundeHistorikkTittel">Kundehistorikk</div>
+    <div id="kundeHistorikkInnhold" style="margin-top:12px;max-height:60vh;overflow-y:auto"></div>
+    <button class="btn" style="margin-top:14px;width:100%" onclick="closeModal('kundeHistorikk')">Lukk</button>
+  </div>
+</div>
+
 <div class="modal" id="nyOrdre">
   <div class="modal-box">
     <div class="h">Ny ordre</div>
@@ -1114,12 +1122,24 @@ function renderOrdreList() {
   }
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
-  const alle = S.ordrer.filter(o => o.status === 'aktiv');
+  const sokTekst = (document.getElementById('ordreSok')?.value||'').toLowerCase().trim();
+  const alle = S.ordrer.filter(o => {
+    if (o.status !== 'aktiv') return false;
+    if (!sokTekst) return true;
+    return (o.regnr||'').toLowerCase().includes(sokTekst) ||
+           (o.kunde||'').toLowerCase().includes(sokTekst) ||
+           (o.eier||'').toLowerCase().includes(sokTekst) ||
+           (o.type||'').toLowerCase().includes(sokTekst) ||
+           (o.merke||'').toLowerCase().includes(sokTekst);
+  });
   listEl.innerHTML = `
     <div class="card">
       <div class="row">
         <div><div class="h">Alle ordrer</div><div class="muted small">Klikk for å åpne</div></div>
         <button class="btn red" onclick="openModal('nyOrdre')">+ Ny ordre</button>
+      </div>
+      <div style="margin-top:10px">
+        <input id="ordreSok" type="search" placeholder="🔍 Søk på regnr, kunde, biltype..." oninput="renderOrdreList()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
       </div>
       <div class="grid g3" style="margin-top:12px">
         ${alle.length ? alle.map(o=>{
@@ -1132,7 +1152,7 @@ function renderOrdreList() {
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</div>
             <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
           </div>`;
-        }).join('') : '<div class="muted small">Ingen aktive ordrer</div>'}
+        }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`}
       </div>
     </div>`;
 }
@@ -1453,7 +1473,13 @@ function buildOrdreDetail() {
         <div class="h">Kunde og bilinfo</div>
 
         <div class="grid g2" style="gap:8px;margin-top:10px">
-          <div><label>Kundenavn</label><input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)"></div>
+          <div>
+            <label>Kundenavn</label>
+            <div style="display:flex;gap:6px">
+              <input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)" style="flex:1">
+              ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde)}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
+            </div>
+          </div>
           <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
           <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value)" placeholder="Toyota"></div>
           <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)" placeholder="HiAce"></div>
@@ -2553,6 +2579,25 @@ function renderArkiv() {
         </div>
       </div>`).join('')
     :'<div class="muted small">Ingen arkiverte ordrer</div>';
+}
+
+function visKundeHistorikk(kunde) {
+  const ordrer = S.ordrer.filter(o => (o.kunde||'').toLowerCase() === kunde.toLowerCase())
+    .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
+  const el = document.getElementById('kundeHistorikkInnhold');
+  document.getElementById('kundeHistorikkTittel').textContent = '📋 ' + kunde;
+  el.innerHTML = ordrer.length ? ordrer.map(o => {
+    const si = statusInfo(o.ordreStatus);
+    return `<div class="box" style="margin-bottom:8px;cursor:pointer" onclick="closeModal('kundeHistorikk');openOrdre('${o.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <b>${ordreLabel(o)}</b>
+        <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
+      </div>
+      <div class="small muted" style="margin-top:4px">${o.merke||''} ${o.type||''} ${o.variant||''}</div>
+      <div class="small muted">${o.ankomstdato||'Ingen dato'} · ${o.status==='arkivert'?'Arkivert':'Aktiv'}</div>
+    </div>`;
+  }).join('') : '<div class="muted small">Ingen ordrer funnet for denne kunden.</div>';
+  openModal('kundeHistorikk');
 }
 
 function slettOrdre(id) {
