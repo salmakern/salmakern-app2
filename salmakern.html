@@ -2722,7 +2722,6 @@ function renderTimerOversikt() {
   let totalNormal=0, totalOt50=0, totalOt100=0, totalMins=0;
 
   const debugInfo = S.ansatte.filter(a=>a.aktiv).map(a=>`${a.navn}:${a.kanForeLonn}`).join(', ');
-  document.getElementById('adminStatInnhold').innerHTML = `<div class="small muted" style="margin-bottom:8px">DEBUG: ${debugInfo}</div>`;
   const rader = S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false).map(a => {
     const timer = S.timer.filter(t => t.ansattId===a.id && t.dato?.startsWith(prefix));
     const arbTimer = timer.filter(t=>t.mins>0);
@@ -2783,6 +2782,7 @@ function renderTimerOversikt() {
     </div>` : '';
 
   document.getElementById('adminStatInnhold').innerHTML =
+    `<div class="small muted" style="margin-bottom:8px;word-break:break-all">DEBUG: ${debugInfo}</div>` +
     (rader.join('') || '<div class="muted small">Ingen timer registrert denne måneden</div>') + totalRad;
 }
 
