@@ -1058,9 +1058,9 @@ function tryLogin() {
   }
 }
 function doLogout() {
-  me = null;
   if (timerTick) clearInterval(timerTick);
   timerTick = null; timerStart = null;
+  me = null;
   document.getElementById('appScreen').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
 }
@@ -2150,6 +2150,23 @@ function initTimerPage() {
   timerType='normal';
   highlightTimerType();
   renderTimerHistorikk();
+  // Gjenopprett pågående timer hvis siden ble lukket
+  const lagretStart = localStorage.getItem('timerStart_'+me?.id);
+  if (lagretStart) {
+    const ts = parseInt(lagretStart);
+    const mins = Math.floor((Date.now()-ts)/60000);
+    if (mins < 1440) { // maks 24 timer
+      timerStart = ts;
+      if (timerTick) clearInterval(timerTick);
+      timerTick = setInterval(updateClock,1000);
+      document.getElementById('stoppBtn').disabled=false;
+      document.getElementById('startBtn').disabled=true;
+      document.getElementById('clockEl').classList.add('running');
+      updateClock();
+    } else {
+      localStorage.removeItem('timerStart_'+me?.id);
+    }
+  }
 }
 
 function setTimerType(t) {
@@ -2264,6 +2281,7 @@ function doStartTimer(notat) {
   const btn=document.getElementById('startBtn');
   if(btn){btn.textContent='▶ Start';btn.disabled=true;}
   timerStart=Date.now();
+  localStorage.setItem('timerStart_'+me?.id, timerStart);
   document.getElementById('stoppBtn').disabled=false;
   document.getElementById('clockEl').classList.add('running');
   timerTick=setInterval(updateClock,1000);
@@ -2355,6 +2373,7 @@ function lagreTimer() {
     id:timerEntry.id, ansatt_id:me.id, ansatt:me.navn,
     dato:timerEntry.dato, type:timerType, start, stopp, mins
   }).then(r=>{if(r.error)console.error('Timer lagringsfeil:',r.error.message);});
+  localStorage.removeItem('timerStart_'+me?.id);
   renderTimerHistorikk();
   stoppTimer();
   timerStart=null;
