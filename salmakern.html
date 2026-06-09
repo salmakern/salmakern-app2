@@ -2721,7 +2721,7 @@ function renderTimerOversikt() {
 
   let totalNormal=0, totalOt50=0, totalOt100=0, totalMins=0;
 
-  const rader = S.ansatte.filter(a=>a.aktiv).map(a => {
+  const rader = S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false).map(a => {
     const timer = S.timer.filter(t => t.ansattId===a.id && t.dato?.startsWith(prefix));
     const arbTimer = timer.filter(t=>t.mins>0);
     const totMins = arbTimer.reduce((s,t)=>s+t.mins,0);
@@ -2808,7 +2808,7 @@ function renderAarsStatistikk() {
   const aar = new Date().getFullYear();
   if (lbl) lbl.textContent = `År ${aar}`;
   const maanedNavn = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
-  const ansatte = S.ansatte.filter(a => a.aktiv);
+  const ansatte = S.ansatte.filter(a => a.aktiv && a.kanForeLonn!==false);
 
   const html = ansatte.map(a => {
     const maaneder = maanedNavn.map((mnavn, mi) => {
