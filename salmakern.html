@@ -702,6 +702,7 @@ let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{la
 let me = null;
 let activeOrdreId = null;
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
+const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
 let flyttOrdreId  = null;
 let signOrdreId   = null;
 let timerStart    = null;
@@ -862,6 +863,7 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(mapA(p.new));
       } else if (p.eventType==='UPDATE') {
+        if (ignorerRealtimeAnsatt.has(String(p.new.id))) return;
         const i=S.ansatte.findIndex(a=>a.id===p.new.id); if(i>=0) S.ansatte[i]=mapA(p.new);
       } else if (p.eventType==='DELETE') {
         S.ansatte = S.ansatte.filter(a=>a.id!==p.old.id);
@@ -3229,6 +3231,8 @@ function genPIN() {
 function toggleKanForeLonn(id) {
   const a=S.ansatte.find(x=>x.id===id); if(!a) return;
   a.kanForeLonn = a.kanForeLonn===false ? true : false;
+  ignorerRealtimeAnsatt.add(String(id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
   if(db) db.from('ansatte').update({kan_fore_lonn: a.kanForeLonn}).eq('id',id)
     .then(r=>{if(r.error)console.error(r.error.message);});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
