@@ -941,7 +941,8 @@ async function migrateLocalToSupabase() {
   const uniqAnsatte = Object.values((lokal.ansatte||[]).reduce((acc,a)=>{acc[a.id]=a;return acc;},{}));
   if (uniqAnsatte.length > 0) {
     el.innerHTML += '<br>📋 Laster opp ' + uniqAnsatte.length + ' ansatte...';
-    const { error } = await db.from('ansatte').upsert(uniqAnsatte, { onConflict: 'id' });
+    const ansatteDb = uniqAnsatte.map(({kanForeLonn, ...rest}) => rest); // fjern camelCase-felt
+    const { error } = await db.from('ansatte').upsert(ansatteDb, { onConflict: 'id' });
     if (error) { el.innerHTML += ' <span class="err-text">Feil: ' + error.message + '</span>'; feil++; }
     else el.innerHTML += ' <span class="ok-text">✓</span>';
   }
@@ -3256,7 +3257,7 @@ function opprettAnsatt() {
   const nyA={id:++S.nextId, navn, pin, rolle:document.getElementById('na_rolle').value, aktiv:true};
   S.ansatte.push(nyA);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-  if(db) db.from('ansatte').insert({id:nyA.id,navn,pin,rolle:nyA.rolle,aktiv:true})
+  if(db) db.from('ansatte').insert({id:nyA.id,navn,pin,rolle:nyA.rolle,aktiv:true,kan_fore_lonn:true})
     .then(r=>{
       if(r.error){
         console.error('Ansatt insert feil:',r.error.message);
