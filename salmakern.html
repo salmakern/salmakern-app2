@@ -498,7 +498,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div><label>Modell</label><input id="n_modell" placeholder="L2H1 Lang"></div>
       <div><label>Variant</label><input id="n_variant" placeholder="2.8 D-4D"></div>
       <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
-      <div><label>Årsmodell</label><input id="n_versjon" placeholder="2022"></div>
+      <div><label>Versjon</label><input id="n_versjon" placeholder="2022"></div>
     </div>
     <div class="box" style="margin-top:10px"><span class="small muted">Sett kunde = eier:</span> <button class="btn sm" onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">Kopier</button></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -1525,7 +1525,7 @@ function buildOrdreDetail() {
           <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)" placeholder="HiAce"></div>
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)" placeholder="L2H1 Lang"></div>
           <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)" placeholder="2.8 D-4D"></div>
-          <div><label>Årsmodell</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)" placeholder="2022"></div>
+          <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)" placeholder="2022"></div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
         </div>
 
