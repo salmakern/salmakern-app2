@@ -601,7 +601,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h">Ny beskjed</div>
     <label style="margin-top:12px">Melding</label>
-    <textarea id="bTekst" rows="4" placeholder="Skriv melding til alle ansatte..."></textarea>
+    <textarea id="bTekst" rows="4"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreBeskjed()">Send</button>
       <button class="btn" onclick="closeModal('nyBeskjed')">Avbryt</button>
@@ -1565,9 +1565,9 @@ function buildOrdreDetail() {
         <table><thead><tr><th></th><th>Ved ankomst</th><th>Endring</th><th>Før visning</th></tr></thead><tbody>
           ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,lbl])=>`<tr>
             <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
-            <td><input value="${o.vekter[k].a}" onchange="sv('${o.id}','${k}','a',this.value)" placeholder="0"></td>
-            <td><input value="${o.vekter[k].e}" onchange="sv('${o.id}','${k}','e',this.value)" placeholder="0"></td>
-            <td><input value="${o.vekter[k].v}" onchange="sv('${o.id}','${k}','v',this.value)" placeholder="0"></td>
+            <td><input value="${o.vekter[k].a}" onchange="sv('${o.id}','${k}','a',this.value)"></td>
+            <td><input value="${o.vekter[k].e}" onchange="sv('${o.id}','${k}','e',this.value)"></td>
+            <td><input value="${o.vekter[k].v}" onchange="sv('${o.id}','${k}','v',this.value)"></td>
           </tr>`).join('')}
         </tbody></table>
       </div>
