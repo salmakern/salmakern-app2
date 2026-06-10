@@ -548,6 +548,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
+<div class="modal" id="godkjennSign">
+  <div class="modal-box">
+    <div class="h">Kundesignatur</div>
+    <div class="muted small" id="godkjSignNavn" style="margin-bottom:10px"></div>
+    <canvas id="godkjCanvas" height="200" style="width:100%;background:#18181b;border-radius:10px;border:1px solid #3f3f46;display:block;touch-action:none"></canvas>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn red" onclick="lagreGodkjennSignatur()">✓ Fullfør og lukk ordre</button>
+      <button class="btn" onclick="clearGodkjCanvas()">Tøm</button>
+      <button class="btn" onclick="lagreGodkjennSignatur(true)">Hopp over signatur</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="nyAnsatt">
   <div class="modal-box">
     <div class="h">Ny ansatt</div>
@@ -1652,7 +1665,12 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Signatur</div>
-        ${o.signatur?`<img src="${o.signatur}" style="width:100%;border-radius:10px;border:1px solid #27272a;margin-top:6px"><button class="btn sm" style="margin-top:6px" onclick="openSign('${o.id}')">Endre</button>`:`<div class="muted small" style="margin-bottom:6px">Ingen signatur</div><button class="btn sm" onclick="openSign('${o.id}')">Signer med finger</button>`}
+        ${o.signatur
+          ? `<img src="${o.signatur}" style="width:100%;border-radius:10px;border:1px solid #27272a;margin-top:6px">
+             ${erGodkjenner?`<button class="btn sm" style="margin-top:6px" onclick="openSign('${o.id}')">Endre signatur</button>`:''}`
+          : erGodkjenner
+            ? `<div class="muted small" style="margin-bottom:6px">Ingen signatur ennå</div><button class="btn sm" onclick="openSign('${o.id}')">Signer med finger</button>`
+            : `<div class="muted small">Signeres ved godkjenning</div>`}
       </div>
 
       <div class="card">
@@ -2053,16 +2071,47 @@ function lagreSignatur() {
 // ════════════════════════════════════════════════════
 // GODKJENNING
 // ════════════════════════════════════════════════════
+let godkjennGodkjenner = null;
+let godkjCtx = null, godkjDrawing = false, godkjLastX = 0, godkjLastY = 0;
+
 function bekreftGodkjenn() {
   const pin=document.getElementById('godkjPIN').value;
   const godkjenner=S.ansatte.find(a=>a.pin===pin&&(a.rolle==='godkjenner'||a.rolle==='admin')&&a.aktiv);
   if (!godkjenner){document.getElementById('godkjErr').textContent='Feil PIN eller ikke godkjenner';return;}
-  const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o) return;
-  o.godkjent=true; o.godkjennerNavn=godkjenner.navn;
-  logChange(o,'Godkjent og lukket av '+godkjenner.navn);
-  save(activeOrdreId); closeModal('godkjenn'); buildOrdreDetail(); renderAll();
+  godkjennGodkjenner = godkjenner;
   document.getElementById('godkjPIN').value='';
   document.getElementById('godkjErr').textContent='';
+  closeModal('godkjenn');
+  // Åpne signaturbox
+  const o=S.ordrer.find(x=>x.id===activeOrdreId);
+  document.getElementById('godkjSignNavn').textContent = `Godkjent av ${godkjenner.navn} – la kunden signere`;
+  openModal('godkjennSign');
+  const c=document.getElementById('godkjCanvas');
+  c.width=c.offsetWidth||600;
+  godkjCtx=c.getContext('2d');
+  godkjCtx.strokeStyle='#f4f4f5'; godkjCtx.lineWidth=2.5; godkjCtx.lineCap='round';
+  clearGodkjCanvas();
+  const pos=e=>{const r=c.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(c.width/r.width),y:(t.clientY-r.top)*(c.height/r.height)};};
+  c.onmousedown=e=>{godkjDrawing=true;const p=pos(e);godkjLastX=p.x;godkjLastY=p.y;};
+  c.onmousemove=e=>{if(!godkjDrawing)return;const p=pos(e);godkjCtx.beginPath();godkjCtx.moveTo(godkjLastX,godkjLastY);godkjCtx.lineTo(p.x,p.y);godkjCtx.stroke();godkjLastX=p.x;godkjLastY=p.y;};
+  c.onmouseup=c.onmouseleave=()=>{godkjDrawing=false;};
+  c.ontouchstart=e=>{e.preventDefault();godkjDrawing=true;const p=pos(e);godkjLastX=p.x;godkjLastY=p.y;};
+  c.ontouchmove=e=>{e.preventDefault();if(!godkjDrawing)return;const p=pos(e);godkjCtx.beginPath();godkjCtx.moveTo(godkjLastX,godkjLastY);godkjCtx.lineTo(p.x,p.y);godkjCtx.stroke();godkjLastX=p.x;godkjLastY=p.y;};
+  c.ontouchend=()=>{godkjDrawing=false;};
+}
+
+function clearGodkjCanvas() { if(godkjCtx) godkjCtx.clearRect(0,0,godkjCtx.canvas.width,godkjCtx.canvas.height); }
+
+function lagreGodkjennSignatur(hoppOver=false) {
+  const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o||!godkjennGodkjenner) return;
+  if (!hoppOver) {
+    const c=document.getElementById('godkjCanvas');
+    o.signatur=c.toDataURL();
+  }
+  o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn;
+  logChange(o,'Godkjent og lukket av '+godkjennGodkjenner.navn);
+  save(activeOrdreId); closeModal('godkjennSign'); buildOrdreDetail(); renderAll();
+  godkjennGodkjenner=null;
 }
 
 // ════════════════════════════════════════════════════
