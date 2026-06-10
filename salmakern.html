@@ -485,20 +485,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="grid g2" style="margin-top:4px">
       <div>
         <label>Reg.nr</label>
-        <input id="n_regnr" placeholder="AB12345" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+        <input id="n_regnr" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
       </div>
       <div>
         <label>Chassis-nr (VIN)</label>
-        <input id="n_chassis" placeholder="VF1-123456789">
+        <input id="n_chassis">
       </div>
-      <div><label>Kundenavn</label><input id="n_kunde" placeholder="Telemark Bygg AS"></div>
-      <div><label>Eier</label><input id="n_eier" placeholder="Ola Nordmann"></div>
-      <div><label>Merke</label><input id="n_merke" placeholder="Toyota"></div>
-      <div><label>Type</label><input id="n_type" placeholder="HiAce"></div>
-      <div><label>Modell</label><input id="n_modell" placeholder="L2H1 Lang"></div>
-      <div><label>Variant</label><input id="n_variant" placeholder="2.8 D-4D"></div>
+      <div><label>Kundenavn</label><input id="n_kunde"></div>
+      <div><label>Eier</label><input id="n_eier"></div>
+      <div><label>Merke</label><input id="n_merke"></div>
+      <div><label>Type</label><input id="n_type"></div>
+      <div><label>Modell</label><input id="n_modell"></div>
+      <div><label>Variant</label><input id="n_variant"></div>
       <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
-      <div><label>Versjon</label><input id="n_versjon" placeholder="2022"></div>
+      <div><label>Versjon</label><input id="n_versjon"></div>
     </div>
     <div class="box" style="margin-top:10px"><span class="small muted">Sett kunde = eier:</span> <button class="btn sm" onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">Kopier</button></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -565,8 +565,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h">Ny ansatt</div>
     <div style="margin-top:12px">
-      <label>Navn *</label><input id="na_navn" placeholder="Fornavn Etternavn">
-      <label>PIN (4 sifre) *</label><input type="password" inputmode="numeric" maxlength="4" id="na_pin" placeholder="1234">
+      <label>Navn *</label><input id="na_navn">
+      <label>PIN (4 sifre) *</label><input type="password" inputmode="numeric" maxlength="4" id="na_pin">
       <label>Rolle</label>
       <select id="na_rolle">
         <option value="ansatt">Ansatt</option>
@@ -613,12 +613,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h">Ny kontakt</div>
     <div class="grid g2" style="margin-top:12px">
-      <div><label>Navn *</label><input id="kNavn" placeholder="Firma / person"></div>
+      <div><label>Navn *</label><input id="kNavn"></div>
       <div><label>Type</label><select id="kType"><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Annet</option></select></div>
-      <div><label>Telefon</label><input id="kTlf" type="tel" placeholder="000 00 000"></div>
-      <div><label>E-post</label><input id="kEpost" type="email" placeholder="post@firma.no"></div>
+      <div><label>Telefon</label><input id="kTlf" type="tel"></div>
+      <div><label>E-post</label><input id="kEpost" type="email"></div>
     </div>
-    <label>Notat</label><textarea id="kNotat" rows="2" placeholder="Valgfri merknad..."></textarea>
+    <label>Notat</label><textarea id="kNotat" rows="2"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreKontakt()">Lagre</button>
       <button class="btn" onclick="closeModal('nyKontakt')">Avbryt</button>
@@ -630,7 +630,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h">Ny drivstoff-sats</div>
     <label style="margin-top:12px">Navn på sats *</label>
-    <input id="dsNavn" placeholder="F.eks. Bedriftskunde, Statens sats, Privat uten MVA">
+    <input id="dsNavn">
     <label>Type beregning *</label>
     <select id="dsType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="toggleDsVerdi()">
       <option value="uten_mva">Uten Mva (totalpris × 0,8 = –20%)</option>
@@ -641,7 +641,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     </select>
     <div id="dsVerdiWrap" style="display:none">
       <label id="dsVerdiLbl">Verdi</label>
-      <input id="dsVerdi" type="number" step="0.01" placeholder="85">
+      <input id="dsVerdi" type="number" step="0.01">
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreDrivstoffSats()">Lagre sats</button>
@@ -655,11 +655,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="h" id="uMalTittel">Ny utstyr-mal (ankomst)</div>
     <input type="hidden" id="uMalEditId" value="">
     <label style="margin-top:12px">Navn på mal *</label>
-    <input id="uMalNavn" placeholder="F.eks. HiAce standard ankomst">
+    <input id="uMalNavn">
     <label>Biltype / modell (valgfri — la stå tom for alle biler)</label>
-    <input id="uMalBiltype" placeholder="F.eks. Toyota HiAce, VW Crafter...">
+    <input id="uMalBiltype">
     <label>Utstyrspunkter (ett per linje) *</label>
-    <textarea id="uMalPunkter" rows="8" placeholder="Takstativ&#10;Hyllesystem&#10;Gulvplate&#10;LED lys&#10;Slepenøkkel&#10;Reservehjul&#10;Varselstrikant&#10;Førstehjelpskrin"></textarea>
+    <textarea id="uMalPunkter" rows="8"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreUtstyrMal()">Lagre mal</button>
       <button class="btn" onclick="closeModal('nyUtstyrMal')">Avbryt</button>
@@ -680,9 +680,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <option>Annet</option>
       </select>
       <label>Beskrivelse *</label>
-      <textarea id="hmsBesk" rows="4" placeholder="Hva skjedde / hva ble observert?"></textarea>
+      <textarea id="hmsBesk" rows="4"></textarea>
       <label>Tiltak</label>
-      <textarea id="hmsTiltak" rows="3" placeholder="Hva ble gjort eller bør gjøres?"></textarea>
+      <textarea id="hmsTiltak" rows="3"></textarea>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreHMS()">Registrer</button>
@@ -1521,11 +1521,11 @@ function buildOrdreDetail() {
             </div>
           </div>
           <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
-          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value)" placeholder="Toyota"></div>
-          <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)" placeholder="HiAce"></div>
-          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)" placeholder="L2H1 Lang"></div>
-          <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)" placeholder="2.8 D-4D"></div>
-          <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)" placeholder="2022"></div>
+          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value)"></div>
+          <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)"></div>
+          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)"></div>
+          <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)"></div>
+          <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)"></div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
         </div>
 
@@ -1535,14 +1535,14 @@ function buildOrdreDetail() {
             <div>
               <label>Reg.nr</label>
               <div style="display:flex;gap:6px">
-                <input id="regnr_${o.id}" value="${esc(o.regnr)}" onchange="sf('${o.id}','regnr',this.value.toUpperCase());this.value=this.value.toUpperCase()" placeholder="AB12345" style="text-transform:uppercase">
+                <input id="regnr_${o.id}" value="${esc(o.regnr)}" onchange="sf('${o.id}','regnr',this.value.toUpperCase());this.value=this.value.toUpperCase()" style="text-transform:uppercase">
                 <button class="btn sm red" onclick="slaOppRegnr('${o.id}')" title="Hent bilinfo fra Statens vegvesen" style="white-space:nowrap;flex-shrink:0">🔍 Søk</button>
               </div>
               <div id="regnrStatus_${o.id}" class="small" style="margin-top:4px"></div>
             </div>
             <div>
               <label>Chassis-nr (VIN)</label>
-              <input value="${esc(o.chassis)}" onchange="sf('${o.id}','chassis',this.value)" placeholder="VF1-123456789">
+              <input value="${esc(o.chassis)}" onchange="sf('${o.id}','chassis',this.value)">
             </div>
           </div>
         </div>
@@ -1585,7 +1585,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Utstyr – Skal ha etter visning</div>
-        <textarea rows="4" style="margin-top:8px" placeholder="Hva skal bilen ha etter visning..." onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+        <textarea rows="4" style="margin-top:8px" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
       </div>
 
       <div class="card">
@@ -1626,7 +1626,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Notater</div>
-        <textarea rows="3" style="margin-top:8px" placeholder="Interne notater..." onchange="sf('${o.id}','notater',this.value)">${esc(o.notater)}</textarea>
+        <textarea rows="3" style="margin-top:8px" onchange="sf('${o.id}','notater',this.value)">${esc(o.notater)}</textarea>
       </div>
 
       <div class="card">
@@ -1790,7 +1790,7 @@ function drivstoffKortHTML(o) {
   return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div style="flex:1;min-width:120px">
       <label>Totalpris (kr)</label>
-      <input type="number" step="0.01" value="${df.totalpris||df.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)" placeholder="0,00">
+      <input type="number" step="0.01" value="${df.totalpris||df.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)">
     </div>
     <div style="flex:2;min-width:160px">
       <label>Sats</label>
