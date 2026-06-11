@@ -389,6 +389,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <button class="btn sm" onclick="adminStatNaviger(-1)" id="statNavBack">◀</button>
             <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700"></span>
             <button class="btn sm" onclick="adminStatNaviger(1)" id="statNavFwd">▶</button>
+            <button class="btn sm" id="stempelkortBtn" onclick="toggleStempelkort()">🕐 Stempelkort</button>
             <button class="btn sm" onclick="eksportFiken()" style="background:#1e3a2f;border-color:#166534;color:#86efac">📥 Fiken</button>
             <button class="btn sm" onclick="eksportExcel()" style="background:#1e3a5f;border-color:#1e40af;color:#93c5fd">📊 Excel</button>
           </div>
@@ -2774,7 +2775,7 @@ function renderMer() {
 }
 
 let adminStatOffset = 0;
-function adminStatNaviger(dir) { adminStatOffset += dir; renderTimerOversikt(); }
+function adminStatNaviger(dir) { adminStatOffset += dir; if(stempelkortAktiv) renderStempelkort(); else if(statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
 
 function fmtTid(mins) {
   return `${Math.floor(mins/60)}t ${mins%60}m`;
@@ -2868,6 +2869,56 @@ function toggleStatVis() {
   if (navFwd)  navFwd.style.display  = statVis === 'maaned' ? '' : 'none';
   if (statVis === 'aar') renderAarsStatistikk();
   else renderTimerOversikt();
+}
+
+let stempelkortAktiv = false;
+function toggleStempelkort() {
+  stempelkortAktiv = !stempelkortAktiv;
+  const btn = document.getElementById('stempelkortBtn');
+  if (btn) btn.style.background = stempelkortAktiv ? '#3f1f6e' : '';
+  if (stempelkortAktiv) renderStempelkort();
+  else {
+    if (statVis === 'aar') renderAarsStatistikk();
+    else renderTimerOversikt();
+  }
+}
+
+function renderStempelkort() {
+  const el = document.getElementById('adminStatInnhold');
+  if (!el) return;
+  const now = new Date();
+  const dato = new Date(now.getFullYear(), now.getMonth() + adminStatOffset, 1);
+  const prefix = `${dato.getFullYear()}-${String(dato.getMonth()+1).padStart(2,'0')}`;
+  const maanedNavn = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+  document.getElementById('adminStatLbl').textContent = `${maanedNavn[dato.getMonth()]} ${dato.getFullYear()}`;
+
+  const relevante = S.timer.filter(t => t.dato?.startsWith(prefix) && t.start && t.start !== '–');
+  const datoer = [...new Set(relevante.map(t => t.dato))].sort();
+
+  if (!datoer.length) { el.innerHTML = '<div class="muted small">Ingen stempelkort denne måneden</div>'; return; }
+
+  const dagerHTML = datoer.map(dag => {
+    const ukedag = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'][new Date(dag).getDay()];
+    const rader = relevante.filter(t => t.dato === dag).sort((a,b) => (a.start||'').localeCompare(b.start||''));
+    const raderHTML = rader.map(t => {
+      const startFeil = t.start < '07:00';
+      const stoppFeil = t.stopp && t.stopp !== '–' && t.stopp > '16:30';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:#18181b;margin-bottom:3px;font-size:13px">
+        <span style="min-width:120px;font-weight:600">${t.ansatt||'?'}</span>
+        <span style="${startFeil?'color:#f87171;font-weight:700':'color:#86efac'}">${t.start}</span>
+        <span class="muted" style="margin:0 4px">→</span>
+        <span style="${stoppFeil?'color:#f87171;font-weight:700':'color:#a1a1aa'}">${t.stopp||'–'}</span>
+        <span style="margin-left:8px;color:#f4f4f5;font-weight:600;min-width:60px;text-align:right">${t.mins>0?fmtTid(t.mins):''}</span>
+        ${startFeil?'<span style="color:#f87171;font-size:11px;margin-left:6px">⚠ tidlig</span>':stoppFeil?'<span style="color:#f87171;font-size:11px;margin-left:6px">⚠ sent</span>':''}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px">
+      <div class="small muted" style="font-weight:700;margin-bottom:4px">${ukedag} ${dag}</div>
+      ${raderHTML}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div style="margin-bottom:8px" class="small muted">Rødt = startet før 07:00 eller sluttet etter 16:30</div>${dagerHTML}`;
 }
 
 function renderAarsStatistikk() {
