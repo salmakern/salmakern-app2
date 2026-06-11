@@ -2901,8 +2901,8 @@ function renderStempelkort() {
     const ukedag = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'][new Date(dag).getDay()];
     const rader = relevante.filter(t => t.dato === dag).sort((a,b) => (a.start||'').localeCompare(b.start||''));
     const raderHTML = rader.map(t => {
-      const startFeil = t.start < '07:00';
-      const stoppFeil = t.stopp && t.stopp !== '–' && t.stopp > '16:30';
+      const startFeil = t.start < '07:30';
+      const stoppFeil = t.stopp && t.stopp !== '–' && t.stopp > '15:30';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:#18181b;margin-bottom:3px;font-size:13px">
         <span style="min-width:120px;font-weight:600">${t.ansatt||'?'}</span>
         <span style="${startFeil?'color:#f87171;font-weight:700':'color:#86efac'}">${t.start}</span>
@@ -2918,7 +2918,7 @@ function renderStempelkort() {
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div style="margin-bottom:8px" class="small muted">Rødt = startet før 07:00 eller sluttet etter 16:30</div>${dagerHTML}`;
+  el.innerHTML = `<div style="margin-bottom:8px" class="small muted">Rødt = startet før 07:30 eller sluttet etter 15:30</div>${dagerHTML}`;
 }
 
 function renderAarsStatistikk() {
