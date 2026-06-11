@@ -3504,14 +3504,14 @@ function renderAnsattDetalj() {
         <div class="small muted">Timer totalt</div>
         <div style="font-size:18px;font-weight:700;color:#f4f4f5;margin-top:2px">${fmtTid(totMins)}</div>
       </div>
-      ${ot50>0?`<div style="background:#42200688;border-radius:10px;padding:10px;text-align:center">
+      <div style="background:#42200688;border-radius:10px;padding:10px;text-align:center">
         <div class="small" style="color:#fde68a">50% OT</div>
         <div style="font-size:18px;font-weight:700;color:#facc15;margin-top:2px">${fmtTid(ot50)}</div>
-      </div>`:''}
-      ${ot100>0?`<div style="background:#43140788;border-radius:10px;padding:10px;text-align:center">
+      </div>
+      <div style="background:#43140788;border-radius:10px;padding:10px;text-align:center">
         <div class="small" style="color:#fed7aa">100% OT</div>
         <div style="font-size:18px;font-weight:700;color:#f97316;margin-top:2px">${fmtTid(ot100)}</div>
-      </div>`:''}
+      </div>
       ${sykDager+egenmDager>0?`<div style="background:#3f0000;border-radius:10px;padding:10px;text-align:center">
         <div class="small" style="color:#fca5a5">Syk/Egenmeld</div>
         <div style="font-size:18px;font-weight:700;color:#fca5a5;margin-top:2px">${sykDager+egenmDager} dager</div>
