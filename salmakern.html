@@ -2983,17 +2983,33 @@ function eksportExcel() {
   const timer = S.timer.filter(t => t.dato?.startsWith(filPrefix));
   if (!timer.length) { alert('Ingen timer i valgt periode'); return; }
 
-  const rader = [
-    ['Ansatt','Dato','Type','Fra','Til','Timer (desimal)','Minutter','Normal (min)','50% OT (min)','100% OT (min)']
-  ];
-  timer.sort((a,b)=>(a.dato||'').localeCompare(b.dato||'') || (a.ansatt||'').localeCompare(b.ansatt||''));
-  timer.forEach(t => {
-    const ot = beregnOvertid(t.mins||0, t.dato||'');
-    rader.push([
-      t.ansatt||'', t.dato||'', t.type||'normal', t.start||'', t.stopp||'',
-      ((t.mins||0)/60).toFixed(2).replace('.',','),
-      t.mins||0, ot.normal, ot.ot50, ot.ot100
+  const rader = [];
+  const ansatte = S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false);
+  ansatte.forEach(a => {
+    const aTimer = timer.filter(t=>t.ansattId===a.id && t.mins>0)
+      .sort((x,y)=>(x.dato||'').localeCompare(y.dato||''));
+    if (!aTimer.length) return;
+    rader.push([a.navn.toUpperCase()]);
+    rader.push(['Dato','Type','Fra','Til','Timer (desimal)','Normal (t)','50% OT (t)','100% OT (t)']);
+    let totNormal=0, totOt50=0, totOt100=0, totMins=0;
+    aTimer.forEach(t => {
+      const ot = beregnOvertid(t.mins||0, t.dato||'');
+      totNormal+=ot.normal; totOt50+=ot.ot50; totOt100+=ot.ot100; totMins+=t.mins||0;
+      rader.push([
+        t.dato||'', t.type||'normal', t.start||'', t.stopp||'',
+        ((t.mins||0)/60).toFixed(2).replace('.',','),
+        (ot.normal/60).toFixed(2).replace('.',','),
+        (ot.ot50/60).toFixed(2).replace('.',','),
+        (ot.ot100/60).toFixed(2).replace('.',',')
+      ]);
+    });
+    rader.push(['TOTAL','','','',
+      (totMins/60).toFixed(2).replace('.',','),
+      (totNormal/60).toFixed(2).replace('.',','),
+      (totOt50/60).toFixed(2).replace('.',','),
+      (totOt100/60).toFixed(2).replace('.',',')
     ]);
+    rader.push([]);
   });
 
   const csv = rader.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(';')).join('\r\n');
@@ -3602,29 +3618,25 @@ function eksportFiken() {
   const maanedNavn=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
   const now = new Date();
   const prefix = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  // Alle timer denne måneden
   const timer = S.timer.filter(t=>t.dato?.startsWith(prefix));
   if (!timer.length) { alert('Ingen timer registrert denne måneden.'); return; }
 
-  const linjer = [];
-  linjer.push(['Ansatt','Dato','Type','Fra','Til','Minutter','Timer','Overtid 50%','Overtid 100%']);
-
-  S.ansatte.forEach(a => {
-    const aTimer = timer.filter(t=>t.ansattId===a.id && t.mins>0);
-    aTimer.forEach(t => {
-      const ot = beregnOvertid(t.mins, t.dato);
-      linjer.push([
-        a.navn,
-        t.dato,
-        t.type||'arbeid',
-        t.start||'',
-        t.stopp||'',
-        t.mins,
-        (t.mins/60).toFixed(2).replace('.',','),
-        (ot.ot50/60).toFixed(2).replace('.',','),
-        (ot.ot100/60).toFixed(2).replace('.',',')
-      ]);
-    });
+  const linjer = [['Ansatt','Normal tid (t)','50% overtid (t)','100% overtid (t)','Syk (dager)','Egenmelding (dager)','Ferie (dager)']];
+  S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false).forEach(a => {
+    const aTimer = timer.filter(t=>t.ansattId===a.id);
+    const arbTimer = aTimer.filter(t=>t.mins>0);
+    if (!aTimer.length) return;
+    let normal=0, ot50=0, ot100=0;
+    arbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); normal+=ot.normal; ot50+=ot.ot50; ot100+=ot.ot100; });
+    linjer.push([
+      a.navn,
+      (normal/60).toFixed(2).replace('.',','),
+      (ot50/60).toFixed(2).replace('.',','),
+      (ot100/60).toFixed(2).replace('.',','),
+      aTimer.filter(t=>t.type==='syk').length,
+      aTimer.filter(t=>t.type==='egenmelding').length,
+      aTimer.filter(t=>t.type==='ferie').length
+    ]);
   });
 
   const csv = linjer.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
