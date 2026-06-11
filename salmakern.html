@@ -2811,14 +2811,14 @@ function renderTimerOversikt() {
           <div class="small muted">Normal</div>
           <div style="font-weight:700;font-size:15px;margin-top:2px">${fmtTid(normal)}</div>
         </div>
-        ${ot50>0?`<div style="background:#42200688;border-radius:10px;padding:8px;text-align:center">
+        <div style="background:#42200688;border-radius:10px;padding:8px;text-align:center">
           <div class="small" style="color:#fde68a">50% overtid</div>
           <div style="font-weight:700;font-size:15px;color:#facc15;margin-top:2px">${fmtTid(ot50)}</div>
-        </div>`:''}
-        ${ot100>0?`<div style="background:#43140788;border-radius:10px;padding:8px;text-align:center">
+        </div>
+        <div style="background:#43140788;border-radius:10px;padding:8px;text-align:center">
           <div class="small" style="color:#fed7aa">100% overtid</div>
           <div style="font-weight:700;font-size:15px;color:#f97316;margin-top:2px">${fmtTid(ot100)}</div>
-        </div>`:''}
+        </div>
         ${sykDager>0||ferieDager>0?`<div style="background:#09090b;border-radius:10px;padding:8px;text-align:center">
           <div class="small muted">Fravær</div>
           <div style="font-size:13px;margin-top:2px">${sykDager>0?`<span style="color:#fca5a5">Syk: ${sykDager}d</span> `:''}${ferieDager>0?`<span style="color:#a1a1aa">Ferie: ${ferieDager}d</span>`:''}</div>
