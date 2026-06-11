@@ -489,7 +489,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
       <div>
         <label>Chassis-nr (VIN)</label>
-        <input id="n_chassis">
+        <input id="n_chassis" maxlength="17" oninput="document.getElementById('n_chassis_tel').textContent=this.value.length+'/17'">
+        <div class="small muted" id="n_chassis_tel" style="margin-top:2px">0/17</div>
       </div>
       <div><label>Kundenavn</label><input id="n_kunde"></div>
       <div><label>Eier</label><input id="n_eier"></div>
@@ -1542,7 +1543,8 @@ function buildOrdreDetail() {
             </div>
             <div>
               <label>Chassis-nr (VIN)</label>
-              <input value="${esc(o.chassis)}" onchange="sf('${o.id}','chassis',this.value)">
+              <input value="${esc(o.chassis)}" maxlength="17" oninput="this.nextElementSibling.textContent=this.value.length+'/17'" onchange="sf('${o.id}','chassis',this.value)">
+              <div class="small muted" style="margin-top:2px">${(o.chassis||'').length}/17</div>
             </div>
           </div>
         </div>
