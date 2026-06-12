@@ -1211,8 +1211,8 @@ function renderOversikt(q) {
   document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&o.kalenderDato).length;
 
   const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
-  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&o.kalenderDato&&match(o));
-  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&!o.kalenderDato&&match(o));
+  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus!=='ikke_paabegynt'&&match(o));
+  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt'&&match(o));
 
   const activeEl = document.getElementById('activeList');
   activeEl.innerHTML = aktive.length
@@ -2113,9 +2113,9 @@ function lagreGodkjennSignatur(hoppOver=false) {
     const c=document.getElementById('godkjCanvas');
     o.signatur=c.toDataURL();
   }
-  o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn;
+  o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn; o.status='arkivert';
   logChange(o,'Godkjent og lukket av '+godkjennGodkjenner.navn);
-  save(activeOrdreId); closeModal('godkjennSign'); buildOrdreDetail(); renderAll();
+  save(activeOrdreId); closeModal('godkjennSign'); tilbakeOrdreList(); renderAll();
   godkjennGodkjenner=null;
 }
 
