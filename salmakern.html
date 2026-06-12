@@ -1161,7 +1161,8 @@ function renderOrdreList() {
   }
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
-  const sokTekst = (document.getElementById('ordreSok')?.value||'').toLowerCase().trim();
+  const gammelSok = document.getElementById('ordreSok')?.value || '';
+  const sokTekst = gammelSok.toLowerCase().trim();
   const alle = S.ordrer.filter(o => {
     if (o.status !== 'aktiv') return false;
     if (!sokTekst) return true;
@@ -1196,6 +1197,10 @@ function renderOrdreList() {
         }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`}
       </div>
     </div>`;
+  if (gammelSok) {
+    const inp = document.getElementById('ordreSok');
+    if (inp) { inp.value = gammelSok; inp.focus(); inp.setSelectionRange(gammelSok.length, gammelSok.length); }
+  }
 }
 
 // ════════════════════════════════════════════════════
