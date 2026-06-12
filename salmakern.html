@@ -1169,7 +1169,9 @@ function renderOrdreList() {
            (o.kunde||'').toLowerCase().includes(sokTekst) ||
            (o.eier||'').toLowerCase().includes(sokTekst) ||
            (o.type||'').toLowerCase().includes(sokTekst) ||
-           (o.merke||'').toLowerCase().includes(sokTekst);
+           (o.merke||'').toLowerCase().includes(sokTekst) ||
+           (o.modell||'').toLowerCase().includes(sokTekst) ||
+           (o.chassis||'').toLowerCase().includes(sokTekst);
   });
   listEl.innerHTML = `
     <div class="card">
