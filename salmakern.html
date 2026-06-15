@@ -711,7 +711,7 @@ const STATUSER = [
   {id:'hentet',         lbl:'Hentet',               border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
 ];
 function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
-const STATUS_SORT = {paabegynt:0,ikke_veid:1,klar_visning:2,vist_biltilsyn:3,klar_henting:4,hentet:5,paa_vei:98,ikke_paabegynt:99};
+const STATUS_SORT = {hentet:0,klar_henting:1,vist_biltilsyn:2,klar_visning:3,ikke_veid:4,paabegynt:5,ikke_paabegynt:6,paa_vei:7};
 function sorterOrdre(a,b) { return (STATUS_SORT[a.ordreStatus]??99)-(STATUS_SORT[b.ordreStatus]??99); }
 
 let db = null;
