@@ -711,6 +711,8 @@ const STATUSER = [
   {id:'hentet',         lbl:'Hentet',               border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
 ];
 function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
+const STATUS_SORT = {paabegynt:0,ikke_veid:1,klar_visning:2,vist_biltilsyn:3,klar_henting:4,hentet:5,paa_vei:98,ikke_paabegynt:99};
+function sorterOrdre(a,b) { return (STATUS_SORT[a.ordreStatus]??99)-(STATUS_SORT[b.ordreStatus]??99); }
 
 let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
@@ -1173,7 +1175,7 @@ function renderOrdreList() {
            (o.merke||'').toLowerCase().includes(sokTekst) ||
            (o.modell||'').toLowerCase().includes(sokTekst) ||
            (o.chassis||'').toLowerCase().includes(sokTekst);
-  });
+  }).sort(sorterOrdre);
   listEl.innerHTML = `
     <div class="card">
       <div class="row">
@@ -1216,8 +1218,8 @@ function renderOversikt(q) {
   document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&o.kalenderDato).length;
 
   const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
-  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus!=='ikke_paabegynt'&&match(o));
-  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt'&&match(o));
+  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus!=='ikke_paabegynt'&&match(o)).sort(sorterOrdre);
+  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt'&&match(o)).sort(sorterOrdre);
 
   const activeEl = document.getElementById('activeList');
   activeEl.innerHTML = aktive.length
