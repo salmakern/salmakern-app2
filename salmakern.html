@@ -712,7 +712,11 @@ const STATUSER = [
 ];
 function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
 const STATUS_SORT = {hentet:0,klar_henting:1,vist_biltilsyn:2,klar_visning:3,ikke_veid:4,paabegynt:5,ikke_paabegynt:6,paa_vei:7};
-function sorterOrdre(a,b) { return (STATUS_SORT[a.ordreStatus]??99)-(STATUS_SORT[b.ordreStatus]??99); }
+function sorterOrdre(a,b) {
+  const sd=(STATUS_SORT[a.ordreStatus]??99)-(STATUS_SORT[b.ordreStatus]??99);
+  if(sd!==0) return sd;
+  return (a.ankomstdato||'').localeCompare(b.ankomstdato||'');
+}
 
 let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
