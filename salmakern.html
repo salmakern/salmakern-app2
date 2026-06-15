@@ -865,15 +865,20 @@ function dbToTimer(r) {
 }
 
 let realtimeChannel = null;
+let realtimeReconnectTimer = null;
+let realtimeReconnectForsok = 0;
+
 function subscribeRealtime() {
   if (!db) return;
-  if (realtimeChannel) { db.removeChannel(realtimeChannel); realtimeChannel = null; }
+  if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
+  if (realtimeChannel) { try { db.removeChannel(realtimeChannel); } catch(_){} realtimeChannel = null; }
+
   realtimeChannel = db.channel('salmakern_live')
     .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
       if (p.eventType==='INSERT') {
         if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); renderAll(); }
       } else if (p.eventType==='UPDATE') {
-        if (ignorerRealtimeFor.has(p.new.id)) return; // vi lagret nettopp selv, ignorer
+        if (ignorerRealtimeFor.has(p.new.id)) return;
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
         if(i>=0){ S.ordrer[i]=dbToOrdre(p.new); renderAll(); if(activeOrdreId===p.new.id) buildOrdreDetail(); }
       } else if (p.eventType==='DELETE') {
@@ -904,8 +909,24 @@ function subscribeRealtime() {
       }
       renderAll();
     })
-    .subscribe(status => {
-      if (status==='SUBSCRIBED') console.log('Sanntid: tilkoblet');
+    .subscribe(async (status, err) => {
+      if (status === 'SUBSCRIBED') {
+        realtimeReconnectForsok = 0;
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('Sanntid frakoblet:', status, err);
+        if (!realtimeReconnectTimer && db && me) {
+          const forsinkelse = Math.min(1000 * Math.pow(2, realtimeReconnectForsok), 30000);
+          realtimeReconnectForsok++;
+          realtimeReconnectTimer = setTimeout(async () => {
+            realtimeReconnectTimer = null;
+            if (db && me) {
+              await loadFromSupabase();
+              renderAll();
+              subscribeRealtime();
+            }
+          }, forsinkelse);
+        }
+      }
     });
   return realtimeChannel;
 }
@@ -928,7 +949,7 @@ function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     if (document.visibilityState === 'visible' && db && me) oppdaterApp();
-  }, 120000); // hvert 2. minutt
+  }, 30000); // hvert 30. sekund som fallback
 }
 
 document.addEventListener('visibilitychange', async () => {
