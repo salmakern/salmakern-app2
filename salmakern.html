@@ -1763,6 +1763,7 @@ function renderAnsOrdre(o) {
 function tvangsflyt(o) {
   const ombyggingValgt = o.ombygging && Object.values(o.ombygging).some(Boolean);
   return [
+    {lbl:'Diagnose utført',   ok: !!o.diagnose},
     {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
     {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
     {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
