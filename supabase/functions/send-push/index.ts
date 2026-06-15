@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
       const { record, old_record } = payload
       const bil = record.chassis || record.regnr || record.kunde || 'Bil'
       const statusEndret = record.ordre_status !== old_record?.ordre_status
-      const vektNy  = record.vekter?.totalvekt?.a
-      const vektGml = old_record?.vekter?.totalvekt?.a
+      const vektNy  = record.vekter?.totalvekt?.v
+      const vektGml = old_record?.vekter?.totalvekt?.v
       const vektEndret = vektNy && !vektGml
 
       if (statusEndret) {
