@@ -371,6 +371,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
           </div>
         </div>
+        <div class="card" id="merVarselKort">
+          <div class="h">Varsler</div>
+          <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
+          <div id="varselStatus" class="small" style="margin-bottom:10px"></div>
+          <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
+        </div>
         <div class="card" id="merKontakter">
           <div class="row">
             <div class="h">Kontakter</div>
@@ -697,9 +703,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 // ════════════════════════════════════════════════════
 // CONFIG & STATE
 // ════════════════════════════════════════════════════
-const SUPA_URL = 'https://qoqpenbfdxeduylxirwk.supabase.co';
-const SUPA_KEY = 'sb_publishable_46JAdcBUbQYS8NbDwP-MXg_zKWA8Ojz';
-const STORE    = 'salmakern_v2';
+const SUPA_URL     = 'https://qoqpenbfdxeduylxirwk.supabase.co';
+const SUPA_KEY     = 'sb_publishable_46JAdcBUbQYS8NbDwP-MXg_zKWA8Ojz';
+const STORE        = 'salmakern_v2';
+const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mqyAfXkQUbeLhPzKiv6y6CpfmTeYJDc';
+const PUSH_URL     = SUPA_URL + '/functions/v1/send-push';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
 const STATUSER = [
   {id:'paa_vei',        lbl:'På vei',              border:'#f472b6', bg:'#50072488', txt:'#fce7f3'},
   {id:'ikke_paabegynt', lbl:'Ikke påbegynt',        border:'#ef4444', bg:'#450a0a88', txt:'#fca5a5'},
@@ -1212,6 +1227,68 @@ function doLogout() {
   me = null;
   document.getElementById('appScreen').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
+}
+
+// ════════════════════════════════════════════════════
+// PUSH-VARSLER
+// ════════════════════════════════════════════════════
+async function oppdaterVarselKnapp() {
+  const knapp = document.getElementById('varselKnapp');
+  const statusEl = document.getElementById('varselStatus');
+  if (!knapp) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    knapp.textContent = 'Varsler støttes ikke på denne enheten';
+    knapp.disabled = true;
+    return;
+  }
+  const perm = Notification.permission;
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (perm === 'denied') {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#f87171">Varsler er blokkert – åpne telefoninnstillinger for å tillate.</span>';
+    knapp.textContent = 'Varsler blokkert';
+    knapp.disabled = true;
+  } else if (sub) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#4ade80">✔ Varsler er aktivert på denne enheten</span>';
+    knapp.textContent = 'Deaktiver varsler';
+    knapp.disabled = false;
+  } else {
+    if (statusEl) statusEl.textContent = 'Varsler er ikke aktivert.';
+    knapp.textContent = 'Aktiver varsler';
+    knapp.disabled = false;
+  }
+}
+
+async function togglePushVarsler() {
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    await sub.unsubscribe();
+    if (db && me) await db.from('push_abonnement').delete().eq('endpoint', sub.endpoint);
+    oppdaterVarselKnapp();
+    return;
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { oppdaterVarselKnapp(); return; }
+    const nySub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
+    });
+    const j = nySub.toJSON();
+    if (db && me) {
+      await db.from('push_abonnement').upsert({
+        ansatt_id: me.id,
+        endpoint: j.endpoint,
+        p256dh: j.keys.p256dh,
+        auth: j.keys.auth
+      }, { onConflict: 'endpoint' });
+    }
+    oppdaterVarselKnapp();
+  } catch(e) {
+    console.warn('Push feilet:', e);
+    oppdaterVarselKnapp();
+  }
 }
 
 // ════════════════════════════════════════════════════
@@ -2815,6 +2892,7 @@ function gjenopprett(id) {
 function renderMer() {
   const erAdmin = me && me.rolle === 'admin';
   const erGodkjenner = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
+  oppdaterVarselKnapp();
 
   // Vis/skjul admin-only kort
   document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
