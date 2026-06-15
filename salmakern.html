@@ -1650,7 +1650,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Endringer</div>
-        ${o.endringer.length?o.endringer.slice(-8).reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+        ${o.endringer.length?[...o.endringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
       </div>
     </div>
 
