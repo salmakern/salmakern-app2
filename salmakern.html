@@ -828,6 +828,7 @@ function dbToOrdre(r) {
     bilderLevering:r.bilder_levering||[null,null,null,null,null,null],
     ansatteSignert:r.ansatte_signert||[], signatur:r.signatur||null,
     godkjent:r.godkjent||false, godkjennerNavn:r.godkjenner_navn||'',
+    diagnose:r.diagnose||false, diagnoseAv:r.diagnose_av||'',
     fakturert:r.fakturert||false, fakturertAv:r.fakturert_av||'',
     ordreStart:r.ordre_start||null, ordreStopp:r.ordre_stopp||null,
     ordreTimerSessions:r.ordre_timer_sessions||[],
@@ -847,6 +848,7 @@ function ordreToDb(o) {
     bilder_ankomst:o.bilderAnkomst, bilder_levering:o.bilderLevering,
     ansatte_signert:o.ansatteSignert, signatur:o.signatur||null,
     godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn,
+    diagnose:o.diagnose||false, diagnose_av:o.diagnoseAv||'',
     fakturert:o.fakturert, fakturert_av:o.fakturertAv,
     ordre_start:o.ordreStart, ordre_stopp:o.ordreStopp,
     ordre_timer_sessions:o.ordreTimerSessions||[],
@@ -1073,6 +1075,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
     bilderLevering:[null,null,null,null,null,null],
     ansatteSignert:[], signatur:null,
     godkjent:false, godkjennerNavn:'',
+    diagnose:false, diagnoseAv:'',
     fakturert:false, fakturertAv:'',
     ordreStart:null, ordreStopp:null, ordreTimerSessions:[],
     notater:'', endringer:[],
@@ -1703,6 +1706,17 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <button class="btn" onclick="genPDF('${o.id}')">Last ned PDF</button>
       </div>
 
+      <div class="card">
+        <div class="h">Diagnose</div>
+        <div style="margin-top:8px">
+          ${o.diagnose
+            ? `<span class="pill ok">✔ Diagnose utført av ${o.diagnoseAv}</span>
+               <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleDiagnose('${o.id}')">Fjern diagnose</button>`
+            : `<div class="muted small" style="margin-bottom:8px">Ikke utført</div>
+               <button class="btn sm red" style="width:100%" onclick="toggleDiagnose('${o.id}')">✔ Merk diagnose utført</button>`}
+        </div>
+      </div>
+
       ${me&&me.rolle==='admin'?`
       <div class="card">
         <div class="h">Fakturering</div>
@@ -1721,6 +1735,14 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
   } catch(err) {
     document.getElementById('ordreDetail').innerHTML = `<div class="card"><div class="err-text">Feil ved lasting av ordre: ${err.message}</div><button class="btn sm" style="margin-top:8px" onclick="tilbakeOrdreList()">← Tilbake</button></div>`;
   }
+}
+
+function toggleDiagnose(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.diagnose = !o.diagnose;
+  o.diagnoseAv = o.diagnose ? me.navn : '';
+  logChange(o, o.diagnose ? 'Diagnose utført' : 'Diagnose fjernet');
+  save(id); buildOrdreDetail();
 }
 
 function toggleFakturert(id) {
