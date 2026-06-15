@@ -742,6 +742,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
     await loadFromSupabase();
     subscribeRealtime();
+    startAutoRefresh();
   } catch(e) {
     console.warn('Supabase feil, bruker lokal data:', e.message);
     try { const c = localStorage.getItem(STORE); if(c) S = JSON.parse(c); else S = defaultData(); }
@@ -911,19 +912,35 @@ function subscribeRealtime() {
 
 // Koble til igjen og oppdater data når appen kommer tilbake i forgrunnen
 let sisteVarSynlig = Date.now();
+let autoRefreshInterval = null;
+
+async function oppdaterApp() {
+  if (!db || !me) return;
+  try {
+    await loadFromSupabase();
+    renderAll();
+    if (activeOrdreId) buildOrdreDetail();
+    subscribeRealtime();
+  } catch(e) { console.warn('Oppdatering feilet:', e); }
+}
+
+function startAutoRefresh() {
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  autoRefreshInterval = setInterval(() => {
+    if (document.visibilityState === 'visible' && db && me) oppdaterApp();
+  }, 120000); // hvert 2. minutt
+}
+
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
     const borte = Date.now() - sisteVarSynlig;
-    if (borte > 3000 && db && me) { // mer enn 3 sekunder borte
-      try {
-        await loadFromSupabase();
-        renderAll();
-        if (activeOrdreId) buildOrdreDetail();
-        subscribeRealtime(); // Koble til realtime på nytt
-      } catch(e) { console.warn('Oppdatering feilet:', e); }
+    if (borte > 1000 && db && me) {
+      await oppdaterApp();
     }
+    startAutoRefresh();
   } else {
     sisteVarSynlig = Date.now();
+    if (autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
   }
 });
 
