@@ -33,10 +33,8 @@ Deno.serve(async (req) => {
       const { data: ordrer } = await supabase
         .from('ordrer').select('id').eq('status', 'aktiv')
       const antall = ordrer?.length ?? 0
-      title = 'God morgen!'
-      body  = antall > 0
-        ? `${antall} aktive ordrer venter i dag.`
-        : 'Ingen aktive ordrer i dag – god arbeidsdag!'
+      title = 'Salmakern'
+      body  = 'Husk å starte timer for lønn!'
 
     } else if (payload.type === 'UPDATE') {
       const { record, old_record } = payload
