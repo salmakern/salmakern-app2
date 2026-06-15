@@ -1557,9 +1557,9 @@ function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
       <span class="pill ${ok===sjekk.length?'ok':'warn'}">${ok}/${sjekk.length} ✓</span>
     </div>
     ${sjekk.map((p,i)=>`
-      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30;cursor:pointer">
-        <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
-        <span style="${p.ok?'text-decoration:line-through;color:#52525b':''};font-size:13px">${esc(p.punkt)}</span>
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30;cursor:pointer;${p.ok?'background:#052e1620;border-radius:8px;padding-left:6px':''}">
+        <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:16px;height:16px;accent-color:#22c55e;flex-shrink:0">
+        <span style="font-size:13px;${p.ok?'color:#4ade80':''}">${p.ok?'✓ ':''} ${esc(p.punkt)}</span>
       </label>`).join('')}
   </div>`;
 }
