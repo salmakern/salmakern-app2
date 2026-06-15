@@ -21,6 +21,8 @@ const STATUS_NAVN: Record<string, string> = {
 Deno.serve(async (req) => {
   try {
     const payload = await req.json()
+    console.log('Payload type:', payload.type)
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -30,11 +32,7 @@ Deno.serve(async (req) => {
     let body  = ''
 
     if (payload.type === 'daglig') {
-      const { data: ordrer } = await supabase
-        .from('ordrer').select('id').eq('status', 'aktiv')
-      const antall = ordrer?.length ?? 0
-      title = 'Salmakern'
-      body  = 'Husk å starte timer for lønn!'
+      body = 'Husk å starte timer for lønn!'
 
     } else if (payload.type === 'UPDATE') {
       const { record, old_record } = payload
@@ -44,20 +42,29 @@ Deno.serve(async (req) => {
       const vektGml = old_record?.vekter?.totalvekt?.v
       const vektEndret = vektNy && !vektGml
 
+      console.log('bil:', bil, 'ordre_status ny:', record.ordre_status, 'gammel:', old_record?.ordre_status, 'statusEndret:', statusEndret)
+
       if (statusEndret) {
         const statusNavn = STATUS_NAVN[record.ordre_status] || record.ordre_status
         body = `${bil} er ${statusNavn.toLowerCase()}`
       } else if (vektEndret) {
         body = `${bil} er veid: ${vektNy} kg`
       }
+    } else {
+      console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
     }
 
-    if (!body) return new Response('ingen varsel', { status: 200 })
+    if (!body) {
+      console.log('Ingen varsel å sende')
+      return new Response('ingen varsel', { status: 200 })
+    }
 
-    const { data: subs } = await supabase.from('push_abonnement').select('*')
+    const { data: subs, error: subErr } = await supabase.from('push_abonnement').select('*')
+    console.log('Abonnenter:', subs?.length ?? 0, subErr?.message ?? '')
     if (!subs?.length) return new Response('ingen abonnenter', { status: 200 })
 
     const melding = JSON.stringify({ title, body, url: '/salmakern-app2/salmakern.html' })
+    console.log('Sender:', melding)
 
     await Promise.allSettled(subs.map(async sub => {
       try {
@@ -65,8 +72,9 @@ Deno.serve(async (req) => {
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
           melding
         )
+        console.log('Sendt til:', sub.endpoint.slice(0, 50))
       } catch (e: any) {
-        // Utløpt abonnement – slett det
+        console.error('Push-feil:', e.statusCode, e.message)
         if (e.statusCode === 410 || e.statusCode === 404) {
           await supabase.from('push_abonnement').delete().eq('endpoint', sub.endpoint)
         }
@@ -75,7 +83,7 @@ Deno.serve(async (req) => {
 
     return new Response('ok', { status: 200 })
   } catch (e) {
-    console.error(e)
+    console.error('Kritisk feil:', e)
     return new Response(String(e), { status: 500 })
   }
 })

@@ -371,18 +371,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
           </div>
         </div>
-        <div class="card" id="merVarselKort">
-          <div class="h">Varsler</div>
-          <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
-          <div id="varselStatus" class="small" style="margin-bottom:10px"></div>
-          <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
-        </div>
         <div class="card" id="merKontakter">
           <div class="row">
             <div class="h">Kontakter</div>
             <div id="merKontaktAdminBtn"></div>
           </div>
           <div id="kontaktListe" style="margin-top:10px"></div>
+        </div>
+        <div class="card" id="merVarselKort">
+          <div class="h">Varsler</div>
+          <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
+          <div id="varselStatus" class="small" style="margin-bottom:10px"></div>
+          <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
         </div>
       </div>
       <div class="card" id="merGodkjKort" style="display:none"><div class="h">Til godkjenning</div><div id="tilGodkj" style="margin-top:8px"></div></div>
@@ -895,7 +895,11 @@ function subscribeRealtime() {
       } else if (p.eventType==='UPDATE') {
         if (ignorerRealtimeFor.has(p.new.id)) return;
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
-        if(i>=0){ S.ordrer[i]=dbToOrdre(p.new); renderAll(); if(activeOrdreId===p.new.id) buildOrdreDetail(); }
+        if(i>=0){
+          S.ordrer[i]=dbToOrdre(p.new);
+          renderAll();
+          if(activeOrdreId===p.new.id) buildOrdreDetail();
+        }
       } else if (p.eventType==='DELETE') {
         S.ordrer = S.ordrer.filter(o=>o.id!==p.old.id);
         if (activeOrdreId===p.old.id) tilbakeOrdreList();
@@ -972,11 +976,10 @@ async function verifiserSession() {
 
 async function oppdaterApp() {
   if (!me) return;
-  if (ignorerRealtimeFor.size > 0) return; // nylig lagring pågår, ikke overskriv
   try {
     if (!db) db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
     await verifiserSession();
-    if (!me) return; // ble logget ut av verifiserSession
+    if (!me) return;
     await loadFromSupabase();
     renderAll();
     if (activeOrdreId) buildOrdreDetail();
@@ -1296,6 +1299,7 @@ async function togglePushVarsler() {
 // PAGE ROUTING
 // ════════════════════════════════════════════════════
 function showPage(id, btn) {
+  if (id === 'ordre') activeOrdreId = null;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
@@ -1314,8 +1318,7 @@ function renderOrdreList() {
   if (activeOrdreId) {
     listEl.style.display = 'none';
     detailEl.style.display = 'block';
-    buildOrdreDetail();
-    return;
+    return; // Ikke rebuild detail fra renderAll — forstyrrer skriving i inputfelter
   }
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
@@ -1350,6 +1353,8 @@ function renderOrdreList() {
               ${statusDropdown(o.id, o.ordreStatus)}
             </div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</div>
+            <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
+            <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
             <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
           </div>`;
         }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`}
@@ -1387,7 +1392,8 @@ function renderOversikt(q) {
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</div>
-          ${o.ankomstdato?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato}</div>`:''}
+          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
+          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">📅 ${o.kalenderDato} ${o.kalenderTid}</div>
         </div>`;
       }).join('')
@@ -2828,6 +2834,8 @@ function renderArkiv() {
           <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
         </div>
         <div class="small muted" style="margin-top:3px">${o.type} ${o.variant} · ${o.kunde}</div>
+        <div class="small muted">Ankomst: ${o.ankomstdato||'—'}</div>
+        <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
       </div>`;
     }).join('')
     :'<div class="muted small">Ingen</div>';
@@ -2837,7 +2845,8 @@ function renderArkiv() {
           <div><b>${ordreLabel(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
           <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
         </div>
-        <div class="small muted">${o.kunde}${o.ankomstdato?' · '+o.ankomstdato:''}</div>
+        <div class="small muted">${o.kunde} · Ankomst: ${o.ankomstdato||'—'}</div>
+        <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${o.fakturert
             ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${o.fakturertAv}</span>
@@ -2960,7 +2969,7 @@ function renderMer() {
   renderKontakter();
   renderFravarKalender();
   renderHMS();
-  if (erGodkjenner) renderTimerOversikt();
+  if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else renderTimerOversikt(); }
   if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
 }
 
