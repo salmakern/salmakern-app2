@@ -1450,7 +1450,7 @@ function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.ordreStatus = nyStatus;
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl);
-  save(id); renderOversikt(); renderWeek();
+  save(id); renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
 }
 
