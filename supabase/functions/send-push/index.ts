@@ -8,14 +8,14 @@ const VAPID_EMAIL   = Deno.env.get('VAPID_EMAIL')!
 webpush.setVapidDetails(`mailto:${VAPID_EMAIL}`, VAPID_PUBLIC, VAPID_PRIVATE)
 
 const STATUS_NAVN: Record<string, string> = {
-  hentet:          '🚗 Hentet',
-  klar_henting:    '📦 Klar for henting',
-  vist_biltilsyn:  '🔍 Vist på biltilsyn',
-  klar_visning:    '👁 Klar for visning',
-  ikke_veid:       '⚖️ Ikke veid',
-  paabegynt:       '🔧 Påbegynt',
-  ikke_paabegynt:  '⏸ Ikke påbegynt',
-  paa_vei:         '🛣 På vei',
+  hentet:          'Hentet',
+  klar_henting:    'Klar for henting',
+  vist_biltilsyn:  'Vist på biltilsyn',
+  klar_visning:    'Klar for visning',
+  ikke_veid:       'Ikke veid',
+  paabegynt:       'Påbegynt',
+  ikke_paabegynt:  'Ikke påbegynt',
+  paa_vei:         'På vei',
 }
 
 Deno.serve(async (req) => {
@@ -26,33 +26,31 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    let title = '🚗 Salmakern'
+    let title = 'Salmakern'
     let body  = ''
 
     if (payload.type === 'daglig') {
       const { data: ordrer } = await supabase
         .from('ordrer').select('id').eq('status', 'aktiv')
       const antall = ordrer?.length ?? 0
-      title = '☀️ God morgen!'
+      title = 'God morgen!'
       body  = antall > 0
         ? `${antall} aktive ordrer venter i dag.`
         : 'Ingen aktive ordrer i dag – god arbeidsdag!'
 
     } else if (payload.type === 'UPDATE') {
       const { record, old_record } = payload
-      const bil = record.regnr || record.kunde || 'Bil'
-
+      const bil = record.chassis || record.regnr || record.kunde || 'Bil'
       const statusEndret = record.ordre_status !== old_record?.ordre_status
       const vektNy  = record.vekter?.totalvekt?.a
       const vektGml = old_record?.vekter?.totalvekt?.a
       const vektEndret = vektNy && !vektGml
 
       if (statusEndret) {
-        title = STATUS_NAVN[record.ordre_status] || record.ordre_status
-        body  = bil
+        const statusNavn = STATUS_NAVN[record.ordre_status] || record.ordre_status
+        body = `${bil} er ${statusNavn.toLowerCase()}`
       } else if (vektEndret) {
-        title = '⚖️ Bil veid'
-        body  = `${bil}: ${vektNy} kg`
+        body = `${bil} er veid: ${vektNy} kg`
       }
     }
 
