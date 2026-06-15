@@ -936,28 +936,35 @@ let sisteVarSynlig = Date.now();
 let autoRefreshInterval = null;
 
 async function oppdaterApp() {
-  if (!db || !me) return;
+  if (!me) return;
   try {
+    if (!db) db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
     await loadFromSupabase();
     renderAll();
     if (activeOrdreId) buildOrdreDetail();
     subscribeRealtime();
-  } catch(e) { console.warn('Oppdatering feilet:', e); }
+  } catch(e) {
+    console.warn('Oppdatering feilet, reinitaliserer klient:', e);
+    try {
+      db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+      await loadFromSupabase();
+      renderAll();
+      if (activeOrdreId) buildOrdreDetail();
+      subscribeRealtime();
+    } catch(e2) { console.warn('Andre forsøk feilet:', e2); }
+  }
 }
 
 function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
-    if (document.visibilityState === 'visible' && db && me) oppdaterApp();
+    if (document.visibilityState === 'visible' && me) oppdaterApp();
   }, 30000); // hvert 30. sekund som fallback
 }
 
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
-    const borte = Date.now() - sisteVarSynlig;
-    if (borte > 1000 && db && me) {
-      await oppdaterApp();
-    }
+    if (me) await oppdaterApp(); // alltid oppdater når appen blir synlig
     startAutoRefresh();
   } else {
     sisteVarSynlig = Date.now();
