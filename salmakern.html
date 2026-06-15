@@ -1722,7 +1722,9 @@ function toggleFakturert(id) {
   o.fakturert = !o.fakturert;
   o.fakturertAv = o.fakturert ? me.navn : '';
   logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
-  save(id); buildOrdreDetail();
+  save(id);
+  if (o.status === 'arkivert') renderArkiv();
+  else buildOrdreDetail();
 }
 
 function renderAnsOrdre(o) {
@@ -2658,10 +2660,12 @@ function renderArkiv() {
           <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
         </div>
         <div class="small muted">${o.kunde}${o.ankomstdato?' · '+o.ankomstdato:''}</div>
-        <div style="margin-top:6px">
+        <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${o.fakturert
-            ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${o.fakturertAv}</span>`
-            :`<span class="pill bad" style="font-size:11px">Ikke fakturert</span>`}
+            ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${o.fakturertAv}</span>
+               <button class="btn sm" onclick="toggleFakturert('${o.id}')" style="font-size:11px;padding:4px 10px">Fjern fakturert</button>`
+            :`<span class="pill bad" style="font-size:11px">Ikke fakturert</span>
+               <button class="btn sm red" onclick="toggleFakturert('${o.id}')" style="font-size:11px;padding:4px 10px">✔ Merk fakturert</button>`}
         </div>
       </div>`).join('')
     :'<div class="muted small">Ingen arkiverte ordrer</div>';
