@@ -972,6 +972,7 @@ async function verifiserSession() {
 
 async function oppdaterApp() {
   if (!me) return;
+  if (ignorerRealtimeFor.size > 0) return; // nylig lagring pågår, ikke overskriv
   try {
     if (!db) db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
     await verifiserSession();
@@ -1171,9 +1172,9 @@ function save(ordreId) {
   if (!db || !ordreId) return;
   const o = S.ordrer.find(x=>x.id===ordreId);
   if (o) {
-    // Ignorer Realtime-oppdatering for denne ordren i 3 sekunder
+    // Ignorer Realtime-oppdatering for denne ordren i 10 sekunder
     ignorerRealtimeFor.add(ordreId);
-    setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 3000);
+    setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
     db.from('ordrer').upsert(ordreToDb(o))
       .then(r=>{ if(r.error) console.error('Lagringsfeil:', r.error.message); });
   }
