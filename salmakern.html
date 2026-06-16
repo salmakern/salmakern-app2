@@ -709,6 +709,9 @@ const STORE        = 'salmakern_v2';
 const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mqyAfXkQUbeLhPzKiv6y6CpfmTeYJDc';
 const PUSH_URL     = SUPA_URL + '/functions/v1/send-push';
 
+// Sporer bilder som er lastet opp i minnet men ikke nødvendigvis bekreftet i Supabase ennå
+const inFlightFotos = {};
+
 function visToast(melding, type='feil') {
   let el = document.getElementById('globalToast');
   if (!el) {
@@ -812,6 +815,22 @@ async function loadFromSupabase() {
   if (aR.error) throw new Error(aR.error.message);
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false}));
   S.ordrer    = (oR.data||[]).map(dbToOrdre);
+  // Re-appliser bilder som er i minnet men ikke bekreftet i Supabase ennå
+  Object.entries(inFlightFotos).forEach(([ordreId, fotos]) => {
+    const o = S.ordrer.find(x=>x.id===ordreId);
+    if (!o) { delete inFlightFotos[ordreId]; return; }
+    const tomme = [];
+    Object.entries(fotos).forEach(([key, url]) => {
+      const [side, idxStr] = key.split('_');
+      const idx = parseInt(idxStr);
+      const dbUrl = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
+      if (dbUrl === url) { tomme.push(key); } // allerede i Supabase
+      else if (side==='a') o.bilderAnkomst[idx] = url;
+      else o.bilderLevering[idx] = url;
+    });
+    tomme.forEach(k => delete fotos[k]);
+    if (!Object.keys(fotos).length) delete inFlightFotos[ordreId];
+  });
   S.timer     = (tR.data||[]).map(dbToTimer);
   S.dagensPIN      = sR.data?.dagens_pin || '1234';
   S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
@@ -2428,6 +2447,8 @@ async function lastOppFoto(e, id, side, idx) {
 
   if (side==='a') o.bilderAnkomst[idx]=url;
   else            o.bilderLevering[idx]=url;
+  if (!inFlightFotos[id]) inFlightFotos[id]={};
+  inFlightFotos[id][`${side}_${idx}`]=url;
   logChange(o,'Bilde lastet opp');
   save(id);
 
