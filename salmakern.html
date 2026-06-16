@@ -2381,7 +2381,7 @@ async function slaOppRegnr(ordreId) {
 
 async function lastOppFoto(e, id, side, idx) {
   const file=e.target.files[0]; if(!file) return;
-  const o=S.ordrer.find(x=>x.id===id); if(!o) return;
+  if(!S.ordrer.find(x=>x.id===id)) return;
 
   // Vis lasteindikator i fotoboksen
   const boksId = `foboks_${side}_${idx}`;
@@ -2416,6 +2416,10 @@ async function lastOppFoto(e, id, side, idx) {
       reader.readAsDataURL(liten);
     });
   }
+
+  // Re-hent ordren fra S.ordrer — oppdaterApp() kan ha erstattet den under async-operasjoner
+  const o = S.ordrer.find(x=>x.id===id);
+  if (!o) { visToast('Ordren ble oppdatert under opplasting — prøv igjen'); return; }
 
   if (side==='a') o.bilderAnkomst[idx]=url;
   else            o.bilderLevering[idx]=url;
