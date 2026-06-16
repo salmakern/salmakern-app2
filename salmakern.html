@@ -709,6 +709,25 @@ const STORE        = 'salmakern_v2';
 const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mqyAfXkQUbeLhPzKiv6y6CpfmTeYJDc';
 const PUSH_URL     = SUPA_URL + '/functions/v1/send-push';
 
+function visToast(melding, type='feil') {
+  let el = document.getElementById('globalToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'globalToast';
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.5);transition:opacity 0.3s;pointer-events:none';
+    document.body.appendChild(el);
+  }
+  if (type === 'ok') {
+    el.style.background = '#14532d'; el.style.border = '1px solid #22c55e'; el.style.color = '#86efac';
+  } else {
+    el.style.background = '#450a0a'; el.style.border = '1px solid #ef4444'; el.style.color = '#fca5a5';
+  }
+  el.textContent = melding;
+  el.style.opacity = '1'; el.style.display = 'block';
+  clearTimeout(el._tid);
+  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 5000);
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -1179,7 +1198,7 @@ function save(ordreId) {
     ignorerRealtimeFor.add(ordreId);
     setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
     db.from('ordrer').upsert(ordreToDb(o))
-      .then(r=>{ if(r.error) console.error('Lagringsfeil:', r.error.message); });
+      .then(r=>{ if(r.error) { console.error('Lagringsfeil:', r.error.message); visToast('Lagringsfeil: ' + r.error.message); } });
   }
 }
 
@@ -2380,18 +2399,21 @@ async function lastOppFoto(e, id, side, idx) {
         const { data } = db.storage.from('bilder').getPublicUrl(filnavn);
         url = data.publicUrl;
       } else {
-        console.warn('Storage feil, bruker base64:', error.message);
+        console.warn('Storage feil:', error.message);
+        visToast('Sky-lagring feilet (' + error.message + ') — lagrer lokalt');
       }
     } catch(err) {
-      console.warn('Storage unntak, bruker base64:', err);
+      console.warn('Storage unntak:', err);
+      visToast('Sky-lagring feilet — lagrer lokalt');
     }
   }
-  // Fallback til base64 hvis Storage ikke fungerte
+  // Fallback til base64 — komprimerer hardt for å holde filstørrelse liten
   if (!url) {
+    const liten = await komprimer(file, 600, 0.65);
     url = await new Promise(res=>{
       const reader=new FileReader();
       reader.onload=ev=>res(ev.target.result);
-      reader.readAsDataURL(komprimert);
+      reader.readAsDataURL(liten);
     });
   }
 
