@@ -2447,7 +2447,8 @@ function oppdaterFotoboks(o, side, idx) {
   const url = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
   const imgId = `fo_${side}_${idx}_src`;
   if(url) {
-    boks.innerHTML = `<img id="${imgId}" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+    boks.innerHTML = `<img id="${imgId}" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none';this.parentElement.querySelector('.fo-feil')?.style&&(this.parentElement.querySelector('.fo-feil').style.display='flex')">
+      <div class="fo-feil" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;font-size:11px;color:#f87171;background:#3f0000;border-radius:8px 8px 0 0;padding:4px;text-align:center">⚠️ Bilde<br>ikke tilgjengelig</div>
       <div class="hover-del" onclick="event.stopPropagation()">
         <button onclick="openLightbox('${imgId}')" title="Vis">🔍</button>
         <button onclick="document.getElementById('fo_${side}_${idx}').click()" title="Bytt">📷</button>
