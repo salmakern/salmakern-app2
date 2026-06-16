@@ -814,7 +814,15 @@ async function loadFromSupabase() {
   ]);
   if (aR.error) throw new Error(aR.error.message);
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false}));
-  S.ordrer    = (oR.data||[]).map(dbToOrdre);
+  const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
+  S.ordrer = (oR.data||[]).map(row => {
+    // Behold in-memory versjon for ordrer som nettopp ble lagret (unngå at status/data går tilbake)
+    if (ignorerRealtimeFor.has(String(row.id))) {
+      const prev = prevOrdrer.find(o=>String(o.id)===String(row.id));
+      if (prev) return prev;
+    }
+    return dbToOrdre(row);
+  });
   // Re-appliser bilder som er i minnet men ikke bekreftet i Supabase ennå
   Object.entries(inFlightFotos).forEach(([ordreId, fotos]) => {
     const o = S.ordrer.find(x=>x.id===ordreId);
