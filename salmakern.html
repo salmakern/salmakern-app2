@@ -1394,7 +1394,7 @@ function renderOversikt(q) {
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
-          <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">📅 ${o.kalenderDato} ${o.kalenderTid}</div>
+          <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid:'Ikke i kalender'}</div>
         </div>`;
       }).join('')
     : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
@@ -1410,7 +1410,7 @@ function renderOversikt(q) {
           </div>
           <div class="small muted">${o.type}${o.variant?' · '+o.variant:''}</div>
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
-          <div class="small" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>
+          ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
             <button class="btn sm" onclick="openOrdre('${o.id}')">Åpne</button>
             <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>
