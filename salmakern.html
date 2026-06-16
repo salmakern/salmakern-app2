@@ -1320,6 +1320,8 @@ function renderOrdreList() {
     detailEl.style.display = 'block';
     return; // Ikke rebuild detail fra renderAll — forstyrrer skriving i inputfelter
   }
+  // Ikke rebuild mens bruker har en status-dropdown åpen (bakgrunnsoppdatering ville lukket pickeren)
+  if (listEl?.contains(document.activeElement) && document.activeElement?.tagName === 'SELECT') return;
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
   const gammelSok = document.getElementById('ordreSok')?.value || '';
@@ -1534,6 +1536,7 @@ function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.ordreStatus = nyStatus;
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl);
+  if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   save(id); renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
 }
