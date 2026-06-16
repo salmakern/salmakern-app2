@@ -1658,9 +1658,10 @@ function buildOrdreDetail() {
   const tf = tvangsflyt(o);
   const kanLukke = tf.every(t=>t.ok);
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  const headerH = document.querySelector('.top')?.offsetHeight || 0;
 
   document.getElementById('ordreDetail').innerHTML = `
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+  <div style="position:sticky;top:${headerH}px;z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <button class="btn sm" onclick="tilbakeOrdreList()">← Alle ordrer</button>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="padding:6px 10px">🔄</button>
