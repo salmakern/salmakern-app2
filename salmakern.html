@@ -2923,7 +2923,7 @@ function slettOrdre(id) {
 function gjenopprett(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
   o.status='aktiv'; logChange(o,'Gjenopprettet');
-  save(); renderArkiv(); renderOversikt();
+  save(id); renderArkiv(); renderOversikt();
 }
 
 // ════════════════════════════════════════════════════
