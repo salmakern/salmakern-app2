@@ -1339,8 +1339,9 @@ function renderOrdreList() {
     detailEl.style.display = 'block';
     return; // Ikke rebuild detail fra renderAll — forstyrrer skriving i inputfelter
   }
-  // Ikke rebuild mens bruker har en status-dropdown åpen (bakgrunnsoppdatering ville lukket pickeren)
-  if (listEl?.contains(document.activeElement) && document.activeElement?.tagName === 'SELECT') return;
+  // Ikke rebuild mens bruker har et interaktivt element fokusert (bakgrunnsoppdatering ville lukket picker/miste input)
+  const focusTag = document.activeElement?.tagName;
+  if (listEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
   const gammelSok = document.getElementById('ordreSok')?.value || '';
@@ -1674,6 +1675,10 @@ function buildOrdreDetail() {
   try {
   const o = S.ordrer.find(x=>x.id===activeOrdreId);
   if (!o) return;
+  // Ikke rebuild mens bruker har et interaktivt element fokusert i detaljvisningen
+  const detailEl = document.getElementById('ordreDetail');
+  const focusTag = document.activeElement?.tagName;
+  if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   const tf = tvangsflyt(o);
   const kanLukke = tf.every(t=>t.ok);
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
