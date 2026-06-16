@@ -2972,7 +2972,7 @@ function renderMer() {
   renderKontakter();
   renderFravarKalender();
   renderHMS();
-  if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else renderTimerOversikt(); }
+  if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
   if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
 }
 
