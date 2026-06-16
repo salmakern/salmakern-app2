@@ -3937,50 +3937,6 @@ ${o.signatur?`<img class="sig" src="${o.signatur}">`:'<span style="font-size:13p
 ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<span class="badge-nei">Ikke godkjent</span>'}
 <h2>Notater</h2>
 <p style="font-size:13px;white-space:pre-wrap">${o.notater||'--'}</p>
-<!-- Ansatt-detalj modal -->
-<div class="modal" id="ansattDetaljModal">
-  <div class="modal-box" style="max-width:520px;width:95%">
-    <div class="row" style="margin-bottom:12px">
-      <div class="h" id="ansattDetaljNavn">–</div>
-      <button onclick="closeModal('ansattDetaljModal')" style="background:none;border:none;color:#a1a1aa;font-size:20px;cursor:pointer">✕</button>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
-      <button class="btn sm" onclick="ansattDetaljNaviger(-1)">◀</button>
-      <span id="ansattDetaljLbl" style="min-width:140px;text-align:center;font-weight:700"></span>
-      <button class="btn sm" onclick="ansattDetaljNaviger(1)">▶</button>
-    </div>
-    <div id="ansattDetaljInnhold"></div>
-  </div>
-</div>
-
-<div class="modal" id="adminTimerModal">
-  <div class="modal-box">
-    <div class="h" style="margin-bottom:12px">Rediger registrering</div>
-    <input type="hidden" id="adminTimerId">
-    <label>Dato</label>
-    <input type="date" id="adminTimerDato">
-    <label>Type</label>
-    <select id="adminTimerType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="adminTimerTypeToggle()">
-      <option value="normal">Normal arbeid</option>
-      <option value="manuell">Manuell</option>
-      <option value="syk">Syk</option>
-      <option value="egenmelding">Egenmelding</option>
-      <option value="ferie">Ferie</option>
-      <option value="permisjon">Permisjon</option>
-    </select>
-    <div id="adminTimerTidWrap">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-        <div><label>Fra kl.</label><input type="time" id="adminTimerFra"></div>
-        <div><label>Til kl.</label><input type="time" id="adminTimerTil"></div>
-      </div>
-    </div>
-    <div style="margin-top:14px;display:flex;gap:8px">
-      <button class="btn red" onclick="adminLagreTimer()">Lagre</button>
-      <button class="btn" onclick="closeModal('adminTimerModal')">Avbryt</button>
-    </div>
-  </div>
-</div>
-
 </body></html>`;
 
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
@@ -4039,6 +3995,34 @@ document.querySelectorAll('.modal').forEach(m=>{
       <button class="btn sm" onclick="ansattDetaljNaviger(1)">▶</button>
     </div>
     <div id="ansattDetaljInnhold"></div>
+  </div>
+</div>
+
+<div class="modal" id="adminTimerModal">
+  <div class="modal-box">
+    <div class="h" style="margin-bottom:12px">Rediger registrering</div>
+    <input type="hidden" id="adminTimerId">
+    <label>Dato</label>
+    <input type="date" id="adminTimerDato">
+    <label>Type</label>
+    <select id="adminTimerType" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px;width:100%" onchange="adminTimerTypeToggle()">
+      <option value="normal">Normal arbeid</option>
+      <option value="manuell">Manuell</option>
+      <option value="syk">Syk</option>
+      <option value="egenmelding">Egenmelding</option>
+      <option value="ferie">Ferie</option>
+      <option value="permisjon">Permisjon</option>
+    </select>
+    <div id="adminTimerTidWrap">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+        <div><label>Fra kl.</label><input type="time" id="adminTimerFra"></div>
+        <div><label>Til kl.</label><input type="time" id="adminTimerTil"></div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="adminLagreTimer()">Lagre</button>
+      <button class="btn" onclick="closeModal('adminTimerModal')">Avbryt</button>
+    </div>
   </div>
 </div>
 
