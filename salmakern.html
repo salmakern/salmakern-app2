@@ -816,12 +816,14 @@ async function loadFromSupabase() {
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
   S.ordrer = (oR.data||[]).map(row => {
-    // Behold in-memory versjon for ordrer som nettopp ble lagret (unngå at status/data går tilbake)
+    const fresh = dbToOrdre(row);
+    // Behold kun ordreStatus fra minnet for ordrer vi nettopp lagret — unngå at status går tilbake
+    // (men bruk alltid ferske data fra Supabase for bilder og andre felt)
     if (ignorerRealtimeFor.has(String(row.id))) {
       const prev = prevOrdrer.find(o=>String(o.id)===String(row.id));
-      if (prev) return prev;
+      if (prev) fresh.ordreStatus = prev.ordreStatus;
     }
-    return dbToOrdre(row);
+    return fresh;
   });
   // Re-appliser bilder som er i minnet men ikke bekreftet i Supabase ennå
   Object.entries(inFlightFotos).forEach(([ordreId, fotos]) => {
