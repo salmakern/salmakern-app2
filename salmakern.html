@@ -827,7 +827,7 @@ async function loadFromSupabase() {
   });
   // Re-appliser bilder som er i minnet men ikke bekreftet i Supabase ennå
   Object.entries(inFlightFotos).forEach(([ordreId, fotos]) => {
-    const o = S.ordrer.find(x=>x.id===ordreId);
+    const o = S.ordrer.find(x=>String(x.id)===String(ordreId));
     if (!o) { delete inFlightFotos[ordreId]; return; }
     const tomme = [];
     Object.entries(fotos).forEach(([key, url]) => {
