@@ -1942,6 +1942,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       </div>`:''}
 
       ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
+      ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
     </div>
   </div>`;
   } catch(err) {
@@ -2513,6 +2514,28 @@ function komprimer(file, maxPx, kvalitet) {
     };
     img.src=url;
   });
+}
+
+async function gjenopprettFotos(id) {
+  if (!db) { visToast('Ikke koblet til Supabase'); return; }
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const { data: filer, error } = await db.storage.from('bilder').list(String(id));
+  if (error || !filer?.length) { visToast('Ingen bildefiler funnet i Storage for denne ordren'); return; }
+  let gjenopprettet = 0;
+  filer.forEach(fil => {
+    const deler = fil.name.split('_');
+    if (deler.length < 2) return;
+    const side = deler[0];
+    const idx = parseInt(deler[1]);
+    if (isNaN(idx) || idx < 0 || idx > 5 || (side !== 'a' && side !== 'l')) return;
+    const { data } = db.storage.from('bilder').getPublicUrl(`${id}/${fil.name}`);
+    const url = data.publicUrl;
+    if (side === 'a' && !o.bilderAnkomst[idx]) { o.bilderAnkomst[idx] = url; gjenopprettet++; }
+    if (side === 'l' && !o.bilderLevering[idx]) { o.bilderLevering[idx] = url; gjenopprettet++; }
+  });
+  if (gjenopprettet === 0) { visToast('Alle plasser er allerede fylt — ingen mangler å gjenopprette'); return; }
+  save(id); buildOrdreDetail();
+  visToast(gjenopprettet + ' bilde(r) gjenopprettet fra Storage!', 'ok');
 }
 
 async function slettFoto(id, side, idx) {
