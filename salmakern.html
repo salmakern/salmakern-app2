@@ -1437,12 +1437,12 @@ function renderOversikt(q) {
   const mnd = now.getMonth(), yr = now.getFullYear();
   const denneMnd = S.ordrer.filter(o=>{const d=new Date(o.ankomstdato);return d.getMonth()===mnd&&d.getFullYear()===yr;});
   document.getElementById('s1').textContent = denneMnd.length;
-  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.godkjent).length;
-  document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&o.kalenderDato).length;
+  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['klar_henting','hentet'].includes(o.ordreStatus)).length;
+  document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)).length;
 
   const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
-  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus!=='ikke_paabegynt'&&match(o)).sort(sorterOrdre);
-  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt'&&match(o)).sort(sorterOrdre);
+  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)&&match(o)).sort(sorterOrdre);
+  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&(o.ordreStatus==='ikke_paabegynt'||o.ordreStatus==='paa_vei')&&match(o)).sort(sorterOrdre);
 
   const activeEl = document.getElementById('activeList');
   activeEl.innerHTML = aktive.length
