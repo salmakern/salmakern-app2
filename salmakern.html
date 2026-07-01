@@ -2055,6 +2055,19 @@ function sf(id, field, val) {
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.vekter[k][col]=val; save(id);
+  if (['totalvekt','vogntog'].includes(k) && (col==='a'||col==='e')) oppdaterVektFarge(id,k);
+}
+function oppdaterVektFarge(id,k) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const rod = o.vekter[k].e && o.vekter[k].a && o.vekter[k].e !== o.vekter[k].a;
+  const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
+  const table = document.querySelector('#ordreDetail table');
+  if (!table) return;
+  const inp = table.querySelectorAll('tbody tr')[rader.indexOf(k)]?.querySelectorAll('input')[1];
+  if (!inp) return;
+  inp.style.color = rod ? '#ef4444' : '';
+  inp.style.borderColor = rod ? '#ef4444' : '';
+  inp.style.fontWeight = rod ? '700' : '';
 }
 function vektEnter(e, rad, kol) {
   if (e.key !== 'Enter') return;
