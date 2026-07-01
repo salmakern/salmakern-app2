@@ -2992,7 +2992,8 @@ function renderArkiv() {
   const q=(document.getElementById('arkivSok')?.value||'').toLowerCase().trim();
   const match=o=>!q||o.regnr?.toLowerCase().includes(q)||o.kunde?.toLowerCase().includes(q)||o.chassis?.toLowerCase().includes(q)||o.eier?.toLowerCase().includes(q);
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o));
-  const ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o));
+  const ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
+    .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
   document.getElementById('arkivAktiv').innerHTML=aktive.length
     ?aktive.map(o=>{
       const si=statusInfo(o.ordreStatus);
