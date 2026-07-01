@@ -2069,15 +2069,22 @@ function oppdaterVektFarge(id,k) {
   inp.style.borderColor = rod ? '#ef4444' : '';
 }
 function vektEnter(e, rad, kol) {
-  if (e.key !== 'Enter') return;
-  e.preventDefault();
+  const cols = ['a','e','v'];
+  const ki = cols.indexOf(kol);
+  const k = e.key;
+  if (!['Enter','ArrowDown','ArrowUp','ArrowLeft','ArrowRight'].includes(k)) return;
   const table = e.target.closest('table');
   if (!table) return;
-  const neste = table.querySelectorAll('tbody tr')[rad + 1];
-  if (!neste) return;
-  const inputs = neste.querySelectorAll('input');
-  const idx = {a:0, e:1, v:2}[kol];
-  if (inputs[idx]) inputs[idx].focus();
+  const rows = table.querySelectorAll('tbody tr');
+  let nr = rad, nk = ki;
+  if (k === 'Enter' || k === 'ArrowDown')  nr = rad + 1;
+  else if (k === 'ArrowUp')                nr = rad - 1;
+  else if (k === 'ArrowRight') { if (ki < 2) nk = ki + 1; else { nr = rad + 1; nk = 0; } }
+  else if (k === 'ArrowLeft')  { if (ki > 0) nk = ki - 1; else { nr = rad - 1; nk = 2; } }
+  if (nr < 0 || nr >= rows.length) return;
+  e.preventDefault();
+  const inp = rows[nr].querySelectorAll('input')[nk];
+  if (inp) { inp.focus(); inp.select(); }
 }
 function sd(id,f,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
