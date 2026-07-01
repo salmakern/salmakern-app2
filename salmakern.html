@@ -1978,6 +1978,17 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
     </div>
   </div>`;
+  if (o.status === 'arkivert') {
+    const detail = document.getElementById('ordreDetail');
+    const header = detail.firstElementChild;
+    detail.querySelectorAll('input, textarea, select').forEach(el => {
+      el.disabled = true;
+      el.style.cursor = 'not-allowed';
+    });
+    detail.querySelectorAll('button').forEach(btn => {
+      if (!header.contains(btn)) { btn.disabled = true; btn.style.opacity = '0.4'; }
+    });
+  }
   } catch(err) {
     document.getElementById('ordreDetail').innerHTML = `<div class="card"><div class="err-text">Feil ved lasting av ordre: ${err.message}</div><button class="btn sm" style="margin-top:8px" onclick="tilbakeOrdreList()">← Tilbake</button></div>`;
   }
