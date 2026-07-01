@@ -1788,8 +1788,8 @@ function buildOrdreDetail() {
           <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)"></div>
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)"></div>
           <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)"></div>
-          <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)"></div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
+          <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)"></div>
         </div>
 
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
@@ -1827,12 +1827,15 @@ function buildOrdreDetail() {
       <div class="card">
         <div class="h">Vekter (kg)</div>
         <table><thead><tr><th></th><th>Ved ankomst</th><th>Endring</th><th>Før visning</th></tr></thead><tbody>
-          ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,lbl])=>`<tr>
-            <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
-            <td><input value="${o.vekter[k].a}" onchange="sv('${o.id}','${k}','a',this.value)"></td>
-            <td><input value="${o.vekter[k].e}" onchange="sv('${o.id}','${k}','e',this.value)"></td>
-            <td><input value="${o.vekter[k].v}" onchange="sv('${o.id}','${k}','v',this.value)"></td>
-          </tr>`).join('')}
+          ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,lbl],i)=>{
+            const rod = ['totalvekt','vogntog'].includes(k) && o.vekter[k].e && o.vekter[k].a && o.vekter[k].e !== o.vekter[k].a;
+            return `<tr>
+              <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
+              <td><input value="${o.vekter[k].a}" inputmode="decimal" onkeydown="vektEnter(event,${i},'a')" onchange="sv('${o.id}','${k}','a',this.value)"></td>
+              <td><input value="${o.vekter[k].e}" inputmode="decimal" onkeydown="vektEnter(event,${i},'e')" onchange="sv('${o.id}','${k}','e',this.value)" style="${rod?'color:#ef4444;border-color:#ef4444;font-weight:700':''}"></td>
+              <td><input value="${o.vekter[k].v}" inputmode="decimal" onkeydown="vektEnter(event,${i},'v')" onchange="sv('${o.id}','${k}','v',this.value)"></td>
+            </tr>`;
+          }).join('')}
         </tbody></table>
       </div>
 
@@ -2052,6 +2055,17 @@ function sf(id, field, val) {
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.vekter[k][col]=val; save(id);
+}
+function vektEnter(e, rad, kol) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const table = e.target.closest('table');
+  if (!table) return;
+  const neste = table.querySelectorAll('tbody tr')[rad + 1];
+  if (!neste) return;
+  const inputs = neste.querySelectorAll('input');
+  const idx = {a:0, e:1, v:2}[kol];
+  if (inputs[idx]) inputs[idx].focus();
 }
 function sd(id,f,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -2980,6 +2994,7 @@ function renderArkiv() {
           <div><b>${ordreLabel(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
           <div style="display:flex;gap:6px">
             <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
+            <button class="btn sm" onclick="genPDF('${o.id}')">📄 PDF</button>
             <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
           </div>
         </div>
