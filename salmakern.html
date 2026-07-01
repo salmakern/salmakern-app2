@@ -3008,7 +3008,7 @@ function renderArkiv() {
     }).join('')
     :'<div class="muted small">Ingen</div>';
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
-    ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px">
+    ?ferdig.map(o=>`<div class="box" style="margin-bottom:6px;padding:8px">
         <div class="row" style="margin-bottom:4px">
           <div><b>${ordreLabel(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
           <div style="display:flex;gap:3px">
