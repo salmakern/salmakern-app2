@@ -759,6 +759,7 @@ let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
 let me = null;
 let activeOrdreId = null;
+let openedFromArkiv = false;
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
 const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
 let flyttOrdreId  = null;
@@ -815,10 +816,12 @@ async function loadFromSupabase() {
   if (aR.error) throw new Error(aR.error.message);
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
+  const prevTimer  = S.timer  ? [...S.timer]  : [];
+  const now = Date.now();
+  const LOCAL_TTL = 15000; // ms — behold lokale rader inntil Supabase bekrefter dem
+
   S.ordrer = (oR.data||[]).map(row => {
     const fresh = dbToOrdre(row);
-    // Behold kun ordreStatus fra minnet for ordrer vi nettopp lagret — unngå at status går tilbake
-    // (men bruk alltid ferske data fra Supabase for bilder og andre felt)
     if (ignorerRealtimeFor.has(String(row.id))) {
       const prev = prevOrdrer.find(o=>String(o.id)===String(row.id));
       if (prev) fresh.ordreStatus = prev.ordreStatus;
@@ -834,14 +837,27 @@ async function loadFromSupabase() {
       const [side, idxStr] = key.split('_');
       const idx = parseInt(idxStr);
       const dbUrl = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
-      if (dbUrl === url) { tomme.push(key); } // allerede i Supabase
+      if (dbUrl === url) { tomme.push(key); }
       else if (side==='a') o.bilderAnkomst[idx] = url;
       else o.bilderLevering[idx] = url;
     });
     tomme.forEach(k => delete fotos[k]);
     if (!Object.keys(fotos).length) delete inFlightFotos[ordreId];
   });
-  S.timer     = (tR.data||[]).map(dbToTimer);
+  // Behold nye ordrer som ikke er bekreftet i Supabase ennå
+  const freshOrdreIds = new Set(S.ordrer.map(o => String(o.id)));
+  prevOrdrer.forEach(o => {
+    if (!freshOrdreIds.has(String(o.id)) && o._localAt && (now - o._localAt) < LOCAL_TTL)
+      S.ordrer.push(o);
+  });
+
+  S.timer = (tR.data||[]).map(dbToTimer);
+  // Behold nye timer-oppføringer som ikke er bekreftet i Supabase ennå
+  const freshTimerIds = new Set(S.timer.map(t => String(t.id)));
+  prevTimer.forEach(t => {
+    if (!freshTimerIds.has(String(t.id)) && t._localAt && (now - t._localAt) < LOCAL_TTL)
+      S.timer.unshift(t);
+  });
   S.dagensPIN      = sR.data?.dagens_pin || '1234';
   S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
   S.utstyrMaler    = sR.data?.utstyr_maler    || [];
@@ -1044,20 +1060,15 @@ async function oppdaterApp() {
   }
 }
 
-function startAutoRefresh() {
-  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-  autoRefreshInterval = setInterval(() => {
-    if (document.visibilityState === 'visible' && me) oppdaterApp();
-  }, 30000); // hvert 30. sekund som fallback
-}
+// Ingen polling-interval — realtime håndterer løpende oppdateringer.
+// Full refresh skjer kun ved: første load, realtime-frakobling, og lang pause.
 
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible') {
-    if (me) await oppdaterApp(); // alltid oppdater når appen blir synlig
-    startAutoRefresh();
+    const pauseMs = Date.now() - sisteVarSynlig;
+    if (me && pauseMs > 3 * 60 * 1000) await oppdaterApp(); // refresh bare etter >3 min pause
   } else {
     sisteVarSynlig = Date.now();
-    if (autoRefreshInterval) { clearInterval(autoRefreshInterval); autoRefreshInterval = null; }
   }
 });
 
@@ -1583,11 +1594,20 @@ function renderWeek() {
 
 function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const gammelStatus = o.ordreStatus;
   o.ordreStatus = nyStatus;
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl);
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   save(id); renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
+  if (nyStatus !== gammelStatus) {
+    const dbO = ordreToDb(o);
+    fetch(PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      body: JSON.stringify({ type: 'UPDATE', record: dbO, old_record: { ...dbO, ordre_status: gammelStatus } })
+    }).catch(e => console.warn('Push-varsel feilet:', e));
+  }
 }
 
 function statusDropdown(ordreId, currentStatus, extraStyle='') {
@@ -1650,8 +1670,9 @@ function quickFlytt(dato, tid) {
 // ════════════════════════════════════════════════════
 // ORDRE DETAIL
 // ════════════════════════════════════════════════════
-function openOrdre(id) {
+function openOrdre(id, fraArkiv=false) {
   activeOrdreId = id;
+  openedFromArkiv = fraArkiv;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('ordre').classList.add('active');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
@@ -1664,8 +1685,19 @@ function openOrdre(id) {
 function tilbakeOrdreList() {
   activeOrdreId = null;
   document.getElementById('ordreDetail').style.display = 'none';
-  document.getElementById('ordreList').style.display   = 'block';
-  renderOrdreList();
+  if (openedFromArkiv) {
+    openedFromArkiv = false;
+    document.getElementById('ordreList').style.display = 'block';
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('arkiv').classList.add('active');
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab')[3].classList.add('active');
+    renderArkiv();
+  } else {
+    openedFromArkiv = false;
+    document.getElementById('ordreList').style.display = 'block';
+    renderOrdreList();
+  }
 }
 
 function utstyrMalDropdown(ordreId, selectId, applyFn, biltype, gjeldendeMalNavn) {
@@ -1715,12 +1747,13 @@ function buildOrdreDetail() {
 
   document.getElementById('ordreDetail').innerHTML = `
   <div style="position:sticky;top:${headerH}px;z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-    <button class="btn sm" onclick="tilbakeOrdreList()">← Alle ordrer</button>
+    <button class="btn sm" onclick="tilbakeOrdreList()">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="padding:6px 10px">🔄</button>
       ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">🗑 Slett ordre</button>` : ''}
     </div>
   </div>
+  ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">🗄 Arkivert ordre — kun visning</div>`:''}
   <div class="card">
     <div class="row">
       <div>
@@ -2263,6 +2296,7 @@ function opprettOrdre() {
   ny.modell  = document.getElementById('n_modell').value.trim();
   ny.versjon = document.getElementById('n_versjon').value.trim();
   ny.chassis = chassis;
+  ny._localAt = Date.now();
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
@@ -2429,7 +2463,7 @@ async function lastOppFoto(e, id, side, idx) {
   if (db) {
     try {
       const filnavn = `${id}/${side}_${idx}_${Date.now()}.jpg`;
-      const { error } = await db.storage.from('bilder').upload(filnavn, komprimert, {contentType:'image/jpeg', upsert:true});
+      const { error } = await db.storage.from('bilder').upload(filnavn, komprimert, {contentType:'image/jpeg', upsert:true, cacheControl:'31536000'});
       if (!error) {
         const { data } = db.storage.from('bilder').getPublicUrl(filnavn);
         url = data.publicUrl;
@@ -2673,13 +2707,13 @@ function doLagreManuellTimer() {
   const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
   const entry={
     id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
-    dato, type:'manuell', start, stopp, mins
+    dato, type:'manuell', start, stopp, mins, _localAt:Date.now()
   };
   S.timer.push(entry);
   if(db) db.from('timer_entries').insert({
     id:entry.id,ansatt_id:me.id,ansatt:me.navn,
     dato:entry.dato,type:'manuell',start,stopp,mins
-  }).then(r=>{if(r.error)console.error('Timer feil:',r.error.message);});
+  }).then(r=>{if(r.error) console.error('Timer feil:',r.error.message);});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   renderTimerHistorikk(); renderTimerMaaned();
   document.getElementById('mFra').value='';
@@ -2755,7 +2789,7 @@ function lagreTimer() {
         entries.push({
           id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
           dato:cur.toISOString().split('T')[0], type:timerType,
-          start:'–', stopp:'–', mins:0
+          start:'–', stopp:'–', mins:0, _localAt:Date.now()
         });
       }
       cur.setDate(cur.getDate()+1);
@@ -2764,7 +2798,7 @@ function lagreTimer() {
     entries.forEach(e=>{
       S.timer.push(e);
       if(db) db.from('timer_entries').insert({id:e.id,ansatt_id:me.id,ansatt:me.navn,dato:e.dato,type:timerType,start:'–',stopp:'–',mins:0})
-        .then(r=>{if(r.error)console.error('Timer lagringsfeil:',r.error.message);});
+        .then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
     });
     try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
     renderTimerHistorikk(); renderTimerMaaned();
@@ -2775,14 +2809,14 @@ function lagreTimer() {
   const timerEntry={
     id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
     dato:new Date().toISOString().split('T')[0], type:timerType,
-    start, stopp, mins
+    start, stopp, mins, _localAt:Date.now()
   };
   S.timer.push(timerEntry);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   if(db) db.from('timer_entries').insert({
     id:timerEntry.id, ansatt_id:me.id, ansatt:me.navn,
     dato:timerEntry.dato, type:timerType, start, stopp, mins
-  }).then(r=>{if(r.error)console.error('Timer lagringsfeil:',r.error.message);});
+  }).then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
   localStorage.removeItem('timerStart_'+me?.id);
   renderTimerHistorikk();
   stoppTimer();
@@ -2933,7 +2967,10 @@ function renderArkiv() {
     ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px">
         <div class="row" style="margin-bottom:4px">
           <div><b>${ordreLabel(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
-          <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
+            <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
+          </div>
         </div>
         <div class="small muted">${o.kunde} · Ankomst: ${o.ankomstdato||'—'}</div>
         <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
@@ -2974,7 +3011,6 @@ function slettOrdre(id) {
   S.timer  = S.timer.filter(t=>t.ordreId!==id);
   if (db) {
     db.from('ordrer').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message)});
-    db.from('timer').delete().eq('ordre_id',id).then(r=>{if(r.error)console.error(r.error.message)});
   }
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   tilbakeOrdreList(); renderAll();
@@ -3648,9 +3684,7 @@ function renderHMS() {
 
 function genPIN() {
   S.dagensPIN=String(Math.floor(1000+Math.random()*9000));
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-  if(db) db.from('innstillinger').upsert({id:'main',dagens_pin:S.dagensPIN})
-    .then(r=>{if(r.error)console.error('PIN lagringsfeil:',r.error.message);});
+  saveInnstillinger();
   renderMer();
 }
 
