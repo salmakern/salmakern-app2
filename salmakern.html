@@ -1640,8 +1640,12 @@ function dragOrdreMove(e) {
   if (!_dragOrdre.moved && Math.hypot(dx, dy) > 8) {
     _dragOrdre.moved = true;
     const o = S.ordrer.find(x => x.id === _dragOrdre.id);
+    const si = statusInfo(o?.ordreStatus);
     const g = document.createElement('div');
     g.className = 'drag-ghost';
+    g.style.borderColor = si.border;
+    g.style.background = si.bg;
+    g.style.color = si.txt;
     g.textContent = '📅 ' + (o ? ordreLabel(o) : 'Ordre');
     document.body.appendChild(g);
     _dragOrdre.ghostEl = g;
@@ -2121,7 +2125,14 @@ function sf(id, field, val) {
 }
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  o.vekter[k][col]=val; save(id);
+  o.vekter[k][col]=val;
+  if (['foraksel','bakaksel'].includes(k) && col==='a') {
+    o.vekter[k].e = val;
+    const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
+    const inp = document.querySelector('#ordreDetail table')?.querySelectorAll('tbody tr')[rader.indexOf(k)]?.querySelectorAll('input')[1];
+    if (inp) inp.value = val;
+  }
+  save(id);
   if (['totalvekt','vogntog'].includes(k) && (col==='a'||col==='e')) oppdaterVektFarge(id,k);
 }
 function oppdaterVektFarge(id,k) {
