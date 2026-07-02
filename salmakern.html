@@ -2453,10 +2453,29 @@ function openSign(id) {
   c.ontouchend=()=>{drawing=false;};
 }
 function clearCanvas() { if(signCtx) signCtx.clearRect(0,0,signCtx.canvas.width,signCtx.canvas.height); }
-function lagreSignatur() {
+
+async function lagreSignaturTilStorage(id, dataUrl) {
+  if (db) {
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const filnavn = `${id}/signatur_${Date.now()}.png`;
+      const { error } = await db.storage.from('bilder').upload(filnavn, blob, {contentType:'image/png', upsert:true, cacheControl:'31536000'});
+      if (!error) return db.storage.from('bilder').getPublicUrl(filnavn).data.publicUrl;
+      console.warn('Signatur-opplasting feilet:', error.message);
+    } catch(err) {
+      console.warn('Signatur-unntak:', err);
+    }
+  }
+  return dataUrl; // fallback til base64 kun hvis Storage feiler
+}
+
+async function lagreSignatur() {
   const c=document.getElementById('signCanvas');
   const o=S.ordrer.find(x=>x.id===signOrdreId); if(!o) return;
-  o.signatur=c.toDataURL();
+  const btn = document.querySelector('#sign .btn.red');
+  if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }
+  o.signatur = await lagreSignaturTilStorage(signOrdreId, c.toDataURL());
+  if (btn) { btn.disabled = false; btn.textContent = 'Lagre signatur'; }
   logChange(o,'Signatur lagret av '+me.navn);
   save(signOrdreId); closeModal('sign'); buildOrdreDetail();
 }
@@ -2495,11 +2514,14 @@ function bekreftGodkjenn() {
 
 function clearGodkjCanvas() { if(godkjCtx) godkjCtx.clearRect(0,0,godkjCtx.canvas.width,godkjCtx.canvas.height); }
 
-function lagreGodkjennSignatur(hoppOver=false) {
+async function lagreGodkjennSignatur(hoppOver=false) {
   const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o||!godkjennGodkjenner) return;
   if (!hoppOver) {
+    const btn = document.querySelector('#godkjennSign .btn.red');
+    if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }
     const c=document.getElementById('godkjCanvas');
-    o.signatur=c.toDataURL();
+    o.signatur = await lagreSignaturTilStorage(activeOrdreId, c.toDataURL());
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Fullfør og lukk ordre'; }
   }
   o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn; o.status='arkivert';
   logChange(o,'Godkjent og lukket av '+godkjennGodkjenner.navn);
