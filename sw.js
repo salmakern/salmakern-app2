@@ -1,8 +1,11 @@
-// v4 - push-varsler + aldri cache HTML
-const CACHE = 'salmakern-v4';
+// v5 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
+// (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
+//  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
+const CACHE = 'salmakern-v5';
+const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
-  '/salmakern-app2/manifest.json',
-  '/salmakern-app2/icon.svg'
+  '/manifest.json',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', e => {
@@ -13,7 +16,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE && k !== BILDE_CACHE).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -21,6 +24,19 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = e.request.url;
+
+  if (url.includes('/storage/v1/object/')) {
+    e.respondWith((async () => {
+      const c = await caches.open(BILDE_CACHE);
+      const cached = await c.match(e.request);
+      if (cached) return cached;
+      const res = await fetch(e.request);
+      if (res && res.status === 200) e.waitUntil(c.put(e.request, res.clone()));
+      return res;
+    })());
+    return;
+  }
+
   if (url.includes('supabase.co')) return;
   if (url.endsWith('.html') || url.includes('salmakern.html')) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
@@ -45,18 +61,18 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/salmakern-app2/icon.svg',
-      badge: '/salmakern-app2/icon.svg',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
       tag: 'salmakern',
       renotify: true,
-      data: { url: data.url || '/salmakern-app2/salmakern.html' }
+      data: { url: data.url || '/salmakern.html' }
     })
   );
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || '/salmakern-app2/salmakern.html';
+  const url = e.notification.data?.url || '/salmakern.html';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
       const existing = all.find(c => c.url.includes('salmakern'));
