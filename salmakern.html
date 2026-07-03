@@ -783,7 +783,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
     await loadFromSupabase();
     subscribeRealtime();
-    startAutoRefresh();
   } catch(e) {
     console.warn('Supabase feil, bruker lokal data:', e.message);
     try { const c = localStorage.getItem(STORE); if(c) S = JSON.parse(c); else S = defaultData(); }
