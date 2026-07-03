@@ -1624,17 +1624,38 @@ function statusDropdown(ordreId, currentStatus, extraStyle='') {
 
 let _dragOrdre = null;
 let _dragScrollRAF = null;
+let _longPressTimer = null;
 function dragOrdreStart(e, id) {
   if (e.button !== undefined && e.button !== 0) return;
   if (e.target.closest('button, select, input, a, textarea')) return;
-  e.preventDefault();
-  _dragOrdre = { id, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, moved: false, ghostEl: null };
+  const startX = e.clientX, startY = e.clientY;
+
+  if (e.pointerType === 'touch') {
+    // Vent på et lite trykk-og-hold før vi griper ordren, ellers blir
+    // vanlig rulling i listen tolket som at man vil dra en ordre.
+    const onEarlyMove = ev => { if (Math.hypot(ev.clientX-startX, ev.clientY-startY) > 10) cancelArm(); };
+    const cancelArm = () => {
+      clearTimeout(_longPressTimer);
+      document.removeEventListener('pointermove', onEarlyMove);
+      document.removeEventListener('pointerup', cancelArm);
+    };
+    document.addEventListener('pointermove', onEarlyMove);
+    document.addEventListener('pointerup', cancelArm);
+    _longPressTimer = setTimeout(() => { cancelArm(); armDrag(id, startX, startY); }, 350);
+  } else {
+    e.preventDefault();
+    armDrag(id, startX, startY);
+  }
+}
+function armDrag(id, startX, startY) {
+  _dragOrdre = { id, startX, startY, x: startX, y: startY, moved: false, ghostEl: null };
   document.addEventListener('pointermove', dragOrdreMove);
   document.addEventListener('pointerup', dragOrdreEnd);
   _dragScrollRAF = setInterval(dragAutoScroll, 16);
 }
 function dragOrdreMove(e) {
   if (!_dragOrdre) return;
+  e.preventDefault();
   _dragOrdre.x = e.clientX; _dragOrdre.y = e.clientY;
   const dx = e.clientX - _dragOrdre.startX, dy = e.clientY - _dragOrdre.startY;
   if (!_dragOrdre.moved && Math.hypot(dx, dy) > 8) {
