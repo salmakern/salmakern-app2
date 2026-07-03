@@ -1,11 +1,13 @@
-// v5 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
+// v6 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-const CACHE = 'salmakern-v5';
+// Alle stier er relative (uten innledende "/") slik at dette virker uansett
+// om siden ligger på domenerot eller under en understi som /salmakern-app2/.
+const CACHE = 'salmakern-v6';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
-  '/manifest.json',
-  '/icon.svg'
+  'manifest.json',
+  'icon.svg'
 ];
 
 self.addEventListener('install', e => {
@@ -61,18 +63,18 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/icon.svg',
-      badge: '/icon.svg',
+      icon: 'icon.svg',
+      badge: 'icon.svg',
       tag: 'salmakern',
       renotify: true,
-      data: { url: data.url || '/salmakern.html' }
+      data: { url: data.url || 'salmakern.html' }
     })
   );
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || '/salmakern.html';
+  const url = e.notification.data?.url || 'salmakern.html';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
       const existing = all.find(c => c.url.includes('salmakern'));
