@@ -1447,7 +1447,8 @@ function renderOversikt(q) {
   const pending = S.ordrer.filter(o=>o.status==='aktiv'&&(o.ordreStatus==='ikke_paabegynt'||o.ordreStatus==='paa_vei')&&match(o)).sort(sorterOrdre);
 
   const activeEl = document.getElementById('activeList');
-  activeEl.innerHTML = aktive.length
+  const activeElHarFokusertValg = activeEl.contains(document.activeElement) && document.activeElement.tagName === 'SELECT';
+  if (!activeElHarFokusertValg) activeEl.innerHTML = aktive.length
     ? aktive.map(o => {
         const si = statusInfo(o.ordreStatus);
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px">
@@ -1464,7 +1465,8 @@ function renderOversikt(q) {
     : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
 
   const pendEl = document.getElementById('pendingList');
-  pendEl.innerHTML = pending.length
+  const pendElHarFokusertValg = pendEl.contains(document.activeElement) && document.activeElement.tagName === 'SELECT';
+  if (!pendElHarFokusertValg) pendEl.innerHTML = pending.length
     ? pending.map(o => {
         const si = statusInfo(o.ordreStatus);
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px">
