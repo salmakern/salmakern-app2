@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     console.log('Abonnenter:', subs?.length ?? 0, subErr?.message ?? '')
     if (!subs?.length) return new Response('ingen abonnenter', { status: 200 })
 
-    const melding = JSON.stringify({ title, body, url: 'salmakern.html' })
+    const melding = JSON.stringify({ title, body, url: '/salmakern-app2/salmakern.html' })
     console.log('Sender:', melding)
 
     await Promise.allSettled(subs.map(async sub => {

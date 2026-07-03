@@ -1,13 +1,13 @@
-// v6 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
+// v7 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-// Alle stier er relative (uten innledende "/") slik at dette virker uansett
-// om siden ligger på domenerot eller under en understi som /salmakern-app2/.
-const CACHE = 'salmakern-v6';
+// Appen kjører under /salmakern-app2/ på GitHub Pages - faste stier, ikke relative
+// (Safari løste relative manifest-stier feil, så vi tar ingen sjanser her heller).
+const CACHE = 'salmakern-v7';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
-  'manifest.json',
-  'icon.svg'
+  '/salmakern-app2/manifest.json',
+  '/salmakern-app2/icon.svg'
 ];
 
 self.addEventListener('install', e => {
@@ -63,18 +63,18 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: 'icon.svg',
-      badge: 'icon.svg',
+      icon: '/salmakern-app2/icon.svg',
+      badge: '/salmakern-app2/icon.svg',
       tag: 'salmakern',
       renotify: true,
-      data: { url: data.url || 'salmakern.html' }
+      data: { url: data.url || '/salmakern-app2/salmakern.html' }
     })
   );
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || 'salmakern.html';
+  const url = e.notification.data?.url || '/salmakern-app2/salmakern.html';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
       const existing = all.find(c => c.url.includes('salmakern'));
