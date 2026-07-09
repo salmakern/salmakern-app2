@@ -4030,7 +4030,10 @@ function renderAnsattDetalj() {
       </div>
     </div>
 
-    <div class="small muted" style="margin-bottom:6px">Alle registreringer denne måneden</div>
+    <div class="row" style="margin-bottom:6px">
+      <div class="small muted">Alle registreringer denne måneden</div>
+      <button class="btn sm" onclick="adminNyTimer()">+ Legg til</button>
+    </div>
     ${dagsRader || '<div class="muted small">Ingen registreringer</div>'}`;
 }
 
@@ -4044,11 +4047,26 @@ function adminSlettTimer(id) {
 
 function adminRedigerTimer(id) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
+  document.getElementById('adminTimerModalTittel').textContent = 'Rediger registrering';
   document.getElementById('adminTimerId').value = id;
+  document.getElementById('adminTimerAnsattId').value = '';
   document.getElementById('adminTimerDato').value = t.dato||'';
   document.getElementById('adminTimerType').value = t.type||'normal';
   document.getElementById('adminTimerFra').value = t.start!=='–'?t.start:'';
   document.getElementById('adminTimerTil').value = t.stopp!=='–'?t.stopp:'';
+  adminTimerTypeToggle();
+  openModal('adminTimerModal');
+}
+
+function adminNyTimer() {
+  const a = S.ansatte.find(x=>x.id===ansattDetaljId); if(!a) return;
+  document.getElementById('adminTimerModalTittel').textContent = 'Ny registrering – ' + a.navn;
+  document.getElementById('adminTimerId').value = '';
+  document.getElementById('adminTimerAnsattId').value = a.id;
+  document.getElementById('adminTimerDato').value = new Date().toISOString().split('T')[0];
+  document.getElementById('adminTimerType').value = 'normal';
+  document.getElementById('adminTimerFra').value = '';
+  document.getElementById('adminTimerTil').value = '';
   adminTimerTypeToggle();
   openModal('adminTimerModal');
 }
@@ -4061,25 +4079,33 @@ function adminTimerTypeToggle() {
 
 function adminLagreTimer() {
   const id = document.getElementById('adminTimerId').value;
-  const t = S.timer.find(x=>x.id===id); if(!t) return;
   const dato = document.getElementById('adminTimerDato').value;
   const type = document.getElementById('adminTimerType').value;
   const fra  = document.getElementById('adminTimerFra').value;
   const til  = document.getElementById('adminTimerTil').value;
   const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
-  let mins = t.mins;
-  let start = t.start, stopp = t.stopp;
+  let mins = 0, start = '–', stopp = '–';
   if (!fraværTyper.includes(type) && fra && til) {
     const [sh,sm]=fra.split(':').map(Number);
     const [eh,em]=til.split(':').map(Number);
     mins = Math.max(0,(eh*60+em)-(sh*60+sm)-30);
     start=fra; stopp=til;
-  } else if (fraværTyper.includes(type)) {
-    mins=0; start='–'; stopp='–';
   }
-  t.dato=dato; t.type=type; t.start=start; t.stopp=stopp; t.mins=mins;
-  if(db) db.from('timer_entries').update({dato,type,start,stopp,mins}).eq('id',id)
-    .then(r=>{if(r.error)console.error(r.error.message);});
+
+  if (id) {
+    const t = S.timer.find(x=>x.id===id); if(!t) return;
+    t.dato=dato; t.type=type; t.start=start; t.stopp=stopp; t.mins=mins;
+    if(db) db.from('timer_entries').update({dato,type,start,stopp,mins}).eq('id',id)
+      .then(r=>{if(r.error)console.error(r.error.message);});
+  } else {
+    const ansattId = document.getElementById('adminTimerAnsattId').value;
+    const a = S.ansatte.find(x=>String(x.id)===ansattId); if(!a) return;
+    const nyId = 't'+(++S.nextId);
+    const timerEntry = { id:nyId, ansattId:a.id, ansatt:a.navn, dato, type, start, stopp, mins, _localAt:Date.now() };
+    S.timer.push(timerEntry);
+    if(db) db.from('timer_entries').insert({id:nyId, ansatt_id:a.id, ansatt:a.navn, dato, type, start, stopp, mins})
+      .then(r=>{if(r.error)console.error(r.error.message);});
+  }
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('adminTimerModal');
   renderAnsattDetalj();
@@ -4272,8 +4298,9 @@ document.querySelectorAll('.modal').forEach(m=>{
 
 <div class="modal" id="adminTimerModal">
   <div class="modal-box">
-    <div class="h" style="margin-bottom:12px">Rediger registrering</div>
+    <div class="h" style="margin-bottom:12px" id="adminTimerModalTittel">Rediger registrering</div>
     <input type="hidden" id="adminTimerId">
+    <input type="hidden" id="adminTimerAnsattId">
     <label>Dato</label>
     <input type="date" id="adminTimerDato">
     <label>Type</label>
