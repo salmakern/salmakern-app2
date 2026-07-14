@@ -389,6 +389,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
       </div>
       <div class="card" id="merGodkjKort" style="display:none"><div class="h">Til godkjenning</div><div id="tilGodkj" style="margin-top:8px"></div></div>
+      <div class="card" id="merFlateKort" style="display:none">
+        <div class="h">Flåtegodkjenning</div>
+        <div class="muted small" style="margin-bottom:8px">Grupper ordrer i flåter og se status på tvers.</div>
+        <button class="btn" style="width:100%" onclick="visFlaterModal()">Åpne flåtegodkjenning</button>
+      </div>
       <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
       <div class="card" id="merTimerOversikt" style="display:none">
         <div class="row" style="flex-wrap:wrap;gap:8px">
@@ -746,7 +751,7 @@ function sorterOrdre(a,b) {
 }
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
 let me = null;
 let activeOrdreId = null;
 let openedFromArkiv = false;
@@ -879,6 +884,11 @@ async function loadFromSupabase() {
     ];
     saveInnstillinger();
   }
+  // Flåter hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
+  try {
+    const fR = await db.from('flater').select('*').order('created_at');
+    if (!fR.error) S.flater = (fR.data||[]).map(dbToFlate);
+  } catch(_) {}
 }
 
 function dbToOrdre(r) {
@@ -902,7 +912,8 @@ function dbToOrdre(r) {
     ordreTimerSessions:r.ordre_timer_sessions||[],
     notater:r.notater||'', endringer:r.endringer||[],
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
-    visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||''
+    visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
+    flateId:r.flate_id||null
   };
 }
 function ordreToDb(o) {
@@ -923,8 +934,12 @@ function ordreToDb(o) {
     notater:o.notater, endringer:o.endringer,
     utstyr_sjekkliste:o.utstyrSjekkliste||[], utstyr_mal_navn:o.utstyrMalNavn||'',
     visnings_sjekkliste:o.visningsSjekkliste||[], visnings_mal_navn:o.visningsMalNavn||'',
+    flate_id:o.flateId||null,
     updated_at:new Date().toISOString()
   };
+}
+function dbToFlate(r) {
+  return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', createdAt:r.created_at||'' };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
@@ -988,6 +1003,19 @@ function subscribeRealtime() {
         S.timer = S.timer.filter(t=>t.id!==p.old.id);
       }
       renderAll();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'flater'}, p => {
+      S.flater = S.flater || [];
+      if (p.eventType==='INSERT') {
+        if (!S.flater.find(f=>f.id===p.new.id)) S.flater.push(dbToFlate(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.flater.findIndex(f=>f.id===p.new.id); if(i>=0) S.flater[i]=dbToFlate(p.new);
+      } else if (p.eventType==='DELETE') {
+        S.flater = S.flater.filter(f=>f.id!==p.old.id);
+      }
+      if (document.getElementById('flaterModal')?.classList.contains('show')) {
+        aktivFlateId ? renderFlateDetalj() : renderFlaterListe();
+      }
     })
     .subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {
@@ -1184,6 +1212,7 @@ function defaultData() {
       mkOrdre('ord2','CD56789','Vestfold Transport','Erik Johansen','VW Crafter','L3H2 2023','2026-04-21','','','','Hyllesystem\nGulvplate')
     ],
     timer: [],
+    flater: [],
     nextId: 10,
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
@@ -1871,6 +1900,14 @@ function buildOrdreDetail() {
               <div class="small muted" style="margin-top:2px">${(o.chassis||'').length}/17</div>
             </div>
           </div>
+        </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <label>Flåte</label>
+          <div class="small" style="padding:6px 0">${(() => {
+            const f = (S.flater||[]).find(x=>x.id===o.flateId);
+            return f ? esc(f.flatenummer) + (f.kunde ? ' – '+esc(f.kunde) : '') : 'Ingen flåte';
+          })()}</div>
         </div>
       </div>
 
@@ -3125,6 +3162,7 @@ function renderMer() {
   document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
   document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
+  document.getElementById('merFlateKort').style.display   = erGodkjenner ? 'block' : 'none';
 
   if (erAdmin) {
     document.getElementById('dagensPINVal').textContent = S.dagensPIN;
@@ -4212,6 +4250,143 @@ function visOppdateringsToast() {
 }
 
 // ════════════════════════════════════════════════════
+// FLÅTEGODKJENNING
+// ════════════════════════════════════════════════════
+let flaterVisning = 'aktiv'; // 'aktiv' | 'arkivert'
+let aktivFlateId  = null;
+
+function visFlaterModal() {
+  aktivFlateId = null;
+  document.getElementById('flaterListeView').style.display = 'block';
+  document.getElementById('flateDetaljView').style.display = 'none';
+  renderFlaterListe();
+  openModal('flaterModal');
+}
+
+function toggleFlaterVisning() {
+  flaterVisning = flaterVisning === 'aktiv' ? 'arkivert' : 'aktiv';
+  document.getElementById('flaterVisningBtn').textContent = flaterVisning === 'aktiv' ? 'Aktive flåter' : 'Arkiverte flåter';
+  renderFlaterListe();
+}
+
+function renderFlaterListe() {
+  const liste = (S.flater||[]).filter(f => f.status === flaterVisning).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const el = document.getElementById('flaterListe');
+  el.innerHTML = liste.length ? liste.map(f => {
+    const ordrer = (S.ordrer||[]).filter(o=>o.flateId===f.id);
+    const aktiveOrdrer = ordrer.filter(o=>o.status==='aktiv');
+    return `<div class="box" style="margin-bottom:8px;cursor:pointer" onclick="visFlateDetalj('${f.id}')">
+      <div class="row">
+        <div><b>${esc(f.flatenummer)}</b>${f.kunde?` <span class="small muted">– ${esc(f.kunde)}</span>`:''}</div>
+        <span class="small muted">${ordrer.length} ordre${ordrer.length===1?'':'r'}</span>
+      </div>
+      ${aktiveOrdrer.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${aktiveOrdrer.map(o=>{
+        const si = statusInfo(o.ordreStatus);
+        return `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:${si.bg};color:${si.txt};border:1px solid ${si.border}">${si.lbl}</span>`;
+      }).join('')}</div>` : ''}
+    </div>`;
+  }).join('') : `<div class="muted small">Ingen ${flaterVisning==='aktiv'?'aktive':'arkiverte'} flåter</div>`;
+}
+
+function apneNyFlate() {
+  document.getElementById('nyFlateNummer').value = '';
+  document.getElementById('nyFlateKunde').value = '';
+  openModal('nyFlateModal');
+}
+
+function lagreNyFlate() {
+  const nr = document.getElementById('nyFlateNummer').value.trim();
+  if (!nr) { alert('Skriv inn et flåtenummer'); return; }
+  const kunde = document.getElementById('nyFlateKunde').value.trim();
+  const id = 'flate_' + Date.now();
+  const flate = { id, flatenummer:nr, kunde, status:'aktiv', createdAt:new Date().toISOString() };
+  S.flater = S.flater || [];
+  S.flater.push(flate);
+  if (db) db.from('flater').insert({id, flatenummer:nr, kunde, status:'aktiv'})
+    .then(r=>{if(r.error) console.error('Flåte-lagring feilet:', r.error.message);});
+  closeModal('nyFlateModal');
+  renderFlaterListe();
+}
+
+function visFlateDetalj(id) {
+  aktivFlateId = id;
+  document.getElementById('flaterListeView').style.display = 'none';
+  document.getElementById('flateDetaljView').style.display = 'block';
+  document.getElementById('flateSokInput').value = '';
+  document.getElementById('flateSokResultat').innerHTML = '';
+  renderFlateDetalj();
+}
+
+function tilbakeFlaterListe() {
+  aktivFlateId = null;
+  document.getElementById('flaterListeView').style.display = 'block';
+  document.getElementById('flateDetaljView').style.display = 'none';
+  renderFlaterListe();
+}
+
+function renderFlateDetalj() {
+  const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
+  document.getElementById('flateDetaljTittel').textContent = 'Flåte ' + f.flatenummer;
+  document.getElementById('flateDetaljKunde').textContent = f.kunde || '';
+  document.getElementById('flateArkiverBtn').textContent = f.status === 'aktiv' ? 'Arkiver flåte' : 'Gjenopprett flåte';
+
+  const ordrer = (S.ordrer||[]).filter(o=>o.flateId===f.id).sort(sorterOrdre);
+  const el = document.getElementById('flateOrdreListe');
+  el.innerHTML = ordrer.length ? ordrer.map(o => {
+    const si = statusInfo(o.ordreStatus);
+    return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:10px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <b style="cursor:pointer" onclick="closeModal('flaterModal');openOrdre('${o.id}')">${ordreLabel(o)}</b>
+        ${statusDropdown(o.id, o.ordreStatus)}
+      </div>
+      <div class="small muted" style="margin-top:3px">${esc(o.kunde||'')}${o.status==='arkivert'?' · <span class="err-text">Arkivert</span>':''}</div>
+      <button class="btn sm" style="margin-top:6px" onclick="fjernOrdreFraFlate('${o.id}')">✕ Fjern fra flåte</button>
+    </div>`;
+  }).join('') : '<div class="muted small">Ingen ordrer i denne flåten ennå</div>';
+}
+
+function renderFlateSok(q) {
+  const el = document.getElementById('flateSokResultat');
+  q = q.trim().toLowerCase();
+  if (!q) { el.innerHTML=''; return; }
+  const treff = (S.ordrer||[]).filter(o => o.flateId !== aktivFlateId && (
+    (o.regnr||'').toLowerCase().includes(q) ||
+    (o.chassis||'').toLowerCase().includes(q) ||
+    (o.kunde||'').toLowerCase().includes(q)
+  )).slice(0, 15);
+  el.innerHTML = treff.length ? treff.map(o=>`<div class="box" style="margin-bottom:4px;padding:8px;display:flex;justify-content:space-between;align-items:center;gap:6px">
+    <div><b>${ordreLabel(o)}</b> <span class="small muted">${esc(o.kunde||'')}</span></div>
+    <button class="btn sm" onclick="leggOrdreIFlate('${o.id}')">+ Legg til</button>
+  </div>`).join('') : '<div class="muted small">Ingen treff</div>';
+}
+
+function leggOrdreIFlate(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  o.flateId = aktivFlateId;
+  logChange(o, 'Lagt i flåte');
+  save(ordreId);
+  document.getElementById('flateSokInput').value = '';
+  document.getElementById('flateSokResultat').innerHTML = '';
+  renderFlateDetalj();
+}
+
+function fjernOrdreFraFlate(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  o.flateId = null;
+  logChange(o, 'Fjernet fra flåte');
+  save(ordreId);
+  renderFlateDetalj();
+}
+
+function toggleArkiverFlate() {
+  const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
+  f.status = f.status === 'aktiv' ? 'arkivert' : 'aktiv';
+  if (db) db.from('flater').update({status:f.status}).eq('id', f.id)
+    .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
+  renderFlateDetalj();
+}
+
+// ════════════════════════════════════════════════════
 // MODALS
 // ════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('show'); }
@@ -4261,6 +4436,55 @@ document.querySelectorAll('.modal').forEach(m=>{
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="adminLagreTimer()">Lagre</button>
       <button class="btn" onclick="closeModal('adminTimerModal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="flaterModal">
+  <div class="modal-box" style="max-width:560px;width:95%">
+    <div class="row" style="margin-bottom:12px">
+      <div class="h">Flåtegodkjenning</div>
+      <button onclick="closeModal('flaterModal')" style="background:none;border:none;color:#a1a1aa;font-size:20px;cursor:pointer">✕</button>
+    </div>
+
+    <div id="flaterListeView">
+      <div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <button class="btn sm" id="flaterVisningBtn" onclick="toggleFlaterVisning()">Aktive flåter</button>
+        <button class="btn sm red" onclick="apneNyFlate()">+ Ny flåte</button>
+      </div>
+      <div id="flaterListe"></div>
+    </div>
+
+    <div id="flateDetaljView" style="display:none">
+      <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFlaterListe()">← Alle flåter</button>
+      <div class="row" style="margin-bottom:10px;align-items:flex-start">
+        <div>
+          <b id="flateDetaljTittel">–</b>
+          <div class="small muted" id="flateDetaljKunde"></div>
+        </div>
+        <button class="btn sm" id="flateArkiverBtn" onclick="toggleArkiverFlate()">Arkiver flåte</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label>Legg til ordre (søk reg.nr, chassis eller kunde)</label>
+        <input id="flateSokInput" placeholder="Bla eller søk..." oninput="renderFlateSok(this.value)">
+        <div id="flateSokResultat" style="margin-top:6px;max-height:180px;overflow-y:auto"></div>
+      </div>
+      <div class="small muted" style="margin-bottom:6px">Ordrer i denne flåten</div>
+      <div id="flateOrdreListe"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyFlateModal">
+  <div class="modal-box">
+    <div class="h" style="margin-bottom:12px">Ny flåte</div>
+    <label>Flåtenummer</label>
+    <input id="nyFlateNummer" placeholder="F.eks. 1001">
+    <label>Kunde (valgfritt)</label>
+    <input id="nyFlateKunde" placeholder="F.eks. Telemark Bygg AS">
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreNyFlate()">Opprett</button>
+      <button class="btn" onclick="closeModal('nyFlateModal')">Avbryt</button>
     </div>
   </div>
 </div>
