@@ -1,9 +1,9 @@
-// v7 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
+// v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
 // Appen kjører under /salmakern-app2/ på GitHub Pages - faste stier, ikke relative
 // (Safari løste relative manifest-stier feil, så vi tar ingen sjanser her heller).
-const CACHE = 'salmakern-v7';
+const CACHE = 'salmakern-v8';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/salmakern-app2/manifest.json',
@@ -41,7 +41,10 @@ self.addEventListener('fetch', e => {
 
   if (url.includes('supabase.co')) return;
   if (url.endsWith('.html') || url.includes('salmakern.html')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    // no-store: GitHub Pages sender Cache-Control: max-age=600 på HTML-filen,
+    // så en vanlig fetch() kan fortsatt bli servert fra nettleserens egen
+    // HTTP-cache i opptil 10 minutter. no-store tvinger et ekte nettverkskall.
+    e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() => caches.match(e.request)));
     return;
   }
   e.respondWith(
