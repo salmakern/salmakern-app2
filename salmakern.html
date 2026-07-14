@@ -533,19 +533,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
-<div class="modal" id="sign">
-  <div class="modal-box">
-    <div class="h">Signer med finger</div>
-    <div class="muted small" id="signNavn" style="margin-bottom:8px"></div>
-    <canvas id="signCanvas" height="200" style="width:100%"></canvas>
-    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn red" onclick="lagreSignatur()">Lagre signatur</button>
-      <button class="btn" onclick="clearCanvas()">Tøm</button>
-      <button class="btn" onclick="closeModal('sign')">Avbryt</button>
-    </div>
-  </div>
-</div>
-
 <div class="modal" id="godkjenn">
   <div class="modal-box">
     <div class="h">Godkjenn og lukk ordre</div>
@@ -766,7 +753,6 @@ let openedFromArkiv = false;
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
 const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
 let flyttOrdreId  = null;
-let signOrdreId   = null;
 let timerStart    = null;
 let timerType     = 'normal';
 let timerTick     = null;
@@ -2007,19 +1993,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       </div>
 
       <div class="card">
-        <div class="h">Signatur</div>
-        ${o.signatur
-          ? `<img src="${o.signatur}" style="width:100%;border-radius:10px;border:1px solid #27272a;margin-top:6px">
-             ${erGodkjenner?`<div style="display:flex;gap:6px;margin-top:6px">
-                <button class="btn sm" onclick="openSign('${o.id}')">Endre signatur</button>
-                <button class="btn sm red" onclick="slettSignatur('${o.id}')">Fjern signatur</button>
-              </div>`:''}`
-          : erGodkjenner
-            ? `<div class="muted small" style="margin-bottom:6px">Ingen signatur ennå</div><button class="btn sm" onclick="openSign('${o.id}')">Signer med finger</button>`
-            : `<div class="muted small">Signeres ved godkjenning</div>`}
-      </div>
-
-      <div class="card">
         <div class="h">Godkjenning</div>
         ${o.godkjent?`<span class="pill ok">Godkjent av ${o.godkjennerNavn}</span>`:`
           <div class="muted small" style="margin-bottom:8px">Godkjenner kontrollerer arbeidet og lukker ordren.</div>
@@ -2106,7 +2079,6 @@ function tvangsflyt(o) {
     {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
     {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
     {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
-    {lbl:'Signatur',          ok: !!o.signatur},
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
     {lbl:'Ombygging valgt',   ok: ombyggingValgt}
   ];
@@ -2455,30 +2427,6 @@ function bekreftFlytt() {
 // ════════════════════════════════════════════════════
 // SIGNATUR
 // ════════════════════════════════════════════════════
-let drawing=false, lastX=0, lastY=0, signCtx=null;
-
-function openSign(id) {
-  signOrdreId=id;
-  document.getElementById('signNavn').textContent='Ansatt: '+me.navn;
-  openModal('sign');
-  const c=document.getElementById('signCanvas');
-  c.width=c.offsetWidth||600;
-  signCtx=c.getContext('2d');
-  signCtx.strokeStyle='#f4f4f5'; signCtx.lineWidth=2.5; signCtx.lineCap='round';
-  clearCanvas();
-  const pos=(e)=>{
-    const r=c.getBoundingClientRect(), t=e.touches?e.touches[0]:e;
-    return {x:(t.clientX-r.left)*(c.width/r.width), y:(t.clientY-r.top)*(c.height/r.height)};
-  };
-  c.onmousedown=e=>{drawing=true;const p=pos(e);lastX=p.x;lastY=p.y;};
-  c.onmousemove=e=>{if(!drawing)return;const p=pos(e);signCtx.beginPath();signCtx.moveTo(lastX,lastY);signCtx.lineTo(p.x,p.y);signCtx.stroke();lastX=p.x;lastY=p.y;};
-  c.onmouseup=c.onmouseleave=()=>{drawing=false;};
-  c.ontouchstart=e=>{e.preventDefault();drawing=true;const p=pos(e);lastX=p.x;lastY=p.y;};
-  c.ontouchmove=e=>{e.preventDefault();if(!drawing)return;const p=pos(e);signCtx.beginPath();signCtx.moveTo(lastX,lastY);signCtx.lineTo(p.x,p.y);signCtx.stroke();lastX=p.x;lastY=p.y;};
-  c.ontouchend=()=>{drawing=false;};
-}
-function clearCanvas() { if(signCtx) signCtx.clearRect(0,0,signCtx.canvas.width,signCtx.canvas.height); }
-
 async function lagreSignaturTilStorage(id, dataUrl) {
   if (db) {
     try {
@@ -2492,28 +2440,6 @@ async function lagreSignaturTilStorage(id, dataUrl) {
     }
   }
   return dataUrl; // fallback til base64 kun hvis Storage feiler
-}
-
-async function lagreSignatur() {
-  const c=document.getElementById('signCanvas');
-  const o=S.ordrer.find(x=>x.id===signOrdreId); if(!o) return;
-  const btn = document.querySelector('#sign .btn.red');
-  if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }
-  o.signatur = await lagreSignaturTilStorage(signOrdreId, c.toDataURL());
-  if (btn) { btn.disabled = false; btn.textContent = 'Lagre signatur'; }
-  logChange(o,'Signatur lagret av '+me.navn);
-  save(signOrdreId); closeModal('sign'); buildOrdreDetail();
-}
-
-async function slettSignatur(id) {
-  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  if (db && o.signatur && o.signatur.startsWith('http')) {
-    const filnavn = o.signatur.split('/bilder/')[1];
-    if (filnavn) await db.storage.from('bilder').remove([filnavn]);
-  }
-  o.signatur = null;
-  logChange(o, 'Signatur fjernet av '+me.navn);
-  save(id); buildOrdreDetail();
 }
 
 // ════════════════════════════════════════════════════
