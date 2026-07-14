@@ -2010,7 +2010,10 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <div class="h">Signatur</div>
         ${o.signatur
           ? `<img src="${o.signatur}" style="width:100%;border-radius:10px;border:1px solid #27272a;margin-top:6px">
-             ${erGodkjenner?`<button class="btn sm" style="margin-top:6px" onclick="openSign('${o.id}')">Endre signatur</button>`:''}`
+             ${erGodkjenner?`<div style="display:flex;gap:6px;margin-top:6px">
+                <button class="btn sm" onclick="openSign('${o.id}')">Endre signatur</button>
+                <button class="btn sm red" onclick="slettSignatur('${o.id}')">Fjern signatur</button>
+              </div>`:''}`
           : erGodkjenner
             ? `<div class="muted small" style="margin-bottom:6px">Ingen signatur ennå</div><button class="btn sm" onclick="openSign('${o.id}')">Signer med finger</button>`
             : `<div class="muted small">Signeres ved godkjenning</div>`}
@@ -2500,6 +2503,17 @@ async function lagreSignatur() {
   if (btn) { btn.disabled = false; btn.textContent = 'Lagre signatur'; }
   logChange(o,'Signatur lagret av '+me.navn);
   save(signOrdreId); closeModal('sign'); buildOrdreDetail();
+}
+
+async function slettSignatur(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (db && o.signatur && o.signatur.startsWith('http')) {
+    const filnavn = o.signatur.split('/bilder/')[1];
+    if (filnavn) await db.storage.from('bilder').remove([filnavn]);
+  }
+  o.signatur = null;
+  logChange(o, 'Signatur fjernet av '+me.navn);
+  save(id); buildOrdreDetail();
 }
 
 // ════════════════════════════════════════════════════
