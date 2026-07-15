@@ -351,11 +351,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <!-- ── MER ── -->
     <section id="mer" class="page">
-      <div class="card" id="merFlateKort" style="display:none;margin-bottom:14px">
-        <div class="h">Flåtegodkjenning</div>
-        <div class="muted small" style="margin-bottom:8px">Grupper ordrer i flåter og se status på tvers.</div>
-        <button class="btn" style="width:100%" onclick="visFlaterModal()">Åpne flåtegodkjenning</button>
-      </div>
       <div class="grid g3">
         <div class="card" id="merAnsatteKort" style="display:none">
           <div class="h">Ansatte</div>
@@ -1414,7 +1409,13 @@ function renderOrdreList() {
            (o.modell||'').toLowerCase().includes(sokTekst) ||
            (o.chassis||'').toLowerCase().includes(sokTekst);
   }).sort(sorterOrdre);
+  const erGodkjennerOrdreListe = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
   listEl.innerHTML = `
+    ${erGodkjennerOrdreListe ? `<div class="card" style="margin-bottom:14px">
+      <div class="h">Flåtegodkjenning</div>
+      <div class="muted small" style="margin-bottom:8px">Grupper ordrer i flåter og se status på tvers.</div>
+      <button class="btn" style="width:100%" onclick="visFlaterModal()">Åpne flåtegodkjenning</button>
+    </div>` : ''}
     <div class="card">
       <div class="row">
         <div><div class="h">Alle ordrer</div><div class="muted small">Klikk for å åpne</div></div>
@@ -3176,7 +3177,6 @@ function renderMer() {
   document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
   document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
-  document.getElementById('merFlateKort').style.display   = erGodkjenner ? 'block' : 'none';
 
   if (erAdmin) {
     document.getElementById('dagensPINVal').textContent = S.dagensPIN;
