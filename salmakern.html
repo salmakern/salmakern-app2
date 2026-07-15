@@ -939,7 +939,7 @@ function ordreToDb(o) {
   };
 }
 function dbToFlate(r) {
-  return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', createdAt:r.created_at||'' };
+  return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'' };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
@@ -2139,6 +2139,7 @@ function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().
 function sf(id, field, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
+  if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
 }
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -2151,6 +2152,19 @@ function sv(id,k,col,val) {
   }
   save(id);
   if (['totalvekt','vogntog'].includes(k) && (col==='a'||col==='e')) oppdaterVektFarge(id,k);
+  synkroniserFraPrimaer(id);
+}
+function synkroniserFraPrimaer(id) {
+  const primaer = S.ordrer.find(x=>x.id===id); if (!primaer) return;
+  const flater = (S.flater||[]).filter(f => f.primaerOrdreId === id);
+  if (!flater.length) return;
+  flater.forEach(f => {
+    (S.ordrer||[]).filter(o => o.flateId===f.id && o.id!==id).forEach(o => {
+      o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
+      o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+      save(o.id);
+    });
+  });
 }
 function oppdaterVektFarge(id,k) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -4291,19 +4305,51 @@ function renderFlaterListe() {
 function apneNyFlate() {
   document.getElementById('nyFlateNummer').value = '';
   document.getElementById('nyFlateKunde').value = '';
+  document.getElementById('nyFlatePrimaerSok').value = '';
+  document.getElementById('nyFlatePrimaerResultat').innerHTML = '';
+  document.getElementById('nyFlatePrimaerValgt').textContent = '';
+  document.getElementById('nyFlatePrimaerId').value = '';
   openModal('nyFlateModal');
+}
+
+function renderNyFlatePrimaerSok(q) {
+  const el = document.getElementById('nyFlatePrimaerResultat');
+  q = q.trim().toLowerCase();
+  if (!q) { el.innerHTML=''; return; }
+  const treff = (S.ordrer||[]).filter(o => (
+    (o.regnr||'').toLowerCase().includes(q) ||
+    (o.chassis||'').toLowerCase().includes(q) ||
+    (o.kunde||'').toLowerCase().includes(q)
+  )).slice(0, 15);
+  el.innerHTML = treff.length ? treff.map(o=>`<div class="box" style="margin-bottom:4px;padding:8px;display:flex;justify-content:space-between;align-items:center;gap:6px">
+    <div><b>${ordreLabel(o)}</b> <span class="small muted">${esc(o.kunde||'')}</span></div>
+    <button class="btn sm" onclick="velgNyFlatePrimaer('${o.id}')">Velg</button>
+  </div>`).join('') : '<div class="muted small">Ingen treff</div>';
+}
+
+function velgNyFlatePrimaer(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  document.getElementById('nyFlatePrimaerId').value = ordreId;
+  document.getElementById('nyFlatePrimaerValgt').innerHTML = `Valgt: <b>${ordreLabel(o)}</b>`;
+  document.getElementById('nyFlatePrimaerSok').value = '';
+  document.getElementById('nyFlatePrimaerResultat').innerHTML = '';
 }
 
 function lagreNyFlate() {
   const nr = document.getElementById('nyFlateNummer').value.trim();
   if (!nr) { alert('Skriv inn et flåtenummer'); return; }
   const kunde = document.getElementById('nyFlateKunde').value.trim();
+  const primaerId = document.getElementById('nyFlatePrimaerId').value || null;
   const id = 'flate_' + Date.now();
-  const flate = { id, flatenummer:nr, kunde, status:'aktiv', createdAt:new Date().toISOString() };
+  const flate = { id, flatenummer:nr, kunde, status:'aktiv', primaerOrdreId:primaerId, createdAt:new Date().toISOString() };
   S.flater = S.flater || [];
   S.flater.push(flate);
-  if (db) db.from('flater').insert({id, flatenummer:nr, kunde, status:'aktiv'})
+  if (db) db.from('flater').insert({id, flatenummer:nr, kunde, status:'aktiv', primaer_ordre_id:primaerId})
     .then(r=>{if(r.error) console.error('Flåte-lagring feilet:', r.error.message);});
+  if (primaerId) {
+    const o = S.ordrer.find(x=>x.id===primaerId);
+    if (o) { o.flateId = id; logChange(o,'Lagt i flåte som primær kjøretøy'); save(primaerId); }
+  }
   closeModal('nyFlateModal');
   renderFlaterListe();
 }
@@ -4334,11 +4380,13 @@ function renderFlateDetalj() {
   const el = document.getElementById('flateOrdreListe');
   el.innerHTML = ordrer.length ? ordrer.map(o => {
     const si = statusInfo(o.ordreStatus);
-    return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:10px;margin-bottom:6px">
+    const erPrimaer = f.primaerOrdreId === o.id;
+    return `<div style="background:#111114;border:2px solid ${erPrimaer?'#facc15':si.border};border-radius:16px;padding:10px;margin-bottom:6px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-        <b style="cursor:pointer" onclick="closeModal('flaterModal');openOrdre('${o.id}')">${ordreLabel(o)}</b>
+        <b style="cursor:pointer" onclick="closeModal('flaterModal');openOrdre('${o.id}')">${erPrimaer?'⭐ ':''}${ordreLabel(o)}</b>
         ${statusDropdown(o.id, o.ordreStatus)}
       </div>
+      ${erPrimaer?'<div class="small" style="color:#facc15;margin-top:2px">Primær kjøretøy – kilden for type/variant/versjon/vekter</div>':''}
       <div class="small muted" style="margin-top:3px">${esc(o.kunde||'')}${o.status==='arkivert'?' · <span class="err-text">Arkivert</span>':''}</div>
       <button class="btn sm" style="margin-top:6px" onclick="fjernOrdreFraFlate('${o.id}')">✕ Fjern fra flåte</button>
     </div>`;
@@ -4363,6 +4411,14 @@ function renderFlateSok(q) {
 function leggOrdreIFlate(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   o.flateId = aktivFlateId;
+  const f = (S.flater||[]).find(x=>x.id===aktivFlateId);
+  if (f && f.primaerOrdreId && f.primaerOrdreId !== ordreId) {
+    const primaer = S.ordrer.find(x=>x.id===f.primaerOrdreId);
+    if (primaer) {
+      o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
+      o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+    }
+  }
   logChange(o, 'Lagt i flåte');
   save(ordreId);
   document.getElementById('flateSokInput').value = '';
@@ -4482,6 +4538,12 @@ document.querySelectorAll('.modal').forEach(m=>{
     <input id="nyFlateNummer" placeholder="F.eks. 1001">
     <label>Kunde (valgfritt)</label>
     <input id="nyFlateKunde" placeholder="F.eks. Telemark Bygg AS">
+    <label>Primær kjøretøy</label>
+    <div class="muted small" style="margin-bottom:6px">Type, variant, versjon og vekter kopieres alltid fra dette kjøretøyet til de andre i flåten.</div>
+    <input id="nyFlatePrimaerSok" placeholder="Søk reg.nr, chassis eller kunde..." oninput="renderNyFlatePrimaerSok(this.value)">
+    <div id="nyFlatePrimaerResultat" style="margin-top:6px;max-height:150px;overflow-y:auto"></div>
+    <div id="nyFlatePrimaerValgt" class="small" style="margin-top:8px"></div>
+    <input type="hidden" id="nyFlatePrimaerId">
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreNyFlate()">Opprett</button>
       <button class="btn" onclick="closeModal('nyFlateModal')">Avbryt</button>

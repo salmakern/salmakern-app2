@@ -12,6 +12,7 @@ create table if not exists flater (
 );
 
 alter table ordrer add column if not exists flate_id text default null;
+alter table flater add column if not exists primaer_ordre_id text default null;
 
 alter publication supabase_realtime add table flater;
 
