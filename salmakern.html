@@ -1409,9 +1409,8 @@ function renderOrdreList() {
            (o.modell||'').toLowerCase().includes(sokTekst) ||
            (o.chassis||'').toLowerCase().includes(sokTekst);
   }).sort(sorterOrdre);
-  const erGodkjennerOrdreListe = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
   listEl.innerHTML = `
-    ${erGodkjennerOrdreListe ? `<div class="card" style="margin-bottom:14px">
+    ${me ? `<div class="card" style="margin-bottom:14px">
       <div class="h">Flåtegodkjenning</div>
       <div class="muted small" style="margin-bottom:8px">Grupper ordrer i flåter og se status på tvers.</div>
       <button class="btn" style="width:100%" onclick="visFlaterModal()">Åpne flåtegodkjenning</button>
