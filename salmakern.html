@@ -164,7 +164,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 .cal-now::before{content:'';position:absolute;left:-5px;top:-4px;width:10px;height:10px;background:#ef4444;border-radius:50%}
 .cal-event{position:absolute;left:3px;right:3px;background:#16a34a;border:1px solid #22c55e;border-radius:6px;padding:4px 6px;cursor:pointer;overflow:visible;z-index:1}
 .cal-event:hover{opacity:0.9}
-.cal-event-regnr{font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.cal-event-regnr{font-size:13px;font-weight:700;color:#fff;overflow-wrap:anywhere;line-height:1.3}
 .cal-event-info{font-size:11px;color:#bbf7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
 
 /* SCROLLBAR */
@@ -1564,10 +1564,10 @@ function renderWeek() {
       const si = statusInfo(o.ordreStatus);
       const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
       const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
-      const height = Math.max(52, SLOT_PX); // min height so text fits
+      const height = o.regnr ? Math.max(52, SLOT_PX) : 76; // ekstra høyde så chassisnr får plass på flere linjer
       return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
-          <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0;overflow:hidden">
+          <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
             <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabel(o)}</div>
             <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid} · ${statusInfo(o.ordreStatus).lbl}</div>
           </div>
