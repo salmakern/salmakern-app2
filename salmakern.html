@@ -4388,7 +4388,10 @@ function renderFlateDetalj() {
       </div>
       ${erPrimaer?'<div class="small" style="color:#facc15;margin-top:2px">Primær kjøretøy – kilden for type/variant/versjon/vekter</div>':''}
       <div class="small muted" style="margin-top:3px">${esc(o.kunde||'')}${o.status==='arkivert'?' · <span class="err-text">Arkivert</span>':''}</div>
-      <button class="btn sm" style="margin-top:6px" onclick="fjernOrdreFraFlate('${o.id}')">✕ Fjern fra flåte</button>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+        ${erPrimaer?'':`<button class="btn sm" onclick="settFlatePrimaer('${o.id}')">☆ Gjør til primær</button>`}
+        <button class="btn sm" onclick="fjernOrdreFraFlate('${o.id}')">✕ Fjern fra flåte</button>
+      </div>
     </div>`;
   }).join('') : '<div class="muted small">Ingen ordrer i denne flåten ennå</div>';
 }
@@ -4440,6 +4443,25 @@ function toggleArkiverFlate() {
   if (db) db.from('flater').update({status:f.status}).eq('id', f.id)
     .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
   renderFlateDetalj();
+}
+
+function settFlatePrimaer(ordreId) {
+  const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
+  f.primaerOrdreId = ordreId;
+  if (db) db.from('flater').update({primaer_ordre_id:ordreId}).eq('id', f.id)
+    .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
+  synkroniserFraPrimaer(ordreId);
+  renderFlateDetalj();
+}
+
+function slettFlate() {
+  const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
+  if (!confirm(`Slette flåten "${f.flatenummer}" helt? Ordrene i den blir ikke slettet, bare koblet fra flåten.`)) return;
+  (S.ordrer||[]).filter(o=>o.flateId===f.id).forEach(o => { o.flateId = null; save(o.id); });
+  S.flater = (S.flater||[]).filter(x=>x.id!==f.id);
+  if (db) db.from('flater').delete().eq('id', f.id)
+    .then(r=>{if(r.error) console.error('Sletting av flåte feilet:', r.error.message);});
+  tilbakeFlaterListe();
 }
 
 // ════════════════════════════════════════════════════
@@ -4518,7 +4540,10 @@ document.querySelectorAll('.modal').forEach(m=>{
           <b id="flateDetaljTittel">–</b>
           <div class="small muted" id="flateDetaljKunde"></div>
         </div>
-        <button class="btn sm" id="flateArkiverBtn" onclick="toggleArkiverFlate()">Arkiver flåte</button>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn sm" id="flateArkiverBtn" onclick="toggleArkiverFlate()">Arkiver flåte</button>
+          <button class="btn sm red" onclick="slettFlate()">🗑 Slett flåte</button>
+        </div>
       </div>
       <div style="margin-bottom:12px">
         <label>Legg til ordre (søk reg.nr, chassis eller kunde)</label>
