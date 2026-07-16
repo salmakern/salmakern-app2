@@ -3374,15 +3374,12 @@ function renderStempelkort() {
     const ukedag = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'][new Date(dag).getDay()];
     const rader = relevante.filter(t => t.dato === dag).sort((a,b) => (a.start||'').localeCompare(b.start||''));
     const raderHTML = rader.map(t => {
-      const startFeil = t.start < '07:30';
-      const stoppFeil = t.stopp && t.stopp !== '–' && t.stopp > '15:30';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:#18181b;margin-bottom:3px;font-size:13px">
         <span style="min-width:120px;font-weight:600">${t.ansatt||'?'}</span>
-        <span style="${startFeil?'color:#f87171;font-weight:700':'color:#86efac'}">${t.start}</span>
+        <span style="color:#86efac">${t.start}</span>
         <span class="muted" style="margin:0 4px">→</span>
-        <span style="${stoppFeil?'color:#f87171;font-weight:700':'color:#a1a1aa'}">${t.stopp||'–'}</span>
+        <span style="color:#a1a1aa">${t.stopp||'–'}</span>
         <span style="margin-left:8px;color:#f4f4f5;font-weight:600;min-width:60px;text-align:right">${t.mins>0?fmtTid(t.mins):''}</span>
-        ${startFeil?'<span style="color:#f87171;font-size:11px;margin-left:6px">⚠ tidlig</span>':stoppFeil?'<span style="color:#f87171;font-size:11px;margin-left:6px">⚠ sent</span>':''}
       </div>`;
     }).join('');
     return `<div style="margin-bottom:10px">
@@ -3391,7 +3388,7 @@ function renderStempelkort() {
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div style="margin-bottom:8px" class="small muted">Rødt = startet før 07:30 eller sluttet etter 15:30</div>${dagerHTML}`;
+  el.innerHTML = dagerHTML;
 }
 
 function renderAarsStatistikk() {
