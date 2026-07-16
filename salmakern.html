@@ -1761,7 +1761,10 @@ function openFlyttKalender(id) {
 // ════════════════════════════════════════════════════
 // ORDRE DETAIL
 // ════════════════════════════════════════════════════
+let ordreListScrollY = 0;
+
 function openOrdre(id, fraArkiv=false) {
+  ordreListScrollY = window.scrollY;
   activeOrdreId = id;
   openedFromArkiv = fraArkiv;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1771,6 +1774,7 @@ function openOrdre(id, fraArkiv=false) {
   document.getElementById('ordreList').style.display   = 'none';
   document.getElementById('ordreDetail').style.display = 'block';
   buildOrdreDetail();
+  window.scrollTo(0, 0);
 }
 
 function tilbakeOrdreList() {
@@ -1789,6 +1793,7 @@ function tilbakeOrdreList() {
     document.getElementById('ordreList').style.display = 'block';
     renderOrdreList();
   }
+  setTimeout(() => window.scrollTo(0, ordreListScrollY), 0);
 }
 
 function utstyrMalDropdown(ordreId, selectId, applyFn, biltype, gjeldendeMalNavn) {
