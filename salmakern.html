@@ -350,6 +350,16 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <div class="h">Arkiv</div>
             <div class="small muted" id="arkivFakturertSammendrag"></div>
           </div>
+          <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0">
+              <input type="checkbox" id="arkivFilterIkkeFakturert" onchange="renderArkiv()" style="width:16px;height:16px;accent-color:#ef4444">
+              <span class="small">Vis kun ikke fakturert</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0">
+              <input type="checkbox" id="arkivFilterFakturert" onchange="renderArkiv()" style="width:16px;height:16px;accent-color:#16a34a">
+              <span class="small">Vis kun fakturert</span>
+            </label>
+          </div>
           <div id="arkivFerdig" style="margin-top:10px"></div>
         </div>
       </div>
@@ -3104,8 +3114,12 @@ function renderArkiv() {
   const q=(document.getElementById('arkivSok')?.value||'').toLowerCase().trim();
   const match=o=>!q||o.regnr?.toLowerCase().includes(q)||o.kunde?.toLowerCase().includes(q)||o.chassis?.toLowerCase().includes(q)||o.eier?.toLowerCase().includes(q);
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o));
-  const ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
+  const kunIkkeFakturert = document.getElementById('arkivFilterIkkeFakturert')?.checked;
+  const kunFakturert = document.getElementById('arkivFilterFakturert')?.checked;
+  let ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
     .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
+  if (kunIkkeFakturert && !kunFakturert) ferdig = ferdig.filter(o=>!o.fakturert);
+  else if (kunFakturert && !kunIkkeFakturert) ferdig = ferdig.filter(o=>!!o.fakturert);
   const fakturertAntall = ferdig.filter(o=>o.fakturert).length;
   const fakturertSammendrag = document.getElementById('arkivFakturertSammendrag');
   if (fakturertSammendrag) fakturertSammendrag.textContent = ferdig.length ? `${fakturertAntall} av ${ferdig.length} fakturert` : '';
