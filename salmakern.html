@@ -345,7 +345,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
       <div class="grid g2">
         <div class="card"><div class="h">Aktive</div><div id="arkivAktiv" style="margin-top:10px"></div></div>
-        <div class="card"><div class="h">Arkiv</div><div id="arkivFerdig" style="margin-top:10px"></div></div>
+        <div class="card">
+          <div class="row">
+            <div class="h">Arkiv</div>
+            <div class="small muted" id="arkivFakturertSammendrag"></div>
+          </div>
+          <div id="arkivFerdig" style="margin-top:10px"></div>
+        </div>
       </div>
     </section>
 
@@ -3100,6 +3106,9 @@ function renderArkiv() {
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o));
   const ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
     .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
+  const fakturertAntall = ferdig.filter(o=>o.fakturert).length;
+  const fakturertSammendrag = document.getElementById('arkivFakturertSammendrag');
+  if (fakturertSammendrag) fakturertSammendrag.textContent = ferdig.length ? `${fakturertAntall} av ${ferdig.length} fakturert` : '';
   document.getElementById('arkivAktiv').innerHTML=aktive.length
     ?aktive.map(o=>{
       const si=statusInfo(o.ordreStatus);
