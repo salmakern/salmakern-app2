@@ -1433,7 +1433,7 @@ function renderOrdreList() {
     </div>` : ''}
     <div class="card">
       <div class="row">
-        <div><div class="h">Alle ordrer</div><div class="muted small">Klikk for å åpne</div></div>
+        <div><div class="h">Alle ordrer</div><div class="muted small">${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne</div></div>
         <button class="btn red" onclick="openModal('nyOrdre')">+ Ny ordre</button>
       </div>
       <div style="margin-top:10px">
