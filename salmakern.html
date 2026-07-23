@@ -1445,12 +1445,12 @@ function renderOrdreList() {
           return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:5px;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
-              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0">
-                ${statusDropdown(o.id, o.ordreStatus)}
-                ${hengerfesteKortHTML(o)}
-              </div>
+              ${statusDropdown(o.id, o.ordreStatus)}
             </div>
-            <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0">
+              <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</span>
+              ${hengerfesteKortHTML(o)}
+            </div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
             <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
@@ -1488,12 +1488,12 @@ function renderOversikt(q) {
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0">
-              ${statusDropdown(o.id, o.ordreStatus)}
-              ${hengerfesteKortHTML(o)}
-            </div>
+            ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0">
+            <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</span>
+            ${hengerfesteKortHTML(o)}
+          </div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid:'Ikke i kalender'}</div>
@@ -1509,12 +1509,12 @@ function renderOversikt(q) {
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
             <b>${ordreLabel(o)}</b>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0">
-              ${statusDropdown(o.id, o.ordreStatus)}
-              ${hengerfesteKortHTML(o)}
-            </div>
+            ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div class="small muted">${o.type}${o.variant?' · '+o.variant:''}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0">
+            <span class="small muted">${o.type}${o.variant?' · '+o.variant:''}</span>
+            ${hengerfesteKortHTML(o)}
+          </div>
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
