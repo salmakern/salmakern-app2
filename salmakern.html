@@ -912,7 +912,7 @@ function dbToOrdre(r) {
     ordreStatus:r.ordre_status||'ikke_paabegynt',
     kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
     vekter:r.vekter||dv, drivstoff:r.drivstoff||{totalpris:'',satsId:''},
-    utstyr:r.utstyr||{har:'',skalHa:''},
+    utstyr:r.utstyr||{har:'',skalHa:'',hengerfeste:'ikke_hengerfeste',hengerfesteMontert:'ikke_montert'},
     bilderAnkomst:r.bilder_ankomst||[null,null,null,null,null,null],
     bilderLevering:r.bilder_levering||[null,null,null,null,null,null],
     ansatteSignert:r.ansatte_signert||[], signatur:r.signatur||null,
@@ -1243,7 +1243,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
       foraksel:{a:'',e:'',v:''}, bakaksel:{a:'',e:'',v:''}
     },
     drivstoff:{totalpris:'',satsId:''},
-    utstyr:{har, skalHa},
+    utstyr:{har, skalHa, hengerfeste:'ikke_hengerfeste', hengerfesteMontert:'ikke_montert'},
     bilderAnkomst:[null,null,null,null,null,null],
     bilderLevering:[null,null,null,null,null,null],
     ansatteSignert:[], signatur:null,
@@ -1447,6 +1447,7 @@ function renderOrdreList() {
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
               ${statusDropdown(o.id, o.ordreStatus)}
             </div>
+            ${hengerfesteKortHTML(o)}
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
@@ -1487,6 +1488,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
+          ${hengerfesteKortHTML(o)}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
@@ -1505,6 +1507,7 @@ function renderOversikt(q) {
             <b>${ordreLabel(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
+          ${hengerfesteKortHTML(o)}
           <div class="small muted">${o.type}${o.variant?' · '+o.variant:''}</div>
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
@@ -1651,6 +1654,26 @@ function statusDropdown(ordreId, currentStatus, extraStyle='') {
   return `<select onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
     ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
   </select>`;
+}
+
+function hengerfesteMontertDropdown(ordreId, montert) {
+  const erMontert = montert === 'montert';
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${erMontert?'#052e1688':'#42200688'};color:${erMontert?'#86efac':'#fef08a'};border:2px solid ${erMontert?'#22c55e':'#facc15'};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
+    <option value="ikke_montert" ${erMontert?'':'selected'}>Ikke montert</option>
+    <option value="montert" ${erMontert?'selected':''}>Montert</option>
+  </select>`;
+}
+function settHengerfesteMontert(id, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.utstyr.hengerfesteMontert = val;
+  logChange(o, 'Hengerfeste: ' + (val==='montert'?'Montert':'Ikke montert'));
+  save(id); renderAll();
+}
+function hengerfesteKortHTML(o) {
+  return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;gap:6px">
+    <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
+    ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
+  </div>` : '';
 }
 
 let _dragOrdre = null;
@@ -1973,6 +1996,14 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card">
         <div class="h">Utstyr – Skal ha etter visning</div>
         <textarea rows="4" style="margin-top:8px" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+      </div>
+
+      <div class="card">
+        <div class="h">Hengerfeste</div>
+        <select onchange="su('${o.id}','hengerfeste',this.value)" style="margin-top:8px;background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
+          <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>
+          <option value="hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'selected':''}>Hengerfeste</option>
+        </select>
       </div>
 
       <div class="card">
