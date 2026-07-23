@@ -1442,12 +1442,14 @@ function renderOrdreList() {
       <div class="grid g3" style="margin-top:12px">
         ${alle.length ? alle.map(o=>{
           const si = statusInfo(o.ordreStatus);
-          return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:5px">
+          return `<div style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:5px;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
-              ${statusDropdown(o.id, o.ordreStatus)}
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0">
+                ${statusDropdown(o.id, o.ordreStatus)}
+                ${hengerfesteKortHTML(o)}
+              </div>
             </div>
-            ${hengerfesteKortHTML(o)}
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
@@ -1483,12 +1485,14 @@ function renderOversikt(q) {
   if (!activeElHarFokusertValg) activeEl.innerHTML = aktive.length
     ? aktive.map(o => {
         const si = statusInfo(o.ordreStatus);
-        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px">
+        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
-            ${statusDropdown(o.id, o.ordreStatus)}
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0">
+              ${statusDropdown(o.id, o.ordreStatus)}
+              ${hengerfesteKortHTML(o)}
+            </div>
           </div>
-          ${hengerfesteKortHTML(o)}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
@@ -1502,12 +1506,14 @@ function renderOversikt(q) {
   if (!pendElHarFokusertValg) pendEl.innerHTML = pending.length
     ? pending.map(o => {
         const si = statusInfo(o.ordreStatus);
-        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px">
+        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="background:#111114;border:2px solid ${si.border};border-radius:16px;padding:12px;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
             <b>${ordreLabel(o)}</b>
-            ${statusDropdown(o.id, o.ordreStatus)}
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:0">
+              ${statusDropdown(o.id, o.ordreStatus)}
+              ${hengerfesteKortHTML(o)}
+            </div>
           </div>
-          ${hengerfesteKortHTML(o)}
           <div class="small muted">${o.type}${o.variant?' · '+o.variant:''}</div>
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
@@ -1679,7 +1685,7 @@ function settHengerfesteMontert(id, val) {
   }
 }
 function hengerfesteKortHTML(o) {
-  return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;gap:6px">
+  return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;max-width:100%">
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
   </div>` : '';
