@@ -1665,9 +1665,18 @@ function hengerfesteMontertDropdown(ordreId, montert) {
 }
 function settHengerfesteMontert(id, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const gammelVerdi = o.utstyr.hengerfesteMontert;
   o.utstyr.hengerfesteMontert = val;
   logChange(o, 'Hengerfeste: ' + (val==='montert'?'Montert':'Ikke montert'));
   save(id); renderAll();
+  if (val === 'montert' && gammelVerdi !== 'montert') {
+    const dbO = ordreToDb(o);
+    fetch(PUSH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      body: JSON.stringify({ type: 'UPDATE', record: dbO, old_record: { ...dbO, utstyr: { ...dbO.utstyr, hengerfesteMontert: 'ikke_montert' } } })
+    }).catch(e => console.warn('Push-varsel feilet:', e));
+  }
 }
 function hengerfesteKortHTML(o) {
   return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;gap:6px">

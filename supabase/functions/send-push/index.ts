@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
       const vektNy  = record.vekter?.totalvekt?.v
       const vektGml = old_record?.vekter?.totalvekt?.v
       const vektEndret = vektNy && !vektGml
+      const hengerfesteMontertEndret = record.utstyr?.hengerfesteMontert === 'montert' && old_record?.utstyr?.hengerfesteMontert !== 'montert'
 
       console.log('bil:', bil, 'ordre_status ny:', record.ordre_status, 'gammel:', old_record?.ordre_status, 'statusEndret:', statusEndret)
 
@@ -49,6 +50,8 @@ Deno.serve(async (req) => {
         body = `${bil} er ${statusNavn.toLowerCase()}`
       } else if (vektEndret) {
         body = `${bil} er veid: ${vektNy} kg`
+      } else if (hengerfesteMontertEndret) {
+        body = `${bil} har fått montert hengerfeste`
       }
     } else {
       console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
