@@ -1685,7 +1685,7 @@ function settHengerfesteMontert(id, val) {
   }
 }
 function hengerfesteKortHTML(o) {
-  return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px;max-width:100%">
+  return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
   </div>` : '';
