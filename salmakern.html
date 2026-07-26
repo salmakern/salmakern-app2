@@ -1323,6 +1323,29 @@ function doLogout() {
 // ════════════════════════════════════════════════════
 // PUSH-VARSLER
 // ════════════════════════════════════════════════════
+// localStorage husker forrige endpoint denne enheten var registrert med.
+// iOS/Safari roterer av og til push-endepunktet i bakgrunnen (f.eks. etter
+// OS-oppdatering eller at PWA-en legges til på nytt) uten at brukeren gjør
+// noe i appen. Uten opprydding blir den gamle raden i push_abonnement
+// liggende igjen som gyldig, og enheten mottar da samme varsel to ganger.
+const PUSH_ENDPOINT_LS_KEY = 'salmakern_push_endpoint';
+
+async function lagrePushAbonnement(sub) {
+  if (!db || !me || !sub) return;
+  const j = sub.toJSON();
+  const forrigeEndpoint = localStorage.getItem(PUSH_ENDPOINT_LS_KEY);
+  if (forrigeEndpoint && forrigeEndpoint !== j.endpoint) {
+    await db.from('push_abonnement').delete().eq('endpoint', forrigeEndpoint);
+  }
+  await db.from('push_abonnement').upsert({
+    ansatt_id: me.id,
+    endpoint: j.endpoint,
+    p256dh: j.keys.p256dh,
+    auth: j.keys.auth
+  }, { onConflict: 'endpoint' });
+  localStorage.setItem(PUSH_ENDPOINT_LS_KEY, j.endpoint);
+}
+
 async function oppdaterVarselKnapp() {
   const knapp = document.getElementById('varselKnapp');
   const statusEl = document.getElementById('varselStatus');
@@ -1340,6 +1363,11 @@ async function oppdaterVarselKnapp() {
     knapp.textContent = 'Varsler blokkert';
     knapp.disabled = true;
   } else if (sub) {
+    // Sjekk om endepunktet har rotert siden sist (f.eks. iOS i bakgrunnen)
+    // og rydd opp den gamle raden hvis så, slik at vi ikke får dupliserte varsler.
+    if (sub.endpoint !== localStorage.getItem(PUSH_ENDPOINT_LS_KEY)) {
+      await lagrePushAbonnement(sub);
+    }
     if (statusEl) statusEl.innerHTML = '<span style="color:#4ade80">✔ Varsler er aktivert på denne enheten</span>';
     knapp.textContent = 'Deaktiver varsler';
     knapp.disabled = false;
@@ -1356,6 +1384,7 @@ async function togglePushVarsler() {
   if (sub) {
     await sub.unsubscribe();
     if (db && me) await db.from('push_abonnement').delete().eq('endpoint', sub.endpoint);
+    localStorage.removeItem(PUSH_ENDPOINT_LS_KEY);
     oppdaterVarselKnapp();
     return;
   }
@@ -1366,15 +1395,7 @@ async function togglePushVarsler() {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC)
     });
-    const j = nySub.toJSON();
-    if (db && me) {
-      await db.from('push_abonnement').upsert({
-        ansatt_id: me.id,
-        endpoint: j.endpoint,
-        p256dh: j.keys.p256dh,
-        auth: j.keys.auth
-      }, { onConflict: 'endpoint' });
-    }
+    await lagrePushAbonnement(nySub);
     oppdaterVarselKnapp();
   } catch(e) {
     console.warn('Push feilet:', e);
