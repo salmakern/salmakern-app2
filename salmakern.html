@@ -713,7 +713,6 @@ const SUPA_URL     = 'https://qoqpenbfdxeduylxirwk.supabase.co';
 const SUPA_KEY     = 'sb_publishable_46JAdcBUbQYS8NbDwP-MXg_zKWA8Ojz';
 const STORE        = 'salmakern_v2';
 const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mqyAfXkQUbeLhPzKiv6y6CpfmTeYJDc';
-const PUSH_URL     = SUPA_URL + '/functions/v1/send-push';
 
 // Sporer bilder som er lastet opp i minnet men ikke nødvendigvis bekreftet i Supabase ennå
 const inFlightFotos = {};
@@ -1660,20 +1659,13 @@ function renderWeek() {
 
 function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  const gammelStatus = o.ordreStatus;
   o.ordreStatus = nyStatus;
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl);
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
+  // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
+  // ikke herfra - ellers sendes varselet dobbelt.
   save(id); renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
-  if (nyStatus !== gammelStatus) {
-    const dbO = ordreToDb(o);
-    fetch(PUSH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
-      body: JSON.stringify({ type: 'UPDATE', record: dbO, old_record: { ...dbO, ordre_status: gammelStatus } })
-    }).catch(e => console.warn('Push-varsel feilet:', e));
-  }
 }
 
 function statusDropdown(ordreId, currentStatus, extraStyle='') {
@@ -1692,18 +1684,11 @@ function hengerfesteMontertDropdown(ordreId, montert) {
 }
 function settHengerfesteMontert(id, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  const gammelVerdi = o.utstyr.hengerfesteMontert;
   o.utstyr.hengerfesteMontert = val;
   logChange(o, 'Hengerfeste: ' + (val==='montert'?'Montert':'Ikke montert'));
+  // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
+  // ikke herfra - ellers sendes varselet dobbelt.
   save(id); renderAll();
-  if (val === 'montert' && gammelVerdi !== 'montert') {
-    const dbO = ordreToDb(o);
-    fetch(PUSH_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
-      body: JSON.stringify({ type: 'UPDATE', record: dbO, old_record: { ...dbO, utstyr: { ...dbO.utstyr, hengerfesteMontert: 'ikke_montert' } } })
-    }).catch(e => console.warn('Push-varsel feilet:', e));
-  }
 }
 function hengerfesteKortHTML(o) {
   return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
