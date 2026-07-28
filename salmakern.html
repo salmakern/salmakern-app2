@@ -1997,7 +1997,7 @@ function buildOrdreDetail() {
               <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
               <td><input value="${o.vekter[k].a}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'a')" onchange="sv('${o.id}','${k}','a',this.value)"></td>
               <td><input value="${o.vekter[k].e}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'e')" onchange="sv('${o.id}','${k}','e',this.value)" style="${rod?'color:#ef4444;border-color:#ef4444':''}"></td>
-              <td><input value="${o.vekter[k].v}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'v')" onchange="sv('${o.id}','${k}','v',this.value)"></td>
+              <td>${k==='vogntog' ? '<span class="small muted">–</span>' : `<input value="${o.vekter[k].v}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'v')" onchange="sv('${o.id}','${k}','v',this.value)">`}</td>
             </tr>`;
           }).join('')}
         </tbody></table>
