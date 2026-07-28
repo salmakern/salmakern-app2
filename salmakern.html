@@ -121,9 +121,9 @@ tr:first-child td{padding-top:8px}
 .hover-del button:hover{background:#ffffff22}
 .hover-del button:active{background:#ffffff44}
 /* LIGHTBOX */
-#lightbox{position:fixed;inset:0;background:#000d;z-index:999;display:none;align-items:center;justify-content:center;padding:16px}
+#lightbox{position:fixed;inset:0;background:#000d;z-index:999;display:none;align-items:center;justify-content:center;padding:16px;overflow:hidden}
 #lightbox.show{display:flex}
-#lightbox img{max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 40px #000}
+#lightbox img{max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 40px #000;touch-action:none;cursor:zoom-in;user-select:none}
 #lightbox-close{position:fixed;top:16px;right:20px;font-size:32px;color:#fff;cursor:pointer;background:none;border:none;line-height:1;z-index:1000}
 
 /* CLOCK */
@@ -491,7 +491,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <!-- LIGHTBOX -->
 <div id="lightbox" onclick="closeLightbox()">
   <button id="lightbox-close" onclick="closeLightbox()">✕</button>
-  <img id="lightbox-img" src="" onclick="event.stopPropagation()">
+  <img id="lightbox-img" src=""
+    onclick="event.stopPropagation()"
+    ondblclick="event.stopPropagation();lbToggleZoom()"
+    onwheel="lbWheel(event)"
+    onpointerdown="lbPointerDown(event)"
+    onpointermove="lbPointerMove(event)"
+    onpointerup="lbPointerUp(event)"
+    onpointercancel="lbPointerUp(event)"
+    ontouchstart="lbTouchStart(event)"
+    ontouchmove="lbTouchMove(event)"
+    ontouchend="lbTouchEnd(event)">
 </div>
 
 <!-- ═══════════════ MODALS ═══════════════ -->
@@ -2623,12 +2633,69 @@ function openLightbox(imgId) {
   if (!img) return;
   document.getElementById('lightbox-img').src = img.src;
   document.getElementById('lightbox').classList.add('show');
+  lbResetZoom();
 }
 function closeLightbox() {
   document.getElementById('lightbox').classList.remove('show');
   document.getElementById('lightbox-img').src = '';
+  lbResetZoom();
 }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
+
+// Zoom/pan i lightbox — dobbeltklikk/dobbelttrykk, scroll og knip-til-zoom
+let lbScale = 1, lbX = 0, lbY = 0;
+let lbDrag = null, lbPinch = null;
+
+function lbApplyTransform() {
+  const img = document.getElementById('lightbox-img');
+  img.style.transform = `translate(${lbX}px, ${lbY}px) scale(${lbScale})`;
+  img.style.cursor = lbScale > 1 ? 'grab' : 'zoom-in';
+}
+function lbResetZoom() {
+  lbScale = 1; lbX = 0; lbY = 0; lbDrag = null; lbPinch = null;
+  lbApplyTransform();
+}
+function lbToggleZoom() {
+  if (lbScale > 1) { lbResetZoom(); return; }
+  lbScale = 2.5;
+  lbApplyTransform();
+}
+function lbWheel(e) {
+  e.preventDefault();
+  const faktor = e.deltaY < 0 ? 1.15 : 1/1.15;
+  lbScale = Math.min(6, Math.max(1, lbScale * faktor));
+  if (lbScale === 1) { lbX = 0; lbY = 0; }
+  lbApplyTransform();
+}
+function lbPointerDown(e) {
+  if (lbScale <= 1) return;
+  lbDrag = { startX: e.clientX - lbX, startY: e.clientY - lbY };
+  e.target.setPointerCapture(e.pointerId);
+}
+function lbPointerMove(e) {
+  if (!lbDrag) return;
+  lbX = e.clientX - lbDrag.startX;
+  lbY = e.clientY - lbDrag.startY;
+  lbApplyTransform();
+}
+function lbPointerUp() { lbDrag = null; }
+function lbTouchStart(e) {
+  if (e.touches.length === 2) {
+    const [t1,t2] = e.touches;
+    lbPinch = { dist: Math.hypot(t2.clientX-t1.clientX, t2.clientY-t1.clientY), scale: lbScale };
+  }
+}
+function lbTouchMove(e) {
+  if (e.touches.length === 2 && lbPinch) {
+    e.preventDefault();
+    const [t1,t2] = e.touches;
+    const dist = Math.hypot(t2.clientX-t1.clientX, t2.clientY-t1.clientY);
+    lbScale = Math.min(6, Math.max(1, lbPinch.scale * (dist / lbPinch.dist)));
+    if (lbScale === 1) { lbX = 0; lbY = 0; }
+    lbApplyTransform();
+  }
+}
+function lbTouchEnd(e) { if (e.touches.length < 2) lbPinch = null; }
 
 async function slaOppRegnr(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
