@@ -2044,7 +2044,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
             ${o.bilderAnkomst[i]
               ? `<img id="fo_a_${i}_src" src="${o.bilderAnkomst[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
                  <div class="hover-del" onclick="event.stopPropagation()">
-                   <button onclick="openLightbox('fo_a_${i}_src')" title="Vis fullt bilde">🔍</button>
+                   <button data-viewonly onclick="openLightbox('fo_a_${i}_src')" title="Vis fullt bilde">🔍</button>
                    <button onclick="document.getElementById('fo_a_${i}').click()" title="Bytt bilde">📷</button>
                    <button onclick="slettFoto('${o.id}','a',${i})" title="Slett">🗑</button>
                  </div>`
@@ -2060,7 +2060,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
             ${o.bilderLevering[i]
               ? `<img id="fo_l_${i}_src" src="${o.bilderLevering[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
                  <div class="hover-del" onclick="event.stopPropagation()">
-                   <button onclick="openLightbox('fo_l_${i}_src')" title="Vis fullt bilde">🔍</button>
+                   <button data-viewonly onclick="openLightbox('fo_l_${i}_src')" title="Vis fullt bilde">🔍</button>
                    <button onclick="document.getElementById('fo_l_${i}').click()" title="Bytt bilde">📷</button>
                    <button onclick="slettFoto('${o.id}','l',${i})" title="Slett">🗑</button>
                  </div>`
@@ -2161,7 +2161,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       el.style.cursor = 'not-allowed';
     });
     detail.querySelectorAll('button').forEach(btn => {
-      if (!header.contains(btn)) { btn.disabled = true; btn.style.opacity = '0.4'; }
+      if (!header.contains(btn) && !btn.hasAttribute('data-viewonly')) { btn.disabled = true; btn.style.opacity = '0.4'; }
     });
   }
   } catch(err) {
@@ -2796,7 +2796,7 @@ function oppdaterFotoboks(o, side, idx) {
     boks.innerHTML = `<img id="${imgId}" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none';this.parentElement.querySelector('.fo-feil')?.style&&(this.parentElement.querySelector('.fo-feil').style.display='flex')">
       <div class="fo-feil" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;font-size:11px;color:#f87171;background:#3f0000;border-radius:8px 8px 0 0;padding:4px;text-align:center">⚠️ Bilde<br>ikke tilgjengelig</div>
       <div class="hover-del" onclick="event.stopPropagation()">
-        <button onclick="openLightbox('${imgId}')" title="Vis">🔍</button>
+        <button data-viewonly onclick="openLightbox('${imgId}')" title="Vis">🔍</button>
         <button onclick="document.getElementById('fo_${side}_${idx}').click()" title="Bytt">📷</button>
         <button onclick="slettFoto('${o.id}','${side}',${idx})" title="Slett">🗑</button>
       </div>`;
