@@ -2498,7 +2498,7 @@ function sd(id,f,val) {
 
 function drivstoffKortHTML(o) {
   const df = o.drivstoff||{};
-  const totalpris = parseFloat(df.totalpris||df.literpris)||0;
+  const totalpris = parseFloat(String(df.totalpris||df.literpris||'').replace(',','.'))||0;
   const satsId = df.satsId||'';
   const satser = S.drivstoffSatser||[];
   const sats = satser.find(s=>s.id===satsId);
@@ -2523,7 +2523,7 @@ function drivstoffKortHTML(o) {
   return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div style="flex:1;min-width:120px">
       <label>Totalpris (kr)</label>
-      <input type="number" step="0.01" value="${df.totalpris||df.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)">
+      <input inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${df.totalpris||df.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)">
     </div>
     <div style="flex:2;min-width:160px">
       <label>Sats</label>
