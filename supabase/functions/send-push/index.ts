@@ -18,9 +18,28 @@ const STATUS_NAVN: Record<string, string> = {
   paa_vei:         'På vei',
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 Deno.serve(async (req) => {
+  // Nettlesere sender en tom "preflight"-forespørsel (OPTIONS) før selve POST-kallet
+  // når man kaller funksjonen direkte fra en annen origin med Authorization-header.
+  // Uten dette svaret prøver koden under å JSON-parse den tomme OPTIONS-requesten og krasjer,
+  // og selve POST-kallet med det ekte innholdet blokkeres av nettleseren.
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS })
+  }
+
   try {
-    const payload = await req.json()
+    const raw = await req.text()
+    if (!raw) {
+      console.error('Tom body mottatt. Method:', req.method, 'Headers:', JSON.stringify([...req.headers.entries()]))
+      return new Response('tom body', { status: 400, headers: CORS_HEADERS })
+    }
+    const payload = JSON.parse(raw)
     console.log('Payload type:', payload.type)
 
     const supabase = createClient(
@@ -67,12 +86,12 @@ Deno.serve(async (req) => {
 
     if (!body) {
       console.log('Ingen varsel å sende')
-      return new Response('ingen varsel', { status: 200 })
+      return new Response('ingen varsel', { status: 200, headers: CORS_HEADERS })
     }
 
     const { data: subs, error: subErr } = await supabase.from('push_abonnement').select('*')
     console.log('Abonnenter:', subs?.length ?? 0, subErr?.message ?? '')
-    if (!subs?.length) return new Response('ingen abonnenter', { status: 200 })
+    if (!subs?.length) return new Response('ingen abonnenter', { status: 200, headers: CORS_HEADERS })
 
     const melding = JSON.stringify({ title, body, url: '/salmakern-app2/salmakern.html' })
     console.log('Sender:', melding)
@@ -92,9 +111,9 @@ Deno.serve(async (req) => {
       }
     }))
 
-    return new Response('ok', { status: 200 })
+    return new Response('ok', { status: 200, headers: CORS_HEADERS })
   } catch (e) {
     console.error('Kritisk feil:', e)
-    return new Response(String(e), { status: 500 })
+    return new Response(String(e), { status: 500, headers: CORS_HEADERS })
   }
 })
