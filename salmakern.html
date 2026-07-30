@@ -622,10 +622,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
       <div><label>Kundenavn</label><input id="n_kunde"></div>
       <div><label>Eier</label><input id="n_eier"></div>
-      <div><label>Merke</label><input id="n_merke"></div>
-      <div><label>Type / modell</label><select id="n_type"></select></div>
-      <div><label>Modell</label><input id="n_modell"></div>
-      <div><label>Variant</label><input id="n_variant"></div>
+      <div><label>Merke</label><input id="n_merke" onchange="document.getElementById('n_variantListe').innerHTML=variantDatalistOptions(document.getElementById('n_merke').value+' '+document.getElementById('n_modell').value)"></div>
+      <div><label>Type</label><input id="n_type"></div>
+      <div><label>Modell</label><input id="n_modell" onchange="document.getElementById('n_variantListe').innerHTML=variantDatalistOptions(document.getElementById('n_merke').value+' '+document.getElementById('n_modell').value)"></div>
+      <div><label>Variant</label><input id="n_variant" list="n_variantListe"><datalist id="n_variantListe"></datalist></div>
       <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
       <div><label>Versjon</label><input id="n_versjon"></div>
     </div>
@@ -2106,10 +2106,12 @@ function buildOrdreDetail() {
             </div>
           </div>
           <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
-          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value)"></div>
-          <div><label>Type / modell</label><select onchange="sf('${o.id}','type',this.value)">${modellSelectOptions(o.type||'')}</select></div>
-          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)"></div>
-          <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)"></div>
+          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOrdreVariantForslag('${o.id}')"></div>
+          <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)"></div>
+          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOrdreVariantForslag('${o.id}')"></div>
+          <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)" list="ordreVariantListe_${o.id}">
+            <datalist id="ordreVariantListe_${o.id}">${variantDatalistOptions(merkeModell(o))}</datalist>
+          </div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)"></div>
         </div>
@@ -2387,6 +2389,25 @@ function modellSelectOptions(gjeldende) {
   if (gjeldende && !modeller.includes(gjeldende)) { modeller.push(gjeldende); modeller.sort((a,b)=>a.localeCompare(b,'no')); }
   return `<option value="">– Velg modell –</option>` + modeller.map(m=>`<option value="${esc(m)}" ${m===gjeldende?'selected':''}>${esc(m)}</option>`).join('');
 }
+
+// Foreslåtte varianter for en gitt modell, basert på hvilke varianter det allerede finnes oppskrifter for
+function variantDatalistOptions(biltype) {
+  if (!biltype) return '';
+  const b = biltype.toLowerCase();
+  const varianter = [...new Set((S.lagerOppskrifter||[])
+    .filter(r => r.biltype && (b.includes(r.biltype.toLowerCase()) || r.biltype.toLowerCase().includes(b)))
+    .map(r => r.variant).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+  return varianter.map(v=>`<option value="${esc(v)}">`).join('');
+}
+function oppdaterOrdreVariantForslag(ordreId) {
+  const dl = document.getElementById('ordreVariantListe_' + ordreId);
+  if (!dl) return;
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  dl.innerHTML = variantDatalistOptions(merkeModell(o));
+}
+// Merke + Modell er det som faktisk fylles ut på ordrer i praksis, og brukes derfor
+// som modell-nøkkelen for å matche oppskrifter - ikke det separate Type-feltet.
+function merkeModell(o) { return `${o.merke||''} ${o.modell||''}`.trim(); }
 function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
 
 function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
@@ -2395,7 +2416,7 @@ function sf(id, field, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
-  if (['type','variant'].includes(field)) autoTrekkOppskrift(id);
+  if (['merke','modell','variant'].includes(field)) autoTrekkOppskrift(id);
 }
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -2691,7 +2712,7 @@ function arkiver(id) {
   o.status='arkivert'; logChange(o,'Arkivert'); save(id); renderAll(); tilbakeOrdreList();
 }
 function apneNyOrdreModal() {
-  document.getElementById('n_type').innerHTML = modellSelectOptions('');
+  document.getElementById('n_variantListe').innerHTML = '';
   openModal('nyOrdre');
 }
 
@@ -2717,7 +2738,7 @@ function opprettOrdre() {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
-  if (ny.type) autoTrekkOppskrift(id);
+  if (ny.merke || ny.modell) autoTrekkOppskrift(id);
   openOrdre(id);
 }
 
@@ -5267,11 +5288,11 @@ function slettOppskrift(id) {
 // ════════════════════════════════════════════════════
 // VARER FRA LAGER PÅ ORDRE
 // ════════════════════════════════════════════════════
-// En oppskrift matcher en ordre på modell (Type), og på variant hvis
+// En oppskrift matcher en ordre på modell (Merke + Modell), og på variant hvis
 // oppskriften har spesifisert en (blank variant = gjelder alle varianter).
 function oppskriftMatcherOrdre(r, o) {
   if (!r.biltype) return false;
-  const biltypeTekst = (o.type||'').toLowerCase().trim();
+  const biltypeTekst = merkeModell(o).toLowerCase();
   if (!biltypeTekst) return false;
   const biltypeR = r.biltype.toLowerCase();
   if (!(biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst))) return false;
@@ -5316,10 +5337,11 @@ function renderOrdreLagerbruk() {
       }).filter(Boolean).join(', ')}</div>
     </div>`).join('') : '';
 
+  const modellTekst = merkeModell(o);
   el.innerHTML = `
     ${batchHTML ? `<div class="small muted" style="margin-bottom:6px">Trukket fra lager på denne ordren</div>${batchHTML}` : ''}
-    ${forslagHTML ? `<div class="small muted" style="margin:${batchHTML?'10px':'0'} 0 6px">${batchHTML?'Andre':'Tilgjengelige'} oppskrifter for "${esc(o.type)}"</div>${forslagHTML}` : ''}
-    ${!batchHTML && !forslagHTML ? `<div class="muted small">${o.type ? `Ingen oppskrift funnet for "${esc(o.type)}". Lag en under Lager-fanen.` : 'Sett en modell/type på ordren for å se aktuelle oppskrifter.'}</div>` : ''}
+    ${forslagHTML ? `<div class="small muted" style="margin:${batchHTML?'10px':'0'} 0 6px">${batchHTML?'Andre':'Tilgjengelige'} oppskrifter for "${esc(modellTekst)}"</div>${forslagHTML}` : ''}
+    ${!batchHTML && !forslagHTML ? `<div class="muted small">${modellTekst ? `Ingen oppskrift funnet for "${esc(modellTekst)}". Lag en under Lager-fanen.` : 'Fyll inn Merke og Modell på ordren for å se aktuelle oppskrifter.'}</div>` : ''}
   `;
 }
 
@@ -5344,7 +5366,7 @@ function trekkOppskriftForOrdre(oppskriftId) {
 // Trekker fra lager for alle matchende oppskrifter som ikke allerede er brukt på denne ordren.
 // Kjører stille (ingen bekreftelsesdialog) siden den trigges i bakgrunnen - varsler heller med en toast.
 function autoTrekkOppskrift(ordreId) {
-  const o = S.ordrer.find(x=>x.id===ordreId); if (!o || !o.type) return;
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o || !merkeModell(o)) return;
   const treff = (S.lagerOppskrifter||[]).filter(r => oppskriftMatcherOrdre(r, o));
   if (!treff.length) return;
 
@@ -5544,7 +5566,7 @@ document.querySelectorAll('.modal').forEach(m=>{
     <label>Navn</label>
     <input id="oppskriftNavn" placeholder="F.eks. KIA EV9 standard ombygging">
     <label>Modell</label>
-    <div class="muted small" style="margin-bottom:6px">Samme liste som Type/modell på ordren og biltype på utstyr-maler.</div>
+    <div class="muted small" style="margin-bottom:6px">Matches mot Merke + Modell på ordren. Samme liste som biltype på utstyr-maler.</div>
     <select id="oppskriftBiltype" onchange="oppskriftVisAlleVarer=false;fyllOppskriftVareListe(lesOppskriftIngredienser())"></select>
     <label>Variant (valgfritt)</label>
     <div class="muted small" style="margin-bottom:6px">La stå tom for at oppskriften gjelder alle varianter av modellen. Fyll ut for varianter som bruker andre deler, f.eks. "Med takluke".</div>
