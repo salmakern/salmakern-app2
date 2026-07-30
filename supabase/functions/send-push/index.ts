@@ -10,7 +10,7 @@ webpush.setVapidDetails(`mailto:${VAPID_EMAIL}`, VAPID_PUBLIC, VAPID_PRIVATE)
 const STATUS_NAVN: Record<string, string> = {
   hentet:          'Hentet',
   klar_henting:    'Klar for henting',
-  vist_biltilsyn:  'Vist på biltilsyn',
+  vist_biltilsyn:  'Vist på biltilsynet',
   klar_visning:    'Klar for visning',
   ikke_veid:       'Ikke veid',
   paabegynt:       'Påbegynt',
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
 
     if (payload.type === 'daglig') {
       title = 'Påminnelse'
-      body = 'Husk å starte timer for lønn!'
+      body = 'Husk å starte timer!'
 
     } else if (payload.type === 'UPDATE') {
       const { record, old_record } = payload
@@ -48,14 +48,14 @@ Deno.serve(async (req) => {
 
       if (statusEndret) {
         const statusNavn = STATUS_NAVN[record.ordre_status] || record.ordre_status
-        title = bil
-        body = statusNavn
+        title = 'Statusendring'
+        body = `${bil} er ${statusNavn.toLowerCase()}`
       } else if (vektEndret) {
-        title = bil
-        body = `Veid: ${vektNy} kg`
+        title = 'Vekt registrert'
+        body = `${bil} er veid: ${vektNy} kg`
       } else if (hengerfesteMontertEndret) {
-        title = bil
-        body = 'Hengerfeste montert'
+        title = 'Hengerfeste'
+        body = `${bil} har fått montert hengerfeste`
       }
     } else {
       console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
