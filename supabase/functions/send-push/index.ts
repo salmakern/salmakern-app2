@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
     let body  = ''
 
     if (payload.type === 'daglig') {
+      title = 'Påminnelse'
       body = 'Husk å starte timer for lønn!'
 
     } else if (payload.type === 'UPDATE') {
@@ -47,11 +48,14 @@ Deno.serve(async (req) => {
 
       if (statusEndret) {
         const statusNavn = STATUS_NAVN[record.ordre_status] || record.ordre_status
-        body = `${bil} er ${statusNavn.toLowerCase()}`
+        title = bil
+        body = statusNavn
       } else if (vektEndret) {
-        body = `${bil} er veid: ${vektNy} kg`
+        title = bil
+        body = `Veid: ${vektNy} kg`
       } else if (hengerfesteMontertEndret) {
-        body = `${bil} har fått montert hengerfeste`
+        title = bil
+        body = 'Hengerfeste montert'
       }
     } else {
       console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
