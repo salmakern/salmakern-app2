@@ -61,7 +61,7 @@ self.addEventListener('fetch', e => {
 
 // Push-varsler
 self.addEventListener('push', e => {
-  let data = { title: '🚗 Salmakern', body: 'Ny oppdatering' };
+  let data = { title: "🚗 Salmaker'n", body: 'Ny oppdatering' };
   try { data = e.data?.json() || data; } catch(_) {}
   e.waitUntil(
     self.registration.showNotification(data.title, {
