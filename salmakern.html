@@ -227,6 +227,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="tab" onclick="showPage('ordre',this)">Ordre</button>
         <button class="tab" id="timerTab" onclick="showPage('timer',this)">Timer</button>
         <button class="tab" onclick="showPage('arkiv',this)">Ordrearkiv</button>
+        <button class="tab" onclick="showPage('lager',this)">Lager</button>
         <button class="tab" onclick="showPage('mer',this)">Mer</button>
       </div>
     </div>
@@ -258,7 +259,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="card">
         <div class="row">
           <div><div class="h">Ikke påbegynt</div><div class="muted small">Venter på kalender</div></div>
-          <button class="btn red" onclick="openModal('nyOrdre')">+ Ny ordre</button>
+          <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
         </div>
         <div class="grid g3" style="margin-top:12px" id="pendingList"></div>
       </div>
@@ -361,6 +362,97 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             </label>
           </div>
           <div id="arkivFerdig" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LAGER ── -->
+    <section id="lager" class="page">
+      <div id="lagerListeView">
+        <div class="card">
+          <div class="row">
+            <div>
+              <div class="h">Oppskrifter</div>
+              <div class="muted small">Hvilke deler som går med per modell og variant.</div>
+            </div>
+            <button class="btn sm red" onclick="visOppskriftModeller()">Åpne oppskrifter</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <div><div class="h">Varelager</div><div id="lagerVarselBadge" class="muted small"></div></div>
+            <button class="btn red" onclick="apneNyVare()">+ Ny vare</button>
+          </div>
+          <div style="margin-top:10px">
+            <input id="lagerSokInput" type="search" placeholder="Søk vare, kategori eller leverandør..." oninput="renderLagerListe()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+          </div>
+        </div>
+        <div id="lagerListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="oppskriftModellerView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeLagerListe()">← Lager</button>
+        <div class="card">
+          <div class="h">Oppskrifter per modell</div>
+          <div class="muted small">Velg en modell for å se varianter og hvilke deler som brukes.</div>
+        </div>
+        <div id="oppskriftModellerListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="oppskriftModellDetaljView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraOppskriftModell()">← Alle modeller</button>
+        <div class="card">
+          <div class="h" id="oppskriftModellTittel">–</div>
+          <div class="muted small" style="margin-top:4px">Generell oversikt – alle deler som brukes på tvers av varianter</div>
+          <div id="oppskriftModellGenerellOversikt" style="margin-top:8px"></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="row">
+            <div class="h">Varianter</div>
+            <button class="btn sm red" onclick="apneNyOppskrift(oppskriftAktivModell)">+ Ny variant</button>
+          </div>
+          <div id="oppskriftVariantListeKort" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="kategoriDetaljView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeLagerListe()">← Alle kategorier</button>
+        <div class="card">
+          <div class="row">
+            <div class="h" id="kategoriDetaljTittel">–</div>
+            <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
+          </div>
+        </div>
+        <div id="kategoriVareListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="vareDetaljView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" id="vareDetaljTilbakeBtn" onclick="tilbakeFraVareDetalj()">← Alle varer</button>
+        <div class="card">
+          <div class="row" style="margin-bottom:6px;align-items:flex-start">
+            <div>
+              <b id="vareDetaljNavn" style="font-size:18px">–</b>
+              <div class="small muted" id="vareDetaljUndertekst"></div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="btn sm" onclick="apneRedigerVare()">✎ Rediger</button>
+              <button class="btn sm red" onclick="slettVare()">🗑 Slett</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0">
+            <span class="title" id="vareDetaljAntall">0</span>
+            <span class="muted small" id="vareDetaljEnhet"></span>
+          </div>
+          <div id="vareLavLagerVarsel" class="small" style="margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn sm" style="flex:1" onclick="fyllPaLager()">+ Fyll på</button>
+            <button class="btn sm" style="flex:1" onclick="taUtFraLager()">− Ta ut</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h">Historikk</div>
+          <div id="vareHistorikkListe" style="margin-top:8px"></div>
         </div>
       </div>
     </section>
@@ -531,7 +623,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div><label>Kundenavn</label><input id="n_kunde"></div>
       <div><label>Eier</label><input id="n_eier"></div>
       <div><label>Merke</label><input id="n_merke"></div>
-      <div><label>Type</label><input id="n_type"></div>
+      <div><label>Type / modell</label><select id="n_type"></select></div>
       <div><label>Modell</label><input id="n_modell"></div>
       <div><label>Variant</label><input id="n_variant"></div>
       <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
@@ -804,6 +896,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.beskjeder        = S.beskjeder        || [];
     S.kontakter        = S.kontakter        || [];
     S.hms              = S.hms              || [];
+    S.flater           = S.flater           || [];
+    S.lagervarer       = S.lagervarer       || [];
+    S.lagerhistorikk   = S.lagerhistorikk   || [];
+    S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.ordrer = (S.ordrer||[]).map(o => ({
       ...o,
       utstyrSjekkliste:   o.utstyrSjekkliste   || [],
@@ -909,6 +1005,17 @@ async function loadFromSupabase() {
     const fR = await db.from('flater').select('*').order('created_at');
     if (!fR.error) S.flater = (fR.data||[]).map(dbToFlate);
   } catch(_) {}
+  // Varelager hentes for seg selv - tabellene finnes kanskje ikke ennå (krever eget SQL-oppsett)
+  try {
+    const [lvR, lhR, loR] = await Promise.all([
+      db.from('lagervarer').select('*').order('navn'),
+      db.from('lagerhistorikk').select('*').order('created_at', {ascending:false}).limit(500),
+      db.from('lager_oppskrifter').select('*').order('navn')
+    ]);
+    if (!lvR.error) S.lagervarer = (lvR.data||[]).map(dbToLagervare);
+    if (!lhR.error) S.lagerhistorikk = (lhR.data||[]).map(dbToLagerhistorikk);
+    if (!loR.error) S.lagerOppskrifter = (loR.data||[]).map(dbToLagerOppskrift);
+  } catch(_) {}
 }
 
 function dbToOrdre(r) {
@@ -960,6 +1067,15 @@ function ordreToDb(o) {
 }
 function dbToFlate(r) {
   return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'' };
+}
+function dbToLagervare(r) {
+  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', leverandor:r.leverandor||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', createdAt:r.created_at||'' };
+}
+function dbToLagerhistorikk(r) {
+  return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
+}
+function dbToLagerOppskrift(r) {
+  return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', variant:r.variant||'', ingredienser:r.ingredienser||[], createdAt:r.created_at||'' };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
@@ -1036,6 +1152,43 @@ function subscribeRealtime() {
       if (document.getElementById('flaterModal')?.classList.contains('show')) {
         aktivFlateId ? renderFlateDetalj() : renderFlaterListe();
       }
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'lagervarer'}, p => {
+      S.lagervarer = S.lagervarer || [];
+      if (p.eventType==='INSERT') {
+        if (!S.lagervarer.find(v=>v.id===p.new.id)) S.lagervarer.push(dbToLagervare(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.lagervarer.findIndex(v=>v.id===p.new.id); if(i>=0) S.lagervarer[i]=dbToLagervare(p.new);
+      } else if (p.eventType==='DELETE') {
+        S.lagervarer = S.lagervarer.filter(v=>v.id!==p.old.id);
+      }
+      oppdaterLagerVarselBadge();
+      if (document.getElementById('lager')?.classList.contains('active')) {
+        aktivVareId ? renderVareDetalj() : renderLagerListe();
+      }
+      if (activeOrdreId) renderOrdreLagerbruk();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'lagerhistorikk'}, p => {
+      S.lagerhistorikk = S.lagerhistorikk || [];
+      if (p.eventType==='INSERT') {
+        if (!S.lagerhistorikk.find(h=>h.id===p.new.id)) S.lagerhistorikk.unshift(dbToLagerhistorikk(p.new));
+      } else if (p.eventType==='DELETE') {
+        S.lagerhistorikk = S.lagerhistorikk.filter(h=>h.id!==p.old.id);
+      }
+      if (document.getElementById('lager')?.classList.contains('active') && aktivVareId) renderVareDetalj();
+      if (activeOrdreId) renderOrdreLagerbruk();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'lager_oppskrifter'}, p => {
+      S.lagerOppskrifter = S.lagerOppskrifter || [];
+      if (p.eventType==='INSERT') {
+        if (!S.lagerOppskrifter.find(o=>o.id===p.new.id)) S.lagerOppskrifter.push(dbToLagerOppskrift(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.lagerOppskrifter.findIndex(o=>o.id===p.new.id); if(i>=0) S.lagerOppskrifter[i]=dbToLagerOppskrift(p.new);
+      } else if (p.eventType==='DELETE') {
+        S.lagerOppskrifter = S.lagerOppskrifter.filter(o=>o.id!==p.old.id);
+      }
+      if (document.getElementById('lager')?.classList.contains('active')) refreshOppskriftVisning();
+      if (activeOrdreId) renderOrdreLagerbruk();
     })
     .subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {
@@ -1233,6 +1386,7 @@ function defaultData() {
     ],
     timer: [],
     flater: [],
+    lagervarer: [], lagerhistorikk: [], lagerOppskrifter: [],
     nextId: 10,
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
@@ -1417,6 +1571,7 @@ async function togglePushVarsler() {
 // ════════════════════════════════════════════════════
 function showPage(id, btn) {
   if (id === 'ordre') activeOrdreId = null;
+  if (id === 'lager') aktivVareId = null;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
@@ -1425,6 +1580,7 @@ function showPage(id, btn) {
   if (id==='ordre')    renderOrdreList();
   if (id==='timer')    { renderTimerHistorikk(); renderTimerMaaned(); }
   if (id==='arkiv')    renderArkiv();
+  if (id==='lager')    { aktivKategori=null; oppskriftAktivModell=null; document.getElementById('lagerListeView').style.display='block'; document.getElementById('kategoriDetaljView').style.display='none'; document.getElementById('vareDetaljView').style.display='none'; document.getElementById('oppskriftModellerView').style.display='none'; document.getElementById('oppskriftModellDetaljView').style.display='none'; renderLagerListe(); }
   if (id==='mer')      renderMer();
 }
 function renderAll() { renderOversikt(); renderArkiv(); renderMer(); renderOrdreList(); }
@@ -1464,7 +1620,7 @@ function renderOrdreList() {
     <div class="card">
       <div class="row">
         <div><div class="h">Alle ordrer</div><div class="muted small">${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne</div></div>
-        <button class="btn red" onclick="openModal('nyOrdre')">+ Ny ordre</button>
+        <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
       </div>
       <div style="margin-top:10px">
         <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype..." oninput="renderOrdreList()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
@@ -1951,7 +2107,7 @@ function buildOrdreDetail() {
           </div>
           <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
           <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value)"></div>
-          <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)"></div>
+          <div><label>Type / modell</label><select onchange="sf('${o.id}','type',this.value)">${modellSelectOptions(o.type||'')}</select></div>
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value)"></div>
           <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)"></div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
@@ -1996,6 +2152,11 @@ function buildOrdreDetail() {
             </label>
           `).join('')}
         </div>
+      </div>
+
+      <div class="card">
+        <div class="h">Varer fra lager</div>
+        <div id="ordreLagerbruk_${o.id}" style="margin-top:8px"></div>
       </div>
 
       <div class="card">
@@ -2153,6 +2314,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
     </div>
   </div>`;
+  renderOrdreLagerbruk();
   if (o.status === 'arkivert') {
     const detail = document.getElementById('ordreDetail');
     const header = detail.firstElementChild;
@@ -2215,6 +2377,16 @@ function sfOmbygging(id, felt, val) {
 // ════════════════════════════════════════════════════
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function ordreLabel(o){ return o.regnr || (o.chassis ? 'Chassis: '+o.chassis : 'Uten reg.nr'); }
+
+// Kjente modeller = biltype-feltet på utstyr-malene, siden de allerede er satt opp per modell
+function alleKjenteModeller() {
+  return [...new Set((S.utstyrMaler||[]).map(m=>m.biltype).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+}
+function modellSelectOptions(gjeldende) {
+  const modeller = alleKjenteModeller();
+  if (gjeldende && !modeller.includes(gjeldende)) { modeller.push(gjeldende); modeller.sort((a,b)=>a.localeCompare(b,'no')); }
+  return `<option value="">– Velg modell –</option>` + modeller.map(m=>`<option value="${esc(m)}" ${m===gjeldende?'selected':''}>${esc(m)}</option>`).join('');
+}
 function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
 
 function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
@@ -2223,6 +2395,7 @@ function sf(id, field, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
+  if (['type','variant'].includes(field)) autoTrekkOppskrift(id);
 }
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -2517,6 +2690,11 @@ function arkiver(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
   o.status='arkivert'; logChange(o,'Arkivert'); save(id); renderAll(); tilbakeOrdreList();
 }
+function apneNyOrdreModal() {
+  document.getElementById('n_type').innerHTML = modellSelectOptions('');
+  openModal('nyOrdre');
+}
+
 function opprettOrdre() {
   const regnr  = document.getElementById('n_regnr').value.trim().toUpperCase();
   const chassis= document.getElementById('n_chassis').value.trim();
@@ -2529,6 +2707,7 @@ function opprettOrdre() {
     document.getElementById('n_variant').value.trim(),
     document.getElementById('n_dato').value||new Date().toISOString().split('T')[0],'','','','');
   ny.merke   = document.getElementById('n_merke').value.trim();
+  ny.type    = document.getElementById('n_type').value.trim();
   ny.modell  = document.getElementById('n_modell').value.trim();
   ny.versjon = document.getElementById('n_versjon').value.trim();
   ny.chassis = chassis;
@@ -2538,6 +2717,7 @@ function opprettOrdre() {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
+  if (ny.type) autoTrekkOppskrift(id);
   openOrdre(id);
 }
 
@@ -4615,6 +4795,595 @@ function slettFlate() {
 }
 
 // ════════════════════════════════════════════════════
+// VARELAGER
+// ════════════════════════════════════════════════════
+let aktivVareId = null;
+
+function fmtAntall(n) {
+  n = Number(n)||0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/,'');
+}
+
+function oppdaterLagerVarselBadge() {
+  const el = document.getElementById('lagerVarselBadge');
+  if (!el) return;
+  const varer = S.lagervarer||[];
+  const lave = varer.filter(v => v.minAntall > 0 && v.antall <= v.minAntall);
+  el.innerHTML = lave.length
+    ? `<span style="color:#f87171">⚠ ${lave.length} vare${lave.length===1?'':'r'} har lav beholdning</span>`
+    : `${varer.length} vare${varer.length===1?'':'r'} på lager`;
+}
+
+let aktivKategori = null;
+
+function renderLagerListe() {
+  oppdaterLagerVarselBadge();
+  const el = document.getElementById('lagerListe');
+  const sok = (document.getElementById('lagerSokInput')?.value||'').toLowerCase().trim();
+  let varer = (S.lagervarer||[]).slice().sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
+
+  const dl = document.getElementById('lagerKategoriListe');
+  if (dl) {
+    const alleKat = [...new Set((S.lagervarer||[]).map(v=>v.kategori).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+    dl.innerHTML = alleKat.map(k=>`<option value="${esc(k)}">`).join('');
+  }
+
+  if (sok) {
+    // Ved søk: vis treffene direkte, uten å måtte inn i en kategori
+    varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.leverandor||'').toLowerCase().includes(sok));
+    el.innerHTML = varer.length ? `<div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>` : '<div class="card"><div class="muted small">Ingen varer funnet</div></div>';
+    return;
+  }
+
+  if (!varer.length) { el.innerHTML = '<div class="card"><div class="muted small">Ingen varer i lageret ennå</div></div>'; return; }
+
+  const grupper = {};
+  varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
+  const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
+
+  el.innerHTML = `<div class="grid g3">${kategorier.map(kat => {
+    const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall).length;
+    return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${kat.replace(/'/g,"\\'")}')">
+      <div class="row">
+        <b>${esc(kat)}</b>
+        <span style="color:#a1a1aa">›</span>
+      </div>
+      <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'}${lavtIKat?` · <span style="color:#f87171">⚠ ${lavtIKat} lav</span>`:''}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function vareBoksHTML(v) {
+  const lavt = v.minAntall > 0 && v.antall <= v.minAntall;
+  return `<div class="box" style="cursor:pointer;${lavt?'border-color:#ef4444':''}" onclick="visVareDetalj('${v.id}')">
+    <div class="row">
+      <b>${esc(v.navn)}</b>
+      <span style="font-weight:700;${lavt?'color:#f87171':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
+    </div>
+    ${v.leverandor?`<div class="small muted" style="margin-top:2px">${esc(v.leverandor)}</div>`:''}
+    ${lavt?'<div class="small" style="color:#f87171;margin-top:4px">⚠ Lav beholdning</div>':''}
+  </div>`;
+}
+
+function visKategoriDetalj(kat) {
+  aktivKategori = kat;
+  document.getElementById('lagerListeView').style.display = 'none';
+  document.getElementById('kategoriDetaljView').style.display = 'block';
+  document.getElementById('vareDetaljView').style.display = 'none';
+  renderKategoriDetalj();
+  window.scrollTo(0, 0);
+}
+
+function renderKategoriDetalj() {
+  if (!aktivKategori) return;
+  document.getElementById('kategoriDetaljTittel').textContent = aktivKategori;
+  const varer = (S.lagervarer||[]).filter(v => (v.kategori || 'Uten kategori') === aktivKategori).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
+  const el = document.getElementById('kategoriVareListe');
+  el.innerHTML = varer.length ? `<div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>` : '<div class="card"><div class="muted small">Ingen varer i denne kategorien ennå</div></div>';
+}
+
+function apneNyVareIKategori() {
+  apneNyVare();
+  if (aktivKategori && aktivKategori !== 'Uten kategori') document.getElementById('nyVareKategori').value = aktivKategori;
+}
+
+function apneNyVare() {
+  document.getElementById('nyVareModalTittel').textContent = 'Ny vare';
+  document.getElementById('redigerVareId').value = '';
+  document.getElementById('nyVareNavn').value = '';
+  document.getElementById('nyVareKategori').value = '';
+  document.getElementById('nyVareLeverandor').value = '';
+  document.getElementById('nyVareAntall').value = '0';
+  document.getElementById('nyVareAntall').disabled = false;
+  document.getElementById('nyVareEnhet').value = 'stk';
+  document.getElementById('nyVareMinAntall').value = '0';
+  document.getElementById('nyVareNotat').value = '';
+  openModal('nyVareModal');
+}
+
+function apneRedigerVare() {
+  const v = (S.lagervarer||[]).find(x=>x.id===aktivVareId); if (!v) return;
+  document.getElementById('nyVareModalTittel').textContent = 'Rediger vare';
+  document.getElementById('redigerVareId').value = v.id;
+  document.getElementById('nyVareNavn').value = v.navn;
+  document.getElementById('nyVareKategori').value = v.kategori||'';
+  document.getElementById('nyVareLeverandor').value = v.leverandor||'';
+  document.getElementById('nyVareAntall').value = v.antall;
+  document.getElementById('nyVareAntall').disabled = true; // antall endres via Fyll på/Ta ut, ikke her
+  document.getElementById('nyVareEnhet').value = v.enhet||'stk';
+  document.getElementById('nyVareMinAntall').value = v.minAntall||0;
+  document.getElementById('nyVareNotat').value = v.notat||'';
+  openModal('nyVareModal');
+}
+
+function lagreVare() {
+  const navn = document.getElementById('nyVareNavn').value.trim();
+  if (!navn) { alert('Skriv inn et navn på varen'); return; }
+  const redigerId  = document.getElementById('redigerVareId').value;
+  const kategori   = document.getElementById('nyVareKategori').value.trim();
+  const leverandor = document.getElementById('nyVareLeverandor').value.trim();
+  const enhet      = document.getElementById('nyVareEnhet').value.trim() || 'stk';
+  const minAntall  = Number(document.getElementById('nyVareMinAntall').value) || 0;
+  const notat      = document.getElementById('nyVareNotat').value.trim();
+
+  if (redigerId) {
+    const v = (S.lagervarer||[]).find(x=>x.id===redigerId); if (!v) return;
+    v.navn = navn; v.kategori = kategori; v.leverandor = leverandor; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
+    if (db) db.from('lagervarer').update({navn, kategori, leverandor, enhet, min_antall:minAntall, notat}).eq('id', v.id)
+      .then(r=>{if(r.error) console.error('Lagervare-oppdatering feilet:', r.error.message);});
+    closeModal('nyVareModal');
+    renderVareDetalj();
+  } else {
+    const antall = Number(document.getElementById('nyVareAntall').value) || 0;
+    const id = 'vare_' + Date.now();
+    const vare = { id, navn, kategori, leverandor, antall, enhet, minAntall, notat, createdAt:new Date().toISOString() };
+    S.lagervarer = S.lagervarer || [];
+    S.lagervarer.push(vare);
+    if (db) db.from('lagervarer').insert({id, navn, kategori, leverandor, antall, enhet, min_antall:minAntall, notat})
+      .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
+    closeModal('nyVareModal');
+    renderLagerListe();
+  }
+}
+
+function slettVare() {
+  const v = (S.lagervarer||[]).find(x=>x.id===aktivVareId); if (!v) return;
+  if (!confirm(`Slette "${v.navn}" fra varelageret? Historikken beholdes, men varen forsvinner fra listen.`)) return;
+  S.lagervarer = (S.lagervarer||[]).filter(x=>x.id!==v.id);
+  if (db) db.from('lagervarer').delete().eq('id', v.id)
+    .then(r=>{if(r.error) console.error('Sletting av lagervare feilet:', r.error.message);});
+  tilbakeLagerListe();
+}
+
+function visVareDetalj(id) {
+  aktivVareId = id;
+  document.getElementById('lagerListeView').style.display = 'none';
+  document.getElementById('kategoriDetaljView').style.display = 'none';
+  document.getElementById('vareDetaljView').style.display = 'block';
+  document.getElementById('vareDetaljTilbakeBtn').textContent = aktivKategori ? '← ' + aktivKategori : '← Alle varer';
+  renderVareDetalj();
+  window.scrollTo(0, 0);
+}
+
+function tilbakeFraVareDetalj() {
+  aktivVareId = null;
+  if (aktivKategori) {
+    document.getElementById('vareDetaljView').style.display = 'none';
+    document.getElementById('kategoriDetaljView').style.display = 'block';
+    renderKategoriDetalj();
+  } else {
+    tilbakeLagerListe();
+  }
+}
+
+function tilbakeLagerListe() {
+  aktivVareId = null;
+  aktivKategori = null;
+  oppskriftAktivModell = null;
+  document.getElementById('lagerListeView').style.display = 'block';
+  document.getElementById('kategoriDetaljView').style.display = 'none';
+  document.getElementById('vareDetaljView').style.display = 'none';
+  document.getElementById('oppskriftModellerView').style.display = 'none';
+  document.getElementById('oppskriftModellDetaljView').style.display = 'none';
+  renderLagerListe();
+}
+
+function renderVareDetalj() {
+  const v = (S.lagervarer||[]).find(x=>x.id===aktivVareId);
+  if (!v) { tilbakeLagerListe(); return; }
+  document.getElementById('vareDetaljNavn').textContent = v.navn;
+  document.getElementById('vareDetaljUndertekst').textContent = [v.kategori, v.leverandor].filter(Boolean).join(' · ');
+  document.getElementById('vareDetaljAntall').textContent = fmtAntall(v.antall);
+  document.getElementById('vareDetaljEnhet').textContent = v.enhet;
+  const lavt = v.minAntall > 0 && v.antall <= v.minAntall;
+  document.getElementById('vareLavLagerVarsel').innerHTML = lavt
+    ? `<span style="color:#f87171">⚠ Lav beholdning (varsler ved ${fmtAntall(v.minAntall)} ${esc(v.enhet)})</span>`
+    : (v.notat ? `<span class="muted">${esc(v.notat)}</span>` : '');
+
+  const historikk = (S.lagerhistorikk||[]).filter(h=>h.vareId===v.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const el = document.getElementById('vareHistorikkListe');
+  el.innerHTML = historikk.length ? historikk.slice(0,50).map(h => {
+    const positiv = h.endring > 0;
+    const o = h.ordreId ? S.ordrer.find(x=>x.id===h.ordreId) : null;
+    const tid = h.createdAt ? new Date(h.createdAt).toLocaleString('no-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    return `<div class="box" style="margin-bottom:5px;padding:8px 10px">
+      <div class="row">
+        <div class="small">${tid} · ${esc(h.ansattNavn||'—')}</div>
+        <b style="color:${positiv?'#4ade80':'#f87171'}">${positiv?'+':''}${fmtAntall(h.endring)}</b>
+      </div>
+      ${(o || h.kommentar) ? `<div class="small muted" style="margin-top:2px">${o?`Ordre: ${esc(ordreLabel(o))}`:''}${o && h.kommentar?' · ':''}${esc(h.kommentar||'')}</div>` : ''}
+    </div>`;
+  }).join('') : '<div class="muted small">Ingen historikk ennå</div>';
+}
+
+function fyllPaLager() {
+  document.getElementById('lagerEndringTittel').textContent = 'Fyll på lager';
+  document.getElementById('lagerEndringVareId').value = aktivVareId;
+  document.getElementById('lagerEndringFortegn').value = '1';
+  document.getElementById('lagerEndringAntall').value = '';
+  document.getElementById('lagerEndringKommentar').value = '';
+  openModal('lagerEndringModal');
+}
+function taUtFraLager() {
+  document.getElementById('lagerEndringTittel').textContent = 'Ta ut fra lager';
+  document.getElementById('lagerEndringVareId').value = aktivVareId;
+  document.getElementById('lagerEndringFortegn').value = '-1';
+  document.getElementById('lagerEndringAntall').value = '';
+  document.getElementById('lagerEndringKommentar').value = '';
+  openModal('lagerEndringModal');
+}
+function lagreLagerEndring() {
+  const vareId    = document.getElementById('lagerEndringVareId').value;
+  const fortegn   = Number(document.getElementById('lagerEndringFortegn').value) || 1;
+  const antallRaw = Number(document.getElementById('lagerEndringAntall').value);
+  const kommentar = document.getElementById('lagerEndringKommentar').value.trim();
+  if (!antallRaw || antallRaw <= 0) { alert('Skriv inn et antall større enn 0'); return; }
+  const v = (S.lagervarer||[]).find(x=>x.id===vareId); if (!v) return;
+  const endring = fortegn * antallRaw;
+  if (endring < 0 && v.antall + endring < 0) {
+    if (!confirm(`Det er kun ${fmtAntall(v.antall)} ${v.enhet} igjen. Fortsett og gå i minus?`)) return;
+  }
+  registrerLagerEndring(v, endring, endring>0?'inn':'ut', null, kommentar);
+  closeModal('lagerEndringModal');
+  renderVareDetalj();
+}
+
+function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
+  v.antall = (Number(v.antall)||0) + endring;
+  if (db) db.from('lagervarer').update({antall:v.antall}).eq('id', v.id)
+    .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
+  const hId = 'lh_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+  const hist = { id:hId, vareId:v.id, vareNavn:v.navn, endring, type, ordreId:ordreId||null, batchId:batchId||null, ansattNavn: me?me.navn:'', kommentar:kommentar||'', createdAt:new Date().toISOString() };
+  S.lagerhistorikk = S.lagerhistorikk || [];
+  S.lagerhistorikk.unshift(hist);
+  if (db) db.from('lagerhistorikk').insert({id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''})
+    .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
+  oppdaterLagerVarselBadge();
+  return hist;
+}
+
+// ════════════════════════════════════════════════════
+// LAGER-OPPSKRIFTER
+// ════════════════════════════════════════════════════
+let oppskriftAktivModell = null;
+
+function refreshOppskriftVisning() {
+  if (oppskriftAktivModell && document.getElementById('oppskriftModellDetaljView')?.style.display !== 'none') {
+    renderOppskriftModellDetalj();
+  } else if (document.getElementById('oppskriftModellerView')?.style.display !== 'none') {
+    renderOppskriftModellerListe();
+  }
+}
+
+function visOppskriftModeller() {
+  oppskriftAktivModell = null;
+  document.getElementById('lagerListeView').style.display = 'none';
+  document.getElementById('kategoriDetaljView').style.display = 'none';
+  document.getElementById('vareDetaljView').style.display = 'none';
+  document.getElementById('oppskriftModellDetaljView').style.display = 'none';
+  document.getElementById('oppskriftModellerView').style.display = 'block';
+  renderOppskriftModellerListe();
+  window.scrollTo(0, 0);
+}
+
+function renderOppskriftModellerListe() {
+  const el = document.getElementById('oppskriftModellerListe');
+  const modeller = [...new Set([...alleKjenteModeller(), ...(S.lagerOppskrifter||[]).map(o=>o.biltype).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'no'));
+  if (!modeller.length) { el.innerHTML = '<div class="card"><div class="muted small">Ingen modeller ennå. Lag en utstyr-mal med en biltype under Mer først.</div></div>'; return; }
+  el.innerHTML = `<div class="grid g3">${modeller.map(m => {
+    const varianter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===m);
+    return `<div class="box" style="cursor:pointer" onclick="visOppskriftModell('${m.replace(/'/g,"\\'")}')">
+      <div class="row"><b>${esc(m)}</b><span style="color:#a1a1aa">›</span></div>
+      <div class="small muted" style="margin-top:2px">${varianter.length ? varianter.length+' variant'+(varianter.length===1?'':'er') : 'Ingen oppskrift ennå'}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function visOppskriftModell(modell) {
+  oppskriftAktivModell = modell;
+  document.getElementById('oppskriftModellerView').style.display = 'none';
+  document.getElementById('oppskriftModellDetaljView').style.display = 'block';
+  renderOppskriftModellDetalj();
+  window.scrollTo(0, 0);
+}
+
+function tilbakeFraOppskriftModell() {
+  document.getElementById('oppskriftModellDetaljView').style.display = 'none';
+  visOppskriftModeller();
+}
+
+function renderOppskriftModellDetalj() {
+  const modell = oppskriftAktivModell; if (!modell) return;
+  document.getElementById('oppskriftModellTittel').textContent = modell;
+  const varianter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===modell).sort((a,b)=>(a.variant||'').localeCompare(b.variant||'','no'));
+
+  // Generell oversikt: alle deler brukt i minst én variant av modellen, uavhengig av hvilken
+  const delerMap = {};
+  varianter.forEach(o => (o.ingredienser||[]).forEach(i => {
+    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
+    (delerMap[i.vareId] = delerMap[i.vareId] || {navn:v.navn, enhet:v.enhet, bruk:[]}).bruk.push({variant:o.variant||'Generelt', antall:i.antall});
+  }));
+  const generellEl = document.getElementById('oppskriftModellGenerellOversikt');
+  const delerListe = Object.values(delerMap).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
+  generellEl.innerHTML = delerListe.length ? delerListe.map(d => `
+    <div class="box" style="margin-bottom:5px;padding:8px 10px">
+      <b>${esc(d.navn)}</b>
+      <div class="small muted" style="margin-top:2px">${d.bruk.map(b=>`${fmtAntall(b.antall)} ${esc(d.enhet)} – ${esc(b.variant)}`).join(', ')}</div>
+    </div>`).join('') : '<div class="muted small">Ingen deler lagt til på noen variant ennå</div>';
+
+  const variantEl = document.getElementById('oppskriftVariantListeKort');
+  variantEl.innerHTML = varianter.length ? varianter.map(o => `
+    <div class="box" style="margin-bottom:6px;padding:10px">
+      <div class="row">
+        <b>${o.variant ? esc(o.variant) : 'Generelt (alle varianter)'}</b>
+        <div style="display:flex;gap:6px">
+          <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎ Rediger</button>
+          <button class="btn sm red" onclick="slettOppskrift('${o.id}')">🗑</button>
+        </div>
+      </div>
+      <div class="small muted" style="margin-top:4px">${(o.ingredienser||[]).map(i=>{
+        const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
+        return v ? `${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}` : null;
+      }).filter(Boolean).join(', ') || 'Ingen deler lagt til'}</div>
+    </div>`).join('') : '<div class="muted small">Ingen varianter opprettet ennå for denne modellen</div>';
+}
+
+let oppskriftVisAlleVarer = false;
+
+function fyllOppskriftVareListe(forhaandsvalgt) {
+  forhaandsvalgt = forhaandsvalgt || {};
+  const biltype = document.getElementById('oppskriftBiltype').value;
+  const el = document.getElementById('oppskriftIngrediensListe');
+  let varer = (S.lagervarer||[]).slice();
+  const iKategori = biltype ? varer.filter(v => (v.kategori||'').toLowerCase() === biltype.toLowerCase()) : [];
+  const brukAlle = oppskriftVisAlleVarer || !biltype || !iKategori.length;
+  varer = (brukAlle ? varer : iKategori).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
+
+  if (!varer.length) {
+    el.innerHTML = '<div class="muted small">Ingen varer i lageret ennå. Legg til varer under Lager først.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    ${(!brukAlle || (biltype && iKategori.length)) ? `<div class="small" style="margin-bottom:6px">
+      <a href="#" onclick="event.preventDefault();oppskriftVisAlleVarer=!oppskriftVisAlleVarer;fyllOppskriftVareListe(lesOppskriftIngredienser());" style="color:#f87171">
+        ${oppskriftVisAlleVarer ? '↩ Vis kun varer i "'+esc(biltype)+'"-kategorien' : '+ Vis alle varer i lageret (ikke bare "'+esc(biltype)+'")'}
+      </a>
+    </div>` : ''}
+    ${varer.map(v => {
+      const valgt = forhaandsvalgt[v.id] != null;
+      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a">
+        <input type="checkbox" class="oppskrift-vare-chk" data-vare-id="${v.id}" ${valgt?'checked':''} onchange="this.nextElementSibling.style.display=this.checked?'inline-block':'none'" style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+        <input type="number" class="oppskrift-vare-antall" min="0" step="any" value="${valgt?forhaandsvalgt[v.id]:1}" style="width:64px;display:${valgt?'inline-block':'none'};flex-shrink:0">
+        <span style="font-size:13px;flex:1">${esc(v.navn)} <span class="muted small">(${esc(v.enhet)})</span></span>
+      </label>`;
+    }).join('')}
+  `;
+}
+
+function lesOppskriftIngredienser() {
+  const valgt = {};
+  document.querySelectorAll('#oppskriftIngrediensListe .oppskrift-vare-chk').forEach(chk => {
+    if (chk.checked) valgt[chk.dataset.vareId] = Number(chk.nextElementSibling.value) || 1;
+  });
+  return valgt;
+}
+
+function fyllVariantForslag() {
+  const dl = document.getElementById('oppskriftVariantListe');
+  if (!dl) return;
+  const fraOppskrifter = (S.lagerOppskrifter||[]).map(o=>o.variant).filter(Boolean);
+  const fraOrdrer = (S.ordrer||[]).map(o=>o.variant).filter(Boolean);
+  const alle = [...new Set([...fraOppskrifter, ...fraOrdrer])].sort((a,b)=>a.localeCompare(b,'no'));
+  dl.innerHTML = alle.map(v=>`<option value="${esc(v)}">`).join('');
+}
+
+function apneNyOppskrift(forhaandsvalgtModell) {
+  if (!(S.lagervarer||[]).length) { alert('Legg til minst én vare i lageret først'); return; }
+  document.getElementById('oppskriftModalTittel').textContent = 'Ny oppskrift';
+  document.getElementById('redigerOppskriftId').value = '';
+  document.getElementById('oppskriftNavn').value = '';
+  document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(forhaandsvalgtModell||'');
+  document.getElementById('oppskriftVariant').value = '';
+  fyllVariantForslag();
+  oppskriftVisAlleVarer = false;
+  fyllOppskriftVareListe();
+  openModal('nyOppskriftModal');
+}
+
+function apneRedigerOppskrift(id) {
+  const o = (S.lagerOppskrifter||[]).find(x=>x.id===id); if (!o) return;
+  document.getElementById('oppskriftModalTittel').textContent = 'Rediger oppskrift';
+  document.getElementById('redigerOppskriftId').value = o.id;
+  document.getElementById('oppskriftNavn').value = o.navn;
+  document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(o.biltype||'');
+  document.getElementById('oppskriftVariant').value = o.variant||'';
+  fyllVariantForslag();
+  oppskriftVisAlleVarer = false;
+  const forhaandsvalgt = {};
+  (o.ingredienser||[]).forEach(i => forhaandsvalgt[i.vareId] = i.antall);
+  fyllOppskriftVareListe(forhaandsvalgt);
+  openModal('nyOppskriftModal');
+}
+
+function lagreOppskrift() {
+  const navn = document.getElementById('oppskriftNavn').value.trim();
+  if (!navn) { alert('Skriv inn et navn på oppskriften'); return; }
+  const biltype = document.getElementById('oppskriftBiltype').value.trim();
+  const variant = document.getElementById('oppskriftVariant').value.trim();
+  const editId = document.getElementById('redigerOppskriftId').value;
+  const valgt = lesOppskriftIngredienser();
+  const ingredienser = Object.entries(valgt).map(([vareId, antall]) => ({vareId, antall})).filter(i => i.antall > 0);
+  if (!ingredienser.length) { alert('Huk av minst én vare med antall større enn 0'); return; }
+
+  if (editId) {
+    const o = (S.lagerOppskrifter||[]).find(x=>x.id===editId); if (!o) return;
+    o.navn = navn; o.biltype = biltype; o.variant = variant; o.ingredienser = ingredienser;
+    if (db) db.from('lager_oppskrifter').update({navn, biltype, variant, ingredienser}).eq('id', o.id)
+      .then(r=>{if(r.error) console.error('Oppskrift-oppdatering feilet:', r.error.message);});
+  } else {
+    const id = 'oppskrift_' + Date.now();
+    const oppskrift = { id, navn, biltype, variant, ingredienser, createdAt:new Date().toISOString() };
+    S.lagerOppskrifter = S.lagerOppskrifter || [];
+    S.lagerOppskrifter.push(oppskrift);
+    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, variant, ingredienser})
+      .then(r=>{if(r.error) console.error('Oppskrift-lagring feilet:', r.error.message);});
+  }
+  closeModal('nyOppskriftModal');
+  refreshOppskriftVisning();
+  if (activeOrdreId) renderOrdreLagerbruk();
+}
+
+function slettOppskrift(id) {
+  const o = (S.lagerOppskrifter||[]).find(x=>x.id===id); if (!o) return;
+  if (!confirm(`Slette oppskriften "${o.navn}"?`)) return;
+  S.lagerOppskrifter = (S.lagerOppskrifter||[]).filter(x=>x.id!==id);
+  if (db) db.from('lager_oppskrifter').delete().eq('id', id)
+    .then(r=>{if(r.error) console.error('Sletting av oppskrift feilet:', r.error.message);});
+  refreshOppskriftVisning();
+  if (activeOrdreId) renderOrdreLagerbruk();
+}
+
+// ════════════════════════════════════════════════════
+// VARER FRA LAGER PÅ ORDRE
+// ════════════════════════════════════════════════════
+// En oppskrift matcher en ordre på modell (Type), og på variant hvis
+// oppskriften har spesifisert en (blank variant = gjelder alle varianter).
+function oppskriftMatcherOrdre(r, o) {
+  if (!r.biltype) return false;
+  const biltypeTekst = (o.type||'').toLowerCase().trim();
+  if (!biltypeTekst) return false;
+  const biltypeR = r.biltype.toLowerCase();
+  if (!(biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst))) return false;
+  if (!r.variant) return true;
+  const variantTekst = (o.variant||'').toLowerCase().trim();
+  const variantR = r.variant.toLowerCase();
+  return !!variantTekst && (variantTekst.includes(variantR) || variantR.includes(variantTekst));
+}
+
+function renderOrdreLagerbruk() {
+  const el = document.getElementById('ordreLagerbruk_' + activeOrdreId);
+  if (!el) return;
+  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+
+  const treff = (S.lagerOppskrifter||[]).filter(r => oppskriftMatcherOrdre(r, o));
+
+  const brukteBatcher = {};
+  (S.lagerhistorikk||[]).filter(h => h.ordreId===o.id && h.batchId).forEach(h => {
+    (brukteBatcher[h.batchId] = brukteBatcher[h.batchId] || []).push(h);
+  });
+  const brukteNavn = new Set(Object.values(brukteBatcher).map(rader=>rader[0].kommentar));
+  const batchHTML = Object.entries(brukteBatcher).map(([batchId, rader]) => {
+    const navn = rader[0].kommentar || 'Oppskrift';
+    return `<div class="box" style="margin-bottom:6px;padding:10px">
+      <div class="row">
+        <b>${esc(navn)}</b>
+        <button class="btn sm" onclick="angreLagerBatch('${batchId}')">↩ Angre</button>
+      </div>
+      <div class="small muted" style="margin-top:4px">${rader.map(r=>`${fmtAntall(Math.abs(r.endring))} ${esc(r.vareNavn)}`).join(', ')}</div>
+    </div>`;
+  }).join('');
+
+  const ubrukteTreff = treff.filter(r => !brukteNavn.has(r.navn));
+  const forslagHTML = ubrukteTreff.length ? ubrukteTreff.map(r => `
+    <div class="box" style="margin-bottom:6px;padding:10px">
+      <div class="row">
+        <div><b>${esc(r.navn)}</b> <span class="small muted">– ${esc(r.biltype)}</span></div>
+        <button class="btn sm red" onclick="trekkOppskriftForOrdre('${r.id}')">Trekk fra lager</button>
+      </div>
+      <div class="small muted" style="margin-top:4px">${(r.ingredienser||[]).map(i=>{
+        const v=(S.lagervarer||[]).find(x=>x.id===i.vareId); return v?`${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}`:null;
+      }).filter(Boolean).join(', ')}</div>
+    </div>`).join('') : '';
+
+  el.innerHTML = `
+    ${batchHTML ? `<div class="small muted" style="margin-bottom:6px">Trukket fra lager på denne ordren</div>${batchHTML}` : ''}
+    ${forslagHTML ? `<div class="small muted" style="margin:${batchHTML?'10px':'0'} 0 6px">${batchHTML?'Andre':'Tilgjengelige'} oppskrifter for "${esc(o.type)}"</div>${forslagHTML}` : ''}
+    ${!batchHTML && !forslagHTML ? `<div class="muted small">${o.type ? `Ingen oppskrift funnet for "${esc(o.type)}". Lag en under Lager-fanen.` : 'Sett en modell/type på ordren for å se aktuelle oppskrifter.'}</div>` : ''}
+  `;
+}
+
+function trekkOppskriftForOrdre(oppskriftId) {
+  const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId); if (!r) return;
+  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+  const mangler = (r.ingredienser||[]).filter(i => {
+    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
+    return !v || v.antall < i.antall;
+  });
+  if (mangler.length && !confirm('Det er ikke nok på lager av alle varene i denne oppskriften. Fortsett og gå i minus der det trengs?')) return;
+
+  const batchId = 'batch_' + Date.now();
+  (r.ingredienser||[]).forEach(i => {
+    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
+    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId);
+  });
+  renderOrdreLagerbruk();
+}
+
+// Kalles automatisk når type/modell settes på en ordre (sf() og opprettOrdre()).
+// Trekker fra lager for alle matchende oppskrifter som ikke allerede er brukt på denne ordren.
+// Kjører stille (ingen bekreftelsesdialog) siden den trigges i bakgrunnen - varsler heller med en toast.
+function autoTrekkOppskrift(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o || !o.type) return;
+  const treff = (S.lagerOppskrifter||[]).filter(r => oppskriftMatcherOrdre(r, o));
+  if (!treff.length) return;
+
+  const brukteNavn = new Set((S.lagerhistorikk||[]).filter(h=>h.ordreId===ordreId && h.batchId).map(h=>h.kommentar));
+  const nye = treff.filter(r => !brukteNavn.has(r.navn));
+  if (!nye.length) return;
+
+  nye.forEach(r => {
+    const batchId = 'batch_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+    let underMinimum = false;
+    (r.ingredienser||[]).forEach(i => {
+      const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
+      if (v.antall < i.antall) underMinimum = true;
+      registrerLagerEndring(v, -Math.abs(i.antall), 'ut', ordreId, r.navn, batchId);
+    });
+    visToast(`Trukket fra lager: ${r.navn}${underMinimum ? ' (noen varer gikk i minus)' : ''}`, underMinimum ? 'feil' : 'ok');
+  });
+  if (activeOrdreId === ordreId) renderOrdreLagerbruk();
+}
+
+function angreLagerBatch(batchId) {
+  if (!confirm('Angre denne uttrekkingen og legge varene tilbake på lager?')) return;
+  const rader = (S.lagerhistorikk||[]).filter(h=>h.batchId===batchId);
+  rader.forEach(h => {
+    const v = (S.lagervarer||[]).find(x=>x.id===h.vareId);
+    if (v) {
+      v.antall = (Number(v.antall)||0) - h.endring;
+      if (db) db.from('lagervarer').update({antall:v.antall}).eq('id', v.id)
+        .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
+    }
+    if (db) db.from('lagerhistorikk').delete().eq('id', h.id)
+      .then(r=>{if(r.error) console.error('Sletting av lagerhistorikk feilet:', r.error.message);});
+  });
+  S.lagerhistorikk = (S.lagerhistorikk||[]).filter(h=>h.batchId!==batchId);
+  oppdaterLagerVarselBadge();
+  renderOrdreLagerbruk();
+}
+
+// ════════════════════════════════════════════════════
 // MODALS
 // ════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('show'); }
@@ -4722,6 +5491,70 @@ document.querySelectorAll('.modal').forEach(m=>{
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreNyFlate()">Opprett</button>
       <button class="btn" onclick="closeModal('nyFlateModal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyVareModal">
+  <div class="modal-box">
+    <div class="h" style="margin-bottom:12px" id="nyVareModalTittel">Ny vare</div>
+    <input type="hidden" id="redigerVareId">
+    <label>Navn</label>
+    <input id="nyVareNavn" placeholder="F.eks. Skruer 4x40">
+    <label>Kategori (valgfritt)</label>
+    <input id="nyVareKategori" placeholder="F.eks. Skruer, Elektrisk, Modul-deler..." list="lagerKategoriListe">
+    <datalist id="lagerKategoriListe"></datalist>
+    <label>Leverandør (valgfritt)</label>
+    <input id="nyVareLeverandor" placeholder="F.eks. Biltema">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label>Antall på lager</label><input type="number" id="nyVareAntall" value="0"></div>
+      <div><label>Enhet</label><input id="nyVareEnhet" value="stk"></div>
+    </div>
+    <label>Varsle ved lav beholdning (antall)</label>
+    <input type="number" id="nyVareMinAntall" value="0">
+    <label>Notat (valgfritt)</label>
+    <input id="nyVareNotat">
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreVare()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyVareModal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="lagerEndringModal">
+  <div class="modal-box">
+    <div class="h" style="margin-bottom:12px" id="lagerEndringTittel">Fyll på lager</div>
+    <input type="hidden" id="lagerEndringVareId">
+    <input type="hidden" id="lagerEndringFortegn">
+    <label>Antall</label>
+    <input type="number" id="lagerEndringAntall" min="0" step="any" value="">
+    <label>Kommentar (valgfritt)</label>
+    <input id="lagerEndringKommentar" placeholder="F.eks. Innkjøp, brukt på jobb...">
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreLagerEndring()">Registrer</button>
+      <button class="btn" onclick="closeModal('lagerEndringModal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyOppskriftModal">
+  <div class="modal-box">
+    <div class="h" style="margin-bottom:12px" id="oppskriftModalTittel">Ny oppskrift</div>
+    <input type="hidden" id="redigerOppskriftId">
+    <label>Navn</label>
+    <input id="oppskriftNavn" placeholder="F.eks. KIA EV9 standard ombygging">
+    <label>Modell</label>
+    <div class="muted small" style="margin-bottom:6px">Samme liste som Type/modell på ordren og biltype på utstyr-maler.</div>
+    <select id="oppskriftBiltype" onchange="oppskriftVisAlleVarer=false;fyllOppskriftVareListe(lesOppskriftIngredienser())"></select>
+    <label>Variant (valgfritt)</label>
+    <div class="muted small" style="margin-bottom:6px">La stå tom for at oppskriften gjelder alle varianter av modellen. Fyll ut for varianter som bruker andre deler, f.eks. "Med takluke".</div>
+    <input id="oppskriftVariant" placeholder="F.eks. Med takluke" list="oppskriftVariantListe">
+    <datalist id="oppskriftVariantListe"></datalist>
+    <label>Huk av delene som brukes på denne varianten</label>
+    <div id="oppskriftIngrediensListe" style="margin-top:4px;max-height:320px;overflow-y:auto"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreOppskrift()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyOppskriftModal')">Avbryt</button>
     </div>
   </div>
 </div>
