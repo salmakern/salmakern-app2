@@ -57,6 +57,10 @@ Deno.serve(async (req) => {
         title = 'Hengerfeste'
         body = `${bil} har fått montert hengerfeste`
       }
+    } else if (payload.type === 'lav_lager') {
+      title = `Lav beholdning: ${payload.vareNavn}`
+      body = `${payload.antall} ${payload.enhet} igjen (grense: ${payload.minAntall})`
+
     } else {
       console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
     }

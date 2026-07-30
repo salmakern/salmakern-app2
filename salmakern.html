@@ -4831,7 +4831,9 @@ function oppdaterLagerVarselBadge() {
   const varer = S.lagervarer||[];
   const lave = varer.filter(v => v.minAntall > 0 && v.antall <= v.minAntall);
   el.innerHTML = lave.length
-    ? `<span style="color:#f87171">⚠ ${lave.length} vare${lave.length===1?'':'r'} har lav beholdning</span>`
+    ? `<span style="color:#f87171">⚠ Lav beholdning: ${lave.map(v=>
+        `<a href="#" onclick="event.preventDefault();visVareDetalj('${v.id}')" style="color:#f87171;text-decoration:underline;cursor:pointer">${esc(v.navn)} (${fmtAntall(v.antall)} ${esc(v.enhet)})</a>`
+      ).join(', ')}</span>`
     : `${varer.length} vare${varer.length===1?'':'r'} på lager`;
 }
 
@@ -5070,6 +5072,7 @@ function lagreLagerEndring() {
 }
 
 function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
+  const varLavFor = v.minAntall > 0 && (Number(v.antall)||0) <= v.minAntall;
   v.antall = (Number(v.antall)||0) + endring;
   if (db) db.from('lagervarer').update({antall:v.antall}).eq('id', v.id)
     .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
@@ -5080,6 +5083,16 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
   if (db) db.from('lagerhistorikk').insert({id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''})
     .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
   oppdaterLagerVarselBadge();
+
+  // Send push kun i det øyeblikket varen krysser under grensen, ikke hver gang den er lav
+  const erLavNa = v.minAntall > 0 && v.antall <= v.minAntall;
+  if (erLavNa && !varLavFor) {
+    fetch(SUPA_URL + '/functions/v1/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      body: JSON.stringify({ type: 'lav_lager', vareNavn: v.navn, antall: v.antall, enhet: v.enhet, minAntall: v.minAntall })
+    }).catch(e => console.warn('Lav lager-varsel feilet:', e));
+  }
   return hist;
 }
 
