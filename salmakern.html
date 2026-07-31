@@ -2399,16 +2399,21 @@ function merkeModell(o) { return `${o.merke||''} ${o.modell||''}`.trim(); }
 // Hvilke ombyggings-varianter (oppskrifter) som finnes for modellen på denne ordren.
 // Lagres i o.ombygging.variant - samme JSONB-objekt som de andre ombyggings-valgene,
 // så det trengs ingen ny databasekolonne.
+// Ingenting velges automatisk - feltet står på "Ingen valgt" til noen faktisk velger
+// en variant selv, og ingenting trekkes fra lager før det skjer.
+const OMBYGGING_INGEN_VALGT = '__ingen_valgt__';
 function ombyggingVariantSelectOptions(o) {
   const modellTekst = merkeModell(o).toLowerCase();
-  if (!modellTekst) return `<option value="">– Fyll inn Merke/Modell først –</option>`;
+  if (!modellTekst) return `<option value="${OMBYGGING_INGEN_VALGT}">– Fyll inn Merke/Modell først –</option>`;
   const varianter = [...new Set((S.lagerOppskrifter||[])
     .filter(r => r.biltype && (modellTekst.includes(r.biltype.toLowerCase()) || r.biltype.toLowerCase().includes(modellTekst)))
     .map(r => r.variant || ''))];
-  if (!varianter.length) return `<option value="">Ingen oppskrift for "${esc(merkeModell(o))}" ennå</option>`;
-  const gjeldende = o.ombygging?.variant || '';
+  if (!varianter.length) return `<option value="${OMBYGGING_INGEN_VALGT}">Ingen oppskrift for "${esc(merkeModell(o))}" ennå</option>`;
+  const gjeldende = o.ombygging?.variant; // undefined = ingenting valgt ennå
   varianter.sort((a,b)=> a===''?-1 : b===''?1 : a.localeCompare(b,'no'));
-  return varianter.map(v => `<option value="${esc(v)}" ${v===gjeldende?'selected':''}>${v ? esc(v) : 'Standard (alle varianter)'}</option>`).join('');
+  const placeholder = `<option value="${OMBYGGING_INGEN_VALGT}" ${gjeldende===undefined?'selected':''}>– Ingen valgt –</option>`;
+  const valgOpts = varianter.map(v => `<option value="${esc(v)}" ${gjeldende===v?'selected':''}>${v ? esc(v) : 'Standard (alle varianter)'}</option>`).join('');
+  return placeholder + valgOpts;
 }
 function oppdaterOmbyggingVariant(ordreId) {
   const sel = document.getElementById('ombyggingVariantSelect_' + ordreId);
@@ -2419,6 +2424,12 @@ function oppdaterOmbyggingVariant(ordreId) {
 function sfOmbyggingVariant(id, val) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   o.ombygging = o.ombygging || {};
+  if (val === OMBYGGING_INGEN_VALGT) {
+    delete o.ombygging.variant;
+    logChange(o, 'Ombygging-variant tilbakestilt til ingen valgt');
+    save(id);
+    return;
+  }
   o.ombygging.variant = val;
   logChange(o, 'Ombygging-variant satt til: ' + (val || 'Standard'));
   save(id);
@@ -2432,7 +2443,6 @@ function sf(id, field, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
-  if (['merke','modell'].includes(field)) autoTrekkOppskrift(id);
 }
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -2753,7 +2763,6 @@ function opprettOrdre() {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
-  if (ny.merke || ny.modell) autoTrekkOppskrift(id);
   openOrdre(id);
 }
 
