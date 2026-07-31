@@ -40,6 +40,10 @@ create table if not exists lager_oppskrifter (
   created_at  timestamptz default now()
 );
 
+-- Markering av at noen allerede har bestilt mer av en vare som er lav på lager,
+-- slik at varselet forsvinner til den nye leveransen kommer inn.
+alter table lagervarer add column if not exists bestilt boolean not null default false;
+
 alter publication supabase_realtime add table lagervarer;
 alter publication supabase_realtime add table lagerhistorikk;
 alter publication supabase_realtime add table lager_oppskrifter;

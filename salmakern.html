@@ -227,9 +227,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="tab" onclick="showPage('ordre',this)">Ordre</button>
         <button class="tab" id="timerTab" onclick="showPage('timer',this)">Timer</button>
         <button class="tab" onclick="showPage('arkiv',this)">Ordrearkiv</button>
-        <button class="tab" onclick="showPage('lager',this)">Lager</button>
+        <button class="tab" id="lagerTab" onclick="showPage('lager',this)">Lager</button>
         <button class="tab" onclick="showPage('mer',this)">Mer</button>
       </div>
+      <div id="globalLavLagerVarsel" style="display:none"></div>
     </div>
   </div>
 
@@ -1072,7 +1073,7 @@ function dbToFlate(r) {
   return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'' };
 }
 function dbToLagervare(r) {
-  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', leverandor:r.leverandor||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', createdAt:r.created_at||'' };
+  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', leverandor:r.leverandor||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, createdAt:r.created_at||'' };
 }
 function dbToLagerhistorikk(r) {
   return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
@@ -1166,6 +1167,7 @@ function subscribeRealtime() {
         S.lagervarer = S.lagervarer.filter(v=>v.id!==p.old.id);
       }
       oppdaterLagerVarselBadge();
+      renderGlobalLavLagerVarsel();
       if (document.getElementById('lager')?.classList.contains('active')) {
         aktivVareId ? renderVareDetalj() : renderLagerListe();
       }
@@ -1586,7 +1588,7 @@ function showPage(id, btn) {
   if (id==='lager')    { aktivKategori=null; oppskriftAktivModell=null; document.getElementById('lagerListeView').style.display='block'; document.getElementById('kategoriDetaljView').style.display='none'; document.getElementById('vareDetaljView').style.display='none'; document.getElementById('oppskriftModellerView').style.display='none'; document.getElementById('oppskriftModellDetaljView').style.display='none'; renderLagerListe(); }
   if (id==='mer')      renderMer();
 }
-function renderAll() { renderOversikt(); renderArkiv(); renderMer(); renderOrdreList(); }
+function renderAll() { renderOversikt(); renderArkiv(); renderMer(); renderOrdreList(); renderGlobalLavLagerVarsel(); }
 
 function renderOrdreList() {
   const listEl   = document.getElementById('ordreList');
@@ -4863,7 +4865,7 @@ function oppdaterLagerVarselBadge() {
   const el = document.getElementById('lagerVarselBadge');
   if (!el) return;
   const varer = S.lagervarer||[];
-  const lave = varer.filter(v => v.minAntall > 0 && v.antall <= v.minAntall);
+  const lave = varer.filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
   el.innerHTML = lave.length
     ? `<span style="color:#f87171">⚠ Lav beholdning: ${lave.map(v=>
         `<a href="#" onclick="event.preventDefault();visVareDetalj('${v.id}')" style="color:#f87171;text-decoration:underline;cursor:pointer">${esc(v.navn)} (${fmtAntall(v.antall)} ${esc(v.enhet)})</a>`
@@ -4899,7 +4901,7 @@ function renderLagerListe() {
   const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
 
   el.innerHTML = `<div class="grid g3">${kategorier.map(kat => {
-    const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall).length;
+    const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
     return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${kat.replace(/'/g,"\\'")}')">
       <div class="row">
         <b>${esc(kat)}</b>
@@ -4912,13 +4914,13 @@ function renderLagerListe() {
 
 function vareBoksHTML(v) {
   const lavt = v.minAntall > 0 && v.antall <= v.minAntall;
-  return `<div class="box" style="cursor:pointer;${lavt?'border-color:#ef4444':''}" onclick="visVareDetalj('${v.id}')">
+  return `<div class="box" style="cursor:pointer;${lavt && !v.bestilt?'border-color:#ef4444':''}" onclick="visVareDetalj('${v.id}')">
     <div class="row">
       <b>${esc(v.navn)}</b>
-      <span style="font-weight:700;${lavt?'color:#f87171':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
+      <span style="font-weight:700;${lavt && !v.bestilt?'color:#f87171':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
     </div>
     ${v.leverandor?`<div class="small muted" style="margin-top:2px">${esc(v.leverandor)}</div>`:''}
-    ${lavt?'<div class="small" style="color:#f87171;margin-top:4px">⚠ Lav beholdning</div>':''}
+    ${lavt?`<div class="small" style="color:${v.bestilt?'#4ade80':'#f87171'};margin-top:4px">${v.bestilt?'✓ Bestilt':'⚠ Lav beholdning'}</div>`:''}
   </div>`;
 }
 
@@ -5073,7 +5075,8 @@ function renderVareDetalj() {
   document.getElementById('vareDetaljEnhet').textContent = v.enhet;
   const lavt = v.minAntall > 0 && v.antall <= v.minAntall;
   document.getElementById('vareLavLagerVarsel').innerHTML = lavt
-    ? `<span style="color:#f87171">⚠ Lav beholdning (varsler ved ${fmtAntall(v.minAntall)} ${esc(v.enhet)})</span>`
+    ? `<span style="color:${v.bestilt?'#4ade80':'#f87171'}">${v.bestilt?'✓ Bestilt':'⚠ Lav beholdning'} (varsler ved ${fmtAntall(v.minAntall)} ${esc(v.enhet)})</span>
+       <button class="btn sm" style="margin-left:8px;padding:2px 8px;font-size:11px" onclick="settVareBestilt('${v.id}',${!v.bestilt})">${v.bestilt?'Fjern bestilt-merking':'✓ Merk som bestilt'}</button>`
     : (v.notat ? `<span class="muted">${esc(v.notat)}</span>` : '');
 
   const historikk = (S.lagerhistorikk||[]).filter(h=>h.vareId===v.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
@@ -5127,6 +5130,16 @@ function lagreLagerEndring() {
 function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
   const varLavFor = v.minAntall > 0 && (Number(v.antall)||0) <= v.minAntall;
   v.antall = (Number(v.antall)||0) + endring;
+  const erLavNa = v.minAntall > 0 && v.antall <= v.minAntall;
+
+  // Nullstill "bestilt"-merking automatisk når varen fylles opp over grensen igjen,
+  // slik at neste gang den blir lav gir et nytt, friskt varsel.
+  if (!erLavNa && v.bestilt) {
+    v.bestilt = false;
+    if (db) db.from('lagervarer').update({bestilt:false}).eq('id', v.id)
+      .then(r=>{if(r.error) console.error('Bestilt-nullstilling feilet:', r.error.message);});
+  }
+
   if (db) db.from('lagervarer').update({antall:v.antall}).eq('id', v.id)
     .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
   const hId = 'lh_' + Date.now() + '_' + Math.floor(Math.random()*1000);
@@ -5136,9 +5149,9 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
   if (db) db.from('lagerhistorikk').insert({id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''})
     .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
   oppdaterLagerVarselBadge();
+  renderGlobalLavLagerVarsel();
 
   // Send push kun i det øyeblikket varen krysser under grensen, ikke hver gang den er lav
-  const erLavNa = v.minAntall > 0 && v.antall <= v.minAntall;
   if (erLavNa && !varLavFor) {
     fetch(SUPA_URL + '/functions/v1/send-push', {
       method: 'POST',
@@ -5147,6 +5160,51 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
     }).catch(e => console.warn('Lav lager-varsel feilet:', e));
   }
   return hist;
+}
+
+// Marker en enkelt vare som bestilt (skjuler den fra lav-lager-varselet til den fylles opp igjen)
+function settVareBestilt(vareId, val) {
+  const v = (S.lagervarer||[]).find(x=>x.id===vareId); if (!v) return;
+  v.bestilt = !!val;
+  if (db) db.from('lagervarer').update({bestilt:v.bestilt}).eq('id', v.id)
+    .then(r=>{if(r.error) console.error('Bestilt-oppdatering feilet:', r.error.message);});
+  oppdaterLagerVarselBadge();
+  renderGlobalLavLagerVarsel();
+  if (document.getElementById('vareDetaljView')?.style.display === 'block') renderVareDetalj();
+}
+
+// Marker alle lave, ikke-bestilte varer i en kategori som bestilt samlet
+function settKategoriBestilt(kategori) {
+  const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === kategori && v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
+  varer.forEach(v => settVareBestilt(v.id, true));
+}
+
+// Globalt lav-lager-varsel i toppmenyen, synlig uansett hvilken side man er på
+function renderGlobalLavLagerVarsel() {
+  const el = document.getElementById('globalLavLagerVarsel');
+  if (!el) return;
+  const lave = (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
+  if (!lave.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  const grupper = {};
+  lave.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
+  el.style.display = 'block';
+  el.innerHTML = `<div style="background:#450a0a;border:1px solid #ef4444cc;border-radius:10px;padding:8px 10px;margin-top:8px;font-size:12px;color:#fca5a5">
+    ${Object.entries(grupper).map(([kat, varer]) => `
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <b>⚠ ${esc(kat)}:</b>
+        ${varer.map(v=>`<span style="white-space:nowrap">${esc(v.navn)} (${fmtAntall(v.antall)} ${esc(v.enhet)})
+          <a href="#" onclick="event.preventDefault();gaaTilVareFraVarsel('${v.id}')" style="color:#fca5a5">vis</a> ·
+          <a href="#" onclick="event.preventDefault();settVareBestilt('${v.id}',true)" style="color:#fca5a5">bestilt</a></span>`).join(', ')}
+        <button onclick="settKategoriBestilt('${kat.replace(/'/g,"\\'")}')" class="btn sm" style="padding:2px 8px;font-size:10px;margin-left:auto">✓ Bestill hele kategorien</button>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+// Naviger til Lager-fanen og rett inn i varen fra varselet, uansett hvilken side man star pa
+function gaaTilVareFraVarsel(vareId) {
+  showPage('lager', document.getElementById('lagerTab'));
+  visVareDetalj(vareId);
 }
 
 // ════════════════════════════════════════════════════
