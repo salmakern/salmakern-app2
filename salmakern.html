@@ -2144,7 +2144,7 @@ function buildOrdreDetail() {
           <label>Flåte</label>
           <div class="small" style="padding:6px 0">${(() => {
             const f = (S.flater||[]).find(x=>x.id===o.flateId);
-            return f ? esc(f.flatenummer) + (f.kunde ? ' – '+esc(f.kunde) : '') : 'Ingen flåte';
+            return f ? esc(f.flatenummer) : 'Ingen flåte';
           })()}</div>
         </div>
       </div>
@@ -4669,7 +4669,7 @@ function renderFlaterListe() {
     const aktiveOrdrer = ordrer.filter(o=>o.status==='aktiv');
     return `<div class="box" style="margin-bottom:8px;cursor:pointer" onclick="visFlateDetalj('${f.id}')">
       <div class="row">
-        <div><b>${esc(f.flatenummer)}</b>${f.kunde?` <span class="small muted">– ${esc(f.kunde)}</span>`:''}</div>
+        <div><b>${esc(f.flatenummer)}</b></div>
         <span class="small muted">${ordrer.length} ordre${ordrer.length===1?'':'r'}</span>
       </div>
       ${aktiveOrdrer.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${aktiveOrdrer.map(o=>{
@@ -4682,7 +4682,6 @@ function renderFlaterListe() {
 
 function apneNyFlate() {
   document.getElementById('nyFlateNummer').value = '';
-  document.getElementById('nyFlateKunde').value = '';
   document.getElementById('nyFlatePrimaerSok').value = '';
   document.getElementById('nyFlatePrimaerResultat').innerHTML = '';
   document.getElementById('nyFlatePrimaerValgt').textContent = '';
@@ -4716,13 +4715,12 @@ function velgNyFlatePrimaer(ordreId) {
 function lagreNyFlate() {
   const nr = document.getElementById('nyFlateNummer').value.trim();
   if (!nr) { alert('Skriv inn et flåtenummer'); return; }
-  const kunde = document.getElementById('nyFlateKunde').value.trim();
   const primaerId = document.getElementById('nyFlatePrimaerId').value || null;
   const id = 'flate_' + Date.now();
-  const flate = { id, flatenummer:nr, kunde, status:'aktiv', primaerOrdreId:primaerId, createdAt:new Date().toISOString() };
+  const flate = { id, flatenummer:nr, status:'aktiv', primaerOrdreId:primaerId, createdAt:new Date().toISOString() };
   S.flater = S.flater || [];
   S.flater.push(flate);
-  if (db) db.from('flater').insert({id, flatenummer:nr, kunde, status:'aktiv', primaer_ordre_id:primaerId})
+  if (db) db.from('flater').insert({id, flatenummer:nr, status:'aktiv', primaer_ordre_id:primaerId})
     .then(r=>{if(r.error) console.error('Flåte-lagring feilet:', r.error.message);});
   if (primaerId) {
     const o = S.ordrer.find(x=>x.id===primaerId);
@@ -4751,7 +4749,6 @@ function tilbakeFlaterListe() {
 function renderFlateDetalj() {
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   document.getElementById('flateDetaljTittel').value = f.flatenummer || '';
-  document.getElementById('flateDetaljKunde').value = f.kunde || '';
   document.getElementById('flateArkiverBtn').textContent = f.status === 'aktiv' ? 'Arkiver flåte' : 'Gjenopprett flåte';
 
   const ordrer = (S.ordrer||[]).filter(o=>o.flateId===f.id).sort(sorterOrdre);
@@ -5544,15 +5541,9 @@ document.querySelectorAll('.modal').forEach(m=>{
     <div id="flateDetaljView" style="display:none">
       <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFlaterListe()">← Alle flåter</button>
       <div class="row" style="margin-bottom:10px;align-items:flex-start;flex-wrap:wrap;gap:10px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:200px">
-          <div style="min-width:100px">
-            <label>Flåtenummer</label>
-            <input id="flateDetaljTittel" onchange="sfFlate('flatenummer',this.value)">
-          </div>
-          <div style="min-width:140px">
-            <label>Kunde</label>
-            <input id="flateDetaljKunde" onchange="sfFlate('kunde',this.value)">
-          </div>
+        <div style="flex:1;min-width:160px">
+          <label>Flåtenummer</label>
+          <input id="flateDetaljTittel" onchange="sfFlate('flatenummer',this.value)">
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn sm" id="flateArkiverBtn" onclick="toggleArkiverFlate()">Arkiver flåte</button>
@@ -5575,8 +5566,6 @@ document.querySelectorAll('.modal').forEach(m=>{
     <div class="h" style="margin-bottom:12px">Ny flåte</div>
     <label>Flåtenummer</label>
     <input id="nyFlateNummer" placeholder="F.eks. 1001">
-    <label>Kunde (valgfritt)</label>
-    <input id="nyFlateKunde" placeholder="F.eks. Telemark Bygg AS">
     <label>Primær kjøretøy</label>
     <div class="muted small" style="margin-bottom:6px">Type, variant, versjon og vekter kopieres alltid fra dette kjøretøyet til de andre i flåten.</div>
     <input id="nyFlatePrimaerSok" placeholder="Søk reg.nr, chassis eller kunde..." oninput="renderNyFlatePrimaerSok(this.value)">
