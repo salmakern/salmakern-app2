@@ -421,7 +421,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="card">
           <div class="row">
             <div class="h" id="kategoriDetaljTittel">–</div>
-            <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn sm" onclick="redigerKategoriNavn()">✎ Rediger navn</button>
+              <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
+            </div>
           </div>
         </div>
         <div id="kategoriVareListe" style="margin-top:12px"></div>
@@ -4747,8 +4750,8 @@ function tilbakeFlaterListe() {
 
 function renderFlateDetalj() {
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
-  document.getElementById('flateDetaljTittel').textContent = 'Flåte ' + f.flatenummer;
-  document.getElementById('flateDetaljKunde').textContent = f.kunde || '';
+  document.getElementById('flateDetaljTittel').value = f.flatenummer || '';
+  document.getElementById('flateDetaljKunde').value = f.kunde || '';
   document.getElementById('flateArkiverBtn').textContent = f.status === 'aktiv' ? 'Arkiver flåte' : 'Gjenopprett flåte';
 
   const ordrer = (S.ordrer||[]).filter(o=>o.flateId===f.id).sort(sorterOrdre);
@@ -4810,6 +4813,16 @@ function fjernOrdreFraFlate(ordreId) {
   logChange(o, 'Fjernet fra flåte');
   save(ordreId);
   renderFlateDetalj();
+}
+
+function sfFlate(field, val) {
+  const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
+  val = val.trim();
+  if (field === 'flatenummer' && !val) { alert('Flåtenummer kan ikke være tomt'); renderFlateDetalj(); return; }
+  f[field] = val;
+  if (db) db.from('flater').update({[field]:val}).eq('id', f.id)
+    .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
+  renderFlaterListe();
 }
 
 function toggleArkiverFlate() {
@@ -4932,6 +4945,25 @@ function renderKategoriDetalj() {
 function apneNyVareIKategori() {
   apneNyVare();
   if (aktivKategori && aktivKategori !== 'Uten kategori') document.getElementById('nyVareKategori').value = aktivKategori;
+}
+
+// Kategori er bare et tekstfelt delt av flere varer - "å endre navn" betyr å
+// oppdatere kategori-feltet på alle varene som har den, samlet sett.
+function redigerKategoriNavn() {
+  if (!aktivKategori) return;
+  const naavaerende = aktivKategori === 'Uten kategori' ? '' : aktivKategori;
+  const nyttNavn = prompt('Nytt navn på kategorien:', naavaerende);
+  if (nyttNavn === null) return;
+  const trimmet = nyttNavn.trim();
+  const gammelKategori = aktivKategori;
+  const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === gammelKategori);
+  varer.forEach(v => {
+    v.kategori = trimmet;
+    if (db) db.from('lagervarer').update({kategori:trimmet}).eq('id', v.id)
+      .then(r=>{if(r.error) console.error('Kategori-oppdatering feilet:', r.error.message);});
+  });
+  aktivKategori = trimmet || 'Uten kategori';
+  renderKategoriDetalj();
 }
 
 function apneNyVare() {
@@ -5511,10 +5543,16 @@ document.querySelectorAll('.modal').forEach(m=>{
 
     <div id="flateDetaljView" style="display:none">
       <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFlaterListe()">← Alle flåter</button>
-      <div class="row" style="margin-bottom:10px;align-items:flex-start">
-        <div>
-          <b id="flateDetaljTittel">–</b>
-          <div class="small muted" id="flateDetaljKunde"></div>
+      <div class="row" style="margin-bottom:10px;align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1;min-width:200px">
+          <div style="min-width:100px">
+            <label>Flåtenummer</label>
+            <input id="flateDetaljTittel" onchange="sfFlate('flatenummer',this.value)">
+          </div>
+          <div style="min-width:140px">
+            <label>Kunde</label>
+            <input id="flateDetaljKunde" onchange="sfFlate('kunde',this.value)">
+          </div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn sm" id="flateArkiverBtn" onclick="toggleArkiverFlate()">Arkiver flåte</button>
