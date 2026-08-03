@@ -44,10 +44,13 @@ self.addEventListener('fetch', e => {
   }
 
   if (url.includes('supabase.co')) return;
-  if (url.endsWith('.html') || url.includes('salmakern.html')) {
-    // no-store: GitHub Pages sender Cache-Control: max-age=600 på HTML-filen,
-    // så en vanlig fetch() kan fortsatt bli servert fra nettleserens egen
-    // HTTP-cache i opptil 10 minutter. no-store tvinger et ekte nettverkskall.
+  if (url.endsWith('.html') || url.includes('salmakern.html') || url.includes('/js/')) {
+    // no-store: GitHub Pages sender Cache-Control: max-age=600 på både HTML-
+    // filen og js/-filene, så en vanlig fetch() kan bli servert fra nettleserens
+    // egen HTTP-cache i opptil 10 minutter selv om en ny versjon er deployet.
+    // Appens logikk ligger nå i js/-filene (ikke lenger inline i HTML-en), så
+    // de må ferskest mulig - ellers kan gammel klientkode og ny database-
+    // struktur komme ut av sync med hverandre rett etter en deploy.
     e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() => caches.match(e.request)));
     return;
   }
