@@ -33,7 +33,11 @@ self.addEventListener('fetch', e => {
       const cached = await c.match(e.request);
       if (cached) return cached;
       const res = await fetch(e.request);
-      if (res && res.status === 200) e.waitUntil(c.put(e.request, res.clone()));
+      // <img>-forespørsler til en annen origin (Storage) er som standard "no-cors",
+      // så svaret blir "opaque" - status er da alltid 0, aldri 200, selv om
+      // nedlastingen lyktes. Sjekken må derfor også godta opaque-svar, ellers
+      // blir INGENTING noensinne lagret i cachen og alt lastes ned på nytt hver gang.
+      if (res && (res.status === 200 || res.type === 'opaque')) e.waitUntil(c.put(e.request, res.clone()));
       return res;
     })());
     return;
