@@ -1601,8 +1601,12 @@ function renderOrdreList() {
     return; // Ikke rebuild detail fra renderAll — forstyrrer skriving i inputfelter
   }
   // Ikke rebuild mens bruker har et interaktivt element fokusert (bakgrunnsoppdatering ville lukket picker/miste input)
-  const focusTag = document.activeElement?.tagName;
-  if (listEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
+  // - unntatt søkefeltet selv, ellers slutter søk-mens-du-skriver å virke siden feltet har fokus mens man skriver i det.
+  const aktivtEl = document.activeElement;
+  const sokFokusert = aktivtEl?.id === 'ordreSok';
+  const focusTag = aktivtEl?.tagName;
+  if (!sokFokusert && listEl?.contains(aktivtEl) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
+  const sokCursorPos = sokFokusert ? aktivtEl.selectionStart : null;
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
   const gammelSok = document.getElementById('ordreSok')?.value || '';
@@ -1652,9 +1656,9 @@ function renderOrdreList() {
         }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`}
       </div>
     </div>`;
-  if (gammelSok) {
+  if (sokFokusert) {
     const inp = document.getElementById('ordreSok');
-    if (inp) { inp.value = gammelSok; inp.focus(); inp.setSelectionRange(gammelSok.length, gammelSok.length); }
+    if (inp) { inp.value = gammelSok; inp.focus(); const pos = sokCursorPos ?? gammelSok.length; inp.setSelectionRange(pos, pos); }
   }
 }
 
