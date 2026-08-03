@@ -366,7 +366,9 @@ function opprettAnsatt() {
     .then(r=>{
       if(r.error){
         console.error('Ansatt insert feil:',r.error.message);
-        alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN er allerede i bruk' : 'Feil ved lagring av ansatt: '+r.error.message);
+        alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN er allerede i bruk'
+          : r.error.message.includes('KUN_ADMIN') ? 'Kun admin kan opprette ansatte'
+          : 'Feil ved lagring av ansatt: '+r.error.message);
         S.ansatte=S.ansatte.filter(a=>a.id!==nyA.id);
         renderMer(); return;
       }

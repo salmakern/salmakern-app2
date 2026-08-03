@@ -76,8 +76,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('loadingOverlay').style.display = 'flex';
   try {
     db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
-    await loadFromSupabase();
-    subscribeRealtime();
+    // Anonym Auth-sesjon kreves for at databasen (RLS + Realtime) skal vite
+    // hvem som spør. Selve identiteten (hvilken ansatt) knyttes først etter
+    // riktig PIN i tryLogin() - uten en PIN er denne sesjonen ikke koblet
+    // til noen ansatt og RLS slipper den ikke til noe som helst.
+    const { data: { session } } = await db.auth.getSession();
+    if (!session) await db.auth.signInAnonymously();
+    // Data kan ikke leses uten en innlogget ansatt lenger - hentes i
+    // tryLogin() i stedet for her.
   } catch(e) {
     console.warn('Supabase feil, bruker lokal data:', e.message);
     try { const c = localStorage.getItem(STORE); if(c) S = JSON.parse(c); else S = defaultData(); }
@@ -645,12 +651,14 @@ function refreshPinDots() {
   document.getElementById('pinDots').textContent = (filled+empty).split('').join(' ');
 }
 async function tryLogin() {
-  // PIN-sjekken skjer i databasen (login_med_pin), ikke lokalt mot S.ansatte -
-  // PIN-koder lastes ikke lenger ned til nettleseren i det hele tatt.
+  // PIN-sjekken skjer i databasen (logg_inn_med_pin), ikke lokalt mot
+  // S.ansatte - PIN-koder lastes ikke ned til nettleseren i det hele tatt.
+  // Funksjonen kobler i tillegg vår anonyme Auth-sesjon til ansatt-raden
+  // (via auth.uid()), slik at RLS og Realtime vet hvem som spør etterpå.
   let user = null;
   if (db) {
     try {
-      const { data, error } = await db.rpc('login_med_pin', { kandidat_pin: pinBuf });
+      const { data, error } = await db.rpc('logg_inn_med_pin', { kandidat_pin: pinBuf });
       if (error) console.warn('PIN-sjekk feilet:', error.message);
       else if (data && data.length) user = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
     } catch(e) { console.warn('PIN-sjekk feilet:', e); }
@@ -662,10 +670,9 @@ async function tryLogin() {
     me = user;
     pinBuf = '';
     refreshPinDots();
-    // Generer session token — logger ut andre enheter med samme bruker
-    const token = crypto.randomUUID();
-    localStorage.setItem('sessionToken_' + me.id, token);
-    if (db) db.from('ansatte').update({session_token: token}).eq('id', me.id);
+    // Hent en ny JWT med ansatt_id/rolle-claims med en gang - uten dette
+    // ville vi måtte vente til token-en fornyes naturlig av seg selv.
+    try { await db.auth.refreshSession(); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appScreen').style.display='block';
     document.getElementById('headerUser').textContent = me.navn + ' · ' + me.rolle;
@@ -673,6 +680,9 @@ async function tryLogin() {
     const timerTab = document.getElementById('timerTab');
     if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
     initTimerPage();
+    // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.
+    await loadFromSupabase();
+    subscribeRealtime();
     renderAll();
   } else {
     document.getElementById('pinErr').textContent = 'Feil PIN – prøv igjen';
