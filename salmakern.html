@@ -2153,14 +2153,7 @@ function buildOrdreDetail() {
 
       <div class="card">
         <div class="h">Ombygging</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-          ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
-            <label style="display:flex;align-items:center;gap:10px;background:#18181b;border:2px solid ${o.ombygging?.[k]?'#ef4444':'#27272a'};border-radius:12px;padding:12px;cursor:pointer">
-              <input type="checkbox" ${o.ombygging?.[k]?'checked':''} onchange="sfOmbygging('${o.id}','${k}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0">
-              <span style="font-weight:600">${lbl}</span>
-            </label>
-          `).join('')}
-        </div>
+        <div id="ombyggingBoks_${o.id}">${ombyggingBoksHTML(o)}</div>
       </div>
 
       <div class="card">
@@ -2374,11 +2367,24 @@ function tvangsflyt(o) {
     {lbl:'Ombygging valgt',   ok: ombyggingValgt}
   ];
 }
+function ombyggingBoksHTML(o) {
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+    ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
+      <label style="display:flex;align-items:center;gap:10px;background:#18181b;border:2px solid ${o.ombygging?.[k]?'#ef4444':'#27272a'};border-radius:12px;padding:12px;cursor:pointer">
+        <input type="checkbox" ${o.ombygging?.[k]?'checked':''} onchange="sfOmbygging('${o.id}','${k}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0">
+        <span style="font-weight:600">${lbl}</span>
+      </label>
+    `).join('')}
+  </div>`;
+}
 function sfOmbygging(id, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
   o.ombygging[felt] = val;
-  save(id); buildOrdreDetail();
+  save(id);
+  // Oppdater kun ombygging-boksen - ikke bygg om hele ordresiden (samme fiks som utstyr-sjekklisten).
+  const container = document.getElementById('ombyggingBoks_' + id);
+  if (container) container.innerHTML = ombyggingBoksHTML(o);
 }
 
 // ════════════════════════════════════════════════════
@@ -4141,22 +4147,6 @@ function toggleUtstyrPunkt(ordreId, idx) {
   // layout-hopp midt i trykket som kan gjøre at neste trykk treffer feil boks.
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);
   if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');
-}
-
-function applyVisningsMal(ordreId, malIdx) {
-  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const mal = S.utstyrMaler[parseInt(malIdx)]; if(!mal) return;
-  if(o.visningsSjekkliste?.length && !confirm(`Erstatte eksisterende liste (${o.visningsSjekkliste.length} punkter) med "${mal.navn}"?`)) return;
-  o.visningsSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
-  o.visningsMalNavn = mal.navn;
-  logChange(o, 'Utstyr-mal (visning) valgt: '+mal.navn);
-  save(ordreId); buildOrdreDetail();
-}
-
-function toggleVisningsPunkt(ordreId, idx) {
-  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  o.visningsSjekkliste[idx].ok = !o.visningsSjekkliste[idx].ok;
-  save(ordreId); buildOrdreDetail();
 }
 
 // ════════════════════════════════════════════════════
