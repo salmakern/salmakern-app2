@@ -679,6 +679,8 @@ function angreLagerBatch(batchId) {
 // ════════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-document.querySelectorAll('.modal').forEach(m=>{
-  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('show'); });
+// Delegert på document (ikke querySelectorAll ved script-kjøring) slik at klikk-utenfor-lukker
+// virker for ALLE modaler, uansett om HTML-en for dem står før eller etter dette scriptet i dokumentet.
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal')) e.target.classList.remove('show');
 });
