@@ -2191,7 +2191,7 @@ function buildOrdreDetail() {
       <div class="card">
         <div class="h">Utstyr – Har ved ankomst</div>
 ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrMalNavn||'')}
-        ${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}
+        <div id="utstyrSjekkliste_${o.id}">${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}</div>
       </div>
 
       <div class="card">
@@ -4136,7 +4136,11 @@ function applyUtstyrMal(ordreId, malIdx) {
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   o.utstyrSjekkliste[idx].ok = !o.utstyrSjekkliste[idx].ok;
-  save(ordreId); buildOrdreDetail();
+  save(ordreId);
+  // Oppdater kun sjekklisten - ikke bygg om hele ordresiden, det gir et lite
+  // layout-hopp midt i trykket som kan gjøre at neste trykk treffer feil boks.
+  const container = document.getElementById('utstyrSjekkliste_' + ordreId);
+  if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');
 }
 
 function applyVisningsMal(ordreId, malIdx) {
