@@ -644,8 +644,20 @@ function refreshPinDots() {
   const empty  = '·'.repeat(4-pinBuf.length);
   document.getElementById('pinDots').textContent = (filled+empty).split('').join(' ');
 }
-function tryLogin() {
-  const user = S.ansatte.find(a => a.pin===pinBuf && a.aktiv);
+async function tryLogin() {
+  // PIN-sjekken skjer i databasen (login_med_pin), ikke lokalt mot S.ansatte -
+  // PIN-koder lastes ikke lenger ned til nettleseren i det hele tatt.
+  let user = null;
+  if (db) {
+    try {
+      const { data, error } = await db.rpc('login_med_pin', { kandidat_pin: pinBuf });
+      if (error) console.warn('PIN-sjekk feilet:', error.message);
+      else if (data && data.length) user = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
+    } catch(e) { console.warn('PIN-sjekk feilet:', e); }
+  } else {
+    // Uten tilkobling: fall tilbake på ev. lokalt bufret data (dev/offline)
+    user = S.ansatte.find(a => a.pin===pinBuf && a.aktiv) || null;
+  }
   if (user) {
     me = user;
     pinBuf = '';

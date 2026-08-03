@@ -357,15 +357,16 @@ function opprettAnsatt() {
   const navn=document.getElementById('na_navn').value.trim();
   const pin=document.getElementById('na_pin').value.trim();
   if(!navn||pin.length!==4||isNaN(Number(pin))){alert('Fyll ut navn og 4-sifret PIN');return;}
-  if(S.ansatte.find(a=>a.pin===pin)){alert('Denne PIN er allerede i bruk');return;}
-  const nyA={id:++S.nextId, navn, pin, rolle:document.getElementById('na_rolle').value, aktiv:true};
+  const nyA={id:++S.nextId, navn, rolle:document.getElementById('na_rolle').value, aktiv:true};
   S.ansatte.push(nyA);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-  if(db) db.from('ansatte').insert({id:nyA.id,navn,pin,rolle:nyA.rolle,aktiv:true,kan_fore_lonn:true})
+  // Ansatt + PIN opprettes atomisk i databasen (opprett_ansatt) - PIN-koder
+  // lagres ikke lenger direkte via klienten, og dup-sjekk skjer server-side.
+  if(db) db.rpc('opprett_ansatt', {p_id:nyA.id, p_navn:navn, p_rolle:nyA.rolle, p_pin:pin})
     .then(r=>{
       if(r.error){
         console.error('Ansatt insert feil:',r.error.message);
-        alert('Feil ved lagring av ansatt: '+r.error.message);
+        alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN er allerede i bruk' : 'Feil ved lagring av ansatt: '+r.error.message);
         S.ansatte=S.ansatte.filter(a=>a.id!==nyA.id);
         renderMer(); return;
       }

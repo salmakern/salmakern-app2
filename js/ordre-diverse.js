@@ -259,9 +259,13 @@ async function lagreSignaturTilStorage(id, dataUrl) {
 let godkjennGodkjenner = null;
 let godkjCtx = null, godkjDrawing = false, godkjLastX = 0, godkjLastY = 0;
 
-function bekreftGodkjenn() {
+async function bekreftGodkjenn() {
   const pin=document.getElementById('godkjPIN').value;
-  const godkjenner=S.ansatte.find(a=>a.pin===pin&&(a.rolle==='godkjenner'||a.rolle==='admin')&&a.aktiv);
+  let godkjenner = null;
+  if (db) {
+    const { data, error } = await db.rpc('login_med_pin', { kandidat_pin: pin });
+    if (!error && data && data.length && (data[0].rolle==='godkjenner'||data[0].rolle==='admin')) godkjenner = data[0];
+  }
   if (!godkjenner){document.getElementById('godkjErr').textContent='Feil PIN eller ikke godkjenner';return;}
   godkjennGodkjenner = godkjenner;
   document.getElementById('godkjPIN').value='';
