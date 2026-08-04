@@ -365,6 +365,7 @@ function settKategoriBestilt(kategori) {
 function renderGlobalLavLagerVarsel() {
   const el = document.getElementById('globalLavLagerVarsel');
   if (!el) return;
+  if (!me || me.rolle !== 'admin') { el.style.display = 'none'; el.innerHTML = ''; return; }
   const lave = (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
   if (!lave.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   const grupper = {};
