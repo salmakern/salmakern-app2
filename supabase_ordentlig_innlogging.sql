@@ -95,9 +95,12 @@ end;
 $$;
 grant execute on function custom_access_token_hook(jsonb) to supabase_auth_admin;
 
--- Slår opp den innloggede ansatte ut fra JWT-claimet. Sjekker IKKE
--- session_token lenger - samme PIN kan være innlogget på flere enheter
--- samtidig, uten at en ny innlogging logger ut de andre.
+-- Enkelte kontoer (satt via flere_enheter) kan være innlogget på flere
+-- enheter samtidig uten å logge ut de andre. Alle andre beholder
+-- dagens oppførsel: ny innlogging et annet sted logger ut forrige enhet.
+alter table ansatte add column if not exists flere_enheter boolean not null default false;
+update ansatte set flere_enheter = true where id = 17; -- Jan Henrik Sigurdsen
+
 create or replace function current_ansatt()
 returns table (id integer, rolle text)
 language sql
@@ -109,7 +112,8 @@ as $$
   from ansatte a
   where a.aktiv = true
     and (auth.jwt()->>'ansatt_id') is not null
-    and a.id = (auth.jwt()->>'ansatt_id')::integer;
+    and a.id = (auth.jwt()->>'ansatt_id')::integer
+    and (a.flere_enheter or a.session_token = (auth.jwt()->>'session_token'));
 $$;
 grant execute on function current_ansatt() to anon, authenticated;
 
