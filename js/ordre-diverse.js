@@ -581,7 +581,13 @@ async function lastOppDokument(e, id) {
   if (file.type !== 'application/pdf') { alert('Kun PDF-filer er tillatt'); e.target.value=''; return; }
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   if (!db) { visToast('Ikke koblet til Supabase'); return; }
-  const filnavn = `${id}/${Date.now()}_${file.name}`;
+  // Supabase Storage tillater ikke æøå/mellomrom/spesialtegn i selve filbanen -
+  // det opprinnelige filnavnet vises fortsatt i appen (lagret i "navn" under),
+  // dette er kun den tekniske lagringsnøkkelen.
+  const tryggNavn = file.name
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // æ/ø/å m.fl. -> nærmeste ascii-bokstav
+    .replace(/[^a-zA-Z0-9.\-]/g, '_');
+  const filnavn = `${id}/${Date.now()}_${tryggNavn}`;
   const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType:'application/pdf'});
   if (error) { visToast('Feil ved opplasting: ' + error.message); return; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
