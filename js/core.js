@@ -633,7 +633,16 @@ function save(ordreId) {
   // Ignorer Realtime-oppdatering for denne ordren i 10 sekunder
   ignorerRealtimeFor.add(ordreId);
   setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
-  return db.from('ordrer').upsert(ordreToDb(o))
+  // status/ordre_status/godkjent/godkjenner_navn utelates bevisst her - de har
+  // egne målrettede oppdateringer (endreStatus/arkiver/lagreGodkjennSignatur)
+  // og skal ALDRI skrives via denne generelle full-rad-lagringen. Grunnen: hvis
+  // noen redigerer et vanlig felt (f.eks. merke) mens de har en litt gammel
+  // kopi av ordren i minnet, ville denne lagringen ellers kunne skrive den
+  // gamle statusen tilbake og "gjenåpne" en nettopp arkivert/godkjent ordre.
+  const payload = ordreToDb(o);
+  delete payload.status; delete payload.ordre_status;
+  delete payload.godkjent; delete payload.godkjenner_navn;
+  return db.from('ordrer').upsert(payload)
     .then(r=>{
       if (r.error) { console.error('Lagringsfeil:', r.error.message); visToast('Lagringsfeil: ' + r.error.message); return r.error.message; }
       return null;

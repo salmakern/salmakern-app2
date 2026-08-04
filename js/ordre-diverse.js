@@ -190,7 +190,12 @@ async function arkiver(id) {
   o.status='arkivert';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Arkivert'};
   o.endringer.push(endring);
-  const feil = await save(id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  let feil = null;
+  if (db) {
+    const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);
+    if (error) feil = error.message;
+  }
   if (feil) {
     o.status='aktiv';
     o.endringer = o.endringer.filter(e=>e!==endring);
@@ -314,7 +319,12 @@ async function lagreGodkjennSignatur(hoppOver=false) {
   const overstyrTekst = (!tvangsflytOk && me?.rolle==='admin') ? ' (tvangsflyt overstyrt av admin - ikke alle punkter var fullført)' : '';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjennGodkjenner.navn+overstyrTekst};
   o.endringer.push(endring);
-  const feil = await save(activeOrdreId);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  let feil = null;
+  if (db) {
+    const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status, signatur:o.signatur, endringer:o.endringer}).eq('id', activeOrdreId);
+    if (error) feil = error.message;
+  }
   if (feil) {
     // Lagringen feilet - ikke la det se ut som ordren er lukket når den ikke er det
     o.godkjent=false; o.godkjennerNavn=''; o.status='aktiv';

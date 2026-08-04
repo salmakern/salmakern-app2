@@ -261,17 +261,27 @@ async function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   const forrigeStatus = o.ordreStatus;
   const forrigeArkivStatus = o.status;
+  const forrigeEndringer = [...o.endringer];
   o.ordreStatus = nyStatus;
   // Ordren arkiveres automatisk når den er hentet
   if (nyStatus === 'hentet') o.status = 'arkivert';
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (nyStatus==='hentet'?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
-  // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
-  // ikke herfra - ellers sendes varselet dobbelt.
-  const feil = await save(id);
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  // Målrettet oppdatering av kun disse feltene - IKKE via den generelle
+  // save(), slik at denne handlingen aldri kan overskrives av en gammel
+  // kopi av ordren som lagres fra et annet sted i appen.
+  let feil = null;
+  if (db) {
+    // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
+    // ikke herfra - ellers sendes varselet dobbelt.
+    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, endringer:o.endringer}).eq('id', id);
+    if (error) feil = error.message;
+  }
   if (feil) {
     o.ordreStatus = forrigeStatus;
     o.status = forrigeArkivStatus;
+    o.endringer = forrigeEndringer;
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }
