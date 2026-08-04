@@ -95,9 +95,9 @@ end;
 $$;
 grant execute on function custom_access_token_hook(jsonb) to supabase_auth_admin;
 
--- Slår opp den innloggede ansatte "live" (ikke bare stol på JWT-claimet
--- for evig - sjekk at session_token fortsatt stemmer med ansatte-tabellen,
--- ellers ville en "kastet ut"-enhet fortsatt ha tilgang til JWT-en utløper).
+-- Slår opp den innloggede ansatte ut fra JWT-claimet. Sjekker IKKE
+-- session_token lenger - samme PIN kan være innlogget på flere enheter
+-- samtidig, uten at en ny innlogging logger ut de andre.
 create or replace function current_ansatt()
 returns table (id integer, rolle text)
 language sql
@@ -109,8 +109,7 @@ as $$
   from ansatte a
   where a.aktiv = true
     and (auth.jwt()->>'ansatt_id') is not null
-    and a.id = (auth.jwt()->>'ansatt_id')::integer
-    and a.session_token = (auth.jwt()->>'session_token');
+    and a.id = (auth.jwt()->>'ansatt_id')::integer;
 $$;
 grant execute on function current_ansatt() to anon, authenticated;
 
