@@ -323,15 +323,6 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(mapA(p.new));
       } else if (p.eventType==='UPDATE') {
-        // Sjekk om denne brukeren har logget inn på en annen enhet
-        if (me && String(p.new.id) === String(me.id)) {
-          const lokaltToken = localStorage.getItem('sessionToken_' + me.id);
-          if (lokaltToken && p.new.session_token && p.new.session_token !== lokaltToken) {
-            alert('Denne brukeren logget inn på en annen enhet. Du er logget ut.');
-            doLogout();
-            return;
-          }
-        }
         if (ignorerRealtimeAnsatt.has(String(p.new.id))) return;
         const i=S.ansatte.findIndex(a=>a.id===p.new.id); if(i>=0) S.ansatte[i]=mapA(p.new);
       } else if (p.eventType==='DELETE') {
@@ -428,15 +419,10 @@ function subscribeRealtime() {
 let sisteVarSynlig = Date.now();
 let autoRefreshInterval = null;
 
+// Sesjonsgyldighet håndheves nå server-side (current_ansatt() + RLS) -
+// ingen egen klientsjekk mot en lokalt lagret session_token lenger.
 async function verifiserSession() {
-  if (!me || !db) return;
-  const lokaltToken = localStorage.getItem('sessionToken_' + me.id);
-  if (!lokaltToken) return;
-  const {data} = await db.from('ansatte').select('session_token').eq('id', me.id).single();
-  if (data && data.session_token && data.session_token !== lokaltToken) {
-    alert('Denne brukeren logget inn på en annen enhet. Du er logget ut.');
-    doLogout();
-  }
+  try { localStorage.removeItem('sessionToken_' + me?.id); } catch(e) {}
 }
 
 async function oppdaterApp() {
