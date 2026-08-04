@@ -88,6 +88,7 @@ function buildOrdreDetail() {
     <button class="btn sm" onclick="tilbakeOrdreList()">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="${o.prioritert?'background:#78350f;border-color:#facc15;color:#facc15':''}">${o.prioritert?'PRIORITERT ✕':'+ Prioriter'}</button>
+      <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport">📄 PDF</button>
       <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="padding:6px 10px">🔄</button>
       ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">🗑 Slett ordre</button>` : ''}
     </div>
@@ -295,12 +296,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
           <div class="muted small" style="margin-bottom:8px">Godkjenner kontrollerer arbeidet og lukker ordren.</div>
           ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:6px">${erAdmin?'Tvangsflyt ikke fullført (du kan overstyre som admin):':'Fullfør tvangsflyt først:'}</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
           <button class="btn red" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
-      </div>
-
-      <div class="card">
-        <div class="h">PDF / Rapport</div>
-        <div class="muted small" style="margin-bottom:8px">Vekter, bilder, signatur og info.</div>
-        <button class="btn" onclick="genPDF('${o.id}')">Last ned PDF</button>
       </div>
 
       <div class="card">
