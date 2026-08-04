@@ -75,6 +75,7 @@ function renderOrdreList() {
               <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</span>
               ${hengerfesteKortHTML(o)}
             </div>
+            ${dokStatusKortHTML(o)}
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
             <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
@@ -97,7 +98,7 @@ function renderOversikt(q) {
   const mnd = now.getMonth(), yr = now.getFullYear();
   const denneMnd = S.ordrer.filter(o=>{const d=new Date(o.ankomstdato);return d.getMonth()===mnd&&d.getFullYear()===yr;});
   document.getElementById('s1').textContent = denneMnd.length;
-  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['klar_henting','hentet'].includes(o.ordreStatus)).length;
+  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['klar_henting','bestilt_frakt','hentet'].includes(o.ordreStatus)).length;
   document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)).length;
 
   const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
@@ -119,6 +120,7 @@ function renderOversikt(q) {
             <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</span>
             ${hengerfesteKortHTML(o)}
           </div>
+          ${dokStatusKortHTML(o)}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid:'Ikke i kalender'}</div>
@@ -141,6 +143,7 @@ function renderOversikt(q) {
             <span class="small muted">${o.type}${o.variant?' · '+o.variant:''}</span>
             ${hengerfesteKortHTML(o)}
           </div>
+          ${dokStatusKortHTML(o)}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
@@ -301,6 +304,30 @@ function hengerfesteKortHTML(o) {
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
   </div>` : '';
+}
+
+function dokStatusFarge(verdi) {
+  if (verdi==='har') return {bg:'#052e1688', txt:'#86efac', border:'#22c55e'};
+  if (verdi==='etterspurt') return {bg:'#42200688', txt:'#fef08a', border:'#facc15'};
+  return {bg:'#450a0a88', txt:'#fca5a5', border:'#ef4444'}; // har_ikke
+}
+function dokStatusDropdown(ordreId, felt, verdi) {
+  verdi = verdi || 'har_ikke';
+  const f = dokStatusFarge(verdi);
+  return `<select onchange="sf('${ordreId}','${felt}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
+    <option value="har_ikke" ${verdi==='har_ikke'?'selected':''}>Har ikke</option>
+    <option value="etterspurt" ${verdi==='etterspurt'?'selected':''}>Etterspurt</option>
+    <option value="har" ${verdi==='har'?'selected':''}>Har</option>
+  </select>`;
+}
+function dokStatusPillHTML(label, verdi) {
+  verdi = verdi || 'har_ikke';
+  const f = dokStatusFarge(verdi);
+  const kort = verdi==='har_ikke' ? 'Mangler' : (verdi==='etterspurt' ? 'Etterspurt' : 'OK');
+  return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${f.bg};color:${f.txt};border:1px solid ${f.border};white-space:nowrap">${label}: ${kort}</span>`;
+}
+function dokStatusKortHTML(o) {
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}</div>`;
 }
 
 let _dragOrdre = null;

@@ -42,10 +42,11 @@ const STATUSER = [
   {id:'klar_visning',   lbl:'Klar for visning',     border:'#22c55e', bg:'#052e1688', txt:'#86efac'},
   {id:'vist_biltilsyn', lbl:'Vist på biltilsynet',  border:'#f97316', bg:'#43140788', txt:'#fed7aa'},
   {id:'klar_henting',   lbl:'Klar for henting',     border:'#a1a1aa', bg:'#09090b88', txt:'#e4e4e7'},
+  {id:'bestilt_frakt',  lbl:'Bestilt frakt',        border:'#a78bfa', bg:'#2e106688', txt:'#ddd6fe'},
   {id:'hentet',         lbl:'Hentet',               border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
 ];
 function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
-const STATUS_SORT = {hentet:0,klar_henting:1,vist_biltilsyn:2,klar_visning:3,ikke_veid:4,paabegynt:5,ikke_paabegynt:6,paa_vei:7};
+const STATUS_SORT = {hentet:0,bestilt_frakt:1,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8};
 function sorterOrdre(a,b) {
   const pd = (b.prioritert?1:0) - (a.prioritert?1:0);
   if (pd !== 0) return pd;
@@ -249,7 +250,8 @@ function dbToOrdre(r) {
     notater:r.notater||'', endringer:r.endringer||[],
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
-    flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[]
+    flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
+    coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke'
   };
 }
 function ordreToDb(o) {
@@ -271,6 +273,7 @@ function ordreToDb(o) {
     utstyr_sjekkliste:o.utstyrSjekkliste||[], utstyr_mal_navn:o.utstyrMalNavn||'',
     visnings_sjekkliste:o.visningsSjekkliste||[], visnings_mal_navn:o.visningsMalNavn||'',
     flate_id:o.flateId||null,
+    coc:o.coc||'har_ikke', fullmakt:o.fullmakt||'har_ikke',
     updated_at:new Date().toISOString()
   };
 }
