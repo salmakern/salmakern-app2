@@ -71,10 +71,9 @@ function renderOrdreList() {
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
               ${statusDropdown(o.id, o.ordreStatus)}
             </div>
-            <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0">
-              ${hengerfesteKortHTML(o)}
-            </div>
+            <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.variant||''}</span>
             ${dokStatusKortHTML(o)}
+            <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
             <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
@@ -115,10 +114,9 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0">
-            ${hengerfesteKortHTML(o)}
-          </div>
+          <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.variant||''}</span>
           ${dokStatusKortHTML(o)}
+          <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid:'Ikke i kalender'}</div>
@@ -137,10 +135,9 @@ function renderOversikt(q) {
             <b>${ordreLabel(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0">
-            ${hengerfesteKortHTML(o)}
-          </div>
+          <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.variant||''}</span>
           ${dokStatusKortHTML(o)}
+          <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
