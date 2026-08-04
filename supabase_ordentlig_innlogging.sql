@@ -29,7 +29,7 @@
 -- auth.uid() her er avsenderens EGEN anonyme sesjon (kan ikke forfalskes),
 -- så denne funksjonen kan bare "kreve" identiteten til seg selv, ikke andre.
 create or replace function logg_inn_med_pin(kandidat_pin text)
-returns table (id bigint, navn text, rolle text, aktiv boolean, kan_fore_lonn boolean)
+returns table (id integer, navn text, rolle text, aktiv boolean, kan_fore_lonn boolean)
 language plpgsql
 security definer
 set search_path = public
@@ -99,7 +99,7 @@ grant execute on function custom_access_token_hook(jsonb) to supabase_auth_admin
 -- for evig - sjekk at session_token fortsatt stemmer med ansatte-tabellen,
 -- ellers ville en "kastet ut"-enhet fortsatt ha tilgang til JWT-en utløper).
 create or replace function current_ansatt()
-returns table (id bigint, rolle text)
+returns table (id integer, rolle text)
 language sql
 security definer
 stable
@@ -109,7 +109,7 @@ as $$
   from ansatte a
   where a.aktiv = true
     and (auth.jwt()->>'ansatt_id') is not null
-    and a.id = (auth.jwt()->>'ansatt_id')::bigint
+    and a.id = (auth.jwt()->>'ansatt_id')::integer
     and a.session_token = (auth.jwt()->>'session_token');
 $$;
 grant execute on function current_ansatt() to anon, authenticated;
@@ -166,7 +166,7 @@ create policy "slette_timer_admin" on timer_entries for delete
 -- direkte, uten å logge inn først. Kunne ikke håndheves skikkelig før nå,
 -- siden current_ansatt() ikke fantes ennå.
 -- ============================================================
-create or replace function opprett_ansatt(p_id bigint, p_navn text, p_rolle text, p_pin text)
+create or replace function opprett_ansatt(p_id integer, p_navn text, p_rolle text, p_pin text)
 returns void
 language plpgsql
 security definer
