@@ -268,8 +268,8 @@ function beregnOvertid(mins, datoStr) {
   }
   const normal = Math.min(mins, 450);   // 7.5 timer = 450 min
   const rest   = Math.max(0, mins - 450);
-  const ot50   = Math.min(rest, 270);   // neste 4.5 timer = 270 min (til 12 timer totalt)
-  const ot100  = Math.max(0, rest - 270);
+  const ot50   = Math.min(rest, 240);   // neste 4 timer = 240 min (til 11.5 timer totalt)
+  const ot100  = Math.max(0, rest - 240);
   return {normal, ot50, ot100};
 }
 
