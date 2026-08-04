@@ -99,7 +99,10 @@ function buildOrdreDetail() {
       <div>
         <div class="title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${ordreLabel(o)}
-          <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px">${o.godkjent?'Godkjent':'Ikke godkjent'}</span>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer">
+            Godkjent
+            <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
+          </label>
         </div>
         ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${o.chassis}</div>`:''}
         <div class="muted" style="margin-top:2px">${o.type}${o.variant?' – '+o.variant:''}</div>
@@ -107,6 +110,7 @@ function buildOrdreDetail() {
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:7px 12px;')}
+        <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
       </div>
     </div>
   </div>
@@ -378,6 +382,17 @@ function togglePrioritert(id) {
   renderOrdreList(); renderOversikt();
   const btn = document.getElementById('prioritertBtn_' + id);
   if (btn) { btn.textContent = o.prioritert ? 'PRIORITERT ✕' : '+ Prioriter'; btn.style.background = o.prioritert ? '#78350f' : ''; btn.style.borderColor = o.prioritert ? '#facc15' : ''; btn.style.color = o.prioritert ? '#facc15' : ''; }
+}
+
+function toggleGodkjentBiltilsyn(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.godkjentBiltilsyn = !o.godkjentBiltilsyn;
+  logChange(o, o.godkjentBiltilsyn ? 'Godkjent på biltilsynet' : 'Fjernet godkjent-merking (biltilsyn)');
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if (db) db.from('ordrer').update({godkjent_biltilsyn:o.godkjentBiltilsyn}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Godkjent-biltilsyn oppdatering feilet:', r.error.message);});
+  renderOrdreList(); renderOversikt();
+  if (activeOrdreId===id) buildOrdreDetail();
 }
 
 function renderAnsOrdre(o) {

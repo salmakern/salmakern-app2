@@ -119,7 +119,6 @@ function renderOversikt(q) {
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid:'Ikke i kalender'}</div>
-          ${godkjentKortHTML(o)}
         </div>`;
       }).join('')
     : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
@@ -142,7 +141,6 @@ function renderOversikt(q) {
             <button class="btn sm" onclick="openOrdre('${o.id}')">Åpne</button>
             <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>
           </div>
-          ${godkjentKortHTML(o)}
         </div>`;
       }).join('')
     : '<div class="muted small">Ingen ventende ordrer</div>';
@@ -259,14 +257,25 @@ function renderWeek() {
   </div>`;
 }
 
-function endreStatus(id, nyStatus) {
+async function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const forrigeStatus = o.ordreStatus;
+  const forrigeArkivStatus = o.status;
   o.ordreStatus = nyStatus;
-  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl);
+  // Ordren arkiveres automatisk når den er hentet
+  if (nyStatus === 'hentet') o.status = 'arkivert';
+  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (nyStatus==='hentet'?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
   // ikke herfra - ellers sendes varselet dobbelt.
-  save(id); renderAll();
+  const feil = await save(id);
+  if (feil) {
+    o.ordreStatus = forrigeStatus;
+    o.status = forrigeArkivStatus;
+    visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
+    return;
+  }
+  renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
 }
 
@@ -323,10 +332,10 @@ function dokStatusKortHTML(o) {
   return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}</div>`;
 }
 function godkjentKortHTML(o) {
-  return `<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:2px">
-    <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjent?'#86efac':'#a1a1aa'}">
+  return `<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:2px" onclick="event.stopPropagation()">
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer">
       Godkjent
-      <input type="checkbox" ${o.godkjent?'checked':''} disabled style="width:14px;height:14px;accent-color:#22c55e">
+      <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
     </label>
   </div>`;
 }

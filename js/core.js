@@ -251,7 +251,7 @@ function dbToOrdre(r) {
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
     flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
-    coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke'
+    coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn
   };
 }
 function ordreToDb(o) {
