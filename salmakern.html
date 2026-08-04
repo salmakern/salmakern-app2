@@ -953,7 +953,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="h" style="margin-bottom:12px" id="lagerEndringTittel">Fyll på lager</div>
     <input type="hidden" id="lagerEndringVareId">
     <input type="hidden" id="lagerEndringFortegn">
-    <label>Antall</label>
+    <div id="lagerEndringForventetWrap" style="display:none">
+      <label>Forventet antall (valgfritt)</label>
+      <input type="number" id="lagerEndringForventet" min="0" step="any" value="" placeholder="F.eks. hva du bestilte fra leverandør">
+    </div>
+    <label id="lagerEndringAntallLabel">Antall</label>
     <input type="number" id="lagerEndringAntall" min="0" step="any" value="">
     <label>Kommentar (valgfritt)</label>
     <input id="lagerEndringKommentar" placeholder="F.eks. Innkjøp, brukt på jobb...">

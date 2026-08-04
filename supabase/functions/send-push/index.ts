@@ -80,6 +80,10 @@ Deno.serve(async (req) => {
       title = `Lav beholdning: ${payload.vareNavn}`
       body = `${payload.antall} ${payload.enhet} igjen (grense: ${payload.minAntall})`
 
+    } else if (payload.type === 'mangelfull_levering') {
+      title = `Mangelfull levering: ${payload.vareNavn}`
+      body = `Forventet ${payload.forventet}, fikk kun ${payload.mottatt} ${payload.enhet} (mangler ${payload.mangler})`
+
     } else {
       console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
     }

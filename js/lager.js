@@ -248,6 +248,9 @@ function fyllPaLager() {
   document.getElementById('lagerEndringFortegn').value = '1';
   document.getElementById('lagerEndringAntall').value = '';
   document.getElementById('lagerEndringKommentar').value = '';
+  document.getElementById('lagerEndringForventet').value = '';
+  document.getElementById('lagerEndringForventetWrap').style.display = 'block';
+  document.getElementById('lagerEndringAntallLabel').textContent = 'Mottatt antall';
   openModal('lagerEndringModal');
 }
 function taUtFraLager() {
@@ -256,22 +259,41 @@ function taUtFraLager() {
   document.getElementById('lagerEndringFortegn').value = '-1';
   document.getElementById('lagerEndringAntall').value = '';
   document.getElementById('lagerEndringKommentar').value = '';
+  document.getElementById('lagerEndringForventetWrap').style.display = 'none';
+  document.getElementById('lagerEndringAntallLabel').textContent = 'Antall';
   openModal('lagerEndringModal');
 }
 function lagreLagerEndring() {
   const vareId    = document.getElementById('lagerEndringVareId').value;
   const fortegn   = Number(document.getElementById('lagerEndringFortegn').value) || 1;
   const antallRaw = Number(document.getElementById('lagerEndringAntall').value);
-  const kommentar = document.getElementById('lagerEndringKommentar').value.trim();
+  let   kommentar = document.getElementById('lagerEndringKommentar').value.trim();
+  const forventetRaw = fortegn>0 ? (Number(document.getElementById('lagerEndringForventet').value) || 0) : 0;
   if (!antallRaw || antallRaw <= 0) { alert('Skriv inn et antall større enn 0'); return; }
   const v = (S.lagervarer||[]).find(x=>x.id===vareId); if (!v) return;
   const endring = fortegn * antallRaw;
   if (endring < 0 && v.antall + endring < 0) {
     if (!confirm(`Det er kun ${fmtAntall(v.antall)} ${v.enhet} igjen. Fortsett og gå i minus?`)) return;
   }
+  // Kom det mindre enn forventet? Noter det i historikken og varsle, slik at
+  // noen kan følge opp med leverandøren om resten av leveransen.
+  const mangler = forventetRaw > antallRaw ? forventetRaw - antallRaw : 0;
+  if (mangler > 0) {
+    const manglerTekst = `Forventet ${fmtAntall(forventetRaw)}, mottatt ${fmtAntall(antallRaw)} (mangler ${fmtAntall(mangler)} ${v.enhet})`;
+    kommentar = kommentar ? kommentar + ' — ' + manglerTekst : manglerTekst;
+  }
   registrerLagerEndring(v, endring, endring>0?'inn':'ut', null, kommentar);
+  if (mangler > 0) varselMangelfullLevering(v, forventetRaw, antallRaw, mangler);
   closeModal('lagerEndringModal');
   renderVareDetalj();
+}
+
+function varselMangelfullLevering(v, forventet, mottatt, mangler) {
+  fetch(SUPA_URL + '/functions/v1/send-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+    body: JSON.stringify({ type: 'mangelfull_levering', vareNavn: v.navn, forventet, mottatt, mangler, enhet: v.enhet })
+  }).catch(e => console.warn('Mangelfull leverings-varsel feilet:', e));
 }
 
 function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
