@@ -165,13 +165,22 @@ async function loadFromSupabase() {
     if (!freshTimerIds.has(String(t.id)) && t._localAt && (now - t._localAt) < LOCAL_TTL)
       S.timer.unshift(t);
   });
-  S.dagensPIN      = sR.data?.dagens_pin || '1234';
-  S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
-  S.utstyrMaler    = sR.data?.utstyr_maler    || [];
-  S.drivstoffSatser= sR.data?.drivstoff_satser|| [];
-  S.beskjeder      = sR.data?.beskjeder       || [];
-  S.kontakter      = sR.data?.kontakter       || [];
-  S.hms            = sR.data?.hms             || [];
+  // VIKTIG: hvis denne lesingen feiler (f.eks. midlertidig RLS/nett-trøbbel),
+  // MÅ vi la S.utstyrMaler/drivstoffSatser/osv. stå urørt i stedet for å
+  // tolke feilen som "tom liste" - ellers kan koden under (som fyller inn
+  // og LAGRER standardverdier når listen er tom) stille overskrive ekte
+  // data i databasen med en tom liste. (Dette skjedde faktisk én gang.)
+  if (sR.error) {
+    console.warn('Innstillinger-lesing feilet, beholder eksisterende data i minnet:', sR.error.message);
+  } else {
+    S.dagensPIN      = sR.data?.dagens_pin || '1234';
+    S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
+    S.utstyrMaler    = sR.data?.utstyr_maler    || [];
+    S.drivstoffSatser= sR.data?.drivstoff_satser|| [];
+    S.beskjeder      = sR.data?.beskjeder       || [];
+    S.kontakter      = sR.data?.kontakter       || [];
+    S.hms            = sR.data?.hms             || [];
+  }
   // Sett nextId til høyere enn alle eksisterende ID-er
   const alleIds = [
     ...S.ansatte.map(a=>Number(a.id)||0),
@@ -179,24 +188,26 @@ async function loadFromSupabase() {
     ...(S.utstyrMaler||[]).map(m=>Number(String(m.id).replace(/\D/g,''))||0)
   ];
   S.nextId = Math.max(100, ...alleIds) + 1;
-  // Fiks duplikat-ID-er i utstyrMaler
-  let malIdFikset = false;
-  const seenMalIds = new Set();
-  (S.utstyrMaler||[]).forEach(m => {
-    if (!m.id || seenMalIds.has(String(m.id))) {
-      m.id = 'u' + (++S.nextId);
-      malIdFikset = true;
+  if (!sR.error) {
+    // Fiks duplikat-ID-er i utstyrMaler
+    let malIdFikset = false;
+    const seenMalIds = new Set();
+    (S.utstyrMaler||[]).forEach(m => {
+      if (!m.id || seenMalIds.has(String(m.id))) {
+        m.id = 'u' + (++S.nextId);
+        malIdFikset = true;
+      }
+      seenMalIds.add(String(m.id));
+    });
+    if (malIdFikset) saveInnstillinger();
+    // Pre-populate standard satser hvis ingen finnes
+    if (!S.drivstoffSatser.length) {
+      S.drivstoffSatser = [
+        {id:'ds_uten_mva', navn:'Uten Mva', type:'uten_mva', verdi:0},
+        {id:'ds_bos',      navn:'BOS',      type:'bos',      verdi:0}
+      ];
+      saveInnstillinger();
     }
-    seenMalIds.add(String(m.id));
-  });
-  if (malIdFikset) saveInnstillinger();
-  // Pre-populate standard satser hvis ingen finnes
-  if (!S.drivstoffSatser.length) {
-    S.drivstoffSatser = [
-      {id:'ds_uten_mva', navn:'Uten Mva', type:'uten_mva', verdi:0},
-      {id:'ds_bos',      navn:'BOS',      type:'bos',      verdi:0}
-    ];
-    saveInnstillinger();
   }
   // Flåter hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
   try {
@@ -400,8 +411,10 @@ function subscribeRealtime() {
           realtimeReconnectTimer = setTimeout(async () => {
             realtimeReconnectTimer = null;
             if (db && me) {
-              await loadFromSupabase();
-              renderAll();
+              try {
+                await loadFromSupabase();
+                renderAll();
+              } catch(e) { console.warn('Gjenoppkobling: datahenting feilet:', e); }
               subscribeRealtime();
             }
           }, forsinkelse);
@@ -684,9 +697,14 @@ async function tryLogin() {
     // Viser samme lasteskjerm som ved oppstart, så det korte gapet ikke
     // ser ut som appen henger.
     document.getElementById('loadingOverlay').style.display = 'flex';
-    await loadFromSupabase();
-    subscribeRealtime();
-    renderAll();
+    try {
+      await loadFromSupabase();
+      subscribeRealtime();
+      renderAll();
+    } catch(e) {
+      console.warn('Datahenting etter innlogging feilet:', e);
+      visToast('Klarte ikke å hente data. Trykk 🔄 øverst for å prøve igjen.');
+    }
     document.getElementById('loadingOverlay').style.display = 'none';
   } else {
     document.getElementById('pinErr').textContent = 'Feil PIN – prøv igjen';
