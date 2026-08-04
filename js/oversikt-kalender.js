@@ -71,8 +71,7 @@ function renderOrdreList() {
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
               ${statusDropdown(o.id, o.ordreStatus)}
             </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0">
-              <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type} ${o.variant}</span>
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0">
               ${hengerfesteKortHTML(o)}
             </div>
             ${dokStatusKortHTML(o)}
@@ -116,8 +115,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0">
-            <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.type}${o.variant?' · '+o.variant:''}</span>
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0">
             ${hengerfesteKortHTML(o)}
           </div>
           ${dokStatusKortHTML(o)}
@@ -139,8 +137,7 @@ function renderOversikt(q) {
             <b>${ordreLabel(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0">
-            <span class="small muted">${o.type}${o.variant?' · '+o.variant:''}</span>
+          <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;min-width:0">
             ${hengerfesteKortHTML(o)}
           </div>
           ${dokStatusKortHTML(o)}
