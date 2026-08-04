@@ -681,9 +681,13 @@ async function tryLogin() {
     if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
     initTimerPage();
     // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.
+    // Viser samme lasteskjerm som ved oppstart, så det korte gapet ikke
+    // ser ut som appen henger.
+    document.getElementById('loadingOverlay').style.display = 'flex';
     await loadFromSupabase();
     subscribeRealtime();
     renderAll();
+    document.getElementById('loadingOverlay').style.display = 'none';
   } else {
     document.getElementById('pinErr').textContent = 'Feil PIN – prøv igjen';
     pinBuf = '';
