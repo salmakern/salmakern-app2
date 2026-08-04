@@ -618,17 +618,23 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
   };
 }
 
+// Returnerer et Promise som løses med feilmeldingen (eller null ved suksess) -
+// de aller fleste stedene bruker save() uten å vente på det (som før), men
+// steder der det er kritisk å faktisk vite om lagringen lyktes (f.eks.
+// godkjenning/arkivering) kan gjøre `const feil = await save(id)`.
 function save(ordreId) {
   try { localStorage.setItem(STORE, JSON.stringify(S)); } catch(e) {}
-  if (!db || !ordreId) return;
+  if (!db || !ordreId) return Promise.resolve(null);
   const o = S.ordrer.find(x=>x.id===ordreId);
-  if (o) {
-    // Ignorer Realtime-oppdatering for denne ordren i 10 sekunder
-    ignorerRealtimeFor.add(ordreId);
-    setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
-    db.from('ordrer').upsert(ordreToDb(o))
-      .then(r=>{ if(r.error) { console.error('Lagringsfeil:', r.error.message); visToast('Lagringsfeil: ' + r.error.message); } });
-  }
+  if (!o) return Promise.resolve(null);
+  // Ignorer Realtime-oppdatering for denne ordren i 10 sekunder
+  ignorerRealtimeFor.add(ordreId);
+  setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
+  return db.from('ordrer').upsert(ordreToDb(o))
+    .then(r=>{
+      if (r.error) { console.error('Lagringsfeil:', r.error.message); visToast('Lagringsfeil: ' + r.error.message); return r.error.message; }
+      return null;
+    });
 }
 
 // ════════════════════════════════════════════════════

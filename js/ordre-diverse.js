@@ -185,9 +185,19 @@ function stoppOrdreTimer(id) {
   const el=document.getElementById('ordretimerKort_'+id);
   if(el) el.innerHTML=ordreTimerKortHTML(o);
 }
-function arkiver(id) {
+async function arkiver(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
-  o.status='arkivert'; logChange(o,'Arkivert'); save(id); renderAll(); tilbakeOrdreList();
+  o.status='arkivert';
+  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Arkivert'};
+  o.endringer.push(endring);
+  const feil = await save(id);
+  if (feil) {
+    o.status='aktiv';
+    o.endringer = o.endringer.filter(e=>e!==endring);
+    visToast('Kunne ikke arkivere ordren: ' + feil + ' — prøv igjen.');
+    return;
+  }
+  renderAll(); tilbakeOrdreList();
 }
 function apneNyOrdreModal() {
   openModal('nyOrdre');
@@ -293,16 +303,25 @@ function clearGodkjCanvas() { if(godkjCtx) godkjCtx.clearRect(0,0,godkjCtx.canva
 
 async function lagreGodkjennSignatur(hoppOver=false) {
   const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o||!godkjennGodkjenner) return;
+  const btn = document.querySelector('#godkjennSign .btn.red');
+  if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }
   if (!hoppOver) {
-    const btn = document.querySelector('#godkjennSign .btn.red');
-    if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }
     const c=document.getElementById('godkjCanvas');
     o.signatur = await lagreSignaturTilStorage(activeOrdreId, c.toDataURL());
-    if (btn) { btn.disabled = false; btn.textContent = '✓ Fullfør og lukk ordre'; }
   }
   o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn; o.status='arkivert';
-  logChange(o,'Godkjent og lukket av '+godkjennGodkjenner.navn);
-  save(activeOrdreId); closeModal('godkjennSign'); tilbakeOrdreList(); renderAll();
+  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjennGodkjenner.navn};
+  o.endringer.push(endring);
+  const feil = await save(activeOrdreId);
+  if (feil) {
+    // Lagringen feilet - ikke la det se ut som ordren er lukket når den ikke er det
+    o.godkjent=false; o.godkjennerNavn=''; o.status='aktiv';
+    o.endringer = o.endringer.filter(e=>e!==endring);
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Fullfør og lukk ordre'; }
+    visToast('Kunne ikke lukke ordren: ' + feil + ' — prøv igjen.');
+    return;
+  }
+  closeModal('godkjennSign'); tilbakeOrdreList(); renderAll();
   godkjennGodkjenner=null;
 }
 
