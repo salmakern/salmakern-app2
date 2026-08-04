@@ -267,6 +267,11 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card">
         <div class="h">Tvangsflyt</div>
         <div style="margin-top:6px">${tf.map(t=>`<span class="pill ${t.ok?'ok':'bad'}">${t.lbl}</span>`).join('')}</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          ${o.godkjent?`<span class="pill ok">Godkjent av ${o.godkjennerNavn}</span>`:`
+            ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:6px">${erAdmin?'Tvangsflyt ikke fullført (du kan overstyre som admin):':'Fullfør tvangsflyt først:'}</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
+            <button class="btn red" style="width:100%" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
+        </div>
       </div>
 
       <div class="card">
@@ -288,14 +293,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
               <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
             </div>`
         }
-      </div>
-
-      <div class="card">
-        <div class="h">Godkjenning</div>
-        ${o.godkjent?`<span class="pill ok">Godkjent av ${o.godkjennerNavn}</span>`:`
-          <div class="muted small" style="margin-bottom:8px">Godkjenner kontrollerer arbeidet og lukker ordren.</div>
-          ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:6px">${erAdmin?'Tvangsflyt ikke fullført (du kan overstyre som admin):':'Fullfør tvangsflyt først:'}</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
-          <button class="btn red" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
       </div>
 
       <div class="card">
