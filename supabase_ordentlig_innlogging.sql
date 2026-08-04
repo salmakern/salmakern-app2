@@ -56,10 +56,10 @@ begin
   update ansatte set session_token = ny_token where ansatte.id = treff.id;
 
   -- Knytt DENNE anonyme Auth-brukeren (avsenderen selv) til ansatt-raden.
-  -- raw_app_metadata kan IKKE endres av klienten selv (i motsetning til
+  -- raw_app_meta_data kan IKKE endres av klienten selv (i motsetning til
   -- user_metadata), så dette er trygt mot forfalskning.
   update auth.users
-  set raw_app_metadata = raw_app_metadata
+  set raw_app_meta_data = raw_app_meta_data
     || jsonb_build_object('ansatt_id', treff.id, 'rolle', treff.rolle, 'session_token', ny_token)
   where auth.users.id = auth.uid();
 
@@ -70,7 +70,7 @@ grant execute on function logg_inn_med_pin(text) to anon, authenticated;
 
 -- Custom Access Token Hook: kjøres av Supabase Auth hver gang en JWT
 -- utstedes/fornyes for en bruker. Kopierer ansatt_id/rolle/session_token
--- fra raw_app_metadata inn i selve JWT-en, slik at både vanlige datakall
+-- fra raw_app_meta_data inn i selve JWT-en, slik at både vanlige datakall
 -- OG Realtime kan lese dem via auth.jwt() uten noe eget headerskjema.
 create or replace function custom_access_token_hook(event jsonb)
 returns jsonb
@@ -81,7 +81,7 @@ declare
   claims jsonb;
   meta jsonb;
 begin
-  select raw_app_metadata into meta from auth.users where id = (event->>'user_id')::uuid;
+  select raw_app_meta_data into meta from auth.users where id = (event->>'user_id')::uuid;
   claims := coalesce(event->'claims', '{}'::jsonb);
   if meta ? 'ansatt_id' then
     claims := claims || jsonb_build_object(
