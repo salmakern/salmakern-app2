@@ -65,7 +65,7 @@ function renderOrdreList() {
       <div class="grid g3" style="margin-top:12px">
         ${alle.length ? alle.map(o=>{
           const si = statusInfo(o.ordreStatus);
-          return `<div style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:5px;min-width:0">
+          return `<div style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:14px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0">
             ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
