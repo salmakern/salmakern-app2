@@ -546,3 +546,50 @@ async function slettFoto(id, side, idx) {
   save(id); buildOrdreDetail();
 }
 
+function dokumenterListeHTML(o) {
+  const dok = o.dokumenter||[];
+  if (!dok.length) return '<div class="muted small">Ingen dokumenter lagt til</div>';
+  const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  return dok.map((d,i)=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30">
+      <a href="${d.url}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none;font-size:13px;word-break:break-word">📄 ${esc(d.navn)}</a>
+      ${erGodkjenner?`<button onclick="slettDokument('${o.id}',${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:0;flex-shrink:0">✕</button>`:''}
+    </div>`).join('');
+}
+
+async function lastOppDokument(e, id) {
+  const file = e.target.files[0]; if (!file) return;
+  if (file.type !== 'application/pdf') { alert('Kun PDF-filer er tillatt'); e.target.value=''; return; }
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  if (!db) { visToast('Ikke koblet til Supabase'); return; }
+  const filnavn = `${id}/${Date.now()}_${file.name}`;
+  const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType:'application/pdf'});
+  if (error) { visToast('Feil ved opplasting: ' + error.message); return; }
+  const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
+  o.dokumenter = [...(o.dokumenter||[]), { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() }];
+  logChange(o, 'Lastet opp dokument: ' + file.name);
+  db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
+  e.target.value = '';
+  const listEl = document.getElementById('dokumenterListe_'+id);
+  if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+}
+
+async function slettDokument(id, idx) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const dok = o.dokumenter[idx]; if (!dok) return;
+  if (!confirm(`Slette "${dok.navn}"?`)) return;
+  if (db && dok.url) {
+    const filnavn = dok.url.split('/ordre-dokumenter/')[1];
+    if (filnavn) await db.storage.from('ordre-dokumenter').remove([filnavn]);
+  }
+  o.dokumenter = o.dokumenter.filter((_,i)=>i!==idx);
+  logChange(o, 'Slettet dokument: ' + dok.navn);
+  if (db) db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
+  const listEl = document.getElementById('dokumenterListe_'+id);
+  if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+}
+

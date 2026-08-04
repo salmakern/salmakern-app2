@@ -238,7 +238,7 @@ function dbToOrdre(r) {
     notater:r.notater||'', endringer:r.endringer||[],
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
-    flateId:r.flate_id||null, prioritert:!!r.prioritert
+    flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[]
   };
 }
 function ordreToDb(o) {
