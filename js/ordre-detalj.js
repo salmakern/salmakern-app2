@@ -97,14 +97,16 @@ function buildOrdreDetail() {
   <div class="card">
     <div class="row">
       <div>
-        <div class="title">${ordreLabel(o)}</div>
+        <div class="title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${ordreLabel(o)}
+          <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px">${o.godkjent?'Godkjent':'Ikke godkjent'}</span>
+        </div>
         ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${o.chassis}</div>`:''}
         <div class="muted" style="margin-top:2px">${o.type}${o.variant?' – '+o.variant:''}</div>
         <div class="small muted">Eier: ${o.eier||'–'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:7px 12px;')}
-        <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
       </div>
     </div>
   </div>

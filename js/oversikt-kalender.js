@@ -77,6 +77,7 @@ function renderOrdreList() {
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
             <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid : 'Ikke i kalender'}</div>
+            ${godkjentKortHTML(o)}
           </div>`;
         }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`}
       </div>
@@ -120,6 +121,7 @@ function renderOversikt(q) {
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid:'Ikke i kalender'}</div>
+          ${godkjentKortHTML(o)}
         </div>`;
       }).join('')
     : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
@@ -144,6 +146,7 @@ function renderOversikt(q) {
             <button class="btn sm" onclick="openOrdre('${o.id}')">Åpne</button>
             <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>
           </div>
+          ${godkjentKortHTML(o)}
         </div>`;
       }).join('')
     : '<div class="muted small">Ingen ventende ordrer</div>';
@@ -322,6 +325,14 @@ function dokStatusPillHTML(label, verdi) {
 }
 function dokStatusKortHTML(o) {
   return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}</div>`;
+}
+function godkjentKortHTML(o) {
+  return `<div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:2px">
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjent?'#86efac':'#a1a1aa'}">
+      Godkjent
+      <input type="checkbox" ${o.godkjent?'checked':''} disabled style="width:14px;height:14px;accent-color:#22c55e">
+    </label>
+  </div>`;
 }
 
 let _dragOrdre = null;
