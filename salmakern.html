@@ -933,8 +933,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <datalist id="lagerKategoriListe"></datalist>
     <label>Leverandør (valgfritt)</label>
     <input id="nyVareLeverandor" placeholder="F.eks. Biltema">
+    <div id="nyVareForventetWrap" style="display:none">
+      <label>Forventet antall (valgfritt)</label>
+      <input type="number" id="nyVareForventet" min="0" step="any" value="" placeholder="F.eks. hva du bestilte fra leverandør">
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><label>Antall på lager</label><input type="number" id="nyVareAntall" value="0"></div>
+      <div><label id="nyVareAntallLabel">Antall på lager</label><input type="number" id="nyVareAntall" value="0"></div>
       <div><label>Enhet</label><input id="nyVareEnhet" value="stk"></div>
     </div>
     <label>Varsle ved lav beholdning (antall)</label>

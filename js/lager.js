@@ -118,6 +118,9 @@ function apneNyVare() {
   document.getElementById('nyVareNavn').value = '';
   document.getElementById('nyVareKategori').value = '';
   document.getElementById('nyVareLeverandor').value = '';
+  document.getElementById('nyVareForventet').value = '';
+  document.getElementById('nyVareForventetWrap').style.display = 'block';
+  document.getElementById('nyVareAntallLabel').textContent = 'Mottatt antall';
   document.getElementById('nyVareAntall').value = '0';
   document.getElementById('nyVareAntall').disabled = false;
   document.getElementById('nyVareEnhet').value = 'stk';
@@ -133,6 +136,8 @@ function apneRedigerVare() {
   document.getElementById('nyVareNavn').value = v.navn;
   document.getElementById('nyVareKategori').value = v.kategori||'';
   document.getElementById('nyVareLeverandor').value = v.leverandor||'';
+  document.getElementById('nyVareForventetWrap').style.display = 'none';
+  document.getElementById('nyVareAntallLabel').textContent = 'Antall på lager';
   document.getElementById('nyVareAntall').value = v.antall;
   document.getElementById('nyVareAntall').disabled = true; // antall endres via Fyll på/Ta ut, ikke her
   document.getElementById('nyVareEnhet').value = v.enhet||'stk';
@@ -160,12 +165,20 @@ function lagreVare() {
     renderVareDetalj();
   } else {
     const antall = Number(document.getElementById('nyVareAntall').value) || 0;
+    const forventet = Number(document.getElementById('nyVareForventet').value) || 0;
+    const mangler = forventet > antall ? forventet - antall : 0;
+    let notatMedAvvik = notat;
+    if (mangler > 0) {
+      const manglerTekst = `Forventet ${fmtAntall(forventet)}, mottatt ${fmtAntall(antall)} (mangler ${fmtAntall(mangler)} ${enhet})`;
+      notatMedAvvik = notat ? notat + ' — ' + manglerTekst : manglerTekst;
+    }
     const id = 'vare_' + Date.now();
-    const vare = { id, navn, kategori, leverandor, antall, enhet, minAntall, notat, createdAt:new Date().toISOString() };
+    const vare = { id, navn, kategori, leverandor, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
     S.lagervarer = S.lagervarer || [];
     S.lagervarer.push(vare);
-    if (db) db.from('lagervarer').insert({id, navn, kategori, leverandor, antall, enhet, min_antall:minAntall, notat})
+    if (db) db.from('lagervarer').insert({id, navn, kategori, leverandor, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
       .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
+    if (mangler > 0) varselMangelfullLevering({navn, enhet}, forventet, antall, mangler);
     closeModal('nyVareModal');
     renderLagerListe();
   }
