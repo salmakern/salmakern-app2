@@ -9,6 +9,7 @@ webpush.setVapidDetails(`mailto:${VAPID_EMAIL}`, VAPID_PUBLIC, VAPID_PRIVATE)
 
 const STATUS_NAVN: Record<string, string> = {
   hentet:          'Hentet',
+  bestilt_frakt:   'Bestilt frakt',
   klar_henting:    'Klar for henting',
   vist_biltilsyn:  'Vist på biltilsynet',
   klar_visning:    'Klar for visning',

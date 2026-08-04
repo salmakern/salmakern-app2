@@ -77,7 +77,9 @@ function buildOrdreDetail() {
   const focusTag = document.activeElement?.tagName;
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   const tf = tvangsflyt(o);
-  const kanLukke = tf.every(t=>t.ok);
+  const tvangsflytOk = tf.every(t=>t.ok);
+  const erAdmin = me && me.rolle==='admin';
+  const kanLukke = tvangsflytOk || erAdmin; // admin kan overstyre ufullstendig tvangsflyt
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
   const headerH = document.querySelector('.top')?.offsetHeight || 0;
 
@@ -291,8 +293,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <div class="h">Godkjenning</div>
         ${o.godkjent?`<span class="pill ok">Godkjent av ${o.godkjennerNavn}</span>`:`
           <div class="muted small" style="margin-bottom:8px">Godkjenner kontrollerer arbeidet og lukker ordren.</div>
-          ${!kanLukke?`<div class="muted small" style="margin-bottom:6px">Fullfør tvangsflyt først:</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
-          <button class="btn red" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?'Godkjenn og lukk':'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
+          ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:6px">${erAdmin?'Tvangsflyt ikke fullført (du kan overstyre som admin):':'Fullfør tvangsflyt først:'}</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
+          <button class="btn red" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
       </div>
 
       <div class="card">

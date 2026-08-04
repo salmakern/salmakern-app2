@@ -310,7 +310,9 @@ async function lagreGodkjennSignatur(hoppOver=false) {
     o.signatur = await lagreSignaturTilStorage(activeOrdreId, c.toDataURL());
   }
   o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn; o.status='arkivert';
-  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjennGodkjenner.navn};
+  const tvangsflytOk = tvangsflyt(o).every(t=>t.ok);
+  const overstyrTekst = (!tvangsflytOk && me?.rolle==='admin') ? ' (tvangsflyt overstyrt av admin - ikke alle punkter var fullført)' : '';
+  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjennGodkjenner.navn+overstyrTekst};
   o.endringer.push(endring);
   const feil = await save(activeOrdreId);
   if (feil) {
