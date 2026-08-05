@@ -426,6 +426,50 @@ function kopierBestillingsliste() {
     .catch(()=>visToast('Klarte ikke å kopiere'));
 }
 
+// Åpner et rent, utskriftsvennlig ark og trigger utskriftsdialogen direkte -
+// ingen PDF-nedlasting nødvendig, bruker skriver rett fra nettleseren.
+function skrivUtBestillingsliste() {
+  const grupper = bestillingslisteGruppert();
+  const dato = new Date().toLocaleDateString('no');
+  const innhold = Object.entries(grupper).map(([lev, kategorier]) => `
+    <h2>${esc(lev)}</h2>
+    ${Object.entries(kategorier).map(([kat, varer]) => `
+      <h3>${esc(kat)}</h3>
+      <table>
+        ${varer.map(v=>`
+          <tr>
+            <td class="boks"></td>
+            <td>${esc(v.navn)}</td>
+            <td class="antall">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</td>
+          </tr>`).join('')}
+      </table>`).join('')}
+  `).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bestillingsliste ${dato}</title>
+    <style>
+      body{font-family:Arial,sans-serif;color:#000;padding:24px;max-width:700px;margin:0 auto}
+      h1{font-size:20px;margin-bottom:2px}
+      .dato{color:#555;margin-bottom:20px}
+      h2{font-size:16px;border-bottom:2px solid #000;padding-bottom:4px;margin-top:24px}
+      h3{font-size:13px;color:#444;margin:10px 0 4px}
+      table{width:100%;border-collapse:collapse}
+      td{padding:5px 4px;border-bottom:1px solid #ddd;font-size:13px}
+      td.boks{width:18px}
+      td.boks::before{content:'';display:block;width:14px;height:14px;border:1.5px solid #000}
+      td.antall{text-align:right;color:#555;white-space:nowrap}
+      @media print{ body{padding:0} }
+    </style></head>
+    <body>
+      <h1>Bestillingsliste</h1>
+      <div class="dato">${dato}</div>
+      ${innhold || '<p>Ingen varer er under lav-grensen akkurat nå.</p>'}
+    </body></html>`;
+  const vindu = window.open('', '_blank');
+  if (!vindu) { visToast('Nettleseren blokkerte utskriftsvinduet – tillat popup og prøv igjen'); return; }
+  vindu.document.write(html);
+  vindu.document.close();
+  vindu.onload = () => vindu.print();
+}
+
 function bestillAltFraListe() {
   const varer = laveVarerForBestilling();
   if (!varer.length) return;
