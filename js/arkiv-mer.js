@@ -4,7 +4,7 @@
 function renderArkiv() {
   const q=(document.getElementById('arkivSok')?.value||'').toLowerCase().trim();
   const match=o=>!q||o.regnr?.toLowerCase().includes(q)||o.kunde?.toLowerCase().includes(q)||o.chassis?.toLowerCase().includes(q)||o.eier?.toLowerCase().includes(q);
-  const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o));
+  const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o)).sort(sorterOrdre);
   const kunIkkeFakturert = document.getElementById('arkivFilterIkkeFakturert')?.checked;
   const kunFakturert = document.getElementById('arkivFilterFakturert')?.checked;
   let ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
@@ -19,7 +19,7 @@ function renderArkiv() {
       const si=statusInfo(o.ordreStatus);
       return `<div style="border:2px solid ${si.border};border-radius:12px;padding:10px;margin-bottom:6px;cursor:pointer;background:#111114" onclick="openOrdre('${o.id}')">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
-          <b>${ordreLabel(o)}</b>
+          <b>${ordreLabelFull(o)}</b>
           <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
         </div>
         <div class="small muted" style="margin-top:3px">${o.type} ${o.variant} · ${o.kunde}</div>
@@ -31,7 +31,7 @@ function renderArkiv() {
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
     ?ferdig.map(o=>`<div class="box" style="margin-bottom:6px;padding:8px">
         <div class="row" style="margin-bottom:4px">
-          <div><b>${ordreLabel(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
+          <div><b>${ordreLabelFull(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
           <div style="display:flex;gap:3px">
             <button class="btn sm" onclick="openOrdre('${o.id}',true)" style="font-size:10px;padding:2px 7px;border-radius:8px">Åpne</button>
             <button class="btn sm" onclick="genPDF('${o.id}')" style="font-size:10px;padding:2px 7px;border-radius:8px">📄 PDF</button>

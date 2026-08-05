@@ -68,7 +68,7 @@ function renderOrdreList() {
           return `<div style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:14px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0">
             ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-              <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
+              <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
               ${statusDropdown(o.id, o.ordreStatus)}
             </div>
             <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.variant||''}</span>
@@ -114,7 +114,7 @@ function renderOversikt(q) {
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-            <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabel(o)}</b>
+            <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
@@ -133,7 +133,7 @@ function renderOversikt(q) {
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:16px;padding:12px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
-            <b>${ordreLabel(o)}</b>
+            <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
@@ -211,11 +211,11 @@ function renderWeek() {
       const si = statusInfo(o.ordreStatus);
       const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
       const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
-      const height = o.regnr ? Math.max(36, SLOT_PX) : Math.max(42, SLOT_PX); // nok plass til chassisnr på 2 linjer, uten tomrom
+      const height = (o.regnr && !o.chassis) ? Math.max(36, SLOT_PX) : Math.max(42, SLOT_PX); // nok plass til lengre tekst (regnr + chassis) på 2 linjer, uten tomrom
       return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
           <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
-            <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabel(o)}</div>
+            <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
             <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid} · ${statusInfo(o.ordreStatus).lbl}</div>
           </div>
           <div style="position:relative;flex-shrink:0">

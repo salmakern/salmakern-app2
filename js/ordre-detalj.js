@@ -436,6 +436,7 @@ function sfOmbygging(id, felt, val) {
 // ════════════════════════════════════════════════════
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function ordreLabel(o){ return o.regnr || (o.chassis ? 'Chassis: '+o.chassis : 'Uten reg.nr'); }
+function ordreLabelFull(o){ return (o.regnr && o.chassis) ? o.regnr+' · Chassis: '+o.chassis : ordreLabel(o); }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, siden de allerede er satt opp per modell
 function alleKjenteModeller() {
