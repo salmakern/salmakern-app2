@@ -361,6 +361,69 @@ function settKategoriBestilt(kategori) {
   varer.forEach(v => settVareBestilt(v.id, true));
 }
 
+// ════════════════════════════════════════════════════
+// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per leverandør
+// ════════════════════════════════════════════════════
+function laveVarerForBestilling() {
+  return (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
+}
+
+function bestillingslisteGruppert() {
+  const grupper = {};
+  laveVarerForBestilling().forEach(v => {
+    const lev = v.leverandor || 'Uten leverandør';
+    (grupper[lev] = grupper[lev] || []).push(v);
+  });
+  return grupper;
+}
+
+function visBestillingsliste() {
+  const grupper = bestillingslisteGruppert();
+  const antall = Object.values(grupper).reduce((s,a)=>s+a.length, 0);
+  const el = document.getElementById('bestillingslisteInnhold');
+  el.innerHTML = antall
+    ? Object.entries(grupper).map(([lev, varer]) => `
+        <div style="margin-bottom:14px">
+          <div style="font-weight:700;color:#f87171;margin-bottom:4px">${esc(lev)}</div>
+          ${varer.map(v=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #27272a30">
+              <span>${esc(v.navn)}</span>
+              <span class="small muted">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</span>
+            </div>`).join('')}
+        </div>`).join('')
+    : '<div class="muted small">Ingen varer er under lav-grensen akkurat nå.</div>';
+  document.getElementById('bestillingslisteHandlinger').style.display = antall ? 'flex' : 'none';
+  openModal('bestillingslisteModal');
+}
+
+function bestillingslisteSomTekst() {
+  const grupper = bestillingslisteGruppert();
+  const dato = new Date().toLocaleDateString('no');
+  let tekst = `Bestillingsliste – ${dato}\n\n`;
+  Object.entries(grupper).forEach(([lev, varer]) => {
+    tekst += `${lev}:\n`;
+    varer.forEach(v => { tekst += `- ${v.navn} (${fmtAntall(v.antall)} av ${fmtAntall(v.minAntall)} ${v.enhet} igjen)\n`; });
+    tekst += '\n';
+  });
+  return tekst.trim();
+}
+
+function kopierBestillingsliste() {
+  const tekst = bestillingslisteSomTekst();
+  navigator.clipboard.writeText(tekst)
+    .then(()=>visToast('Bestillingsliste kopiert'))
+    .catch(()=>visToast('Klarte ikke å kopiere'));
+}
+
+function bestillAltFraListe() {
+  const varer = laveVarerForBestilling();
+  if (!varer.length) return;
+  if (!confirm(`Merk alle ${varer.length} varer på listen som bestilt?`)) return;
+  varer.forEach(v => settVareBestilt(v.id, true));
+  renderLagerListe();
+  closeModal('bestillingslisteModal');
+}
+
 // Globalt lav-lager-varsel i toppmenyen, synlig uansett hvilken side man er på
 function renderGlobalLavLagerVarsel() {
   const el = document.getElementById('globalLavLagerVarsel');
