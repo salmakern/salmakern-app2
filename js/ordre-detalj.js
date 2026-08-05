@@ -100,7 +100,7 @@ function buildOrdreDetail() {
         <div class="title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${ordreLabel(o)}
           <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer">
-            Godkjent
+            Vedtak
             <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
           </label>
         </div>

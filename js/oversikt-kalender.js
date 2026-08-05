@@ -211,7 +211,7 @@ function renderWeek() {
       const si = statusInfo(o.ordreStatus);
       const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
       const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
-      const height = o.regnr ? Math.max(52, SLOT_PX) : 76; // ekstra høyde så chassisnr får plass på flere linjer
+      const height = o.regnr ? Math.max(38, SLOT_PX) : 56; // ekstra høyde så chassisnr får plass på flere linjer
       return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
           <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
@@ -345,7 +345,7 @@ function dokStatusKortHTML(o) {
 }
 function godkjentKortHTML(o) {
   return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
-    Godkjent
+    Vedtak
     <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
   </label>`;
 }
