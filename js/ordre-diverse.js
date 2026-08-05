@@ -614,8 +614,21 @@ async function lastOppDokument(e, id) {
   const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream'});
   if (error) { visToast('Feil ved opplasting: ' + error.message); return; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
-  o.dokumenter = [...(o.dokumenter||[]), { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() }];
-  logChange(o, 'Lastet opp dokument: ' + file.name);
+  o.dokumenter = o.dokumenter || [];
+  // Samme filnavn som et eksisterende dokument = ny versjon som erstatter den gamle,
+  // i stedet for at gamle versjoner hoper seg opp i listen.
+  const gammelIdx = o.dokumenter.findIndex(d => d.navn === file.name);
+  if (gammelIdx !== -1) {
+    const gammel = o.dokumenter[gammelIdx];
+    const gammeltFilnavn = gammel.url.split('/ordre-dokumenter/')[1];
+    if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
+    o.dokumenter[gammelIdx] = { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() };
+    o.dokumenter = [...o.dokumenter];
+    logChange(o, 'Erstattet dokument med ny versjon: ' + file.name);
+  } else {
+    o.dokumenter = [...o.dokumenter, { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() }];
+    logChange(o, 'Lastet opp dokument: ' + file.name);
+  }
   db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
     .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
