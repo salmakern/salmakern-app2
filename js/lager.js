@@ -368,27 +368,35 @@ function laveVarerForBestilling() {
   return (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
 }
 
+// Gruppert per leverandør, og innenfor hver leverandør videre per kategori
 function bestillingslisteGruppert() {
   const grupper = {};
   laveVarerForBestilling().forEach(v => {
     const lev = v.leverandor || 'Uten leverandør';
-    (grupper[lev] = grupper[lev] || []).push(v);
+    const kat = v.kategori || 'Uten kategori';
+    grupper[lev] = grupper[lev] || {};
+    (grupper[lev][kat] = grupper[lev][kat] || []).push(v);
   });
   return grupper;
 }
 
 function visBestillingsliste() {
   const grupper = bestillingslisteGruppert();
-  const antall = Object.values(grupper).reduce((s,a)=>s+a.length, 0);
+  const leverandorer = Object.keys(grupper);
+  const antall = leverandorer.reduce((s,lev)=>s+Object.values(grupper[lev]).reduce((s2,a)=>s2+a.length,0), 0);
   const el = document.getElementById('bestillingslisteInnhold');
   el.innerHTML = antall
-    ? Object.entries(grupper).map(([lev, varer]) => `
+    ? leverandorer.map(lev => `
         <div style="margin-bottom:14px">
-          <div style="font-weight:700;color:#f87171;margin-bottom:4px">${esc(lev)}</div>
-          ${varer.map(v=>`
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #27272a30">
-              <span>${esc(v.navn)}</span>
-              <span class="small muted">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</span>
+          <div style="font-weight:700;color:#f87171;margin-bottom:6px">${esc(lev)}</div>
+          ${Object.entries(grupper[lev]).map(([kat, varer]) => `
+            <div style="margin-bottom:8px;margin-left:8px">
+              <div class="small muted" style="font-weight:600;margin-bottom:2px">${esc(kat)}</div>
+              ${varer.map(v=>`
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #27272a30">
+                  <span>${esc(v.navn)}</span>
+                  <span class="small muted">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</span>
+                </div>`).join('')}
             </div>`).join('')}
         </div>`).join('')
     : '<div class="muted small">Ingen varer er under lav-grensen akkurat nå.</div>';
@@ -400,9 +408,12 @@ function bestillingslisteSomTekst() {
   const grupper = bestillingslisteGruppert();
   const dato = new Date().toLocaleDateString('no');
   let tekst = `Bestillingsliste – ${dato}\n\n`;
-  Object.entries(grupper).forEach(([lev, varer]) => {
+  Object.entries(grupper).forEach(([lev, kategorier]) => {
     tekst += `${lev}:\n`;
-    varer.forEach(v => { tekst += `- ${v.navn} (${fmtAntall(v.antall)} av ${fmtAntall(v.minAntall)} ${v.enhet} igjen)\n`; });
+    Object.entries(kategorier).forEach(([kat, varer]) => {
+      tekst += `  ${kat}:\n`;
+      varer.forEach(v => { tekst += `  - ${v.navn} (${fmtAntall(v.antall)} av ${fmtAntall(v.minAntall)} ${v.enhet} igjen)\n`; });
+    });
     tekst += '\n';
   });
   return tekst.trim();

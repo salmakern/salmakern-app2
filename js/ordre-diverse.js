@@ -611,7 +611,7 @@ async function lastOppDokument(e, id) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // æ/ø/å m.fl. -> nærmeste ascii-bokstav
     .replace(/[^a-zA-Z0-9.\-]/g, '_');
   const filnavn = `${id}/${Date.now()}_${tryggNavn}`;
-  const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream'});
+  const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream', cacheControl:'31536000'});
   if (error) { visToast('Feil ved opplasting: ' + error.message); return; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
   o.dokumenter = o.dokumenter || [];
