@@ -212,7 +212,7 @@ function renderWeek() {
       const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
       const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
       const height = (o.regnr && !o.chassis) ? Math.max(36, SLOT_PX) : Math.max(42, SLOT_PX); // nok plass til lengre tekst (regnr + chassis) på 2 linjer, uten tomrom
-      return `<div class="cal-event" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
+      return `<div class="cal-event" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
           <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
             <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
