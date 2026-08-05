@@ -577,20 +577,31 @@ async function slettFoto(id, side, idx) {
   save(id); buildOrdreDetail();
 }
 
+const DOK_TILLATTE_EXT = ['pdf','doc','docx','xls','xlsx','ppt','pptx','odt','ods','txt','csv','jpg','jpeg','png','heic'];
+function dokIkon(navn) {
+  const ext = (navn.split('.').pop()||'').toLowerCase();
+  if (ext==='pdf') return '📄';
+  if (['doc','docx','odt'].includes(ext)) return '📝';
+  if (['xls','xlsx','ods','csv'].includes(ext)) return '📊';
+  if (['ppt','pptx'].includes(ext)) return '📑';
+  if (['jpg','jpeg','png','heic'].includes(ext)) return '🖼️';
+  return '📁';
+}
 function dokumenterListeHTML(o) {
   const dok = o.dokumenter||[];
   if (!dok.length) return '<div class="muted small">Ingen dokumenter lagt til</div>';
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
   return dok.map((d,i)=>`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30">
-      <a href="${d.url}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none;font-size:13px;word-break:break-word">📄 ${esc(d.navn)}</a>
+      <a href="${d.url}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none;font-size:13px;word-break:break-word">${dokIkon(d.navn)} ${esc(d.navn)}</a>
       ${erGodkjenner?`<button onclick="slettDokument('${o.id}',${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:0;flex-shrink:0">✕</button>`:''}
     </div>`).join('');
 }
 
 async function lastOppDokument(e, id) {
   const file = e.target.files[0]; if (!file) return;
-  if (file.type !== 'application/pdf') { alert('Kun PDF-filer er tillatt'); e.target.value=''; return; }
+  const ext = (file.name.split('.').pop()||'').toLowerCase();
+  if (!DOK_TILLATTE_EXT.includes(ext)) { alert('Filtype ikke tillatt. Godkjente typer: ' + DOK_TILLATTE_EXT.join(', ')); e.target.value=''; return; }
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   if (!db) { visToast('Ikke koblet til Supabase'); return; }
   // Supabase Storage tillater ikke æøå/mellomrom/spesialtegn i selve filbanen -
@@ -600,7 +611,7 @@ async function lastOppDokument(e, id) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // æ/ø/å m.fl. -> nærmeste ascii-bokstav
     .replace(/[^a-zA-Z0-9.\-]/g, '_');
   const filnavn = `${id}/${Date.now()}_${tryggNavn}`;
-  const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType:'application/pdf'});
+  const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream'});
   if (error) { visToast('Feil ved opplasting: ' + error.message); return; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
   o.dokumenter = [...(o.dokumenter||[]), { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() }];

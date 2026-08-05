@@ -302,11 +302,11 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       </div>
 
       <div class="card">
-        <div class="h">Dokumenter (PDF-vedlegg)</div>
+        <div class="h">Dokumenter</div>
         <div id="dokumenterListe_${o.id}" style="margin-top:8px">${dokumenterListeHTML(o)}</div>
         ${erGodkjenner?`
-          <input type="file" id="dok_${o.id}" accept="application/pdf" style="display:none" onchange="lastOppDokument(event,'${o.id}')">
-          <button class="btn sm" style="width:100%;margin-top:8px" onclick="document.getElementById('dok_${o.id}').click()">+ Last opp PDF</button>
+          <input type="file" id="dok_${o.id}" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.txt,.csv,.jpg,.jpeg,.png,.heic" style="display:none" onchange="lastOppDokument(event,'${o.id}')">
+          <button class="btn sm" style="width:100%;margin-top:8px" onclick="document.getElementById('dok_${o.id}').click()">+ Last opp dokument</button>
         `:''}
       </div>
 
