@@ -389,7 +389,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             </div>
           </div>
           <div style="margin-top:10px">
-            <input id="lagerSokInput" type="search" placeholder="Søk vare, kategori eller leverandør..." oninput="renderLagerListe()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+            <input id="lagerSokInput" type="search" placeholder="Søk vare, kategori eller tegningsnummer..." oninput="renderLagerListe()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
           </div>
         </div>
         <div id="lagerListe" style="margin-top:12px"></div>
@@ -934,8 +934,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <label>Kategori (valgfritt)</label>
     <input id="nyVareKategori" placeholder="F.eks. Skruer, Elektrisk, Modul-deler..." list="lagerKategoriListe">
     <datalist id="lagerKategoriListe"></datalist>
-    <label>Leverandør (valgfritt)</label>
-    <input id="nyVareLeverandor" placeholder="F.eks. Biltema">
+    <label>Tegningsnummer (valgfritt)</label>
+    <input id="nyVareTegningsnummer" placeholder="F.eks. TN-1234">
     <div id="nyVareForventetWrap" style="display:none">
       <label>Forventet antall (valgfritt)</label>
       <input type="number" id="nyVareForventet" min="0" step="any" value="" placeholder="F.eks. hva du bestilte fra leverandør">
@@ -978,7 +978,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div class="modal" id="bestillingslisteModal">
   <div class="modal-box">
     <div class="h" style="margin-bottom:12px">Bestillingsliste</div>
-    <div class="muted small" style="margin-bottom:10px">Alle varer under lav-grensen, gruppert per leverandør.</div>
+    <div class="muted small" style="margin-bottom:10px">Alle varer under lav-grensen, gruppert per kategori.</div>
     <div id="bestillingslisteInnhold"></div>
     <div id="bestillingslisteHandlinger" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn red" onclick="kopierBestillingsliste()">📋 Kopier liste</button>

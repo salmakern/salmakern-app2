@@ -36,7 +36,7 @@ function renderLagerListe() {
 
   if (sok) {
     // Ved søk: vis treffene direkte, uten å måtte inn i en kategori
-    varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.leverandor||'').toLowerCase().includes(sok));
+    varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
     el.innerHTML = varer.length ? `<div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>` : '<div class="card"><div class="muted small">Ingen varer funnet</div></div>';
     return;
   }
@@ -66,7 +66,7 @@ function vareBoksHTML(v) {
       <b>${esc(v.navn)}</b>
       <span style="font-weight:700;${lavt && !v.bestilt?'color:#f87171':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
     </div>
-    ${v.leverandor?`<div class="small muted" style="margin-top:2px">${esc(v.leverandor)}</div>`:''}
+    ${v.tegningsnummer?`<div class="small muted" style="margin-top:2px">${esc(v.tegningsnummer)}</div>`:''}
     ${lavt?`<div class="small" style="color:${v.bestilt?'#4ade80':'#f87171'};margin-top:4px">${v.bestilt?'✓ Bestilt':'⚠ Lav beholdning'}</div>`:''}
   </div>`;
 }
@@ -117,7 +117,7 @@ function apneNyVare() {
   document.getElementById('redigerVareId').value = '';
   document.getElementById('nyVareNavn').value = '';
   document.getElementById('nyVareKategori').value = '';
-  document.getElementById('nyVareLeverandor').value = '';
+  document.getElementById('nyVareTegningsnummer').value = '';
   document.getElementById('nyVareForventet').value = '';
   document.getElementById('nyVareForventetWrap').style.display = 'block';
   document.getElementById('nyVareAntallLabel').textContent = 'Mottatt antall';
@@ -135,7 +135,7 @@ function apneRedigerVare() {
   document.getElementById('redigerVareId').value = v.id;
   document.getElementById('nyVareNavn').value = v.navn;
   document.getElementById('nyVareKategori').value = v.kategori||'';
-  document.getElementById('nyVareLeverandor').value = v.leverandor||'';
+  document.getElementById('nyVareTegningsnummer').value = v.tegningsnummer||'';
   document.getElementById('nyVareForventetWrap').style.display = 'none';
   document.getElementById('nyVareAntallLabel').textContent = 'Antall på lager';
   document.getElementById('nyVareAntall').value = v.antall;
@@ -151,15 +151,15 @@ function lagreVare() {
   if (!navn) { alert('Skriv inn et navn på varen'); return; }
   const redigerId  = document.getElementById('redigerVareId').value;
   const kategori   = document.getElementById('nyVareKategori').value.trim();
-  const leverandor = document.getElementById('nyVareLeverandor').value.trim();
+  const tegningsnummer = document.getElementById('nyVareTegningsnummer').value.trim();
   const enhet      = document.getElementById('nyVareEnhet').value.trim() || 'stk';
   const minAntall  = Number(document.getElementById('nyVareMinAntall').value) || 0;
   const notat      = document.getElementById('nyVareNotat').value.trim();
 
   if (redigerId) {
     const v = (S.lagervarer||[]).find(x=>x.id===redigerId); if (!v) return;
-    v.navn = navn; v.kategori = kategori; v.leverandor = leverandor; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
-    if (db) db.from('lagervarer').update({navn, kategori, leverandor, enhet, min_antall:minAntall, notat}).eq('id', v.id)
+    v.navn = navn; v.kategori = kategori; v.tegningsnummer = tegningsnummer; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
+    if (db) db.from('lagervarer').update({navn, kategori, tegningsnummer, enhet, min_antall:minAntall, notat}).eq('id', v.id)
       .then(r=>{if(r.error) console.error('Lagervare-oppdatering feilet:', r.error.message);});
     closeModal('nyVareModal');
     renderVareDetalj();
@@ -173,10 +173,10 @@ function lagreVare() {
       notatMedAvvik = notat ? notat + ' — ' + manglerTekst : manglerTekst;
     }
     const id = 'vare_' + Date.now();
-    const vare = { id, navn, kategori, leverandor, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
+    const vare = { id, navn, kategori, tegningsnummer, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
     S.lagervarer = S.lagervarer || [];
     S.lagervarer.push(vare);
-    if (db) db.from('lagervarer').insert({id, navn, kategori, leverandor, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
+    if (db) db.from('lagervarer').insert({id, navn, kategori, tegningsnummer, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
       .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
     if (mangler > 0) varselMangelfullLevering({navn, enhet}, forventet, antall, mangler);
     closeModal('nyVareModal');
@@ -230,7 +230,7 @@ function renderVareDetalj() {
   const v = (S.lagervarer||[]).find(x=>x.id===aktivVareId);
   if (!v) { tilbakeLagerListe(); return; }
   document.getElementById('vareDetaljNavn').textContent = v.navn;
-  document.getElementById('vareDetaljUndertekst').textContent = [v.kategori, v.leverandor].filter(Boolean).join(' · ');
+  document.getElementById('vareDetaljUndertekst').textContent = [v.kategori, v.tegningsnummer].filter(Boolean).join(' · ');
   document.getElementById('vareDetaljAntall').textContent = fmtAntall(v.antall);
   document.getElementById('vareDetaljEnhet').textContent = v.enhet;
   const lavt = v.minAntall > 0 && v.antall <= v.minAntall;
@@ -362,41 +362,33 @@ function settKategoriBestilt(kategori) {
 }
 
 // ════════════════════════════════════════════════════
-// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per leverandør
+// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per kategori
 // ════════════════════════════════════════════════════
 function laveVarerForBestilling() {
   return (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
 }
 
-// Gruppert per leverandør, og innenfor hver leverandør videre per kategori
 function bestillingslisteGruppert() {
   const grupper = {};
   laveVarerForBestilling().forEach(v => {
-    const lev = v.leverandor || 'Uten leverandør';
     const kat = v.kategori || 'Uten kategori';
-    grupper[lev] = grupper[lev] || {};
-    (grupper[lev][kat] = grupper[lev][kat] || []).push(v);
+    (grupper[kat] = grupper[kat] || []).push(v);
   });
   return grupper;
 }
 
 function visBestillingsliste() {
   const grupper = bestillingslisteGruppert();
-  const leverandorer = Object.keys(grupper);
-  const antall = leverandorer.reduce((s,lev)=>s+Object.values(grupper[lev]).reduce((s2,a)=>s2+a.length,0), 0);
+  const antall = Object.values(grupper).reduce((s,a)=>s+a.length, 0);
   const el = document.getElementById('bestillingslisteInnhold');
   el.innerHTML = antall
-    ? leverandorer.map(lev => `
+    ? Object.entries(grupper).map(([kat, varer]) => `
         <div style="margin-bottom:14px">
-          <div style="font-weight:700;color:#f87171;margin-bottom:6px">${esc(lev)}</div>
-          ${Object.entries(grupper[lev]).map(([kat, varer]) => `
-            <div style="margin-bottom:8px;margin-left:8px">
-              <div class="small muted" style="font-weight:600;margin-bottom:2px">${esc(kat)}</div>
-              ${varer.map(v=>`
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #27272a30">
-                  <span>${esc(v.navn)}</span>
-                  <span class="small muted">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</span>
-                </div>`).join('')}
+          <div style="font-weight:700;color:#f87171;margin-bottom:4px">${esc(kat)}</div>
+          ${varer.map(v=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #27272a30">
+              <span>${esc(v.navn)}${v.tegningsnummer?` <span class="small muted">(${esc(v.tegningsnummer)})</span>`:''}</span>
+              <span class="small muted">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</span>
             </div>`).join('')}
         </div>`).join('')
     : '<div class="muted small">Ingen varer er under lav-grensen akkurat nå.</div>';
@@ -408,12 +400,9 @@ function bestillingslisteSomTekst() {
   const grupper = bestillingslisteGruppert();
   const dato = new Date().toLocaleDateString('no');
   let tekst = `Bestillingsliste – ${dato}\n\n`;
-  Object.entries(grupper).forEach(([lev, kategorier]) => {
-    tekst += `${lev}:\n`;
-    Object.entries(kategorier).forEach(([kat, varer]) => {
-      tekst += `  ${kat}:\n`;
-      varer.forEach(v => { tekst += `  - ${v.navn} (${fmtAntall(v.antall)} av ${fmtAntall(v.minAntall)} ${v.enhet} igjen)\n`; });
-    });
+  Object.entries(grupper).forEach(([kat, varer]) => {
+    tekst += `${kat}:\n`;
+    varer.forEach(v => { tekst += `- ${v.navn}${v.tegningsnummer?` (${v.tegningsnummer})`:''} (${fmtAntall(v.antall)} av ${fmtAntall(v.minAntall)} ${v.enhet} igjen)\n`; });
     tekst += '\n';
   });
   return tekst.trim();
@@ -431,31 +420,28 @@ function kopierBestillingsliste() {
 function skrivUtBestillingsliste() {
   const grupper = bestillingslisteGruppert();
   const dato = new Date().toLocaleDateString('no');
-  const innhold = Object.entries(grupper).map(([lev, kategorier]) => `
-    <h2>${esc(lev)}</h2>
-    ${Object.entries(kategorier).map(([kat, varer]) => `
-      <h3>${esc(kat)}</h3>
-      <table>
-        ${varer.map(v=>`
-          <tr>
-            <td class="boks"></td>
-            <td>${esc(v.navn)}</td>
-            <td class="antall">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</td>
-          </tr>`).join('')}
-      </table>`).join('')}
-  `).join('');
+  const innhold = Object.entries(grupper).map(([kat, varer]) => `
+    <h2>${esc(kat)}</h2>
+    <table>
+      ${varer.map(v=>`
+        <tr>
+          <td class="boks"></td>
+          <td>${esc(v.navn)}${v.tegningsnummer?` <span class="tegn">(${esc(v.tegningsnummer)})</span>`:''}</td>
+          <td class="antall">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</td>
+        </tr>`).join('')}
+    </table>`).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bestillingsliste ${dato}</title>
     <style>
       body{font-family:Arial,sans-serif;color:#000;padding:24px;max-width:700px;margin:0 auto}
       h1{font-size:20px;margin-bottom:2px}
       .dato{color:#555;margin-bottom:20px}
       h2{font-size:16px;border-bottom:2px solid #000;padding-bottom:4px;margin-top:24px}
-      h3{font-size:13px;color:#444;margin:10px 0 4px}
       table{width:100%;border-collapse:collapse}
       td{padding:5px 4px;border-bottom:1px solid #ddd;font-size:13px}
       td.boks{width:18px}
       td.boks::before{content:'';display:block;width:14px;height:14px;border:1.5px solid #000}
       td.antall{text-align:right;color:#555;white-space:nowrap}
+      .tegn{color:#666;font-size:12px}
       @media print{ body{padding:0} }
     </style></head>
     <body>

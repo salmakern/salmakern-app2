@@ -281,7 +281,7 @@ function dbToFlate(r) {
   return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'' };
 }
 function dbToLagervare(r) {
-  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', leverandor:r.leverandor||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, createdAt:r.created_at||'' };
+  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', tegningsnummer:r.tegningsnummer||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, createdAt:r.created_at||'' };
 }
 function dbToLagerhistorikk(r) {
   return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
