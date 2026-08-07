@@ -40,6 +40,7 @@ function renderArkiv() {
         </div>
         <div class="small muted">${o.kunde} · Ankomst: ${o.ankomstdato||'—'}</div>
         <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
+        <div class="small muted">Drivstoff: ${o.drivstoff?.totalpris?o.drivstoff.totalpris+' kr':'—'}</div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${o.fakturert
             ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${o.fakturertAv}</span>

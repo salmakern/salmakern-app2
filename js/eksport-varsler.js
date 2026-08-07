@@ -92,7 +92,7 @@ function genPDF(id) {
   <div>
     <h2>Kunde</h2>
     <div class="info-row"><span class="info-label">Kundenavn:</span><span>${o.kunde||'--'}</span></div>
-    <div class="info-row"><span class="info-label">Eier:</span><span>${o.eier||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Kontaktperson:</span><span>${o.eier||'--'}</span></div>
   </div>
 </div>
 <div class="grid" style="margin-top:0">
@@ -115,14 +115,12 @@ ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bak
 <div class="foto-grid">${o.bilderAnkomst.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'<span style="font-size:13px;color:#999">Ingen bilder</span>'}</div>
 <h2>Bilder - Levering</h2>
 <div class="foto-grid">${o.bilderLevering.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'<span style="font-size:13px;color:#999">Ingen bilder</span>'}</div>
-<h2>Ansatte</h2>
-<div style="font-size:13px">${o.ansatteSignert.map(a=>`<div>${a.navn} – ${a.tid}</div>`).join('')||'Ingen'}</div>
-<h2>Signatur</h2>
-${o.signatur?`<img class="sig" src="${o.signatur}">`:'<span style="font-size:13px;color:#999">Ingen signatur</span>'}
 <h2>Godkjenning</h2>
 ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<span class="badge-nei">Ikke godkjent</span>'}
-<h2>Notater</h2>
-<p style="font-size:13px;white-space:pre-wrap">${o.notater||'--'}</p>
+<h2>Hengerfeste</h2>
+<div style="font-size:13px">${o.utstyr?.hengerfeste==='hengerfeste' ? 'Hengerfeste (' + (o.utstyr?.hengerfesteMontert==='montert'?'montert':'ikke montert') + ')' : 'Ikke hengerfeste'}</div>
+<h2>Utstyr-mal${o.utstyrMalNavn?' – '+o.utstyrMalNavn:''}</h2>
+<div style="font-size:13px">${(o.utstyrSjekkliste||[]).filter(p=>p.ok).map(p=>`<div>✓ ${p.punkt}</div>`).join('')||'Ingen punkter avkrysset'}</div>
 </body></html>`;
 
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});

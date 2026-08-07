@@ -60,11 +60,13 @@ function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
       <span class="small muted">${malNavn}</span>
       <span class="pill ${ok===sjekk.length?'ok':'warn'}">${ok}/${sjekk.length} ✓</span>
     </div>
-    ${sjekk.map((p,i)=>`
-      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30;cursor:pointer;${p.ok?'background:#052e1620;border-radius:8px;padding-left:6px':''}">
-        <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:16px;height:16px;accent-color:#22c55e;flex-shrink:0">
-        <span style="font-size:13px;${p.ok?'color:#4ade80':''}">${p.ok?'✓ ':''} ${esc(p.punkt)}</span>
-      </label>`).join('')}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 8px">
+      ${sjekk.map((p,i)=>`
+        <label style="display:flex;align-items:center;gap:6px;padding:5px 0 5px 4px;cursor:pointer;min-width:0;border-radius:8px;background:${p.ok?'#052e1620':'transparent'}">
+          <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:15px;height:15px;accent-color:#22c55e;flex-shrink:0">
+          <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${p.ok?'color:#4ade80':''}" title="${esc(p.punkt)}">${esc(p.punkt)}</span>
+        </label>`).join('')}
+    </div>
   </div>`;
 }
 
@@ -106,7 +108,7 @@ function buildOrdreDetail() {
         </div>
         ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${o.chassis}</div>`:''}
         <div class="muted" style="margin-top:2px">${o.type}${o.variant?' – '+o.variant:''}</div>
-        <div class="small muted">Eier: ${o.eier||'–'}</div>
+        <div class="small muted">Kontaktperson: ${o.eier||'–'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:7px 12px;')}
@@ -129,7 +131,7 @@ function buildOrdreDetail() {
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde)}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
           </div>
-          <div><label>Eier</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
+          <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
           <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
           <div><label>Type</label><input value="${esc(o.type||'')}" onchange="sf('${o.id}','type',this.value)"></div>
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
@@ -301,14 +303,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         }
       </div>
 
-      <div class="card">
-        <div class="h">Dokumenter</div>
-        <div id="dokumenterListe_${o.id}" style="margin-top:8px">${dokumenterListeHTML(o)}</div>
-        ${erGodkjenner?`
-          <input type="file" id="dok_${o.id}" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.txt,.csv,.jpg,.jpeg,.png,.heic" style="display:none" onchange="lastOppDokument(event,'${o.id}')">
-          <button class="btn sm" style="width:100%;margin-top:8px" onclick="document.getElementById('dok_${o.id}').click()">+ Last opp dokument</button>
-        `:''}
-      </div>
 
       <div class="card">
         <div class="h">Diagnose</div>
