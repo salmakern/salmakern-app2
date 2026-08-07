@@ -99,6 +99,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.lagervarer       = S.lagervarer       || [];
     S.lagerhistorikk   = S.lagerhistorikk   || [];
     S.lagerOppskrifter = S.lagerOppskrifter || [];
+    S.adminArk         = S.adminArk         || [];
     S.ordrer = (S.ordrer||[]).map(o => ({
       ...o,
       utstyrSjekkliste:   o.utstyrSjekkliste   || [],
@@ -226,6 +227,11 @@ async function loadFromSupabase() {
     if (!lhR.error) S.lagerhistorikk = (lhR.data||[]).map(dbToLagerhistorikk);
     if (!loR.error) S.lagerOppskrifter = (loR.data||[]).map(dbToLagerOppskrift);
   } catch(_) {}
+  // Admin-ark hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
+  try {
+    const aaR = await db.from('admin_ark').select('*');
+    if (!aaR.error) S.adminArk = (aaR.data||[]).map(dbToAdminArkRad);
+  } catch(_) {}
 }
 
 function dbToOrdre(r) {
@@ -251,7 +257,8 @@ function dbToOrdre(r) {
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
     flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
-    coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn
+    coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn,
+    tidBiltilsynet:r.tid_biltilsynet||''
   };
 }
 function ordreToDb(o) {
@@ -281,13 +288,18 @@ function dbToFlate(r) {
   return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'' };
 }
 function dbToLagervare(r) {
-  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', tegningsnummer:r.tegningsnummer||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, createdAt:r.created_at||'' };
+  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', tegningsnummer:r.tegningsnummer||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, rekkefolge:Number(r.rekkefolge)||0, createdAt:r.created_at||'' };
 }
 function dbToLagerhistorikk(r) {
   return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
 }
 function dbToLagerOppskrift(r) {
   return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', variant:r.variant||'', ingredienser:r.ingredienser||[], createdAt:r.created_at||'' };
+}
+function dbToAdminArkRad(r) {
+  return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,
+    serienummer:r.serienummer||'', papirer:r.papirer||'', dokumenter:r.dokumenter||'', fraktselskap:r.fraktselskap||'',
+    merknader:r.merknader||'', timeBekreftet:r.time_bekreftet||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
@@ -587,7 +599,7 @@ function defaultData() {
     ],
     timer: [],
     flater: [],
-    lagervarer: [], lagerhistorikk: [], lagerOppskrifter: [],
+    lagervarer: [], lagerhistorikk: [], lagerOppskrifter: [], adminArk: [],
     nextId: 10,
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
@@ -696,6 +708,8 @@ async function tryLogin() {
     // Vis/skjul Timer-fanen basert på tilgang
     const timerTab = document.getElementById('timerTab');
     if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
+    const adminTab = document.getElementById('adminTab');
+    if (adminTab) adminTab.style.display = (me.rolle === 'admin') ? '' : 'none';
     initTimerPage();
     // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.
     // Viser samme lasteskjerm som ved oppstart, så det korte gapet ikke
