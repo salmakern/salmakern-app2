@@ -258,7 +258,7 @@ function dbToOrdre(r) {
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
     flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
     coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn,
-    tidBiltilsynet:r.tid_biltilsynet||''
+    tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||''
   };
 }
 function ordreToDb(o) {
@@ -298,8 +298,9 @@ function dbToLagerOppskrift(r) {
 }
 function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,
+    forhandler:r.forhandler||'', kontaktperson:r.kontaktperson||'',
     serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:!!r.papirer, dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
-    merknader:r.merknader||'', timeBekreftet:r.time_bekreftet||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
+    merknader:r.merknader||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,

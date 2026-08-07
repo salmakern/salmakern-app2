@@ -285,10 +285,10 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card">
         <div class="h">Time på biltilsynet</div>
         <div class="grid g2" style="margin-top:8px">
-          <div><label>Dato</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.kalenderDato||'Ikke satt'}</div></div>
-          <div><label>Tid</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.kalenderTid||'Ikke satt'}</div></div>
+          <div><label>Dato</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynet||'Ikke satt'}</div></div>
+          <div><label>Tid</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynetTid||'Ikke satt'}</div></div>
         </div>
-        <button class="btn sm" style="margin-top:8px" onclick="openFlytt('${o.id}')">Sett i kalender</button>
+        <div class="small muted" style="margin-top:8px">Settes under Time bekreftet i Admin-arket</div>
       </div>
 
       <div class="card">
