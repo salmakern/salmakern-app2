@@ -125,7 +125,7 @@ function buildOrdreDetail() {
 
         <div class="grid g2" style="gap:8px;margin-top:10px">
           <div>
-            <label>Kundenavn</label>
+            <label>Forhandler</label>
             <div style="display:flex;gap:6px">
               <input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde)}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}

@@ -91,7 +91,7 @@ function genPDF(id) {
   </div>
   <div>
     <h2>Kunde</h2>
-    <div class="info-row"><span class="info-label">Kundenavn:</span><span>${o.kunde||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Forhandler:</span><span>${o.kunde||'--'}</span></div>
     <div class="info-row"><span class="info-label">Kontaktperson:</span><span>${o.eier||'--'}</span></div>
   </div>
 </div>
