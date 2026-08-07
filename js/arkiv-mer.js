@@ -83,10 +83,23 @@ function slettOrdre(id) {
   tilbakeOrdreList(); renderAll();
 }
 
-function gjenopprett(id) {
+async function gjenopprett(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
-  o.status='aktiv'; logChange(o,'Gjenopprettet');
-  save(id); renderArkiv(); renderOversikt();
+  o.status='aktiv';
+  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Gjenopprettet'};
+  o.endringer.push(endring);
+  let feil = null;
+  if (db) {
+    const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);
+    if (error) feil = error.message;
+  }
+  if (feil) {
+    o.status='arkivert';
+    o.endringer = o.endringer.filter(e=>e!==endring);
+    visToast('Kunne ikke gjenopprette ordren: ' + feil + ' — prøv igjen.');
+    return;
+  }
+  renderArkiv(); renderOversikt();
 }
 
 // ════════════════════════════════════════════════════
