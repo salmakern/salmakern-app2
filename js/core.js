@@ -298,7 +298,7 @@ function dbToLagerOppskrift(r) {
 }
 function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,
-    serienummer:r.serienummer||'', papirer:r.papirer||'', dokumenter:r.dokumenter||'', fraktselskap:r.fraktselskap||'',
+    serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:!!r.papirer, dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
     merknader:r.merknader||'', timeBekreftet:r.time_bekreftet||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToTimer(r) {
