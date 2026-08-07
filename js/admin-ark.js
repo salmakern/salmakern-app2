@@ -22,6 +22,30 @@ function adminArkFlateNavn(o) {
   return f ? (f.flatenummer || f.kunde || '') : '';
 }
 
+// Time bekreftet skrives inn som fri tekst "DD.MM - HH:MM" (tiden er valgfri) - året
+// hentes automatisk fra året arket står på, siden det uansett er året ordren tilhører.
+function fmtTimeBekreftetVis(dato, tid) {
+  if (!dato) return '';
+  const deler = String(dato).split('-');
+  if (deler.length !== 3) return dato;
+  const [, mnd, dag] = deler;
+  return dag + '.' + mnd + (tid ? ' - ' + tid : '');
+}
+function parseTimeBekreftetTekst(tekst) {
+  const m = tekst.trim().match(/^(\d{1,2})\.(\d{1,2})(?:\s*-?\s*(\d{1,2}):(\d{2}))?$/);
+  if (!m) return null;
+  const dag = Number(m[1]), mnd = Number(m[2]);
+  if (dag < 1 || dag > 31 || mnd < 1 || mnd > 12) return null;
+  let tid = '';
+  if (m[3] !== undefined) {
+    const time = Number(m[3]), min = Number(m[4]);
+    if (time > 23 || min > 59) return null;
+    tid = String(time).padStart(2,'0') + ':' + String(min).padStart(2,'0');
+  }
+  const dato = adminArkAar + '-' + String(mnd).padStart(2,'0') + '-' + String(dag).padStart(2,'0');
+  return { dato, tid };
+}
+
 // Rader kommer fra to kilder: ekte ordre (matchet mot admin_ark via chassis.nr),
 // og "løse" admin_ark-rader uten noen matchende ordre ennå (lagt til med "+ Ny rad").
 // Så snart en ordre opprettes med samme chassis.nr, plukkes den løse raden opp av
@@ -54,6 +78,7 @@ function adminArkByggRader() {
       flateVis: adminArkFlateNavn(o),
       timeBekreftet: ark?.timeBekreftet || '',
       timeBekreftetTid: ark?.timeBekreftetTid || '',
+      timeBekreftetVis: fmtTimeBekreftetVis(ark?.timeBekreftet, ark?.timeBekreftetTid),
       ventendeTimer: ark?.ventendeTimer || '',
       rekkefolge: ark?.rekkefolge ?? 999999,
       _arkivert: ark?.arkivert || false
@@ -80,6 +105,7 @@ function adminArkByggRader() {
       flateVis: '',
       timeBekreftet: r.timeBekreftet || '',
       timeBekreftetTid: r.timeBekreftetTid || '',
+      timeBekreftetVis: fmtTimeBekreftetVis(r.timeBekreftet, r.timeBekreftetTid),
       ventendeTimer: r.ventendeTimer || '',
       rekkefolge: r.rekkefolge ?? 999999,
       _arkivert: r.arkivert || false
@@ -88,7 +114,7 @@ function adminArkByggRader() {
     .sort((a,b) => a.rekkefolge - b.rekkefolge || (a.chassisNr||'').localeCompare(b.chassisNr||'','no'));
 }
 
-const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','merknader','timeBekreftet','timeBekreftetTid','ventendeTimer'];
+const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','merknader','ventendeTimer'];
 
 // Legger til en tom, ikke-lagret rad øverst i arket - blir først lagret i databasen
 // når brukeren skriver noe i en av cellene.
@@ -99,7 +125,9 @@ function adminArkNyRad() {
   renderAdminArk();
 }
 
-async function adminArkLagreFelt(rad, felt, verdi) {
+// endringer er et objekt med ett eller flere felt->verdi (f.eks. {serienummer:'x'} eller
+// {timeBekreftet:'2026-08-07', timeBekreftetTid:'09:00'}) - lagres samlet i én upsert.
+async function adminArkLagreFelter(rad, endringer) {
   let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
   if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => r.chassisNr === rad.chassisNr && !r.arkivert);
   if (!ark) {
@@ -108,7 +136,7 @@ async function adminArkLagreFelt(rad, felt, verdi) {
       serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
     S.adminArk = [...(S.adminArk||[]), ark];
   }
-  ark[felt] = verdi;
+  Object.assign(ark, endringer);
   // Alltid upsert med hele radens nåværende tilstand - unngår racen der en update
   // kan lande på serveren FØR den tilhørende insert-en, som stille treffer 0 rader.
   const payload = { id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: ark.rekkefolge,
@@ -118,8 +146,8 @@ async function adminArkLagreFelt(rad, felt, verdi) {
     time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
   const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
-  // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet + Kl. fra Admin-ark.
-  if (felt === 'timeBekreftet' || felt === 'timeBekreftetTid') {
+  // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
+  if ('timeBekreftet' in endringer || 'timeBekreftetTid' in endringer) {
     const o = S.ordrer.find(x => x.chassis === ark.chassisNr);
     if (o) {
       o.tidBiltilsynet = ark.timeBekreftet||'';
@@ -160,8 +188,27 @@ async function arkiverAdminArk() {
   renderAdminArk();
 }
 
+// Setter tabellhøyden til nøyaktig det som er igjen av vinduet under den, slik
+// at hele siden aldri trenger å scrolle - da holder Tabulators egen overskrift
+// seg alltid synlig øverst, det er kun radene inni som scroller.
+function adminArkTilpassHoyde() {
+  const el = document.getElementById('adminArkTabell');
+  if (!el) return;
+  const topp = el.getBoundingClientRect().top;
+  el.style.height = Math.max(300, window.innerHeight - topp - 24) + 'px';
+}
+if (!window._adminArkResizeBundet) {
+  window._adminArkResizeBundet = true;
+  window.addEventListener('resize', () => {
+    if (!document.getElementById('admin')?.classList.contains('active')) return;
+    adminArkTilpassHoyde();
+    if (adminArkTable) adminArkTable.redraw(true);
+  });
+}
+
 function renderAdminArk() {
   adminArkOppdaterStatus();
+  adminArkTilpassHoyde();
   const data = adminArkByggRader();
   const arkRaderIAar = (S.adminArk||[]).filter(r => r.aar === adminArkAar);
   const kanRedigere = arkRaderIAar.length ? arkRaderIAar.some(r => !r.arkivert) : true;
@@ -177,7 +224,7 @@ function renderAdminArk() {
     {title:'Chassis.nr', field:'chassisNr', width:160, headerSort:false, editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Serienummer', field:'serienummer', width:130, headerSort:false, editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Mottatt', field:'mottatt', width:90, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
-    {title:'Dato', field:'dato', width:100, headerSort:false, editable:false, rowHandle:true},
+    {title:'Dato', field:'dato', width:100, headerSort:false, editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
     {title:'Papirer', field:'papirer', width:90, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', width:90, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', width:90, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
@@ -185,8 +232,7 @@ function renderAdminArk() {
     {title:'Henteklar', field:'henteklarVis', width:90, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
     {title:'Merknader', field:'merknader', width:170, headerSort:false, editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Flåte', field:'flateVis', width:100, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Time bekreftet', field:'timeBekreftet', width:130, headerSort:false, editor: kanRedigere ? 'date' : false},
-    {title:'Kl.', field:'timeBekreftetTid', width:80, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false},
+    {title:'Time bekreftet', field:'timeBekreftetVis', width:140, headerSort:false, editor: kanRedigere ? 'input' : false},
     {title:'Ventende timer', field:'ventendeTimer', width:130, headerSort:false, editor: kanRedigere ? 'input' : false}
   ].map(k => ({...k, headerHozAlign:'center'}));
 
@@ -203,14 +249,25 @@ function renderAdminArk() {
 
   adminArkTable.on('cellEdited', cell => {
     const felt = cell.getField();
-    if (!ADMIN_ARK_EDITERBARE_FELT.includes(felt)) return;
     const rad = cell.getRow().getData();
+
+    if (felt === 'timeBekreftetVis') {
+      if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
+      const tekst = (cell.getValue()||'').trim();
+      if (!tekst) { adminArkLagreFelter(rad, {timeBekreftet:'', timeBekreftetTid:''}).then(renderAdminArk); return; }
+      const tolket = parseTimeBekreftetTekst(tekst);
+      if (!tolket) { visToast('Ugyldig format - skriv f.eks. 07.08 - 09:00'); cell.restoreOldValue(); return; }
+      adminArkLagreFelter(rad, {timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid}).then(renderAdminArk);
+      return;
+    }
+
+    if (!ADMIN_ARK_EDITERBARE_FELT.includes(felt)) return;
     if (felt !== 'chassisNr' && felt !== 'forhandler' && felt !== 'kontaktperson' && !rad.chassisNr) {
       visToast('Denne raden mangler chassisnummer og kan ikke lagres');
       cell.restoreOldValue();
       return;
     }
-    adminArkLagreFelt(rad, felt, cell.getValue());
+    adminArkLagreFelter(rad, {[felt]: cell.getValue()});
   });
 
   adminArkTable.on('rowMoved', () => {

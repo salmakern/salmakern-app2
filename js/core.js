@@ -9,6 +9,14 @@ const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mq
 // Sporer bilder som er lastet opp i minnet men ikke nødvendigvis bekreftet i Supabase ennå
 const inFlightFotos = {};
 
+// Gjør om 'YYYY-MM-DD' til 'DD.MM.YYYY' for visning. Lagret/redigert verdi er fortsatt ISO.
+function fmtDatoKort(iso) {
+  if (!iso) return '';
+  const [aar, mnd, dag] = String(iso).split('-');
+  if (!aar || !mnd || !dag) return iso;
+  return `${dag}.${mnd}.${aar}`;
+}
+
 function visToast(melding, type='feil') {
   let el = document.getElementById('globalToast');
   if (!el) {

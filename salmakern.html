@@ -589,8 +589,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <!-- ── ADMIN ── -->
     <section id="admin" class="page">
-      <div class="card" style="padding:6px">
-        <div class="row" style="flex-wrap:wrap;gap:8px">
+      <div class="card" style="padding:4px">
+        <div class="row" style="flex-wrap:wrap;gap:8px;padding:2px 4px">
           <div style="display:flex;align-items:center;gap:10px">
             <button class="btn sm" onclick="adminArkNaviger(-1)">◀</button>
             <div class="h" id="adminArkAarTittel" style="min-width:60px;text-align:center">–</div>
@@ -600,9 +600,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn sm" id="adminArkNyRadBtn" onclick="adminArkNyRad()">+ Ny rad</button>
           <button class="btn sm red" id="adminArkArkiverBtn" onclick="arkiverAdminArk()">Arkiver dette arket</button>
         </div>
-      </div>
-      <div class="card" style="margin-top:4px;padding:4px">
-        <div id="adminArkTabell" style="height:calc(100vh - 110px)"></div>
+        <div id="adminArkTabell" style="height:70vh;margin-top:4px"></div>
       </div>
     </section>
 
