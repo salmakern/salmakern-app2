@@ -97,8 +97,8 @@ function genPDF(id) {
 </div>
 <div class="grid" style="margin-top:0">
   <div>
-    <h2>Utstyr - har</h2>
-    <div style="font-size:13px;white-space:pre-wrap">${o.utstyr.har||'--'}</div>
+    <h2>Utstyr - har${o.utstyrMalNavn?' ('+o.utstyrMalNavn+')':''}</h2>
+    <div style="font-size:13px">${(o.utstyrSjekkliste||[]).length ? o.utstyrSjekkliste.map(p=>`<div>${p.ok?'✓':'☐'} ${p.punkt}</div>`).join('') : '--'}</div>
   </div>
   <div>
     <h2>Utstyr - skal ha</h2>
@@ -119,8 +119,6 @@ ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bak
 ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<span class="badge-nei">Ikke godkjent</span>'}
 <h2>Hengerfeste</h2>
 <div style="font-size:13px">${o.utstyr?.hengerfeste==='hengerfeste' ? 'Hengerfeste (' + (o.utstyr?.hengerfesteMontert==='montert'?'montert':'ikke montert') + ')' : 'Ikke hengerfeste'}</div>
-<h2>Utstyr-mal${o.utstyrMalNavn?' – '+o.utstyrMalNavn:''}</h2>
-<div style="font-size:13px">${(o.utstyrSjekkliste||[]).filter(p=>p.ok).map(p=>`<div>✓ ${p.punkt}</div>`).join('')||'Ingen punkter avkrysset'}</div>
 </body></html>`;
 
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
