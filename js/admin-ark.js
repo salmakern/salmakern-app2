@@ -172,14 +172,52 @@ async function adminArkLagreFelter(rad, endringer) {
   }
 }
 
-// Kalles når en Ventende timer-verdi slippes på Time bekreftet-cellen for SAMME rad -
-// tolker teksten, flytter den over til Time bekreftet, og tømmer Ventende timer.
-async function adminArkBekreftVentendeTid(rad, tekst) {
-  const tolket = parseTimeBekreftetTekst(tekst);
-  if (!tolket) { visToast('Kan ikke tolkes som dato/tid - skriv f.eks. 07.08 - 09:00 i Ventende timer først'); return; }
-  await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, ventendeTimer: '' });
-  visToast('Time bekreftet: ' + tekst, 'ok');
+// Kalles når én eller flere Ventende timer-verdier slippes på Time bekreftet - hver rad
+// tolkes og lagres inn i sin EGEN Time bekreftet-celle, og Ventende timer tømmes.
+async function adminArkBekreftFlereVentendeTid(radTekstListe) {
+  let ok = 0, feilet = 0;
+  for (const { rad, tekst } of radTekstListe) {
+    const tolket = parseTimeBekreftetTekst(tekst);
+    if (!tolket) { feilet++; continue; }
+    await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, ventendeTimer: '' });
+    ok++;
+  }
+  if (ok && !feilet) visToast(ok === 1 ? 'Time bekreftet' : `${ok} timer bekreftet`, 'ok');
+  else if (ok && feilet) visToast(`${ok} bekreftet, ${feilet} kunne ikke tolkes`, 'ok');
+  else visToast('Kan ikke tolkes som dato/tid - skriv f.eks. 07.08 - 09:00 i Ventende timer først');
   renderAdminArk();
+}
+async function adminArkBekreftVentendeTid(rad, tekst) {
+  await adminArkBekreftFlereVentendeTid([{ rad, tekst }]);
+}
+
+// ── Merking av flere rader i Ventende timer-kolonnen ──
+// Klikk-og-dra nedover på tekst-delen markerer en sammenhengende rekke rader (tjukk
+// kantlinje); et etterfølgende dra fra håndtaket til Time bekreftet bekrefter ALLE
+// markerte rader samtidig, hver inn i sin egen Time bekreftet-celle.
+let vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
+
+function vtMerkOppdaterVisning() {
+  if (!adminArkTable) return;
+  adminArkTable.getRows().forEach(r => {
+    const el = r.getCell('ventendeTimer')?.getElement();
+    if (!el) return;
+    el.style.outline = vtMerking.rader.has(r.getPosition()) ? '3px solid #3b82f6' : '';
+    el.style.outlineOffset = '-3px';
+  });
+}
+function vtMerkNullstill() {
+  vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
+  vtMerkOppdaterVisning();
+}
+if (!window._vtMerkGlobaleLyttereBundet) {
+  window._vtMerkGlobaleLyttereBundet = true;
+  window.addEventListener('mouseup', () => {
+    if (vtMerking.aktiv) { vtMerking.aktiv = false; vtMerkOppdaterVisning(); }
+  });
+  window.addEventListener('mousedown', e => {
+    if (vtMerking.rader.size && !e.target.closest('[tabulator-field="ventendeTimer"]')) vtMerkNullstill();
+  });
 }
 
 function adminArkOppdaterStatus() {
@@ -230,6 +268,7 @@ if (!window._adminArkResizeBundet) {
 }
 
 function renderAdminArk() {
+  vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
   adminArkOppdaterStatus();
   adminArkTilpassHoyde();
   const data = adminArkByggRader();
@@ -269,10 +308,21 @@ function renderAdminArk() {
             el.style.outline = '';
             if (!kanRedigere) return;
             if (e.dataTransfer.getData('application/x-admin-ark-kilde') !== 'ventendeTimer') return;
-            if (e.dataTransfer.getData('application/x-admin-ark-radindeks') !== String(cell.getRow().getIndex())) {
+            const flere = JSON.parse(e.dataTransfer.getData('application/x-admin-ark-multi') || '[]');
+            if (flere.length > 1) {
+              // Flere rader markert - bekreft ALLE, uansett hvor i Time bekreftet-kolonnen man slipper.
+              const radTekstListe = flere.map(({radIndeks, tekst}) => {
+                const r = adminArkTable.getRows().find(x => x.getPosition() === radIndeks);
+                return r ? { rad: r.getData(), tekst } : null;
+              }).filter(Boolean);
+              vtMerkNullstill();
+              adminArkBekreftFlereVentendeTid(radTekstListe);
+              return;
+            }
+            if (flere.length === 1 && flere[0].radIndeks !== cell.getRow().getPosition()) {
               visToast('Du kan bare bekrefte tid for samme rad'); return;
             }
-            adminArkBekreftVentendeTid(cell.getRow().getData(), e.dataTransfer.getData('text/plain'));
+            if (flere.length === 1) adminArkBekreftVentendeTid(cell.getRow().getData(), flere[0].tekst);
           };
         });
         return verdi;
@@ -282,25 +332,57 @@ function renderAdminArk() {
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
         const kanDras = kanRedigere && !!verdi;
+        const radIdx = cell.getRow().getPosition();
         onRendered(() => {
           const handle = cell.getElement().querySelector('.vt-drahandtak');
+          const tekstEl = cell.getElement().querySelector('.vt-tekst');
           if (!handle) return;
+
           handle.draggable = kanDras;
           handle.ondragstart = e => {
             e.stopPropagation();
-            e.dataTransfer.setData('text/plain', verdi);
+            // Er denne raden del av en aktiv fler-rads-markering? Dra da ALLE markerte,
+            // ellers bare denne ene raden (som før).
+            const radIndekser = vtMerking.rader.has(radIdx) && vtMerking.rader.size > 1
+              ? [...vtMerking.rader] : [radIdx];
+            const nyttInnhold = radIndekser.map(idx => {
+              const r = adminArkTable.getRows().find(x => x.getPosition() === idx);
+              return { radIndeks: idx, tekst: r ? (r.getData().ventendeTimer || '') : '' };
+            }).filter(x => x.tekst);
             e.dataTransfer.setData('application/x-admin-ark-kilde', 'ventendeTimer');
-            e.dataTransfer.setData('application/x-admin-ark-radindeks', String(cell.getRow().getIndex()));
+            e.dataTransfer.setData('application/x-admin-ark-multi', JSON.stringify(nyttInnhold));
           };
           // Stopper klikk/mousedown fra å boble videre til Tabulator, som ellers
           // tolker et forsøk på å dra i håndtaket som et klikk og åpner redigering.
           handle.addEventListener('mousedown', e => e.stopPropagation());
           handle.addEventListener('click', e => e.stopPropagation());
+
+          // Klikk-og-dra NEDOVER på selve teksten markerer en sammenhengende rekke rader
+          // (tjukk kantlinje) - et vanlig klikk uten drag rører seg ikke unna Tabulators
+          // egen redigerings-trigger, siden ingen 'click' rekker å utløses ved ekte drag
+          // (mouseup havner da på en annen celle enn mousedown startet på).
+          if (tekstEl && kanRedigere && verdi) {
+            tekstEl.addEventListener('mousedown', () => {
+              vtMerking = { aktiv:true, startIdx:radIdx, rader:new Set([radIdx]), fikkDrag:false };
+              vtMerkOppdaterVisning();
+            });
+            tekstEl.addEventListener('mouseenter', () => {
+              if (!vtMerking.aktiv) return;
+              vtMerking.fikkDrag = true;
+              const alleIdx = adminArkTable.getRows().map(r => r.getPosition());
+              const fraPos = alleIdx.indexOf(vtMerking.startIdx);
+              const tilPos = alleIdx.indexOf(radIdx);
+              if (fraPos === -1 || tilPos === -1) return;
+              const [lav, hoy] = fraPos <= tilPos ? [fraPos, tilPos] : [tilPos, fraPos];
+              vtMerking.rader = new Set(alleIdx.slice(lav, hoy + 1));
+              vtMerkOppdaterVisning();
+            });
+          }
         });
         if (!verdi) return '';
         return `<span style="display:flex;align-items:center;justify-content:center;gap:4px;width:100%">
           <span class="vt-drahandtak" title="Dra for å bekrefte i Time bekreftet" style="cursor:${kanDras?'grab':'default'};opacity:.65;flex-shrink:0">⠿</span>
-          <span>${verdi}</span>
+          <span class="vt-tekst" title="Klikk og dra nedover for å markere flere rader" style="cursor:${kanRedigere?'cell':'default'}">${verdi}</span>
         </span>`;
       }
     }
