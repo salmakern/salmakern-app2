@@ -293,6 +293,12 @@ function renderAdminArk() {
     }
   ].map(k => ({...k, headerHozAlign:'center'}));
 
+  // Setter en eksplisitt pixel-bredde på selve tabell-boksen (summen av kolonnene, pluss
+  // litt slingring for kantlinjer/scrollbar) - ellers strekker boksen seg over hele
+  // vinduet selv om innholdet (fitData) stopper mye tidligere.
+  const totalKolonneBredde = kolonner.reduce((sum, k) => sum + (k.width || 0), 0);
+  document.getElementById('adminArkTabell').style.width = (totalKolonneBredde + 20) + 'px';
+
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
   adminArkTable = new Tabulator('#adminArkTabell', {
     data,
