@@ -239,7 +239,7 @@ function renderAdminArk() {
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
   adminArkTable = new Tabulator('#adminArkTabell', {
     data,
-    layout: 'fitDataFill',
+    layout: 'fitData',
     columns: kolonner,
     movableRows: kanRedigere,
     clipboard: true,
