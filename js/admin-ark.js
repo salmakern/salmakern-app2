@@ -147,16 +147,36 @@ async function adminArkLagreFelter(rad, endringer) {
   const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
   // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
+  // Når Time bekreftet faktisk får en verdi, settes den samme datoen/tiden også i
+  // verkstedkalenderen (kalender_dato/kalender_tid) - men vi TØMMER den ikke igjen
+  // hvis Time bekreftet fjernes, siden kalenderplasseringen kan være satt uavhengig.
   if ('timeBekreftet' in endringer || 'timeBekreftetTid' in endringer) {
     const o = S.ordrer.find(x => x.chassis === ark.chassisNr);
     if (o) {
       o.tidBiltilsynet = ark.timeBekreftet||'';
       o.tidBiltilsynetTid = ark.timeBekreftetTid||'';
       logChange(o, 'Time på biltilsynet satt fra Admin-ark: ' + (o.tidBiltilsynet ? (o.tidBiltilsynet+' '+o.tidBiltilsynetTid) : '(fjernet)'));
-      const { error: oErr } = await db.from('ordrer').update({ tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, endringer: o.endringer }).eq('id', o.id);
+      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, endringer: o.endringer };
+      if (ark.timeBekreftet) {
+        o.kalenderDato = ark.timeBekreftet;
+        o.kalenderTid = ark.timeBekreftetTid || o.kalenderTid || '09:00';
+        oppdatering.kalender_dato = o.kalenderDato;
+        oppdatering.kalender_tid = o.kalenderTid;
+      }
+      const { error: oErr } = await db.from('ordrer').update(oppdatering).eq('id', o.id);
       if (oErr) console.error('Kunne ikke oppdatere tid_biltilsynet på ordre:', oErr.message);
     }
   }
+}
+
+// Kalles når en Ventende timer-verdi slippes på Time bekreftet-cellen for SAMME rad -
+// tolker teksten, flytter den over til Time bekreftet, og tømmer Ventende timer.
+async function adminArkBekreftVentendeTid(rad, tekst) {
+  const tolket = parseTimeBekreftetTekst(tekst);
+  if (!tolket) { visToast('Kan ikke tolkes som dato/tid - skriv f.eks. 07.08 - 09:00 i Ventende timer først'); return; }
+  await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, ventendeTimer: '' });
+  visToast('Time bekreftet: ' + tekst, 'ok');
+  renderAdminArk();
 }
 
 function adminArkOppdaterStatus() {
@@ -232,8 +252,45 @@ function renderAdminArk() {
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
     {title:'Merknader', field:'merknader', width:125, headerSort:false, editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, editor: kanRedigere ? 'input' : false},
-    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, editor: kanRedigere ? 'input' : false}
+    {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, editor: kanRedigere ? 'input' : false,
+      cssClass:'admin-ark-slippmal',
+      formatter: (cell, params, onRendered) => {
+        const verdi = cell.getValue() || '';
+        onRendered(() => {
+          const el = cell.getElement();
+          el.ondragover = e => { if (kanRedigere) { e.preventDefault(); el.style.outline = '2px dashed #60a5fa'; e.dataTransfer.dropEffect = 'move'; } };
+          el.ondragleave = () => { el.style.outline = ''; };
+          el.ondrop = e => {
+            e.preventDefault();
+            el.style.outline = '';
+            if (!kanRedigere) return;
+            if (e.dataTransfer.getData('application/x-admin-ark-kilde') !== 'ventendeTimer') return;
+            if (e.dataTransfer.getData('application/x-admin-ark-radindeks') !== String(cell.getRow().getIndex())) {
+              visToast('Du kan bare bekrefte tid for samme rad'); return;
+            }
+            adminArkBekreftVentendeTid(cell.getRow().getData(), e.dataTransfer.getData('text/plain'));
+          };
+        });
+        return verdi;
+      }
+    },
+    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, editor: kanRedigere ? 'input' : false,
+      formatter: (cell, params, onRendered) => {
+        const verdi = cell.getValue() || '';
+        onRendered(() => {
+          const el = cell.getElement();
+          const kanDras = kanRedigere && !!verdi;
+          el.draggable = kanDras;
+          el.style.cursor = kanDras ? 'grab' : '';
+          el.ondragstart = e => {
+            e.dataTransfer.setData('text/plain', verdi);
+            e.dataTransfer.setData('application/x-admin-ark-kilde', 'ventendeTimer');
+            e.dataTransfer.setData('application/x-admin-ark-radindeks', String(cell.getRow().getIndex()));
+          };
+        });
+        return verdi;
+      }
+    }
   ].map(k => ({...k, headerHozAlign:'center'}));
 
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
