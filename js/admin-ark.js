@@ -362,7 +362,10 @@ function renderAdminArk() {
           // egen redigerings-trigger, siden ingen 'click' rekker å utløses ved ekte drag
           // (mouseup havner da på en annen celle enn mousedown startet på).
           if (tekstEl && kanRedigere && verdi) {
-            tekstEl.addEventListener('mousedown', () => {
+            tekstEl.addEventListener('mousedown', e => {
+              // Uten dette starter nettleseren sin egen tekstmarkering (blå highlight) når
+              // man drar over teksten, som forstyrrer/hindrer mouseenter-baserte merkingen under.
+              e.preventDefault();
               vtMerking = { aktiv:true, startIdx:radIdx, rader:new Set([radIdx]), fikkDrag:false };
               vtMerkOppdaterVisning();
             });
@@ -382,7 +385,7 @@ function renderAdminArk() {
         if (!verdi) return '';
         return `<span style="display:flex;align-items:center;justify-content:center;gap:4px;width:100%">
           <span class="vt-drahandtak" title="Dra for å bekrefte i Time bekreftet" style="cursor:${kanDras?'grab':'default'};opacity:.65;flex-shrink:0">⠿</span>
-          <span class="vt-tekst" title="Klikk og dra nedover for å markere flere rader" style="cursor:${kanRedigere?'cell':'default'}">${verdi}</span>
+          <span class="vt-tekst" title="Klikk og dra nedover for å markere flere rader" style="cursor:${kanRedigere?'cell':'default'};user-select:none;-webkit-user-select:none">${verdi}</span>
         </span>`;
       }
     }
