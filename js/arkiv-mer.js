@@ -203,11 +203,25 @@ function renderMoterListe() {
 function renderMoteDeltakereValg() {
   const el = document.getElementById('mote_deltakere');
   if (!el) return;
-  el.innerHTML = (S.ansatte||[]).filter(a => a.aktiv).map(a => `
+  const rader = (S.ansatte||[]).filter(a => a.aktiv).map(a => `
     <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;border-bottom:1px solid #27272a">
       <span>${a.navn}</span>
-      <input type="checkbox" class="mote-deltaker-cb" value="${a.id}" style="flex-shrink:0">
+      <input type="checkbox" class="mote-deltaker-cb" value="${a.id}" onchange="oppdaterMoteVelgAlleStatus()" style="flex-shrink:0">
     </label>`).join('');
+  el.innerHTML = `
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;border-bottom:1px solid #3f3f46;font-weight:700">
+      <span>Velg alle</span>
+      <input type="checkbox" id="mote_velg_alle" onchange="toggleMoteVelgAlle(this.checked)" style="flex-shrink:0">
+    </label>
+    ${rader}`;
+}
+function toggleMoteVelgAlle(checked) {
+  document.querySelectorAll('.mote-deltaker-cb').forEach(cb => cb.checked = checked);
+}
+function oppdaterMoteVelgAlleStatus() {
+  const alle = [...document.querySelectorAll('.mote-deltaker-cb')];
+  const velgAlleEl = document.getElementById('mote_velg_alle');
+  if (velgAlleEl) velgAlleEl.checked = alle.length > 0 && alle.every(cb => cb.checked);
 }
 function apneNyttMoteModal() {
   renderMoteDeltakereValg();
