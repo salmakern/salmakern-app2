@@ -192,18 +192,25 @@ async function adminArkBekreftVentendeTid(rad, tekst) {
 }
 
 // ── Merking av flere rader i Ventende timer-kolonnen ──
-// Klikk-og-dra nedover på tekst-delen markerer en sammenhengende rekke rader (tjukk
-// kantlinje); et etterfølgende dra fra håndtaket til Time bekreftet bekrefter ALLE
-// markerte rader samtidig, hver inn i sin egen Time bekreftet-celle.
+// Som i Excel: klikk-og-dra nedover markerer en sammenhengende rekke rader (tjukk
+// kantlinje). Et NYTT klikk-og-dra som starter INNENFOR den markeringen flytter/
+// bekrefter i stedet - akkurat som å gripe kanten av en markert celleområde i Excel
+// og dra det til et annet felt. Cellene er derfor kun "draggable" (native HTML5-dra)
+// når de er markert fra før - det er det som skiller "start ny markering" fra
+// "dra den markeringen som allerede finnes".
 let vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
 
 function vtMerkOppdaterVisning() {
   if (!adminArkTable) return;
   adminArkTable.getRows().forEach(r => {
-    const el = r.getCell('ventendeTimer')?.getElement();
+    const cell = r.getCell('ventendeTimer');
+    const el = cell?.getElement();
     if (!el) return;
-    el.style.outline = vtMerking.rader.has(r.getPosition()) ? '3px solid #3b82f6' : '';
+    const erMarkert = vtMerking.rader.has(r.getPosition());
+    el.style.outline = erMarkert ? '3px solid #3b82f6' : '';
     el.style.outlineOffset = '-3px';
+    el.style.cursor = erMarkert ? 'grab' : '';
+    if (r.getData().ventendeTimer) el.draggable = erMarkert;
   });
 }
 function vtMerkNullstill() {
@@ -328,21 +335,18 @@ function renderAdminArk() {
         return verdi;
       }
     },
-    {title:'Ventende timer', field:'ventendeTimer', width:120, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
+    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
-        const kanDras = kanRedigere && !!verdi;
         const radIdx = cell.getRow().getPosition();
         onRendered(() => {
-          const handle = cell.getElement().querySelector('.vt-drahandtak');
-          const tekstEl = cell.getElement().querySelector('.vt-tekst');
-          if (!handle) return;
+          const el = cell.getElement();
+          if (!kanRedigere || !verdi) { el.draggable = false; return; }
+          el.title = 'Klikk og dra nedover for å markere flere rader. Dra en markert celle over på Time bekreftet for å bekrefte.';
 
-          handle.draggable = kanDras;
-          handle.ondragstart = e => {
-            e.stopPropagation();
+          el.ondragstart = e => {
             // Er denne raden del av en aktiv fler-rads-markering? Dra da ALLE markerte,
-            // ellers bare denne ene raden (som før).
+            // ellers bare denne ene raden.
             const radIndekser = vtMerking.rader.has(radIdx) && vtMerking.rader.size > 1
               ? [...vtMerking.rader] : [radIdx];
             const nyttInnhold = radIndekser.map(idx => {
@@ -352,43 +356,32 @@ function renderAdminArk() {
             e.dataTransfer.setData('application/x-admin-ark-kilde', 'ventendeTimer');
             e.dataTransfer.setData('application/x-admin-ark-multi', JSON.stringify(nyttInnhold));
           };
-          // Stopper klikk/mousedown fra å boble videre til Tabulator, som ellers
-          // tolker et forsøk på å dra i håndtaket som et klikk og åpner redigering.
-          handle.addEventListener('mousedown', e => e.stopPropagation());
-          handle.addEventListener('click', e => e.stopPropagation());
 
-          // Klikk-og-dra NEDOVER på selve teksten markerer en sammenhengende rekke rader
-          // (tjukk kantlinje) - et vanlig klikk uten drag rører seg ikke unna Tabulators
-          // egen redigerings-trigger, siden ingen 'click' rekker å utløses ved ekte drag
-          // (mouseup havner da på en annen celle enn mousedown startet på).
-          if (tekstEl && kanRedigere && verdi) {
-            tekstEl.addEventListener('mousedown', e => {
-              // Uten dette starter nettleseren sin egen tekstmarkering (blå highlight) når
-              // man drar over teksten, som forstyrrer/hindrer mouseenter-baserte merkingen under.
-              e.preventDefault();
-              vtMerking = { aktiv:true, startIdx:radIdx, rader:new Set([radIdx]), fikkDrag:false };
-              vtMerkOppdaterVisning();
-            });
-            tekstEl.addEventListener('mouseenter', () => {
-              if (!vtMerking.aktiv) return;
-              vtMerking.fikkDrag = true;
-              const alleIdx = adminArkTable.getRows().map(r => r.getPosition());
-              const fraPos = alleIdx.indexOf(vtMerking.startIdx);
-              const tilPos = alleIdx.indexOf(radIdx);
-              if (fraPos === -1 || tilPos === -1) return;
-              const [lav, hoy] = fraPos <= tilPos ? [fraPos, tilPos] : [tilPos, fraPos];
-              vtMerking.rader = new Set(alleIdx.slice(lav, hoy + 1));
-              vtMerkOppdaterVisning();
-            });
-          }
+          // Som i Excel: klikk-og-dra på en UMARKERT celle starter en ny markering
+          // (dra nedover for å ta med flere rader). Klikk-og-dra på en celle som
+          // ALLEREDE er markert lar native HTML5-dra (draggable, satt i
+          // vtMerkOppdaterVisning) overta i stedet, for å flytte/bekrefte markeringen.
+          el.addEventListener('mousedown', e => {
+            if (vtMerking.rader.has(radIdx)) return;
+            // Uten dette starter nettleseren sin egen tekstmarkering (blå highlight) når
+            // man drar over teksten, som ellers hindrer mouseenter-basert merking under.
+            e.preventDefault();
+            vtMerking = { aktiv:true, startIdx:radIdx, rader:new Set([radIdx]), fikkDrag:false };
+            vtMerkOppdaterVisning();
+          });
+          el.addEventListener('mouseenter', () => {
+            if (!vtMerking.aktiv) return;
+            vtMerking.fikkDrag = true;
+            const alleIdx = adminArkTable.getRows().map(r => r.getPosition());
+            const fraPos = alleIdx.indexOf(vtMerking.startIdx);
+            const tilPos = alleIdx.indexOf(radIdx);
+            if (fraPos === -1 || tilPos === -1) return;
+            const [lav, hoy] = fraPos <= tilPos ? [fraPos, tilPos] : [tilPos, fraPos];
+            vtMerking.rader = new Set(alleIdx.slice(lav, hoy + 1));
+            vtMerkOppdaterVisning();
+          });
         });
-        if (!verdi) return '';
-        // Håndtaket er laget stort og tydelig med egen bakgrunn - en liten ⠿ alene var
-        // for vanskelig å treffe presist, og et bomskudd endte i tekst-feltet ved siden av.
-        return `<span style="display:flex;align-items:stretch;width:100%;height:100%">
-          <span class="vt-drahandtak" title="Dra for å bekrefte i Time bekreftet" style="cursor:${kanDras?'grab':'default'};flex-shrink:0;width:26px;display:flex;align-items:center;justify-content:center;font-size:15px;${kanDras?'background:#27272a;border-radius:5px':''}">⠿</span>
-          <span class="vt-tekst" title="Klikk og dra nedover for å markere flere rader" style="cursor:${kanRedigere?'cell':'default'};user-select:none;-webkit-user-select:none;display:flex;align-items:center;padding-left:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${verdi}</span>
-        </span>`;
+        return verdi ? `<span style="user-select:none;-webkit-user-select:none">${verdi}</span>` : '';
       }
     }
   ].map(k => ({...k, headerHozAlign:'center'}));
