@@ -280,18 +280,27 @@ function renderAdminArk() {
     {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
+        const kanDras = kanRedigere && !!verdi;
         onRendered(() => {
-          const el = cell.getElement();
-          const kanDras = kanRedigere && !!verdi;
-          el.draggable = kanDras;
-          el.style.cursor = kanDras ? 'grab' : '';
-          el.ondragstart = e => {
+          const handle = cell.getElement().querySelector('.vt-drahandtak');
+          if (!handle) return;
+          handle.draggable = kanDras;
+          handle.ondragstart = e => {
+            e.stopPropagation();
             e.dataTransfer.setData('text/plain', verdi);
             e.dataTransfer.setData('application/x-admin-ark-kilde', 'ventendeTimer');
             e.dataTransfer.setData('application/x-admin-ark-radindeks', String(cell.getRow().getIndex()));
           };
+          // Stopper klikk/mousedown fra å boble videre til Tabulator, som ellers
+          // tolker et forsøk på å dra i håndtaket som et klikk og åpner redigering.
+          handle.addEventListener('mousedown', e => e.stopPropagation());
+          handle.addEventListener('click', e => e.stopPropagation());
         });
-        return verdi;
+        if (!verdi) return '';
+        return `<span style="display:flex;align-items:center;justify-content:center;gap:4px;width:100%">
+          <span class="vt-drahandtak" title="Dra for å bekrefte i Time bekreftet" style="cursor:${kanDras?'grab':'default'};opacity:.65;flex-shrink:0">⠿</span>
+          <span>${verdi}</span>
+        </span>`;
       }
     }
   ].map(k => ({...k, headerHozAlign:'center'}));
