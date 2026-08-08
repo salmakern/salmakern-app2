@@ -4,6 +4,20 @@
 let adminArkAar = new Date().getFullYear();
 let adminArkTable = null;
 
+// Som i Excel: Enter mens man redigerer en celle skal hoppe til samme kolonne på
+// raden under. Fanges opp i CAPTURE-fasen på document - det garanterer at flagget
+// rekker å settes FØR Tabulators egen (bubble-fase) Enter-håndtering på selve inputen
+// rekker å fullføre redigeringen og fyre cellEdited, uansett rekkefølge ellers.
+let adminArkSisteTastVarEnter = false;
+if (!window._adminArkEnterLytterBundet) {
+  window._adminArkEnterLytterBundet = true;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('adminArkTabell')?.contains(document.activeElement)) {
+      adminArkSisteTastVarEnter = true;
+    }
+  }, true);
+}
+
 function adminArkNaviger(dir) {
   adminArkAar += dir;
   renderAdminArk();
@@ -450,6 +464,16 @@ function renderAdminArk() {
     clipboard: true,
     clipboardPasteAction: 'update',
     placeholder: 'Ingen ordre for ' + adminArkAar
+  });
+
+  adminArkTable.on('cellEdited', cell => {
+    if (!adminArkSisteTastVarEnter) return;
+    adminArkSisteTastVarEnter = false;
+    const felt = cell.getField();
+    const posNaa = cell.getRow().getPosition();
+    const nesteRad = adminArkTable.getRows().find(r => r.getPosition() === posNaa + 1);
+    const nesteCelle = nesteRad?.getCell(felt);
+    if (nesteCelle) setTimeout(() => nesteCelle.edit(true), 0);
   });
 
   adminArkTable.on('cellEdited', cell => {
