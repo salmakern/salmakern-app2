@@ -191,26 +191,25 @@ async function adminArkBekreftVentendeTid(rad, tekst) {
   await adminArkBekreftFlereVentendeTid([{ rad, tekst }]);
 }
 
-// ── Merking av flere rader i Ventende timer-kolonnen ──
+// ── Merking og flytting av flere rader i Ventende timer-kolonnen ──
 // Som i Excel: klikk-og-dra nedover markerer en sammenhengende rekke rader (tjukk
 // kantlinje). Et NYTT klikk-og-dra som starter INNENFOR den markeringen flytter/
-// bekrefter i stedet - akkurat som å gripe kanten av en markert celleområde i Excel
-// og dra det til et annet felt. Cellene er derfor kun "draggable" (native HTML5-dra)
-// når de er markert fra før - det er det som skiller "start ny markering" fra
-// "dra den markeringen som allerede finnes".
+// bekrefter i stedet. Selve flyttingen spores med rene musehendelser (mousemove/
+// mouseup på document + elementFromPoint) i stedet for nettleserens native HTML5
+// dra-og-slipp, som viste seg upålitelig for korte drag mellom to tilstøtende
+// kolonner i denne tabellen.
 let vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
+let vtFlyttHoverEl = null;
 
 function vtMerkOppdaterVisning() {
   if (!adminArkTable) return;
   adminArkTable.getRows().forEach(r => {
-    const cell = r.getCell('ventendeTimer');
-    const el = cell?.getElement();
+    const el = r.getCell('ventendeTimer')?.getElement();
     if (!el) return;
     const erMarkert = vtMerking.rader.has(r.getPosition());
     el.style.outline = erMarkert ? '3px solid #3b82f6' : '';
     el.style.outlineOffset = '-3px';
     el.style.cursor = erMarkert ? 'grab' : '';
-    if (r.getData().ventendeTimer) el.draggable = erMarkert;
   });
 }
 function vtMerkNullstill() {
@@ -225,6 +224,42 @@ if (!window._vtMerkGlobaleLyttereBundet) {
   window.addEventListener('mousedown', e => {
     if (vtMerking.rader.size && !e.target.closest('[tabulator-field="ventendeTimer"]')) vtMerkNullstill();
   });
+}
+
+// Starter en ren musesporet "flytting" av den nåværende markeringen (kalt fra
+// mousedown på en celle som allerede er markert). Følger musepekeren til mouseup,
+// og sjekker da hva som ligger under pekeren via elementFromPoint - er det en
+// Time bekreftet-celle, bekreftes alle markerte rader.
+function vtStartFlytting(startEvent) {
+  startEvent.preventDefault();
+  document.body.style.cursor = 'grabbing';
+
+  function rensHover() {
+    if (vtFlyttHoverEl) { vtFlyttHoverEl.style.outline = ''; vtFlyttHoverEl = null; }
+  }
+  function paMove(e) {
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-tb-celle');
+    if (el === vtFlyttHoverEl) return;
+    rensHover();
+    if (el) { el.style.outline = '2px dashed #60a5fa'; vtFlyttHoverEl = el; }
+  }
+  function paUp(e) {
+    document.removeEventListener('mousemove', paMove);
+    document.removeEventListener('mouseup', paUp);
+    document.body.style.cursor = '';
+    const maalEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-tb-celle');
+    rensHover();
+    const radIndekser = [...vtMerking.rader];
+    vtMerkNullstill();
+    if (!maalEl) return;
+    const radTekstListe = radIndekser.map(idx => {
+      const r = adminArkTable.getRows().find(x => x.getPosition() === idx);
+      return r && r.getData().ventendeTimer ? { rad: r.getData(), tekst: r.getData().ventendeTimer } : null;
+    }).filter(Boolean);
+    if (radTekstListe.length) adminArkBekreftFlereVentendeTid(radTekstListe);
+  }
+  document.addEventListener('mousemove', paMove);
+  document.addEventListener('mouseup', paUp);
 }
 
 function adminArkOppdaterStatus() {
@@ -303,66 +338,24 @@ function renderAdminArk() {
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
     {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
-      cssClass:'admin-ark-slippmal',
-      formatter: (cell, params, onRendered) => {
-        const verdi = cell.getValue() || '';
-        onRendered(() => {
-          const el = cell.getElement();
-          el.ondragover = e => { if (kanRedigere) { e.preventDefault(); el.style.outline = '2px dashed #60a5fa'; e.dataTransfer.dropEffect = 'move'; } };
-          el.ondragleave = () => { el.style.outline = ''; };
-          el.ondrop = e => {
-            e.preventDefault();
-            el.style.outline = '';
-            if (!kanRedigere) return;
-            if (e.dataTransfer.getData('application/x-admin-ark-kilde') !== 'ventendeTimer') return;
-            const flere = JSON.parse(e.dataTransfer.getData('application/x-admin-ark-multi') || '[]');
-            if (flere.length > 1) {
-              // Flere rader markert - bekreft ALLE, uansett hvor i Time bekreftet-kolonnen man slipper.
-              const radTekstListe = flere.map(({radIndeks, tekst}) => {
-                const r = adminArkTable.getRows().find(x => x.getPosition() === radIndeks);
-                return r ? { rad: r.getData(), tekst } : null;
-              }).filter(Boolean);
-              vtMerkNullstill();
-              adminArkBekreftFlereVentendeTid(radTekstListe);
-              return;
-            }
-            if (flere.length === 1 && flere[0].radIndeks !== cell.getRow().getPosition()) {
-              visToast('Du kan bare bekrefte tid for samme rad'); return;
-            }
-            if (flere.length === 1) adminArkBekreftVentendeTid(cell.getRow().getData(), flere[0].tekst);
-          };
-        });
-        return verdi;
-      }
+      cssClass:'admin-ark-slippmal admin-ark-tb-celle',
+      formatter: cell => cell.getValue() || ''
     },
     {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
+      cssClass:'admin-ark-vt-celle',
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
         const radIdx = cell.getRow().getPosition();
         onRendered(() => {
           const el = cell.getElement();
-          if (!kanRedigere || !verdi) { el.draggable = false; return; }
-          el.title = 'Klikk og dra nedover for å markere flere rader. Dra en markert celle over på Time bekreftet for å bekrefte.';
-
-          el.ondragstart = e => {
-            // Er denne raden del av en aktiv fler-rads-markering? Dra da ALLE markerte,
-            // ellers bare denne ene raden.
-            const radIndekser = vtMerking.rader.has(radIdx) && vtMerking.rader.size > 1
-              ? [...vtMerking.rader] : [radIdx];
-            const nyttInnhold = radIndekser.map(idx => {
-              const r = adminArkTable.getRows().find(x => x.getPosition() === idx);
-              return { radIndeks: idx, tekst: r ? (r.getData().ventendeTimer || '') : '' };
-            }).filter(x => x.tekst);
-            e.dataTransfer.setData('application/x-admin-ark-kilde', 'ventendeTimer');
-            e.dataTransfer.setData('application/x-admin-ark-multi', JSON.stringify(nyttInnhold));
-          };
+          if (!kanRedigere || !verdi) return;
+          el.title = 'Klikk og dra nedover for å markere flere rader. Klikk og dra en markert celle over på Time bekreftet for å bekrefte.';
 
           // Som i Excel: klikk-og-dra på en UMARKERT celle starter en ny markering
           // (dra nedover for å ta med flere rader). Klikk-og-dra på en celle som
-          // ALLEREDE er markert lar native HTML5-dra (draggable, satt i
-          // vtMerkOppdaterVisning) overta i stedet, for å flytte/bekrefte markeringen.
+          // ALLEREDE er markert flytter/bekrefter i stedet.
           el.addEventListener('mousedown', e => {
-            if (vtMerking.rader.has(radIdx)) return;
+            if (vtMerking.rader.has(radIdx)) { vtStartFlytting(e); return; }
             // Uten dette starter nettleseren sin egen tekstmarkering (blå highlight) når
             // man drar over teksten, som ellers hindrer mouseenter-basert merking under.
             e.preventDefault();
