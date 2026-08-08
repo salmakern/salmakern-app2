@@ -116,12 +116,12 @@ function adminArkByggRader() {
 
 const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','merknader','ventendeTimer'];
 
-// Legger til en tom, ikke-lagret rad øverst i arket - blir først lagret i databasen
+// Legger til en tom, ikke-lagret rad nederst i arket - blir først lagret i databasen
 // når brukeren skriver noe i en av cellene.
 function adminArkNyRad() {
-  const rad = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: -1,
+  const rad = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: Number.MAX_SAFE_INTEGER,
     forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
-  S.adminArk = [rad, ...(S.adminArk||[])];
+  S.adminArk = [...(S.adminArk||[]), rad];
   renderAdminArk();
 }
 
