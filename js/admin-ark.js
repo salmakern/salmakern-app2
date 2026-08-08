@@ -172,23 +172,22 @@ async function adminArkLagreFelter(rad, endringer) {
   }
 }
 
-// Kalles når én eller flere Ventende timer-verdier slippes på Time bekreftet - hver rad
-// tolkes og lagres inn i sin EGEN Time bekreftet-celle, og Ventende timer tømmes.
+// Kalles når én eller flere Ventende timer-verdier bekreftes over på Time bekreftet -
+// hver rad tolkes og lagres i sin EGEN Time bekreftet-celle, og Ventende timer tømmes.
+// Oppdaterer kun de berørte radene direkte i tabellen (row.update) istedenfor et fullt
+// gjenoppbygg (renderAdminArk) - det siste oppleves som at "hele siden laster på nytt".
 async function adminArkBekreftFlereVentendeTid(radTekstListe) {
   let ok = 0, feilet = 0;
-  for (const { rad, tekst } of radTekstListe) {
+  for (const { row, rad, tekst } of radTekstListe) {
     const tolket = parseTimeBekreftetTekst(tekst);
     if (!tolket) { feilet++; continue; }
     await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, ventendeTimer: '' });
     ok++;
+    if (row) row.update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid), ventendeTimer: '' });
   }
   if (ok && !feilet) visToast(ok === 1 ? 'Time bekreftet' : `${ok} timer bekreftet`, 'ok');
   else if (ok && feilet) visToast(`${ok} bekreftet, ${feilet} kunne ikke tolkes`, 'ok');
   else visToast('Kan ikke tolkes som dato/tid - skriv f.eks. 07.08 - 09:00 i Ventende timer først');
-  renderAdminArk();
-}
-async function adminArkBekreftVentendeTid(rad, tekst) {
-  await adminArkBekreftFlereVentendeTid([{ rad, tekst }]);
 }
 
 // ── Merking og flytting av flere rader i Ventende timer-kolonnen ──
@@ -235,13 +234,13 @@ function vtStartFlytting(startEvent) {
   document.body.style.cursor = 'grabbing';
 
   function rensHover() {
-    if (vtFlyttHoverEl) { vtFlyttHoverEl.style.outline = ''; vtFlyttHoverEl = null; }
+    if (vtFlyttHoverEl) { vtFlyttHoverEl.style.outline = ''; vtFlyttHoverEl.style.background = ''; vtFlyttHoverEl = null; }
   }
   function paMove(e) {
     const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-tb-celle');
     if (el === vtFlyttHoverEl) return;
     rensHover();
-    if (el) { el.style.outline = '2px dashed #60a5fa'; vtFlyttHoverEl = el; }
+    if (el) { el.style.outline = '3px dashed #60a5fa'; el.style.outlineOffset = '-3px'; el.style.background = '#60a5fa33'; vtFlyttHoverEl = el; }
   }
   function paUp(e) {
     document.removeEventListener('mousemove', paMove);
@@ -254,7 +253,7 @@ function vtStartFlytting(startEvent) {
     if (!maalEl) return;
     const radTekstListe = radIndekser.map(idx => {
       const r = adminArkTable.getRows().find(x => x.getPosition() === idx);
-      return r && r.getData().ventendeTimer ? { rad: r.getData(), tekst: r.getData().ventendeTimer } : null;
+      return r && r.getData().ventendeTimer ? { row: r, rad: r.getData(), tekst: r.getData().ventendeTimer } : null;
     }).filter(Boolean);
     if (radTekstListe.length) adminArkBekreftFlereVentendeTid(radTekstListe);
   }
