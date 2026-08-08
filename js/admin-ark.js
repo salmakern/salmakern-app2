@@ -261,6 +261,50 @@ function vtStartFlytting(startEvent) {
   document.addEventListener('mouseup', paUp);
 }
 
+// Motsatt retning: dra en bekreftet Time bekreftet-celle tilbake ned til Ventende
+// timer på SAMME rad, for å sette den tilbake til uavklart. Bare én rad om gangen -
+// ingen markerings-mekanikk her, siden det å "avbekrefte" er en handling per rad.
+function tbStartFlytting(startEvent, kildeCell) {
+  document.body.style.cursor = 'grabbing';
+  const kildeRadPos = kildeCell.getRow().getPosition();
+  let hoverEl = null;
+
+  function rensHover() {
+    if (hoverEl) { hoverEl.style.outline = ''; hoverEl.style.background = ''; hoverEl = null; }
+  }
+  function erSammeRadsVentendeTimerCelle(el) {
+    if (!el) return null;
+    const rad = adminArkTable.getRows().find(r => r.getCell('ventendeTimer').getElement() === el);
+    return rad && rad.getPosition() === kildeRadPos ? rad : null;
+  }
+  function paMove(e) {
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-vt-celle');
+    if (el === hoverEl) return;
+    rensHover();
+    if (erSammeRadsVentendeTimerCelle(el)) { el.style.outline = '3px dashed #60a5fa'; el.style.outlineOffset = '-3px'; el.style.background = '#60a5fa33'; hoverEl = el; }
+  }
+  function paUp(e) {
+    document.removeEventListener('mousemove', paMove);
+    document.removeEventListener('mouseup', paUp);
+    document.body.style.cursor = '';
+    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-vt-celle');
+    rensHover();
+    const maalRad = erSammeRadsVentendeTimerCelle(el);
+    if (!maalRad) return;
+    const rad = kildeCell.getRow().getData();
+    const tekst = rad.timeBekreftetVis;
+    if (!tekst) return;
+    tbFlyttTilbake(rad, tekst, kildeCell.getRow());
+  }
+  document.addEventListener('mousemove', paMove);
+  document.addEventListener('mouseup', paUp);
+}
+async function tbFlyttTilbake(rad, tekst, row) {
+  await adminArkLagreFelter(rad, { timeBekreftet:'', timeBekreftetTid:'', ventendeTimer: tekst });
+  row.update({ timeBekreftetVis:'', ventendeTimer: tekst });
+  visToast('Satt tilbake til Ventende timer', 'ok');
+}
+
 function adminArkOppdaterStatus() {
   const el = document.getElementById('adminArkStatus');
   const btn = document.getElementById('adminArkArkiverBtn');
@@ -338,7 +382,20 @@ function renderAdminArk() {
       editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
     {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal admin-ark-tb-celle',
-      formatter: cell => cell.getValue() || ''
+      formatter: (cell, params, onRendered) => {
+        const verdi = cell.getValue() || '';
+        onRendered(() => {
+          const el = cell.getElement();
+          if (!kanRedigere || !verdi) return;
+          el.style.cursor = 'grab';
+          el.title = 'Klikk og dra ned på Ventende timer for å sette tilbake til uavklart';
+          el.addEventListener('mousedown', e => {
+            e.preventDefault();
+            tbStartFlytting(e, cell);
+          });
+        });
+        return verdi;
+      }
     },
     {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-vt-celle',
@@ -409,10 +466,14 @@ function renderAdminArk() {
     if (felt === 'timeBekreftetVis') {
       if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
       const tekst = (cell.getValue()||'').trim();
-      if (!tekst) { adminArkLagreFelter(rad, {timeBekreftet:'', timeBekreftetTid:''}).then(renderAdminArk); return; }
+      if (!tekst) { adminArkLagreFelter(rad, {timeBekreftet:'', timeBekreftetTid:''}); return; }
       const tolket = parseTimeBekreftetTekst(tekst);
       if (!tolket) { visToast('Ugyldig format - skriv f.eks. 07.08 - 09:00'); cell.restoreOldValue(); return; }
-      adminArkLagreFelter(rad, {timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid}).then(renderAdminArk);
+      // Normaliserer visningen (f.eks. "7.8-9:00" -> "07.08 - 09:00") uten et fullt
+      // gjenoppbygg av tabellen. Bruker row.update (ikke cell.setValue) - det siste
+      // trigger et nytt cellEdited-kall og ender i en unødvendig dobbel-lagring.
+      adminArkLagreFelter(rad, {timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid})
+        .then(() => cell.getRow().update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid) }));
       return;
     }
 
