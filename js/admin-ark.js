@@ -328,7 +328,7 @@ function renderAdminArk() {
         return verdi;
       }
     },
-    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
+    {title:'Ventende timer', field:'ventendeTimer', width:120, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
         const kanDras = kanRedigere && !!verdi;
@@ -383,9 +383,11 @@ function renderAdminArk() {
           }
         });
         if (!verdi) return '';
-        return `<span style="display:flex;align-items:center;justify-content:center;gap:4px;width:100%">
-          <span class="vt-drahandtak" title="Dra for å bekrefte i Time bekreftet" style="cursor:${kanDras?'grab':'default'};opacity:.65;flex-shrink:0">⠿</span>
-          <span class="vt-tekst" title="Klikk og dra nedover for å markere flere rader" style="cursor:${kanRedigere?'cell':'default'};user-select:none;-webkit-user-select:none">${verdi}</span>
+        // Håndtaket er laget stort og tydelig med egen bakgrunn - en liten ⠿ alene var
+        // for vanskelig å treffe presist, og et bomskudd endte i tekst-feltet ved siden av.
+        return `<span style="display:flex;align-items:stretch;width:100%;height:100%">
+          <span class="vt-drahandtak" title="Dra for å bekrefte i Time bekreftet" style="cursor:${kanDras?'grab':'default'};flex-shrink:0;width:26px;display:flex;align-items:center;justify-content:center;font-size:15px;${kanDras?'background:#27272a;border-radius:5px':''}">⠿</span>
+          <span class="vt-tekst" title="Klikk og dra nedover for å markere flere rader" style="cursor:${kanRedigere?'cell':'default'};user-select:none;-webkit-user-select:none;display:flex;align-items:center;padding-left:4px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${verdi}</span>
         </span>`;
       }
     }
