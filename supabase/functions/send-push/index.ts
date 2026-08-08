@@ -68,9 +68,14 @@ async function sendTilAbonnenter(
   }
 }
 
-// Gir " (Navn1, Navn2)" for et sett ansatt-IDer, eller '' hvis ingen (møtet gjelder alle).
+// Gir " (Navn1, Navn2)" for et sett ansatt-IDer, eller '' hvis ingen er valgt ELLER
+// utvalget tilfeldigvis dekker samtlige aktive ansatte (da regnes det som "alle").
 async function deltakerNavnSuffiks(supabase: ReturnType<typeof createClient>, ider?: number[]): Promise<string> {
   if (!ider || !ider.length) return ''
+  const { data: aktive } = await supabase.from('ansatte').select('id').eq('aktiv', true)
+  const aktiveIder = (aktive ?? []).map((a: any) => a.id)
+  const dekkerAlleAktive = aktiveIder.length > 0 && aktiveIder.every((id: number) => ider.includes(id))
+  if (dekkerAlleAktive) return ''
   const { data } = await supabase.from('ansatte').select('id, navn').in('id', ider)
   const navn = (data ?? []).map((a: any) => a.navn).filter(Boolean)
   return navn.length ? ` (${navn.join(', ')})` : ''
