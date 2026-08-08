@@ -40,6 +40,10 @@ if ('serviceWorker' in navigator) {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:100vh}
 
+/* ADMIN-ARK - kompakte rader for å få flest mulig rader synlig uten scroll */
+#adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px}
+#adminArkTabell .tabulator-row{min-height:0}
+
 /* LOGIN */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:20px;padding:16px}
 .pin-dots{font-size:36px;letter-spacing:12px;min-height:52px;text-align:center;font-weight:800}
