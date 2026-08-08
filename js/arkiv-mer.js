@@ -175,8 +175,54 @@ function renderMer() {
   renderKontakter();
   renderFravarKalender();
   renderHMS();
+  renderMoterListe();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
   if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
+}
+
+// ════════════════════════════════════════════════════
+// MØTER
+// ════════════════════════════════════════════════════
+function renderMoterListe() {
+  const el = document.getElementById('moterListe');
+  if (!el) return;
+  const idag = new Date().toISOString().split('T')[0];
+  const kommende = (S.moter||[]).filter(m => m.dato >= idag).sort((a,b) => (a.dato+a.tid).localeCompare(b.dato+b.tid));
+  el.innerHTML = kommende.length ? kommende.map(m => `
+    <div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div><b>${m.tittel}</b><div class="small muted">${fmtDatoKort(m.dato)} kl. ${m.tid}${m.opprettetAv?' · satt av '+m.opprettetAv:''}</div></div>
+      <button class="btn sm" onclick="slettMote('${m.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
+    </div>`).join('') : '<div class="muted small">Ingen kommende møter</div>';
+}
+
+async function opprettMote() {
+  const tittel = document.getElementById('mote_tittel').value.trim();
+  const dato = document.getElementById('mote_dato').value;
+  const tid = document.getElementById('mote_tid').value;
+  if (!tittel || !dato || !tid) { alert('Fyll inn tittel, dato og tid'); return; }
+  const mote = { id:'mote_'+Date.now(), tittel, dato, tid, opprettetAv: me?.navn||'', varslet:false };
+  S.moter = [...(S.moter||[]), mote];
+  if (db) {
+    const { error } = await db.from('moter').insert({ id:mote.id, tittel:mote.tittel, dato:mote.dato, tid:mote.tid, opprettet_av:mote.opprettetAv, varslet:false });
+    if (error) { visToast('Kunne ikke lagre møtet: ' + error.message); S.moter = S.moter.filter(m => m.id !== mote.id); return; }
+  }
+  closeModal('nyttMote');
+  document.getElementById('mote_tittel').value = '';
+  document.getElementById('mote_dato').value = '';
+  document.getElementById('mote_tid').value = '09:00';
+  renderMoterListe();
+  renderOversikt();
+}
+
+async function slettMote(id) {
+  if (!confirm('Slette dette møtet?')) return;
+  S.moter = (S.moter||[]).filter(m => m.id !== id);
+  if (db) {
+    const { error } = await db.from('moter').delete().eq('id', id);
+    if (error) console.error('Kunne ikke slette møtet:', error.message);
+  }
+  renderMoterListe();
+  renderOversikt();
 }
 
 let adminStatOffset = 0;

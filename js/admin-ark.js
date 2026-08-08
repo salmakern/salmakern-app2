@@ -158,7 +158,8 @@ async function adminArkLagreFelter(rad, endringer) {
       o.tidBiltilsynet = ark.timeBekreftet||'';
       o.tidBiltilsynetTid = ark.timeBekreftetTid||'';
       logChange(o, 'Time på biltilsynet satt fra Admin-ark: ' + (o.tidBiltilsynet ? (o.tidBiltilsynet+' '+o.tidBiltilsynetTid) : '(fjernet)'));
-      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, endringer: o.endringer };
+      // Nullstiller "allerede varslet"-merket - en flyttet/ny time skal gi et friskt 30-min-varsel.
+      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, biltilsyn_varslet: false, endringer: o.endringer };
       if (ark.timeBekreftet) {
         o.kalenderDato = ark.timeBekreftet;
         o.kalenderTid = ark.timeBekreftetTid || o.kalenderTid || '09:00';

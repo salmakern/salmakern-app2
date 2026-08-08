@@ -200,6 +200,7 @@ function renderWeek() {
     const ds      = dt.toISOString().split('T')[0];
     const isToday = ds === todayStr;
     const orders  = S.ordrer.filter(o => o.kalenderDato === ds && o.status === 'aktiv');
+    const moter   = (S.moter||[]).filter(m => m.dato === ds);
 
     const slotEls = slots30.map(s => {
       const tid = `${String(s.h).padStart(2,'0')}:${s.m===0?'00':'30'}`;
@@ -231,7 +232,21 @@ function renderWeek() {
       </div>`;
     }).join('');
 
-    return `<div class="cal-day-col${isToday?' cal-today-col':''}">${slotEls}${nowLine}${events}</div>`;
+    const moteEvents = moter.map(m => {
+      const [mh, mm] = (m.tid || '09:00').split(':').map(Number);
+      const top = Math.max(0, (mh + mm / 60 - (START_H + 0.5)) * HOUR_PX);
+      return `<div class="cal-event" style="top:${top}px;height:${Math.max(42,SLOT_PX)}px;background:#2e1065cc;border-color:#a78bfa">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
+          <div style="flex:1;min-width:0">
+            <div class="cal-event-regnr" style="color:#ddd6fe">📅 ${m.tittel}</div>
+            <div class="cal-event-info" style="color:#ddd6fe;opacity:0.8">${m.tid} · Møte</div>
+          </div>
+          <button onclick="event.stopPropagation();slettMote('${m.id}')" style="background:none;border:none;color:#ddd6fe;font-size:16px;line-height:1;padding:0 2px;cursor:pointer" title="Slett møte">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="cal-day-col${isToday?' cal-today-col':''}">${slotEls}${nowLine}${events}${moteEvents}</div>`;
   }).join('');
 
   const headCols = dates.map((dt, i) => {

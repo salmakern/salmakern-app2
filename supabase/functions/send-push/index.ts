@@ -25,6 +25,22 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Gir dagens dato og klokkeslett (i minutter siden midnatt) i Oslo lokaltid, uavhengig
+// av at serveren selv kjører i UTC - håndterer sommer-/vintertid automatisk via Intl.
+function osloNaa(): { dato: string, minutter: number } {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  })
+  const deler = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]))
+  return { dato: `${deler.year}-${deler.month}-${deler.day}`, minutter: Number(deler.hour) * 60 + Number(deler.minute) }
+}
+function imorgenDato(dagensDato: string): string {
+  const d = new Date(dagensDato + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 Deno.serve(async (req) => {
   // Nettlesere sender en tom "preflight"-forespørsel (OPTIONS) før selve POST-kallet
   // når man kaller funksjonen direkte fra en annen origin med Authorization-header.
@@ -47,6 +63,75 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+
+    // Kalles jevnlig av en cron-jobb (ikke fra klienten) - sjekker selv om noe er i ferd
+    // til å skje, istedenfor å få beskjed om det. Kan sende flere ulike varsler i ett kall.
+    if (payload.type === 'paaminnelser_sjekk') {
+      const naa = osloNaa()
+      const meldinger: { title: string, body: string }[] = []
+
+      // --- Time på biltilsynet, sendes når det er 30 minutter eller mindre igjen ---
+      const { data: ordre, error: ordreErr } = await supabase
+        .from('ordrer')
+        .select('id, chassis, regnr, kunde, tid_biltilsynet, tid_biltilsynet_tid')
+        .eq('tid_biltilsynet', naa.dato)
+        .eq('biltilsyn_varslet', false)
+        .not('tid_biltilsynet_tid', 'is', null)
+      if (ordreErr) console.error('Henting av ordre feilet:', ordreErr.message)
+
+      const varsletOrdreIder: string[] = []
+      for (const o of ordre ?? []) {
+        if (!o.tid_biltilsynet_tid) continue
+        const [t, m] = o.tid_biltilsynet_tid.split(':').map(Number)
+        if (Number.isNaN(t) || Number.isNaN(m)) continue
+        const diff = (t * 60 + m) - naa.minutter
+        if (diff >= 0 && diff <= 30) {
+          const bil = o.chassis || o.regnr || o.kunde || 'Bil'
+          meldinger.push({ title: 'Time på biltilsynet snart', body: `${bil} skal på biltilsynet kl. ${o.tid_biltilsynet_tid}` })
+          varsletOrdreIder.push(o.id)
+        }
+      }
+      if (varsletOrdreIder.length) {
+        await supabase.from('ordrer').update({ biltilsyn_varslet: true }).in('id', varsletOrdreIder)
+      }
+
+      // --- Møter, sendes kl 18:00 kvelden før ---
+      if (naa.minutter >= 18 * 60) {
+        const { data: moter, error: moterErr } = await supabase
+          .from('moter')
+          .select('id, tittel, tid')
+          .eq('dato', imorgenDato(naa.dato))
+          .eq('varslet', false)
+        if (moterErr) console.error('Henting av møter feilet:', moterErr.message)
+        const varsletMoteIder: string[] = []
+        for (const m of moter ?? []) {
+          meldinger.push({ title: 'Møte i morgen', body: `${m.tittel} kl. ${m.tid}` })
+          varsletMoteIder.push(m.id)
+        }
+        if (varsletMoteIder.length) {
+          await supabase.from('moter').update({ varslet: true }).in('id', varsletMoteIder)
+        }
+      }
+
+      if (!meldinger.length) return new Response('ingen påminnelser', { status: 200, headers: CORS_HEADERS })
+
+      const { data: subs } = await supabase.from('push_abonnement').select('*')
+      if (!subs?.length) return new Response('ingen abonnenter', { status: 200, headers: CORS_HEADERS })
+
+      for (const msg of meldinger) {
+        const melding = JSON.stringify({ title: msg.title, body: msg.body, url: '/salmakern-app2/salmakern.html' })
+        await Promise.allSettled(subs.map(async sub => {
+          try {
+            await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, melding)
+          } catch (e: any) {
+            if (e.statusCode === 410 || e.statusCode === 404) {
+              await supabase.from('push_abonnement').delete().eq('endpoint', sub.endpoint)
+            }
+          }
+        }))
+      }
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
 
     let title = "Salmaker'n"
     let body  = ''

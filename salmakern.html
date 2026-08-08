@@ -516,6 +516,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
         </div>
       </div>
+      <div class="card" id="merMoterKort">
+        <div class="row">
+          <div class="h">Sett møter</div>
+          <button class="btn sm" onclick="openModal('nyttMote')">+ Nytt møte</button>
+        </div>
+        <div class="muted small" style="margin-top:6px">Møter vises i kalenderen på Oversikt, og gir et varsel til alle kl. 18:00 kvelden før.</div>
+        <div id="moterListe" style="margin-top:10px"></div>
+      </div>
       <div class="card" id="merGodkjKort" style="display:none"><div class="h">Til godkjenning</div><div id="tilGodkj" style="margin-top:8px"></div></div>
       <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
       <div class="card" id="merTimerOversikt" style="display:none">
@@ -684,6 +692,23 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="bekreftFlytt()">Flytt</button>
       <button class="btn" onclick="closeModal('flytt')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyttMote">
+  <div class="modal-box">
+    <div class="h">Nytt møte</div>
+    <div style="margin-top:12px">
+      <label>Tittel</label><input type="text" id="mote_tittel" placeholder="F.eks. Ukentlig oppsummering">
+    </div>
+    <div class="grid g2" style="margin-top:10px">
+      <div><label>Dato</label><input type="date" id="mote_dato"></div>
+      <div><label>Tid</label><input type="time" id="mote_tid" value="09:00"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="opprettMote()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyttMote')">Avbryt</button>
     </div>
   </div>
 </div>

@@ -64,7 +64,7 @@ function sorterOrdre(a,b) {
 }
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[]};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[], moter:[]};
 let me = null;
 let activeOrdreId = null;
 let openedFromArkiv = false;
@@ -108,6 +108,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.lagerhistorikk   = S.lagerhistorikk   || [];
     S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.adminArk         = S.adminArk         || [];
+    S.moter            = S.moter            || [];
     S.ordrer = (S.ordrer||[]).map(o => ({
       ...o,
       utstyrSjekkliste:   o.utstyrSjekkliste   || [],
@@ -240,6 +241,11 @@ async function loadFromSupabase() {
     const aaR = await db.from('admin_ark').select('*');
     if (!aaR.error) S.adminArk = (aaR.data||[]).map(dbToAdminArkRad);
   } catch(_) {}
+  // Møter hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
+  try {
+    const mR = await db.from('moter').select('*').order('dato').order('tid');
+    if (!mR.error) S.moter = (mR.data||[]).map(dbToMote);
+  } catch(_) {}
 }
 
 function dbToOrdre(r) {
@@ -309,6 +315,9 @@ function dbToAdminArkRad(r) {
     forhandler:r.forhandler||'', kontaktperson:r.kontaktperson||'',
     serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:!!r.papirer, dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
     merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
+}
+function dbToMote(r) {
+  return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
