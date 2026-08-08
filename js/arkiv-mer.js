@@ -188,8 +188,10 @@ function renderMoterListe() {
   if (!el) return;
   const idag = new Date().toISOString().split('T')[0];
   const kommende = (S.moter||[]).filter(m => m.dato >= idag).sort((a,b) => (a.dato+a.tid).localeCompare(b.dato+b.tid));
+  const aktiveIder = (S.ansatte||[]).filter(a => a.aktiv).map(a => a.id);
   el.innerHTML = kommende.length ? kommende.map(m => {
-    const deltakerNavn = (m.deltakerIder||[]).length
+    const valgteDekkerAlleAktive = aktiveIder.length > 0 && aktiveIder.every(id => (m.deltakerIder||[]).includes(id));
+    const deltakerNavn = (m.deltakerIder||[]).length && !valgteDekkerAlleAktive
       ? (m.deltakerIder||[]).map(id => S.ansatte.find(a=>a.id===id)?.navn).filter(Boolean).join(', ')
       : 'Alle';
     return `
@@ -200,20 +202,27 @@ function renderMoterListe() {
   }).join('') : '<div class="muted small">Ingen kommende møter</div>';
 }
 
+// Bruker CSS grid på selve containeren (ikke flex per rad) - det garanterer at
+// avkrysningsboksene havner i nøyaktig samme loddrette kolonne på alle rader,
+// uansett om et navn bryter over to linjer eller ikke. "display:contents" på
+// label-en gjør at den ikke lager sin egen boks, slik at navn/boks likevel blir
+// direkte grid-elementer (rad-et er fortsatt klikkbart i sin helhet).
 function renderMoteDeltakereValg() {
   const el = document.getElementById('mote_deltakere');
   if (!el) return;
-  const rader = (S.ansatte||[]).filter(a => a.aktiv).map(a => `
-    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;border-bottom:1px solid #27272a">
-      <span>${a.navn}</span>
-      <input type="checkbox" class="mote-deltaker-cb" value="${a.id}" onchange="oppdaterMoteVelgAlleStatus()" style="flex-shrink:0">
-    </label>`).join('');
-  el.innerHTML = `
-    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;border-bottom:1px solid #3f3f46;font-weight:700">
-      <span>Velg alle</span>
-      <input type="checkbox" id="mote_velg_alle" onchange="toggleMoteVelgAlle(this.checked)" style="flex-shrink:0">
-    </label>
-    ${rader}`;
+  el.style.display = 'grid';
+  el.style.gridTemplateColumns = '1fr auto';
+  el.style.alignItems = 'center';
+  el.style.columnGap = '10px';
+  const rad = (navn, inputHtml, tykk) => `
+    <label style="display:contents;cursor:pointer">
+      <span style="padding:6px 0;border-bottom:1px solid ${tykk?'#3f3f46':'#27272a'};font-weight:${tykk?'700':'400'}">${navn}</span>
+      <span style="padding:6px 0;border-bottom:1px solid ${tykk?'#3f3f46':'#27272a'};display:flex;justify-content:flex-end">${inputHtml}</span>
+    </label>`;
+  const rader = (S.ansatte||[]).filter(a => a.aktiv)
+    .map(a => rad(a.navn, `<input type="checkbox" class="mote-deltaker-cb" value="${a.id}" onchange="oppdaterMoteVelgAlleStatus()">`))
+    .join('');
+  el.innerHTML = rad('Velg alle', `<input type="checkbox" id="mote_velg_alle" onchange="toggleMoteVelgAlle(this.checked)">`, true) + rader;
 }
 function toggleMoteVelgAlle(checked) {
   document.querySelectorAll('.mote-deltaker-cb').forEach(cb => cb.checked = checked);
