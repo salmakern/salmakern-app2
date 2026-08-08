@@ -519,7 +519,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="card" id="merMoterKort">
         <div class="row">
           <div class="h">Sett møter</div>
-          <button class="btn sm" onclick="openModal('nyttMote')">+ Nytt møte</button>
+          <button class="btn sm" onclick="apneNyttMoteModal()">+ Nytt møte</button>
         </div>
         <div class="muted small" style="margin-top:6px">Møter vises i kalenderen på Oversikt, og gir et varsel til alle kl. 18:00 kvelden før.</div>
         <div id="moterListe" style="margin-top:10px"></div>
@@ -705,6 +705,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="grid g2" style="margin-top:10px">
       <div><label>Dato</label><input type="date" id="mote_dato"></div>
       <div><label>Tid</label><input type="time" id="mote_tid" value="09:00"></div>
+    </div>
+    <div style="margin-top:10px">
+      <label>Hvem gjelder møtet? (la stå tomt for alle)</label>
+      <div id="mote_deltakere" style="margin-top:6px;max-height:150px;overflow-y:auto"></div>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="opprettMote()">Lagre</button>

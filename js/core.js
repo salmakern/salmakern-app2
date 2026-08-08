@@ -317,7 +317,7 @@ function dbToAdminArkRad(r) {
     merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToMote(r) {
-  return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet };
+  return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet, deltakerIder:r.deltaker_ider||[] };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,

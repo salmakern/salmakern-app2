@@ -41,6 +41,33 @@ function imorgenDato(dagensDato: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+// Sender hver melding kun til abonnentene som hører til deltakerIder - tom/manglende
+// deltakerIder betyr "alle" (bevarer eksisterende oppførsel for biltilsyn-varsler m.m.).
+async function sendTilAbonnenter(
+  supabase: ReturnType<typeof createClient>,
+  meldinger: { title: string, body: string, deltakerIder?: number[] }[]
+) {
+  if (!meldinger.length) return
+  const { data: subs } = await supabase.from('push_abonnement').select('*')
+  if (!subs?.length) return
+  for (const msg of meldinger) {
+    const mottakere = (msg.deltakerIder && msg.deltakerIder.length)
+      ? subs.filter((s: any) => msg.deltakerIder!.includes(s.ansatt_id))
+      : subs
+    if (!mottakere.length) continue
+    const melding = JSON.stringify({ title: msg.title, body: msg.body, url: '/salmakern-app2/salmakern.html' })
+    await Promise.allSettled(mottakere.map(async (sub: any) => {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, melding)
+      } catch (e: any) {
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          await supabase.from('push_abonnement').delete().eq('endpoint', sub.endpoint)
+        }
+      }
+    }))
+  }
+}
+
 Deno.serve(async (req) => {
   // Nettlesere sender en tom "preflight"-forespørsel (OPTIONS) før selve POST-kallet
   // når man kaller funksjonen direkte fra en annen origin med Authorization-header.
@@ -64,11 +91,22 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // Sendes fra klienten idet et møte opprettes - umiddelbart varsel, kun til de
+    // eventuelt utvalgte deltakerne (tom liste = alle).
+    if (payload.type === 'nytt_mote') {
+      await sendTilAbonnenter(supabase, [{
+        title: 'Nytt møte satt',
+        body: `${payload.tittel} - ${payload.dato?.split('-').reverse().join('.')} kl. ${payload.tid}`,
+        deltakerIder: payload.deltakerIder
+      }])
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
+
     // Kalles jevnlig av en cron-jobb (ikke fra klienten) - sjekker selv om noe er i ferd
     // til å skje, istedenfor å få beskjed om det. Kan sende flere ulike varsler i ett kall.
     if (payload.type === 'paaminnelser_sjekk') {
       const naa = osloNaa()
-      const meldinger: { title: string, body: string }[] = []
+      const meldinger: { title: string, body: string, deltakerIder?: number[] }[] = []
 
       // --- Time på biltilsynet, sendes når det er 30 minutter eller mindre igjen ---
       const { data: ordre, error: ordreErr } = await supabase
@@ -99,13 +137,13 @@ Deno.serve(async (req) => {
       if (naa.minutter >= 18 * 60) {
         const { data: moter, error: moterErr } = await supabase
           .from('moter')
-          .select('id, tittel, tid')
+          .select('id, tittel, tid, deltaker_ider')
           .eq('dato', imorgenDato(naa.dato))
           .eq('varslet', false)
         if (moterErr) console.error('Henting av møter feilet:', moterErr.message)
         const varsletMoteIder: string[] = []
         for (const m of moter ?? []) {
-          meldinger.push({ title: 'Møte i morgen', body: `${m.tittel} kl. ${m.tid}` })
+          meldinger.push({ title: 'Møte i morgen', body: `${m.tittel} kl. ${m.tid}`, deltakerIder: m.deltaker_ider })
           varsletMoteIder.push(m.id)
         }
         if (varsletMoteIder.length) {
@@ -114,22 +152,7 @@ Deno.serve(async (req) => {
       }
 
       if (!meldinger.length) return new Response('ingen påminnelser', { status: 200, headers: CORS_HEADERS })
-
-      const { data: subs } = await supabase.from('push_abonnement').select('*')
-      if (!subs?.length) return new Response('ingen abonnenter', { status: 200, headers: CORS_HEADERS })
-
-      for (const msg of meldinger) {
-        const melding = JSON.stringify({ title: msg.title, body: msg.body, url: '/salmakern-app2/salmakern.html' })
-        await Promise.allSettled(subs.map(async sub => {
-          try {
-            await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, melding)
-          } catch (e: any) {
-            if (e.statusCode === 410 || e.statusCode === 404) {
-              await supabase.from('push_abonnement').delete().eq('endpoint', sub.endpoint)
-            }
-          }
-        }))
-      }
+      await sendTilAbonnenter(supabase, meldinger)
       return new Response('ok', { status: 200, headers: CORS_HEADERS })
     }
 

@@ -188,11 +188,29 @@ function renderMoterListe() {
   if (!el) return;
   const idag = new Date().toISOString().split('T')[0];
   const kommende = (S.moter||[]).filter(m => m.dato >= idag).sort((a,b) => (a.dato+a.tid).localeCompare(b.dato+b.tid));
-  el.innerHTML = kommende.length ? kommende.map(m => `
+  el.innerHTML = kommende.length ? kommende.map(m => {
+    const deltakerNavn = (m.deltakerIder||[]).length
+      ? (m.deltakerIder||[]).map(id => S.ansatte.find(a=>a.id===id)?.navn).filter(Boolean).join(', ')
+      : 'Alle';
+    return `
     <div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-      <div><b>${m.tittel}</b><div class="small muted">${fmtDatoKort(m.dato)} kl. ${m.tid}${m.opprettetAv?' · satt av '+m.opprettetAv:''}</div></div>
+      <div><b>${m.tittel}</b><div class="small muted">${fmtDatoKort(m.dato)} kl. ${m.tid} · ${deltakerNavn}${m.opprettetAv?' · satt av '+m.opprettetAv:''}</div></div>
       <button class="btn sm" onclick="slettMote('${m.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
-    </div>`).join('') : '<div class="muted small">Ingen kommende møter</div>';
+    </div>`;
+  }).join('') : '<div class="muted small">Ingen kommende møter</div>';
+}
+
+function renderMoteDeltakereValg() {
+  const el = document.getElementById('mote_deltakere');
+  if (!el) return;
+  el.innerHTML = (S.ansatte||[]).filter(a => a.aktiv).map(a => `
+    <label style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer">
+      <input type="checkbox" class="mote-deltaker-cb" value="${a.id}"> ${a.navn}
+    </label>`).join('');
+}
+function apneNyttMoteModal() {
+  renderMoteDeltakereValg();
+  openModal('nyttMote');
 }
 
 async function opprettMote() {
@@ -200,12 +218,18 @@ async function opprettMote() {
   const dato = document.getElementById('mote_dato').value;
   const tid = document.getElementById('mote_tid').value;
   if (!tittel || !dato || !tid) { alert('Fyll inn tittel, dato og tid'); return; }
-  const mote = { id:'mote_'+Date.now(), tittel, dato, tid, opprettetAv: me?.navn||'', varslet:false };
+  const deltakerIder = [...document.querySelectorAll('.mote-deltaker-cb:checked')].map(cb => Number(cb.value));
+  const mote = { id:'mote_'+Date.now(), tittel, dato, tid, opprettetAv: me?.navn||'', varslet:false, deltakerIder };
   S.moter = [...(S.moter||[]), mote];
   if (db) {
-    const { error } = await db.from('moter').insert({ id:mote.id, tittel:mote.tittel, dato:mote.dato, tid:mote.tid, opprettet_av:mote.opprettetAv, varslet:false });
+    const { error } = await db.from('moter').insert({ id:mote.id, tittel:mote.tittel, dato:mote.dato, tid:mote.tid, opprettet_av:mote.opprettetAv, varslet:false, deltaker_ider:deltakerIder });
     if (error) { visToast('Kunne ikke lagre møtet: ' + error.message); S.moter = S.moter.filter(m => m.id !== mote.id); return; }
   }
+  fetch(SUPA_URL + '/functions/v1/send-push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+    body: JSON.stringify({ type: 'nytt_mote', tittel, dato, tid, deltakerIder })
+  }).catch(e => console.warn('Nytt møte-varsel feilet:', e));
   closeModal('nyttMote');
   document.getElementById('mote_tittel').value = '';
   document.getElementById('mote_dato').value = '';
