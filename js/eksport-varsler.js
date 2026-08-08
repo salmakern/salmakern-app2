@@ -87,7 +87,7 @@ function genPDF(id) {
     <div class="info-row"><span class="info-label">Modell:</span><span>${o.modell||'--'}</span></div><div class="info-row"><span class="info-label">Variant:</span><span>${o.variant||'--'}</span></div><div class="info-row"><span class="info-label">Versjon:</span><span>${o.versjon||'--'}</span></div>
     <div class="info-row"><span class="info-label">Reg.nr:</span><span>${o.regnr||'--'}</span></div>
     <div class="info-row"><span class="info-label">Chassis:</span><span>${o.chassis||'--'}</span></div>
-    <div class="info-row"><span class="info-label">Ankomst:</span><span>${o.ankomstdato||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Ankomst:</span><span>${o.ankomstdato?fmtDatoKort(o.ankomstdato):'--'}</span></div>
   </div>
   <div>
     <h2>Kunde</h2>
