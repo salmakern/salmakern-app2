@@ -43,6 +43,11 @@ body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:10
 /* ADMIN-ARK - kompakte rader for å få flest mulig rader synlig uten scroll */
 #adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px}
 #adminArkTabell .tabulator-row{min-height:0}
+/* fitData gjør selve rad-/header-innholdet kun så bredt som kolonnene trenger, mens
+   holderne rundt fortsatt fyller hele bredden - sentrer innholdet i dem istedenfor
+   å la det henge til venstre med tomrom etter siste kolonne. Innholdet er
+   display:inline-block, så det sentreres via text-align på holderen, ikke margin:auto. */
+#adminArkTabell .tabulator-tableholder, #adminArkTabell .tabulator-header-contents{text-align:center}
 
 /* LOGIN */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:20px;padding:16px}

@@ -239,20 +239,20 @@ function renderAdminArk() {
   // timer, slik at drahandtaket ikke kommer i konflikt med de siste feltene.
   const kolonner = [
     {title:'#', formatter:'rownum', hozAlign:'center', width:40, headerSort:false, frozen:true, rowHandle:true},
-    {title:'Forhandler', field:'forhandler', width:135, headerSort:false, editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Kontaktperson', field:'kontaktperson', width:135, headerSort:false, editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Serienummer', field:'serienummer', width:95, headerSort:false, editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Forhandler', field:'forhandler', width:135, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Kontaktperson', field:'kontaktperson', width:135, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Serienummer', field:'serienummer', width:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Mottatt', field:'mottatt', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
-    {title:'Dato', field:'dato', width:85, headerSort:false, editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
+    {title:'Dato', field:'dato', width:85, headerSort:false, hozAlign:'center', editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
     {title:'Papirer', field:'papirer', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Merknader', field:'merknader', width:125, headerSort:false, editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Merknader', field:'merknader', width:125, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, editor: kanRedigere ? 'input' : false,
+    {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal',
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
@@ -274,7 +274,7 @@ function renderAdminArk() {
         return verdi;
       }
     },
-    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, editor: kanRedigere ? 'input' : false,
+    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
         onRendered(() => {
