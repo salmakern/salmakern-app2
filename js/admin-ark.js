@@ -75,7 +75,8 @@ function adminArkByggRader() {
       fraktselskap: ark?.fraktselskap || '',
       henteklarVis: o.ordreStatus === 'klar_henting' ? '✓' : '',
       merknader: ark?.merknader || '',
-      flateVis: adminArkFlateNavn(o),
+      flateVis: adminArkFlateNavn(o) || ark?.flateHypotetisk || '',
+      _flateErEkte: !!adminArkFlateNavn(o),
       timeBekreftet: ark?.timeBekreftet || '',
       timeBekreftetTid: ark?.timeBekreftetTid || '',
       timeBekreftetVis: fmtTimeBekreftetVis(ark?.timeBekreftet, ark?.timeBekreftetTid),
@@ -102,7 +103,8 @@ function adminArkByggRader() {
       fraktselskap: r.fraktselskap || '',
       henteklarVis: '',
       merknader: r.merknader || '',
-      flateVis: '',
+      flateVis: r.flateHypotetisk || '',
+      _flateErEkte: false,
       timeBekreftet: r.timeBekreftet || '',
       timeBekreftetTid: r.timeBekreftetTid || '',
       timeBekreftetVis: fmtTimeBekreftetVis(r.timeBekreftet, r.timeBekreftetTid),
@@ -120,7 +122,7 @@ const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','ser
 // når brukeren skriver noe i en av cellene.
 function adminArkNyRad() {
   const rad = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: Number.MAX_SAFE_INTEGER,
-    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
   S.adminArk = [...(S.adminArk||[]), rad];
   renderAdminArk();
 }
@@ -133,7 +135,7 @@ async function adminArkLagreFelter(rad, endringer) {
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: (S.adminArk||[]).length,
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
     S.adminArk = [...(S.adminArk||[]), ark];
   }
   Object.assign(ark, endringer);
@@ -142,7 +144,7 @@ async function adminArkLagreFelter(rad, endringer) {
   const payload = { id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: ark.rekkefolge,
     forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
     serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
-    fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', time_bekreftet: ark.timeBekreftet||null,
+    fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
     time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
   const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
@@ -251,7 +253,8 @@ function renderAdminArk() {
     {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
     {title:'Merknader', field:'merknader', width:125, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
-    {title:'Flåte', field:'flateVis', width:80, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
+    {title:'Flåte', field:'flateVis', width:80, headerSort:false, hozAlign:'center',
+      editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
     {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal',
       formatter: (cell, params, onRendered) => {
@@ -314,6 +317,13 @@ function renderAdminArk() {
     const felt = cell.getField();
     const rad = cell.getRow().getData();
 
+    if (felt === 'flateVis') {
+      if (rad._flateErEkte) { cell.restoreOldValue(); return; }
+      if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
+      adminArkLagreFelter(rad, { flateHypotetisk: cell.getValue() || '' });
+      return;
+    }
+
     if (felt === 'timeBekreftetVis') {
       if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
       const tekst = (cell.getValue()||'').trim();
@@ -344,7 +354,7 @@ function renderAdminArk() {
         if (!rad.chassisNr) return;
         ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
           forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-          serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+          serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
         S.adminArk = [...(S.adminArk||[]), ark];
       } else {
         ark.rekkefolge = idx;
@@ -352,7 +362,7 @@ function renderAdminArk() {
       oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
         forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
         serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
-        fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', time_bekreftet: ark.timeBekreftet||null,
+        fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
         time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
     });
     if (oppdateringer.length) {
