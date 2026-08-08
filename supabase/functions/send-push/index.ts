@@ -68,6 +68,14 @@ async function sendTilAbonnenter(
   }
 }
 
+// Gir " (Navn1, Navn2)" for et sett ansatt-IDer, eller '' hvis ingen (møtet gjelder alle).
+async function deltakerNavnSuffiks(supabase: ReturnType<typeof createClient>, ider?: number[]): Promise<string> {
+  if (!ider || !ider.length) return ''
+  const { data } = await supabase.from('ansatte').select('id, navn').in('id', ider)
+  const navn = (data ?? []).map((a: any) => a.navn).filter(Boolean)
+  return navn.length ? ` (${navn.join(', ')})` : ''
+}
+
 Deno.serve(async (req) => {
   // Nettlesere sender en tom "preflight"-forespørsel (OPTIONS) før selve POST-kallet
   // når man kaller funksjonen direkte fra en annen origin med Authorization-header.
@@ -94,9 +102,10 @@ Deno.serve(async (req) => {
     // Sendes fra klienten idet et møte opprettes - umiddelbart varsel, kun til de
     // eventuelt utvalgte deltakerne (tom liste = alle).
     if (payload.type === 'nytt_mote') {
+      const navnSuffiks = await deltakerNavnSuffiks(supabase, payload.deltakerIder)
       await sendTilAbonnenter(supabase, [{
         title: 'Nytt møte satt',
-        body: `${payload.tittel} - ${payload.dato?.split('-').reverse().join('.')} kl. ${payload.tid}`,
+        body: `${payload.tittel} - ${payload.dato?.split('-').reverse().join('.')} kl. ${payload.tid}${navnSuffiks}`,
         deltakerIder: payload.deltakerIder
       }])
       return new Response('ok', { status: 200, headers: CORS_HEADERS })
@@ -143,7 +152,8 @@ Deno.serve(async (req) => {
         if (moterErr) console.error('Henting av møter feilet:', moterErr.message)
         const varsletMoteIder: string[] = []
         for (const m of moter ?? []) {
-          meldinger.push({ title: 'Møte i morgen', body: `${m.tittel} kl. ${m.tid}`, deltakerIder: m.deltaker_ider })
+          const navnSuffiks = await deltakerNavnSuffiks(supabase, m.deltaker_ider)
+          meldinger.push({ title: 'Møte i morgen', body: `${m.tittel} kl. ${m.tid}${navnSuffiks}`, deltakerIder: m.deltaker_ider })
           varsletMoteIder.push(m.id)
         }
         if (varsletMoteIder.length) {

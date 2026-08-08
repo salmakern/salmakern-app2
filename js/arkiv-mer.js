@@ -204,8 +204,9 @@ function renderMoteDeltakereValg() {
   const el = document.getElementById('mote_deltakere');
   if (!el) return;
   el.innerHTML = (S.ansatte||[]).filter(a => a.aktiv).map(a => `
-    <label style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer">
-      <input type="checkbox" class="mote-deltaker-cb" value="${a.id}"> ${a.navn}
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;cursor:pointer;border-bottom:1px solid #27272a">
+      <span>${a.navn}</span>
+      <input type="checkbox" class="mote-deltaker-cb" value="${a.id}" style="flex-shrink:0">
     </label>`).join('');
 }
 function apneNyttMoteModal() {
