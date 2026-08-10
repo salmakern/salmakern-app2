@@ -39,6 +39,43 @@ function adminArkOppdaterVentendeTimerSnapshot() {
     .sort((a, b) => a.getPosition() - b.getPosition())
     .map(r => r.getData().ventendeTimer || '');
 }
+
+// Lagrer ny rekkefølge for ALLE rader etter en rad-flytting (enten native
+// enkelt-rad-dra via rowMoved, eller egen flere-rader-dra via radFlyttFlereRader) -
+// setter rekkefolge fortløpende, legger posisjonsbasert Ventende timer (fra
+// snapshotet TATT FØR draget) tilbake på riktig plass, og batch-upserter alt i ett kall.
+async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
+  const rader = adminArkTable.getData();
+  const oppdateringer = [];
+  rader.forEach((rad, idx) => {
+    const posisjonsbasertVentendeTimer = ventendeTimerSnapshot[idx] ?? '';
+    let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
+    if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => r.chassisNr === rad.chassisNr && !r.arkivert);
+    if (!ark) {
+      if (!rad.chassisNr) return;
+      ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
+        forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
+        serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
+      S.adminArk = [...(S.adminArk||[]), ark];
+    } else {
+      ark.rekkefolge = idx;
+      ark.ventendeTimer = posisjonsbasertVentendeTimer;
+    }
+    oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
+      forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
+      serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
+      fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
+      time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
+  });
+  // Oppdaterer selve tabellvisningen slik at Ventende timer-kolonnen faktisk viser
+  // den posisjonsbaserte verdien med en gang, ikke verdien som fulgte bilen(e).
+  adminArkTable.getRows().forEach((r, idx) => r.update({ ventendeTimer: ventendeTimerSnapshot[idx] ?? '' }));
+  adminArkOppdaterVentendeTimerSnapshot();
+  if (oppdateringer.length) {
+    const { error } = await db.from('admin_ark').upsert(oppdateringer, {onConflict:'id'});
+    if (error) console.error('Rekkefølge-lagring feilet:', error.message);
+  }
+}
 if (!window._adminArkEnterLytterBundet) {
   window._adminArkEnterLytterBundet = true;
   document.addEventListener('keydown', e => {
@@ -390,6 +427,99 @@ async function tbFlyttTilbake(rad, tekst, row) {
   visToast('Satt tilbake til Ventende timer', 'ok');
 }
 
+// ── Merking og flytting av FLERE HELE RADER via '#'-kolonnen ──
+// Samme mekanikk som Ventende timer-merkingen: klikk-og-dra nedover på '#' markerer
+// en sammenhengende rekke rader (helramme rundt hele raden), et NYTT klikk-og-dra som
+// starter INNENFOR markeringen flytter alle de markerte radene samlet dit du slipper -
+// hele bil-info følger med (som ved vanlig enkelt-rad-dra), men Ventende timer blir
+// IKKE med - den blir værende på sin radplass, akkurat som ved enkelt-rad-dra.
+let radMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
+
+function radMerkOppdaterVisning() {
+  if (!adminArkTable) return;
+  adminArkTable.getRows().forEach(r => {
+    const el = r.getElement();
+    if (!el) return;
+    const erMarkert = radMerking.rader.has(r.getPosition());
+    el.style.outline = erMarkert ? '3px solid #3b82f6' : '';
+    el.style.outlineOffset = erMarkert ? '-2px' : '';
+  });
+}
+function radMerkNullstill() {
+  radMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
+  radMerkOppdaterVisning();
+}
+if (!window._radMerkGlobaleLyttereBundet) {
+  window._radMerkGlobaleLyttereBundet = true;
+  window.addEventListener('mouseup', () => {
+    if (radMerking.aktiv) { radMerking.aktiv = false; radMerkOppdaterVisning(); }
+  });
+  window.addEventListener('mousedown', e => {
+    if (radMerking.rader.size && !e.target.closest('.admin-ark-radnr-celle')) radMerkNullstill();
+  });
+}
+
+function radFraCelle(cellEl) {
+  const trEl = cellEl?.closest('.tabulator-row');
+  return trEl ? adminArkTable.getRows().find(r => r.getElement() === trEl) : null;
+}
+
+// Starter en ren musesporet flytting av HELE den markerte rad-blokken (kalt fra
+// mousedown på en '#'-celle som allerede er markert). Slippes det på en annen rad,
+// flyttes hele blokken dit (i samme innbyrdes rekkefølge), kaskadert fra der du slipper.
+function radStartFlytting(startEvent) {
+  startEvent.preventDefault();
+  document.body.style.cursor = 'grabbing';
+  let hoverRadEl = null;
+
+  function rensHover() {
+    if (hoverRadEl) { hoverRadEl.style.outline = ''; hoverRadEl.style.background = ''; hoverRadEl = null; }
+  }
+  function finnMaalCelle(e) {
+    return document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-radnr-celle');
+  }
+  function paMove(e) {
+    const trEl = finnMaalCelle(e)?.closest('.tabulator-row') || null;
+    if (trEl === hoverRadEl) return;
+    rensHover();
+    if (trEl) { trEl.style.outline = '3px dashed #60a5fa'; trEl.style.outlineOffset = '-2px'; trEl.style.background = '#60a5fa22'; hoverRadEl = trEl; }
+  }
+  function paUp(e) {
+    document.removeEventListener('mousemove', paMove);
+    document.removeEventListener('mouseup', paUp);
+    document.body.style.cursor = '';
+    const maalRad = radFraCelle(finnMaalCelle(e));
+    rensHover();
+    const radIndekser = [...radMerking.rader].sort((a, b) => a - b);
+    radMerkNullstill();
+    if (!maalRad || radIndekser.includes(maalRad.getPosition())) return;
+    radFlyttFlereRader(radIndekser, maalRad.getPosition());
+  }
+  document.addEventListener('mousemove', paMove);
+  document.addEventListener('mouseup', paUp);
+}
+
+// Flytter de markerte radene (kildePosisjoner) samlet til å starte på maalPosisjon,
+// i samme innbyrdes rekkefølge de hadde - resten av radene skyves nedover fra der du
+// slipper. Ventende timer er IKKE med i flyttingen (adminArkPersisterRekkefolge legger
+// posisjonsbasert Ventende timer tilbake etterpå, akkurat som ved enkelt-rad-dra).
+async function radFlyttFlereRader(kildePosisjoner, maalPosisjon) {
+  const alleRader = adminArkTable.getRows();
+  const posisjonerSortert = alleRader.map(r => r.getPosition()).sort((a, b) => a - b);
+  const gammelData = adminArkTable.getData();
+  const kildeIdxSet = new Set(kildePosisjoner.map(pos => posisjonerSortert.indexOf(pos)));
+  const flyttetRaderData = kildePosisjoner.slice().sort((a, b) => a - b)
+    .map(pos => gammelData[posisjonerSortert.indexOf(pos)]);
+  const maalRadData = gammelData[posisjonerSortert.indexOf(maalPosisjon)];
+  const gjenvarende = gammelData.filter((_, idx) => !kildeIdxSet.has(idx));
+  const settInnIndeks = gjenvarende.indexOf(maalRadData);
+  gjenvarende.splice(settInnIndeks, 0, ...flyttetRaderData);
+  const ventendeTimerFor = adminArkVentendeTimerPerPosisjon;
+  await adminArkTable.setData(gjenvarende);
+  await adminArkPersisterRekkefolge(ventendeTimerFor);
+  visToast(kildePosisjoner.length === 1 ? 'Flyttet 1 rad' : `Flyttet ${kildePosisjoner.length} rader`, 'ok');
+}
+
 function adminArkOppdaterStatus() {
   const el = document.getElementById('adminArkStatus');
   const btn = document.getElementById('adminArkArkiverBtn');
@@ -451,7 +581,35 @@ function renderAdminArk() {
   // Satt på alle kolonner til og med Flåte - ikke på Time bekreftet/Ventende
   // timer, slik at drahandtaket ikke kommer i konflikt med de siste feltene.
   const kolonner = [
-    {title:'#', formatter:'rownum', hozAlign:'center', width:40, headerSort:false, frozen:true, rowHandle:true},
+    {title:'#', hozAlign:'center', width:40, headerSort:false, frozen:true, cssClass:'admin-ark-radnr-celle',
+      formatter: (cell, params, onRendered) => {
+        const radIdx = cell.getRow().getPosition();
+        onRendered(() => {
+          const el = cell.getElement();
+          if (!kanRedigere) return;
+          el.style.cursor = 'grab';
+          el.title = 'Klikk og dra nedover for å markere flere rader. Klikk og dra en markert rad for å flytte alle sammen (Ventende timer blir liggende igjen på plassen sin).';
+          el.addEventListener('mousedown', e => {
+            if (radMerking.rader.has(radIdx)) { radStartFlytting(e); return; }
+            e.preventDefault();
+            radMerking = { aktiv:true, startIdx:radIdx, rader:new Set([radIdx]), fikkDrag:false };
+            radMerkOppdaterVisning();
+          });
+          el.addEventListener('mouseenter', () => {
+            if (!radMerking.aktiv) return;
+            radMerking.fikkDrag = true;
+            const alleIdx = adminArkTable.getRows().map(r => r.getPosition());
+            const fraPos = alleIdx.indexOf(radMerking.startIdx);
+            const tilPos = alleIdx.indexOf(radIdx);
+            if (fraPos === -1 || tilPos === -1) return;
+            const [lav, hoy] = fraPos <= tilPos ? [fraPos, tilPos] : [tilPos, fraPos];
+            radMerking.rader = new Set(alleIdx.slice(lav, hoy + 1));
+            radMerkOppdaterVisning();
+          });
+        });
+        return cell.getRow().getPosition();
+      }
+    },
     {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
@@ -621,37 +779,6 @@ function renderAdminArk() {
 
   adminArkTable.on('rowMoved', () => {
     if (!kanRedigere) return;
-    const rader = adminArkTable.getData();
-    const oppdateringer = [];
-    rader.forEach((rad, idx) => {
-      // Ventende timer skal bli værende på RADPLASSEN (idx), ikke følge bilen som
-      // akkurat ble flyttet inn dit - bruk snapshotet fra FØR dette draget.
-      const posisjonsbasertVentendeTimer = adminArkVentendeTimerPerPosisjon[idx] ?? '';
-      let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
-      if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => r.chassisNr === rad.chassisNr && !r.arkivert);
-      if (!ark) {
-        if (!rad.chassisNr) return;
-        ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
-          forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-          serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
-        S.adminArk = [...(S.adminArk||[]), ark];
-      } else {
-        ark.rekkefolge = idx;
-        ark.ventendeTimer = posisjonsbasertVentendeTimer;
-      }
-      oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
-        forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
-        serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
-        fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
-        time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
-    });
-    // Oppdaterer selve tabellvisningen slik at Ventende timer-kolonnen faktisk viser
-    // den posisjonsbaserte verdien med en gang, ikke verdien som fulgte bilen.
-    adminArkTable.getRows().forEach((r, idx) => r.update({ ventendeTimer: adminArkVentendeTimerPerPosisjon[idx] ?? '' }));
-    adminArkOppdaterVentendeTimerSnapshot();
-    if (oppdateringer.length) {
-      db.from('admin_ark').upsert(oppdateringer, {onConflict:'id'})
-        .then(r => { if (r.error) console.error('Rekkefølge-lagring feilet:', r.error.message); });
-    }
+    adminArkPersisterRekkefolge(adminArkVentendeTimerPerPosisjon);
   });
 }
