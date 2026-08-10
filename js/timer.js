@@ -65,8 +65,12 @@ function settGPSLokasjon() {
     if(btn){btn.textContent='Sett arbeidsplasslokasjon';btn.disabled=false;}
     renderMer();
     alert('✅ GPS-lokasjon lagret!');
-  }, ()=>{
-    alert('Kunne ikke hente GPS-posisjon. Prøv igjen.');
+  }, err=>{
+    let msg='Kunne ikke hente GPS-posisjon. Prøv igjen.';
+    if(err && err.code===1) msg='Nettleseren/enheten nekter tilgang til posisjon. Skru på Stedstjenester/Location for nettleseren i systeminnstillingene, og tillat posisjon for denne siden i nettleserinnstillingene.';
+    else if(err && err.code===2) msg='Posisjon ikke tilgjengelig akkurat nå. Sjekk at Stedstjenester/GPS er skrudd på, og prøv igjen.';
+    else if(err && err.code===3) msg='Tidsavbrudd - fant ikke posisjon innen 10 sekunder. Prøv igjen, gjerne utendørs eller nær et vindu.';
+    alert(msg);
     if(btn){btn.textContent='Sett arbeidsplasslokasjon';btn.disabled=false;}
   },{timeout:10000});
 }

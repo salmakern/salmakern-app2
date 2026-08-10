@@ -4,11 +4,41 @@
 let adminArkAar = new Date().getFullYear();
 let adminArkTable = null;
 
+// Brukeren kan dra i det innebygde endre-størrelse-håndtaket nederst til høyre på
+// tabellboksen (CSS resize:both) for å gjøre arket høyere/bredere enn det som
+// automatisk tilpasses vinduet/innholdet - siden/tabellen får da scrolle for å vise
+// resten. Så snart brukeren har gjort det manuelt, skal ikke den automatiske
+// tilpasningen overskrive valget deres igjen.
+let adminArkManuellHoyde = null;
+let adminArkManuellBredde = null;
+if (!window._adminArkManuellHoydeLytterBundet) {
+  window._adminArkManuellHoydeLytterBundet = true;
+  document.addEventListener('mouseup', () => {
+    const el = document.getElementById('adminArkTabell');
+    if (!el) return;
+    if (el.style.height) adminArkManuellHoyde = el.style.height;
+    if (el.style.width) adminArkManuellBredde = el.style.width;
+  });
+}
+
 // Som i Excel: Enter mens man redigerer en celle skal hoppe til samme kolonne på
 // raden under. Fanges opp i CAPTURE-fasen på document - det garanterer at flagget
 // rekker å settes FØR Tabulators egen (bubble-fase) Enter-håndtering på selve inputen
 // rekker å fullføre redigeringen og fyre cellEdited, uansett rekkefølge ellers.
 let adminArkSisteTastVarEnter = false;
+
+// Ventende timer skal høre til RADPLASSEN i lista, ikke til bilen - når en rad dras til
+// ny posisjon skal IKKE Ventende timer-verdien flytte seg med den (i motsetning til
+// alt annet på raden, som følger bilen som vanlig). Derfor tar vi vare på hvilken
+// Ventende timer-verdi som lå på hver posisjon FØR hvert dra, og legger den tilbake
+// på samme posisjon etterpå, uansett hvilken bil som nå havnet der.
+let adminArkVentendeTimerPerPosisjon = [];
+function adminArkOppdaterVentendeTimerSnapshot() {
+  if (!adminArkTable) return;
+  adminArkVentendeTimerPerPosisjon = adminArkTable.getRows()
+    .sort((a, b) => a.getPosition() - b.getPosition())
+    .map(r => r.getData().ventendeTimer || '');
+}
 if (!window._adminArkEnterLytterBundet) {
   window._adminArkEnterLytterBundet = true;
   document.addEventListener('keydown', e => {
@@ -396,6 +426,7 @@ async function arkiverAdminArk() {
 function adminArkTilpassHoyde() {
   const el = document.getElementById('adminArkTabell');
   if (!el) return;
+  if (adminArkManuellHoyde) { el.style.height = adminArkManuellHoyde; return; }
   const topp = el.getBoundingClientRect().top;
   el.style.height = Math.max(300, window.innerHeight - topp - 24) + 'px';
 }
@@ -495,7 +526,7 @@ function renderAdminArk() {
   // litt slingring for kantlinjer/scrollbar) - ellers strekker boksen seg over hele
   // vinduet selv om innholdet (fitData) stopper mye tidligere.
   const totalKolonneBredde = kolonner.reduce((sum, k) => sum + (k.width || 0), 0);
-  document.getElementById('adminArkTabell').style.width = (totalKolonneBredde + 20) + 'px';
+  document.getElementById('adminArkTabell').style.width = adminArkManuellBredde || (totalKolonneBredde + 20) + 'px';
 
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
   adminArkTable = new Tabulator('#adminArkTabell', {
@@ -507,6 +538,10 @@ function renderAdminArk() {
     clipboardPasteAction: 'update',
     placeholder: 'Ingen ordre for ' + adminArkAar
   });
+
+  // Tabulator bygger radene asynkront - et snapshot tatt rett etter new Tabulator(...)
+  // kan derfor bli tomt. tableBuilt garanterer at radene faktisk finnes når vi leser dem.
+  adminArkTable.on('tableBuilt', () => adminArkOppdaterVentendeTimerSnapshot());
 
   adminArkTable.on('cellEdited', cell => {
     if (!adminArkSisteTastVarEnter) return;
@@ -557,16 +592,20 @@ function renderAdminArk() {
     const rader = adminArkTable.getData();
     const oppdateringer = [];
     rader.forEach((rad, idx) => {
+      // Ventende timer skal bli værende på RADPLASSEN (idx), ikke følge bilen som
+      // akkurat ble flyttet inn dit - bruk snapshotet fra FØR dette draget.
+      const posisjonsbasertVentendeTimer = adminArkVentendeTimerPerPosisjon[idx] ?? '';
       let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
       if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => r.chassisNr === rad.chassisNr && !r.arkivert);
       if (!ark) {
         if (!rad.chassisNr) return;
         ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
           forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-          serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+          serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
         S.adminArk = [...(S.adminArk||[]), ark];
       } else {
         ark.rekkefolge = idx;
+        ark.ventendeTimer = posisjonsbasertVentendeTimer;
       }
       oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
         forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
@@ -574,6 +613,10 @@ function renderAdminArk() {
         fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
         time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
     });
+    // Oppdaterer selve tabellvisningen slik at Ventende timer-kolonnen faktisk viser
+    // den posisjonsbaserte verdien med en gang, ikke verdien som fulgte bilen.
+    adminArkTable.getRows().forEach((r, idx) => r.update({ ventendeTimer: adminArkVentendeTimerPerPosisjon[idx] ?? '' }));
+    adminArkOppdaterVentendeTimerSnapshot();
     if (oppdateringer.length) {
       db.from('admin_ark').upsert(oppdateringer, {onConflict:'id'})
         .then(r => { if (r.error) console.error('Rekkefølge-lagring feilet:', r.error.message); });
