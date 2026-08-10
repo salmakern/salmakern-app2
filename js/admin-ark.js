@@ -193,9 +193,10 @@ async function adminArkLagreFelter(rad, endringer) {
   const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
   // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
-  // Når Time bekreftet faktisk får en verdi, settes den samme datoen/tiden også i
-  // verkstedkalenderen (kalender_dato/kalender_tid) - men vi TØMMER den ikke igjen
-  // hvis Time bekreftet fjernes, siden kalenderplasseringen kan være satt uavhengig.
+  // Verkstedkalenderen (kalender_dato/kalender_tid) skal speile den samme verdien begge
+  // veier - settes Time bekreftet, settes kalenderen; fjernes Time bekreftet, fjernes den
+  // tilsvarende kalenderplasseringen igjen (ellers blir det stående en "spøkelses-time" i
+  // oversikten som ikke lenger stemmer med noe bekreftet).
   if ('timeBekreftet' in endringer || 'timeBekreftetTid' in endringer) {
     const o = S.ordrer.find(x => x.chassis === ark.chassisNr);
     if (o) {
@@ -204,12 +205,10 @@ async function adminArkLagreFelter(rad, endringer) {
       logChange(o, 'Time på biltilsynet satt fra Admin-ark: ' + (o.tidBiltilsynet ? (o.tidBiltilsynet+' '+o.tidBiltilsynetTid) : '(fjernet)'));
       // Nullstiller "allerede varslet"-merket - en flyttet/ny time skal gi et friskt 30-min-varsel.
       const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, biltilsyn_varslet: false, endringer: o.endringer };
-      if (ark.timeBekreftet) {
-        o.kalenderDato = ark.timeBekreftet;
-        o.kalenderTid = ark.timeBekreftetTid || o.kalenderTid || '09:00';
-        oppdatering.kalender_dato = o.kalenderDato;
-        oppdatering.kalender_tid = o.kalenderTid;
-      }
+      o.kalenderDato = ark.timeBekreftet || '';
+      o.kalenderTid = ark.timeBekreftet ? (ark.timeBekreftetTid || o.kalenderTid || '09:00') : '';
+      oppdatering.kalender_dato = o.kalenderDato || null;
+      oppdatering.kalender_tid = o.kalenderTid || null;
       const { error: oErr } = await db.from('ordrer').update(oppdatering).eq('id', o.id);
       if (oErr) console.error('Kunne ikke oppdatere tid_biltilsynet på ordre:', oErr.message);
     }
