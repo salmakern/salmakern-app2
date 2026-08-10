@@ -483,7 +483,7 @@ function renderAdminArk() {
         return verdi;
       }
     },
-    {title:'Ventende timer', field:'ventendeTimer', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
+    {title:'Ventende timer', field:'ventendeTimer', minWidth:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-vt-celle',
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
