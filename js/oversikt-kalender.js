@@ -281,9 +281,14 @@ async function endreStatus(id, nyStatus) {
   const forrigeStatus = o.ordreStatus;
   const forrigeArkivStatus = o.status;
   const forrigeEndringer = [...o.endringer];
+  const forrigeDatoKlarHenting = o.datoKlarHenting;
   o.ordreStatus = nyStatus;
   // Ordren arkiveres automatisk når den er hentet
   if (nyStatus === 'hentet') o.status = 'arkivert';
+  // Admin-arket viser denne datoen i Henteklar-kolonnen mens ordren står i denne
+  // statusen - satt her (ikke bare regnet ut fra endringer-loggen) slik at den er
+  // en fast, stabil verdi uansett hvor mange ganger statusen evt. flipper frem og tilbake.
+  if (nyStatus === 'klar_henting') o.datoKlarHenting = new Date().toISOString().split('T')[0];
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (nyStatus==='hentet'?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
@@ -294,13 +299,14 @@ async function endreStatus(id, nyStatus) {
   if (db) {
     // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
     // ikke herfra - ellers sendes varselet dobbelt.
-    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, endringer:o.endringer}).eq('id', id);
+    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, endringer:o.endringer, dato_klar_henting:o.datoKlarHenting||null}).eq('id', id);
     if (error) feil = error.message;
   }
   if (feil) {
     o.ordreStatus = forrigeStatus;
     o.status = forrigeArkivStatus;
     o.endringer = forrigeEndringer;
+    o.datoKlarHenting = forrigeDatoKlarHenting;
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }

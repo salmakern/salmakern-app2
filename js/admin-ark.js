@@ -154,7 +154,10 @@ function adminArkByggRader() {
       dokumenter: ark?.dokumenter || false,
       fakturertVis: o.fakturert ? '✓' : '',
       fraktselskap: ark?.fraktselskap || '',
-      henteklarVis: o.ordreStatus === 'klar_henting' ? '✓' : '',
+      // Viser datoen ordren ble satt til Klar for henting (satt av endreStatus() i
+      // oversikt-kalender.js). Eldre ordre som allerede sto i denne statusen før dette
+      // feltet fantes har ingen lagret dato ennå - faller da tilbake til et kryss.
+      henteklarVis: o.ordreStatus === 'klar_henting' ? (o.datoKlarHenting ? fmtDatoKort(o.datoKlarHenting) : '✓') : '',
       merknader: ark?.merknader || '',
       flateVis: adminArkFlateNavn(o) || ark?.flateHypotetisk || '',
       _flateErEkte: !!adminArkFlateNavn(o),
