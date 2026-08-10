@@ -462,7 +462,7 @@ function renderAdminArk() {
     {title:'Papirer', field:'papirer', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
     {title:'Merknader', field:'merknader', width:125, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, hozAlign:'center',
@@ -525,8 +525,14 @@ function renderAdminArk() {
   // Setter en eksplisitt pixel-bredde på selve tabell-boksen (summen av kolonnene, pluss
   // litt slingring for kantlinjer/scrollbar) - ellers strekker boksen seg over hele
   // vinduet selv om innholdet (fitData) stopper mye tidligere.
+  // Er summen av kolonnene bredere enn det som faktisk er plass til i vinduet, caper vi
+  // boksens bredde til det synlige - da får boksen sin EGEN vannrette scrollbar (overflow:
+  // auto er allerede satt) med de frosne kolonnene liggende fast, i stedet for at siste
+  // kolonne (Ventende timer) rett og slett havner utenfor skjermen og blir usynlig.
   const totalKolonneBredde = kolonner.reduce((sum, k) => sum + (k.width || 0), 0);
-  document.getElementById('adminArkTabell').style.width = adminArkManuellBredde || (totalKolonneBredde + 20) + 'px';
+  const arkElForBredde = document.getElementById('adminArkTabell');
+  const tilgjengeligBredde = window.innerWidth - arkElForBredde.getBoundingClientRect().left - 24;
+  arkElForBredde.style.width = adminArkManuellBredde || Math.min(totalKolonneBredde + 20, Math.max(400, tilgjengeligBredde)) + 'px';
 
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
   adminArkTable = new Tabulator('#adminArkTabell', {
