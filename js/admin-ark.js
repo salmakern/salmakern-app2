@@ -241,8 +241,10 @@ if (!window._vtMerkGlobaleLyttereBundet) {
 
 // Starter en ren musesporet "flytting" av den nåværende markeringen (kalt fra
 // mousedown på en celle som allerede er markert). Følger musepekeren til mouseup,
-// og sjekker da hva som ligger under pekeren via elementFromPoint - er det en
-// Time bekreftet-celle, bekreftes alle markerte rader.
+// og sjekker da hva som ligger under pekeren via elementFromPoint:
+//  - slippes det på en Time bekreftet-celle: bekreftes alle markerte rader (som før).
+//  - slippes det på en ANNEN Ventende timer-celle: flyttes verdiene dit i samme
+//    rekkefølge, kaskadert nedover fra der du slipper (kilde-radene tømmes).
 function vtStartFlytting(startEvent) {
   startEvent.preventDefault();
   document.body.style.cursor = 'grabbing';
@@ -250,8 +252,11 @@ function vtStartFlytting(startEvent) {
   function rensHover() {
     if (vtFlyttHoverEl) { vtFlyttHoverEl.style.outline = ''; vtFlyttHoverEl.style.background = ''; vtFlyttHoverEl = null; }
   }
+  function finnMaal(e) {
+    return document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-tb-celle, .admin-ark-vt-celle');
+  }
   function paMove(e) {
-    const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-tb-celle');
+    const el = finnMaal(e);
     if (el === vtFlyttHoverEl) return;
     rensHover();
     if (el) { el.style.outline = '3px dashed #60a5fa'; el.style.outlineOffset = '-3px'; el.style.background = '#60a5fa33'; vtFlyttHoverEl = el; }
@@ -260,19 +265,56 @@ function vtStartFlytting(startEvent) {
     document.removeEventListener('mousemove', paMove);
     document.removeEventListener('mouseup', paUp);
     document.body.style.cursor = '';
-    const maalEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('.admin-ark-tb-celle');
+    const maalEl = finnMaal(e);
     rensHover();
-    const radIndekser = [...vtMerking.rader];
+    const radIndekser = [...vtMerking.rader].sort((a, b) => a - b);
     vtMerkNullstill();
     if (!maalEl) return;
-    const radTekstListe = radIndekser.map(idx => {
-      const r = adminArkTable.getRows().find(x => x.getPosition() === idx);
-      return r && r.getData().ventendeTimer ? { row: r, rad: r.getData(), tekst: r.getData().ventendeTimer } : null;
-    }).filter(Boolean);
-    if (radTekstListe.length) adminArkBekreftFlereVentendeTid(radTekstListe);
+
+    if (maalEl.classList.contains('admin-ark-tb-celle')) {
+      const radTekstListe = radIndekser.map(idx => {
+        const r = adminArkTable.getRows().find(x => x.getPosition() === idx);
+        return r && r.getData().ventendeTimer ? { row: r, rad: r.getData(), tekst: r.getData().ventendeTimer } : null;
+      }).filter(Boolean);
+      if (radTekstListe.length) adminArkBekreftFlereVentendeTid(radTekstListe);
+      return;
+    }
+
+    const maalRad = adminArkTable.getRows().find(r => r.getCell('ventendeTimer').getElement() === maalEl);
+    if (!maalRad || radIndekser.includes(maalRad.getPosition())) return;
+    vtFlyttInnadIKolonne(radIndekser, maalRad.getPosition());
   }
   document.addEventListener('mousemove', paMove);
   document.addEventListener('mouseup', paUp);
+}
+
+// Flytter de markerte Ventende timer-verdiene (kildePosisjoner, topp til bunn) til å
+// starte på startMaalPosisjon og kaskadere nedover derfra - kilde-radene tømmes, og
+// mål-radenes eventuelle eksisterende verdi overskrives uten videre.
+async function vtFlyttInnadIKolonne(kildePosisjoner, startMaalPosisjon) {
+  const alleRader = adminArkTable.getRows();
+  const tekster = kildePosisjoner.map(pos => alleRader.find(r => r.getPosition() === pos)?.getData().ventendeTimer || '');
+
+  for (const pos of kildePosisjoner) {
+    const rad = alleRader.find(r => r.getPosition() === pos);
+    if (!rad) continue;
+    await adminArkLagreFelter(rad.getData(), { ventendeTimer: '' });
+    rad.update({ ventendeTimer: '' });
+  }
+
+  const posisjonerSortert = alleRader.map(r => r.getPosition()).sort((a, b) => a - b);
+  const startIdx = posisjonerSortert.indexOf(startMaalPosisjon);
+  let antallFlyttet = 0;
+  for (let i = 0; i < tekster.length; i++) {
+    const pos = posisjonerSortert[startIdx + i];
+    if (pos === undefined || !tekster[i]) continue;
+    const rad = alleRader.find(r => r.getPosition() === pos);
+    if (!rad) continue;
+    await adminArkLagreFelter(rad.getData(), { ventendeTimer: tekster[i] });
+    rad.update({ ventendeTimer: tekster[i] });
+    antallFlyttet++;
+  }
+  visToast(antallFlyttet === 1 ? 'Flyttet 1 rad' : `Flyttet ${antallFlyttet} rader`, 'ok');
 }
 
 // Motsatt retning: dra en bekreftet Time bekreftet-celle tilbake ned til Ventende
