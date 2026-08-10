@@ -453,8 +453,8 @@ function renderAdminArk() {
   // timer, slik at drahandtaket ikke kommer i konflikt med de siste feltene.
   const kolonner = [
     {title:'#', formatter:'rownum', hozAlign:'center', width:40, headerSort:false, frozen:true, rowHandle:true},
-    {title:'Forhandler', field:'forhandler', width:135, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Kontaktperson', field:'kontaktperson', width:135, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Serienummer', field:'serienummer', width:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Mottatt', field:'mottatt', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
@@ -462,9 +462,9 @@ function renderAdminArk() {
     {title:'Papirer', field:'papirer', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Fraktselskap', field:'fraktselskap', minWidth:70, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Merknader', field:'merknader', width:125, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Merknader', field:'merknader', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
     {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
@@ -529,10 +529,28 @@ function renderAdminArk() {
   // boksens bredde til det synlige - da får boksen sin EGEN vannrette scrollbar (overflow:
   // auto er allerede satt) med de frosne kolonnene liggende fast, i stedet for at siste
   // kolonne (Ventende timer) rett og slett havner utenfor skjermen og blir usynlig.
-  const totalKolonneBredde = kolonner.reduce((sum, k) => sum + (k.width || 0), 0);
+  // Noen kolonner (Forhandler, Kontaktperson, Fraktselskap, Merknader) har ingen fast
+  // "width" lenger - de tilpasser seg selv til innholdet (som i Excel), så her bruker vi
+  // kun et grovt anslag (minWidth/100) FØR Tabulator finnes. Det egentlige, nøyaktige
+  // målet skjer i adminArkOppdaterTabellBredde() rett under, kalt fra tableBuilt.
+  const totalKolonneBredde = kolonner.reduce((sum, k) => sum + (k.width || k.minWidth || 100), 0);
   const arkElForBredde = document.getElementById('adminArkTabell');
   const tilgjengeligBredde = window.innerWidth - arkElForBredde.getBoundingClientRect().left - 24;
   arkElForBredde.style.width = adminArkManuellBredde || Math.min(totalKolonneBredde + 20, Math.max(400, tilgjengeligBredde)) + 'px';
+
+  // Etter at Tabulator faktisk har bygget og målt kolonnene (fitData tilpasser bredden på
+  // de "auto"-kolonnene til det virkelige innholdet), korrigerer vi boksbredden til det den
+  // EGENTLIG trenger - slik at arket utvider seg for å vise lange navn fullt ut, ikke "BOS Jes...".
+  function adminArkOppdaterTabellBredde() {
+    if (adminArkManuellBredde) { arkElForBredde.style.width = adminArkManuellBredde; return; }
+    // .tabulator-header scroller i takt med selve tabellkroppen og er derfor alltid begrenset
+    // til boksens SYNLIGE bredde - .tabulator-tableholder sitt scrollWidth er det som faktisk
+    // viser hvor bred hele det virkelige innholdet (alle kolonnene) er.
+    const holder = arkElForBredde.querySelector('.tabulator-tableholder');
+    const naturligBredde = (holder ? holder.scrollWidth : totalKolonneBredde) + 20;
+    const naaTilgjengelig = window.innerWidth - arkElForBredde.getBoundingClientRect().left - 24;
+    arkElForBredde.style.width = Math.min(naturligBredde, Math.max(400, naaTilgjengelig)) + 'px';
+  }
 
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
   adminArkTable = new Tabulator('#adminArkTabell', {
@@ -547,7 +565,16 @@ function renderAdminArk() {
 
   // Tabulator bygger radene asynkront - et snapshot tatt rett etter new Tabulator(...)
   // kan derfor bli tomt. tableBuilt garanterer at radene faktisk finnes når vi leser dem.
-  adminArkTable.on('tableBuilt', () => adminArkOppdaterVentendeTimerSnapshot());
+  adminArkTable.on('tableBuilt', () => {
+    adminArkOppdaterVentendeTimerSnapshot();
+    adminArkOppdaterTabellBredde();
+  });
+  // De auto-brede kolonnene (Forhandler/Kontaktperson/Fraktselskap/Merknader) kan trenge
+  // MER enn én layout-runde før Tabulator har regnet ut sin endelige, innholds-tilpassede
+  // bredde - tableBuilt alene var for tidlig. renderComplete fyrer på nytt hver gang
+  // Tabulator selv har måttet justere rad/kolonne-mål videre, så vi korrigerer boksbredden
+  // igjen der - trygt å kalle flere ganger, den regner bare ut på nytt fra faktiske DOM-mål.
+  adminArkTable.on('renderComplete', () => adminArkOppdaterTabellBredde());
 
   adminArkTable.on('cellEdited', cell => {
     if (!adminArkSisteTastVarEnter) return;
