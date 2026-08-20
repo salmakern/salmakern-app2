@@ -283,13 +283,18 @@ async function endreStatus(id, nyStatus) {
   const forrigeEndringer = [...o.endringer];
   const forrigeDatoKlarHenting = o.datoKlarHenting;
   o.ordreStatus = nyStatus;
-  // Ordren arkiveres automatisk når den er hentet
-  if (nyStatus === 'hentet') o.status = 'arkivert';
+  // Ordren arkiveres automatisk når den er hentet - MEN kun hvis den allerede er
+  // ferdig godkjent (tvangsflyt fullført og godkjenner har lukket den via signatur-
+  // flyten). Er den ikke det ennå, skal den bli stående som aktiv slik at den fortsatt
+  // dukker opp i "Til godkjenning"-lista på Mer-siden - ellers forsvinner den sporløst
+  // inn i arkivet før noen har fått godkjent den.
+  const skalArkiveres = nyStatus === 'hentet' && tvangsflyt(o).every(t=>t.ok) && o.godkjent;
+  if (skalArkiveres) o.status = 'arkivert';
   // Admin-arket viser denne datoen i Henteklar-kolonnen mens ordren står i denne
   // statusen - satt her (ikke bare regnet ut fra endringer-loggen) slik at den er
   // en fast, stabil verdi uansett hvor mange ganger statusen evt. flipper frem og tilbake.
   if (nyStatus === 'klar_henting') o.datoKlarHenting = new Date().toISOString().split('T')[0];
-  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (nyStatus==='hentet'?' (arkivert automatisk)':''));
+  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   // Målrettet oppdatering av kun disse feltene - IKKE via den generelle
