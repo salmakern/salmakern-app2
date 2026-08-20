@@ -408,7 +408,6 @@ function visAnsattDetalj(id) {
 
 function ansattDetaljNaviger(dir) {
   ansattDetaljOffset += dir;
-  if (ansattDetaljOffset > 0) ansattDetaljOffset = 0;
   renderAnsattDetalj();
 }
 
