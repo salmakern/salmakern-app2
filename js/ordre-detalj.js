@@ -151,7 +151,7 @@ function buildOrdreDetail() {
             <label>Forhandler</label>
             <div style="display:flex;gap:6px">
               <input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)" style="flex:1">
-              ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde)}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
+              ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
           </div>
           <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>

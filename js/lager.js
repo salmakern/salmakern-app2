@@ -77,7 +77,7 @@ function renderLagerListe() {
 
   el.innerHTML = `<div class="grid g3">${kategorier.map(kat => {
     const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
-    return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${kat.replace(/'/g,"\\'")}')">
+    return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${esc(kat).replace(/'/g,"\\'")}')">
       <div class="row">
         <b>${esc(kat)}</b>
         <span style="color:#a1a1aa">›</span>
@@ -580,7 +580,7 @@ function renderOppskriftModellerListe() {
   if (!modeller.length) { el.innerHTML = '<div class="card"><div class="muted small">Ingen modeller ennå. Lag en utstyr-mal med en biltype under Mer først.</div></div>'; return; }
   el.innerHTML = `<div class="grid g3">${modeller.map(m => {
     const varianter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===m);
-    return `<div class="box" style="cursor:pointer" onclick="visOppskriftModell('${m.replace(/'/g,"\\'")}')">
+    return `<div class="box" style="cursor:pointer" onclick="visOppskriftModell('${esc(m).replace(/'/g,"\\'")}')">
       <div class="row"><b>${esc(m)}</b><span style="color:#a1a1aa">›</span></div>
       <div class="small muted" style="margin-top:2px">${varianter.length ? varianter.length+' variant'+(varianter.length===1?'':'er') : 'Ingen oppskrift ennå'}</div>
     </div>`;
