@@ -341,27 +341,42 @@ function varselMangelfullLevering(v, forventet, mottatt, mangler) {
   }).catch(e => console.warn('Mangelfull leverings-varsel feilet:', e));
 }
 
-function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
+// Endrer beholdning for én vare og logger det i historikken. Sendes et lagerBatch-
+// objekt (fra lagerBatchNy()) inn, samles database-skrivingene opp der i stedet for
+// å sendes hver for seg med en gang - kalleren flusher dem samlet etterpå med
+// lagerBatchFlush(). Mange samtidige enkeltkall til Supabase har vist seg upålitelige
+// i denne appen før (noen forsvinner stille) - se flyttVare() som løste det likt for
+// rekkefølge-oppdatering. Uten batch (vanlig enkelt-vare-endring) lagres som før, med
+// en gang.
+function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, lagerBatch) {
   const varLavFor = v.minAntall > 0 && (Number(v.antall)||0) <= v.minAntall;
   v.antall = (Number(v.antall)||0) + endring;
   const erLavNa = v.minAntall > 0 && v.antall <= v.minAntall;
 
   // Nullstill "bestilt"-merking automatisk når varen fylles opp over grensen igjen,
   // slik at neste gang den blir lav gir et nytt, friskt varsel.
+  let bestiltEndret = false;
   if (!erLavNa && v.bestilt) {
     v.bestilt = false;
-    if (db) db.from('lagervarer').update({bestilt:false}).eq('id', v.id)
-      .then(r=>{if(r.error) console.error('Bestilt-nullstilling feilet:', r.error.message);});
+    bestiltEndret = true;
   }
 
-  if (db) db.from('lagervarer').update({antall:v.antall}).eq('id', v.id)
-    .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
   const hId = 'lh_' + Date.now() + '_' + Math.floor(Math.random()*1000);
   const hist = { id:hId, vareId:v.id, vareNavn:v.navn, endring, type, ordreId:ordreId||null, batchId:batchId||null, ansattNavn: me?me.navn:'', kommentar:kommentar||'', createdAt:new Date().toISOString() };
   S.lagerhistorikk = S.lagerhistorikk || [];
   S.lagerhistorikk.unshift(hist);
-  if (db) db.from('lagerhistorikk').insert({id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''})
-    .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
+
+  const vareOppdatering = bestiltEndret ? {id:v.id, antall:v.antall, bestilt:false} : {id:v.id, antall:v.antall};
+  const historikkInnsetting = {id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''};
+  if (lagerBatch) {
+    lagerBatch.vareOppdateringer.push(vareOppdatering);
+    lagerBatch.historikkInnsettinger.push(historikkInnsetting);
+  } else if (db) {
+    db.from('lagervarer').upsert(vareOppdatering, {onConflict:'id'})
+      .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
+    db.from('lagerhistorikk').insert(historikkInnsetting)
+      .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
+  }
   oppdaterLagerVarselBadge();
   renderGlobalLavLagerVarsel();
 
@@ -374,6 +389,23 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId) {
     }).catch(e => console.warn('Lav lager-varsel feilet:', e));
   }
   return hist;
+}
+
+// Se registrerLagerEndring() sin kommentar - samler opp flere varers endringer for én
+// samlet upsert/insert i stedet for ett Supabase-kall per vare i en oppskrift.
+function lagerBatchNy() {
+  return { vareOppdateringer: [], historikkInnsettinger: [] };
+}
+async function lagerBatchFlush(lagerBatch) {
+  if (!db || !lagerBatch) return;
+  if (lagerBatch.vareOppdateringer.length) {
+    const { error } = await db.from('lagervarer').upsert(lagerBatch.vareOppdateringer, {onConflict:'id'});
+    if (error) console.error('Lagerbeholdning-batch-oppdatering feilet:', error.message);
+  }
+  if (lagerBatch.historikkInnsettinger.length) {
+    const { error } = await db.from('lagerhistorikk').insert(lagerBatch.historikkInnsettinger);
+    if (error) console.error('Lagerhistorikk-batch-lagring feilet:', error.message);
+  }
 }
 
 // Marker en enkelt vare som bestilt (skjuler den fra lav-lager-varselet til den fylles opp igjen)
@@ -788,10 +820,12 @@ function trekkOppskriftForOrdre(oppskriftId) {
   if (mangler.length && !confirm('Det er ikke nok på lager av alle varene i denne oppskriften. Fortsett og gå i minus der det trengs?')) return;
 
   const batchId = 'batch_' + Date.now();
+  const lagerBatch = lagerBatchNy();
   (r.ingredienser||[]).forEach(i => {
     const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
-    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId);
+    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId, lagerBatch);
   });
+  lagerBatchFlush(lagerBatch);
   renderOrdreLagerbruk();
 }
 
@@ -807,33 +841,46 @@ function autoTrekkOppskrift(ordreId) {
   const nye = treff.filter(r => !brukteNavn.has(r.navn));
   if (!nye.length) return;
 
+  const lagerBatch = lagerBatchNy();
   nye.forEach(r => {
     const batchId = 'batch_' + Date.now() + '_' + Math.floor(Math.random()*1000);
     let underMinimum = false;
     (r.ingredienser||[]).forEach(i => {
       const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
       if (v.antall < i.antall) underMinimum = true;
-      registrerLagerEndring(v, -Math.abs(i.antall), 'ut', ordreId, r.navn, batchId);
+      registrerLagerEndring(v, -Math.abs(i.antall), 'ut', ordreId, r.navn, batchId, lagerBatch);
     });
     visToast(`Trukket fra lager: ${r.navn}${underMinimum ? ' (noen varer gikk i minus)' : ''}`, underMinimum ? 'feil' : 'ok');
   });
+  lagerBatchFlush(lagerBatch);
   if (activeOrdreId === ordreId) renderOrdreLagerbruk();
 }
 
-function angreLagerBatch(batchId) {
+async function angreLagerBatch(batchId) {
   if (!confirm('Angre denne uttrekkingen og legge varene tilbake på lager?')) return;
   const rader = (S.lagerhistorikk||[]).filter(h=>h.batchId===batchId);
+  // Samler opp vare- og historikk-endringene og sender dem som to samlede kall (én
+  // upsert, én batch-delete) i stedet for to Supabase-kall per vare i oppskriften -
+  // se registrerLagerEndring() sin kommentar for hvorfor.
+  const vareOppdateringer = [];
   rader.forEach(h => {
     const v = (S.lagervarer||[]).find(x=>x.id===h.vareId);
     if (v) {
       v.antall = (Number(v.antall)||0) - h.endring;
-      if (db) db.from('lagervarer').update({antall:v.antall}).eq('id', v.id)
-        .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
+      vareOppdateringer.push({id:v.id, antall:v.antall});
     }
-    if (db) db.from('lagerhistorikk').delete().eq('id', h.id)
-      .then(r=>{if(r.error) console.error('Sletting av lagerhistorikk feilet:', r.error.message);});
   });
   S.lagerhistorikk = (S.lagerhistorikk||[]).filter(h=>h.batchId!==batchId);
+  if (db) {
+    if (vareOppdateringer.length) {
+      const { error } = await db.from('lagervarer').upsert(vareOppdateringer, {onConflict:'id'});
+      if (error) console.error('Lagerbeholdning-batch-oppdatering feilet:', error.message);
+    }
+    if (rader.length) {
+      const { error } = await db.from('lagerhistorikk').delete().in('id', rader.map(h=>h.id));
+      if (error) console.error('Sletting av lagerhistorikk feilet:', error.message);
+    }
+  }
   oppdaterLagerVarselBadge();
   renderOrdreLagerbruk();
 }
