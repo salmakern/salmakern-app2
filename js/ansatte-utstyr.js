@@ -5,7 +5,7 @@ function lagreBeskjed() {
   const tekst = document.getElementById('bTekst').value.trim();
   if (!tekst) return;
   S.beskjeder.unshift({id:'b'+(++S.nextId), av:me.navn, avId:me.id, tekst, dato:new Date().toISOString()});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   closeModal('nyBeskjed');
   document.getElementById('bTekst').value='';
   renderBeskjeder();
@@ -13,7 +13,7 @@ function lagreBeskjed() {
 
 function slettBeskjed(id) {
   S.beskjeder = S.beskjeder.filter(b=>b.id!==id);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   renderBeskjeder();
 }
 
@@ -46,7 +46,7 @@ function lagreKontakt() {
     epost:document.getElementById('kEpost').value.trim(),
     notat:document.getElementById('kNotat').value.trim()
   });
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   closeModal('nyKontakt');
   ['kNavn','kTlf','kEpost','kNotat'].forEach(i=>document.getElementById(i).value='');
   renderKontakter();
@@ -54,7 +54,7 @@ function lagreKontakt() {
 
 function slettKontakt(id) {
   S.kontakter = S.kontakter.filter(k=>k.id!==id);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   renderKontakter();
 }
 
@@ -289,7 +289,7 @@ function lagreHMS() {
     tiltak:document.getElementById('hmsTiltak').value.trim(),
     lukket:false
   });
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   closeModal('nyHMS');
   ['hmsBesk','hmsTiltak'].forEach(i=>document.getElementById(i).value='');
   renderHMS();
@@ -298,7 +298,7 @@ function lagreHMS() {
 function toggleHMSLukket(id) {
   const h = S.hms.find(x=>x.id===id); if(!h) return;
   h.lukket=!h.lukket;
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   renderHMS();
 }
 
