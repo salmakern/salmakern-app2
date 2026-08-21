@@ -212,11 +212,12 @@ function lagreTimer() {
       cur.setDate(cur.getDate()+1);
     }
     if(!entries.length){alert('Ingen hverdager i valgt periode');return;}
-    entries.forEach(e=>{
-      S.timer.push(e);
-      if(db) db.from('timer_entries').insert({id:e.id,ansatt_id:me.id,ansatt:me.navn,dato:e.dato,type:timerType,start:'–',stopp:'–',mins:0})
-        .then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
-    });
+    entries.forEach(e=>S.timer.push(e));
+    // Ett samlet insert-kall for alle dagene i perioden i stedet for ett per dag - en
+    // lengre ferie/permisjon kan fort bli mange enkeltkall, som har vist seg upålitelig
+    // (se flyttVare()/registrerLagerEndring() sine kommentarer for samme problem).
+    if(db) db.from('timer_entries').insert(entries.map(e=>({id:e.id,ansatt_id:me.id,ansatt:me.navn,dato:e.dato,type:timerType,start:'–',stopp:'–',mins:0})))
+      .then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
     try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
     renderTimerHistorikk(); renderTimerMaaned();
     return;

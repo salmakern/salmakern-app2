@@ -135,11 +135,11 @@ function redigerKategoriNavn() {
   const trimmet = nyttNavn.trim();
   const gammelKategori = aktivKategori;
   const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === gammelKategori);
-  varer.forEach(v => {
-    v.kategori = trimmet;
-    if (db) db.from('lagervarer').update({kategori:trimmet}).eq('id', v.id)
-      .then(r=>{if(r.error) console.error('Kategori-oppdatering feilet:', r.error.message);});
-  });
+  varer.forEach(v => { v.kategori = trimmet; });
+  // Ett samlet kall for alle varene i kategorien i stedet for ett update-kall per vare
+  // (samme upålitelighets-mønster som flyttVare()/registrerLagerEndring() løste likt).
+  if (db && varer.length) db.from('lagervarer').upsert(varer.map(v=>({id:v.id, kategori:trimmet})), {onConflict:'id'})
+    .then(r=>{if(r.error) console.error('Kategori-oppdatering feilet:', r.error.message);});
   aktivKategori = trimmet || 'Uten kategori';
   renderKategoriDetalj();
 }
