@@ -120,7 +120,11 @@ function doLagreManuellTimer() {
   const stopp=document.getElementById('mTil').value;
   const [sh,sm]=start.split(':').map(Number);
   const [eh,em]=stopp.split(':').map(Number);
-  const mins=Math.max(0,(eh*60+em)-(sh*60+sm)-30);
+  const raatid=(eh*60+em)-(sh*60+sm);
+  // Samme pauseregel som den automatiske klokken (updateClock/lagreTimer) - kun 30 min
+  // lunsjpause ved 8+ timer, ikke et fast fratrekk uansett lengde på vakten.
+  const pause=raatid>=480?30:0;
+  const mins=Math.max(0,raatid-pause);
   const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
   const entry={
     id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
@@ -179,8 +183,6 @@ function lagreTimer() {
     start=document.getElementById('mFra').value;
     stopp=document.getElementById('mTil').value;
     if(!start||!stopp){alert('Fyll inn fra- og til-tid');return;}
-    const [sh,sm]=start.split(':').map(Number);const [eh,em]=stopp.split(':').map(Number);
-    mins=(eh*60+em)-(sh*60+sm)-30;
     // Krev dagens PIN for manuell registrering
     timerPINMode='manuell';
     openTimerPIN('Tast inn dagens PIN for å bekrefte manuell timeregistrering');
