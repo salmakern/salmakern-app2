@@ -74,10 +74,18 @@ function visKundeHistorikk(kunde) {
 function slettOrdre(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!confirm(`Sikker på at du vil slette ordren for ${ordreLabel(o)}?\n\nDette kan ikke angres.`)) return;
+  // Finn den tilhørende Admin-ark-raden (samme år + chassis-nr, case-uavhengig) slik at
+  // den slettes sammen med ordren - ellers blir den stående igjen som en "løs" rad som
+  // aldri finner tilbake til noen ordre (og dukker opp i Helsesjekk som om det var en
+  // skrivefeil, når det egentlig bare er rester etter en slettet ordre).
+  const aar = o.ankomstdato ? Number(String(o.ankomstdato).slice(0,4)) : null;
+  const arkRad = o.chassis ? (S.adminArk||[]).find(r => r.aar === aar && samsvarerChassis(r.chassisNr, o.chassis)) : null;
   S.ordrer = S.ordrer.filter(x=>x.id!==id);
   S.timer  = S.timer.filter(t=>t.ordreId!==id);
+  if (arkRad) S.adminArk = S.adminArk.filter(r=>r.id!==arkRad.id);
   if (db) {
     db.from('ordrer').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message)});
+    if (arkRad) db.from('admin_ark').delete().eq('id',arkRad.id).then(r=>{if(r.error)console.error('Kunne ikke slette admin-ark-rad:',r.error.message)});
   }
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   tilbakeOrdreList(); renderAll();
