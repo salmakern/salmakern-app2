@@ -272,7 +272,7 @@ function dbToOrdre(r) {
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
     flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
     coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn,
-    tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||'',
+    tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||'', tidBiltilsynetSted:r.tid_biltilsynet_sted||'',
     datoKlarHenting:r.dato_klar_henting||''
   };
 }

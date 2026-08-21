@@ -103,17 +103,19 @@ function adminArkFlateNavn(o) {
   return f ? (f.flatenummer || f.kunde || '') : '';
 }
 
-// Time bekreftet skrives inn som fri tekst "DD.MM - HH:MM" (tiden er valgfri) - året
-// hentes automatisk fra året arket står på, siden det uansett er året ordren tilhører.
-function fmtTimeBekreftetVis(dato, tid) {
+// Time bekreftet skrives inn som fri tekst "DD.MM - HH:MM" (tiden er valgfri), med et
+// valgfritt STED til slutt (f.eks. "21.08 - 11:30 Skien") - biltilsyn kan være ulike
+// steder. Året hentes automatisk fra året arket står på, siden det uansett er året
+// ordren tilhører.
+function fmtTimeBekreftetVis(dato, tid, sted) {
   if (!dato) return '';
   const deler = String(dato).split('-');
   if (deler.length !== 3) return dato;
   const [, mnd, dag] = deler;
-  return dag + '.' + mnd + (tid ? ' - ' + tid : '');
+  return dag + '.' + mnd + (tid ? ' - ' + tid : '') + (sted ? ' ' + sted : '');
 }
 function parseTimeBekreftetTekst(tekst) {
-  const m = tekst.trim().match(/^(\d{1,2})\.(\d{1,2})(?:\s*-?\s*(\d{1,2}):(\d{2}))?$/);
+  const m = tekst.trim().match(/^(\d{1,2})\.(\d{1,2})(?:\s*-?\s*(\d{1,2}):(\d{2}))?\s*(.*)$/);
   if (!m) return null;
   const dag = Number(m[1]), mnd = Number(m[2]);
   if (dag < 1 || dag > 31 || mnd < 1 || mnd > 12) return null;
@@ -124,7 +126,8 @@ function parseTimeBekreftetTekst(tekst) {
     tid = String(time).padStart(2,'0') + ':' + String(min).padStart(2,'0');
   }
   const dato = adminArkAar + '-' + String(mnd).padStart(2,'0') + '-' + String(dag).padStart(2,'0');
-  return { dato, tid };
+  const sted = (m[5] || '').trim();
+  return { dato, tid, sted };
 }
 
 // Rader kommer fra to kilder: ekte ordre (matchet mot admin_ark via chassis.nr),
@@ -163,7 +166,8 @@ function adminArkByggRader() {
       _flateErEkte: !!adminArkFlateNavn(o),
       timeBekreftet: ark?.timeBekreftet || '',
       timeBekreftetTid: ark?.timeBekreftetTid || '',
-      timeBekreftetVis: fmtTimeBekreftetVis(ark?.timeBekreftet, ark?.timeBekreftetTid),
+      timeBekreftetSted: ark?.timeBekreftetSted || '',
+      timeBekreftetVis: fmtTimeBekreftetVis(ark?.timeBekreftet, ark?.timeBekreftetTid, ark?.timeBekreftetSted),
       ventendeTimer: ark?.ventendeTimer || '',
       rekkefolge: ark?.rekkefolge ?? 999999,
       _arkivert: ark?.arkivert || false
@@ -191,7 +195,8 @@ function adminArkByggRader() {
       _flateErEkte: false,
       timeBekreftet: r.timeBekreftet || '',
       timeBekreftetTid: r.timeBekreftetTid || '',
-      timeBekreftetVis: fmtTimeBekreftetVis(r.timeBekreftet, r.timeBekreftetTid),
+      timeBekreftetSted: r.timeBekreftetSted || '',
+      timeBekreftetVis: fmtTimeBekreftetVis(r.timeBekreftet, r.timeBekreftetTid, r.timeBekreftetSted),
       ventendeTimer: r.ventendeTimer || '',
       rekkefolge: r.rekkefolge ?? 999999,
       _arkivert: r.arkivert || false
@@ -219,7 +224,7 @@ async function adminArkLagreFelter(rad, endringer) {
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: (S.adminArk||[]).length,
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
     S.adminArk = [...(S.adminArk||[]), ark];
   }
   Object.assign(ark, endringer);
@@ -229,7 +234,7 @@ async function adminArkLagreFelter(rad, endringer) {
     forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
     serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
     fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
-    time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
+    time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
   const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
   // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
@@ -242,9 +247,10 @@ async function adminArkLagreFelter(rad, endringer) {
     if (o) {
       o.tidBiltilsynet = ark.timeBekreftet||'';
       o.tidBiltilsynetTid = ark.timeBekreftetTid||'';
-      logChange(o, 'Time på biltilsynet satt fra Admin-ark: ' + (o.tidBiltilsynet ? (o.tidBiltilsynet+' '+o.tidBiltilsynetTid) : '(fjernet)'));
+      o.tidBiltilsynetSted = ark.timeBekreftetSted||'';
+      logChange(o, 'Time på biltilsynet satt fra Admin-ark: ' + (o.tidBiltilsynet ? (o.tidBiltilsynet+' '+o.tidBiltilsynetTid+(o.tidBiltilsynetSted?' '+o.tidBiltilsynetSted:'')) : '(fjernet)'));
       // Nullstiller "allerede varslet"-merket - en flyttet/ny time skal gi et friskt 30-min-varsel.
-      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, biltilsyn_varslet: false, endringer: o.endringer };
+      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, tid_biltilsynet_sted: ark.timeBekreftetSted||'', biltilsyn_varslet: false, endringer: o.endringer };
       o.kalenderDato = ark.timeBekreftet || '';
       o.kalenderTid = ark.timeBekreftet ? (ark.timeBekreftetTid || o.kalenderTid || '09:00') : '';
       oppdatering.kalender_dato = o.kalenderDato || null;
@@ -264,9 +270,9 @@ async function adminArkBekreftFlereVentendeTid(radTekstListe) {
   for (const { row, rad, tekst } of radTekstListe) {
     const tolket = parseTimeBekreftetTekst(tekst);
     if (!tolket) { feilet++; continue; }
-    await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, ventendeTimer: '' });
+    await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, timeBekreftetSted: tolket.sted, ventendeTimer: '' });
     ok++;
-    if (row) row.update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid), ventendeTimer: '' });
+    if (row) row.update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid, tolket.sted), ventendeTimer: '' });
   }
   if (ok && !feilet) visToast(ok === 1 ? 'Time bekreftet' : `${ok} timer bekreftet`, 'ok');
   else if (ok && feilet) visToast(`${ok} bekreftet, ${feilet} kunne ikke tolkes`, 'ok');
@@ -425,7 +431,7 @@ function tbStartFlytting(startEvent, kildeCell) {
   document.addEventListener('mouseup', paUp);
 }
 async function tbFlyttTilbake(rad, tekst, row) {
-  await adminArkLagreFelter(rad, { timeBekreftet:'', timeBekreftetTid:'', ventendeTimer: tekst });
+  await adminArkLagreFelter(rad, { timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: tekst });
   row.update({ timeBekreftetVis:'', ventendeTimer: tekst });
   visToast('Satt tilbake til Ventende timer', 'ok');
 }
@@ -760,14 +766,14 @@ function renderAdminArk() {
     if (felt === 'timeBekreftetVis') {
       if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
       const tekst = (cell.getValue()||'').trim();
-      if (!tekst) { adminArkLagreFelter(rad, {timeBekreftet:'', timeBekreftetTid:''}); return; }
+      if (!tekst) { adminArkLagreFelter(rad, {timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:''}); return; }
       const tolket = parseTimeBekreftetTekst(tekst);
-      if (!tolket) { visToast('Ugyldig format - skriv f.eks. 07.08 - 09:00'); cell.restoreOldValue(); return; }
-      // Normaliserer visningen (f.eks. "7.8-9:00" -> "07.08 - 09:00") uten et fullt
-      // gjenoppbygg av tabellen. Bruker row.update (ikke cell.setValue) - det siste
+      if (!tolket) { visToast('Ugyldig format - skriv f.eks. 07.08 - 09:00 Skien'); cell.restoreOldValue(); return; }
+      // Normaliserer visningen (f.eks. "7.8-9:00 skien" -> "07.08 - 09:00 skien") uten et
+      // fullt gjenoppbygg av tabellen. Bruker row.update (ikke cell.setValue) - det siste
       // trigger et nytt cellEdited-kall og ender i en unødvendig dobbel-lagring.
-      adminArkLagreFelter(rad, {timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid})
-        .then(() => cell.getRow().update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid) }));
+      adminArkLagreFelter(rad, {timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, timeBekreftetSted: tolket.sted})
+        .then(() => cell.getRow().update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid, tolket.sted) }));
       return;
     }
 
