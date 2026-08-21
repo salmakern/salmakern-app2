@@ -199,10 +199,18 @@ function settFlatePrimaer(ordreId) {
 function slettFlate() {
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   if (!confirm(`Slette flåten "${f.flatenummer}" helt? Ordrene i den blir ikke slettet, bare koblet fra flåten.`)) return;
-  (S.ordrer||[]).filter(o=>o.flateId===f.id).forEach(o => { o.flateId = null; save(o.id); });
+  const medlemmer = (S.ordrer||[]).filter(o=>o.flateId===f.id);
+  medlemmer.forEach(o => { o.flateId = null; });
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   S.flater = (S.flater||[]).filter(x=>x.id!==f.id);
-  if (db) db.from('flater').delete().eq('id', f.id)
-    .then(r=>{if(r.error) console.error('Sletting av flåte feilet:', r.error.message);});
+  if (db) {
+    // Ett samlet kall for alle medlemsordrene i stedet for ett save()-kall (og dermed
+    // ett update-kall) per ordre - samme mønster som de andre batch-fiksene i dag.
+    if (medlemmer.length) db.from('ordrer').upsert(medlemmer.map(ordreToDb), {onConflict:'id'})
+      .then(r=>{if(r.error) console.error('Frakobling fra flåte feilet:', r.error.message);});
+    db.from('flater').delete().eq('id', f.id)
+      .then(r=>{if(r.error) console.error('Sletting av flåte feilet:', r.error.message);});
+  }
   tilbakeFlaterListe();
 }
 
