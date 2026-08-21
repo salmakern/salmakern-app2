@@ -79,7 +79,7 @@ function renderOrdreList() {
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
             <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-              <span class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+o.tidBiltilsynetSted:'') : 'Ikke i kalender'}</span>
+              <span class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
               ${godkjentKortHTML(o)}
             </div>
           </div>`;
@@ -122,7 +122,7 @@ function renderOversikt(q) {
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
-          <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+o.tidBiltilsynetSted:''):'Ikke i kalender'}</div>
+          <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
         </div>`;
       }).join('')
     : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
@@ -219,7 +219,7 @@ function renderWeek() {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
           <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
             <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
-            <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${o.tidBiltilsynetSted?' - '+o.tidBiltilsynetSted:''} - ${statusInfo(o.ordreStatus).lbl}</div>
+            <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${o.tidBiltilsynetSted?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
           </div>
           <div style="position:relative;flex-shrink:0">
             <button onclick="event.stopPropagation();toggleCalMenu('${o.id}')" style="background:none;border:none;color:${si.txt};font-size:18px;line-height:1;padding:0 2px;cursor:pointer" title="Valg">⋯</button>

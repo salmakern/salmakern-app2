@@ -282,7 +282,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <div class="grid g3" style="margin-top:8px">
           <div><label>Dato</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet):'Ikke satt'}</div></div>
           <div><label>Tid</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynetTid||'Ikke satt'}</div></div>
-          <div><label>Sted</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynetSted||'–'}</div></div>
+          <div><label>Sted</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynetSted?esc(o.tidBiltilsynetSted):'–'}</div></div>
         </div>
         <div class="small muted" style="margin-top:8px">Settes under Time bekreftet i Admin-arket</div>
       </div>
