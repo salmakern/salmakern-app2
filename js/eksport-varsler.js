@@ -83,26 +83,26 @@ function genPDF(id) {
 <div class="grid">
   <div>
     <h2>Kjoretoy</h2>
-    <div class="info-row"><span class="info-label">Merke/Type:</span><span>${[o.merke,o.type].filter(Boolean).join(' ')||'--'}</span></div>
-    <div class="info-row"><span class="info-label">Modell:</span><span>${o.modell||'--'}</span></div><div class="info-row"><span class="info-label">Variant:</span><span>${o.variant||'--'}</span></div><div class="info-row"><span class="info-label">Versjon:</span><span>${o.versjon||'--'}</span></div>
-    <div class="info-row"><span class="info-label">Reg.nr:</span><span>${o.regnr||'--'}</span></div>
-    <div class="info-row"><span class="info-label">Chassis:</span><span>${o.chassis||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Merke/Type:</span><span>${esc([o.merke,o.type].filter(Boolean).join(' '))||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Modell:</span><span>${esc(o.modell)||'--'}</span></div><div class="info-row"><span class="info-label">Variant:</span><span>${esc(o.variant)||'--'}</span></div><div class="info-row"><span class="info-label">Versjon:</span><span>${esc(o.versjon)||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Reg.nr:</span><span>${esc(o.regnr)||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Chassis:</span><span>${esc(o.chassis)||'--'}</span></div>
     <div class="info-row"><span class="info-label">Ankomst:</span><span>${o.ankomstdato?fmtDatoKort(o.ankomstdato):'--'}</span></div>
   </div>
   <div>
     <h2>Kunde</h2>
-    <div class="info-row"><span class="info-label">Forhandler:</span><span>${o.kunde||'--'}</span></div>
-    <div class="info-row"><span class="info-label">Kontaktperson:</span><span>${o.eier||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Forhandler:</span><span>${esc(o.kunde)||'--'}</span></div>
+    <div class="info-row"><span class="info-label">Kontaktperson:</span><span>${esc(o.eier)||'--'}</span></div>
   </div>
 </div>
 <div class="grid" style="margin-top:0">
   <div>
-    <h2>Utstyr - har${o.utstyrMalNavn?' ('+o.utstyrMalNavn+')':''}</h2>
-    <div style="font-size:13px">${(o.utstyrSjekkliste||[]).length ? o.utstyrSjekkliste.map(p=>`<div>${p.ok?'✓':'☐'} ${p.punkt}</div>`).join('') : '--'}</div>
+    <h2>Utstyr - har${o.utstyrMalNavn?' ('+esc(o.utstyrMalNavn)+')':''}</h2>
+    <div style="font-size:13px">${(o.utstyrSjekkliste||[]).length ? o.utstyrSjekkliste.map(p=>`<div>${p.ok?'✓':'☐'} ${esc(p.punkt)}</div>`).join('') : '--'}</div>
   </div>
   <div>
     <h2>Utstyr - skal ha</h2>
-    <div style="font-size:13px;white-space:pre-wrap">${o.utstyr.skalHa||'--'}</div>
+    <div style="font-size:13px;white-space:pre-wrap">${esc(o.utstyr.skalHa)||'--'}</div>
   </div>
 </div>
 <h2>Vekter (kg)</h2>
@@ -118,7 +118,7 @@ ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bak
 <h2>Bilder - Levering</h2>
 <div class="foto-grid">${o.bilderLevering.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'<span style="font-size:13px;color:#999">Ingen bilder</span>'}</div>
 <h2>Godkjenning</h2>
-${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<span class="badge-nei">Ikke godkjent</span>'}
+${o.godkjent?`<span class="badge-ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:'<span class="badge-nei">Ikke godkjent</span>'}
 <h2>Hengerfeste</h2>
 <div style="font-size:13px">${o.utstyr?.hengerfeste==='hengerfeste' ? 'Hengerfeste (' + (o.utstyr?.hengerfesteMontert==='montert'?'montert':'ikke montert') + ')' : 'Ikke hengerfeste'}</div>
 </body></html>`;

@@ -22,7 +22,7 @@ function renderArkiv() {
           <b>${ordreLabelFull(o)}</b>
           <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
         </div>
-        <div class="small muted" style="margin-top:3px">${o.type} ${o.variant} · ${o.kunde}</div>
+        <div class="small muted" style="margin-top:3px">${esc(o.type)} ${esc(o.variant)} · ${esc(o.kunde)}</div>
         <div class="small muted">Ankomst: ${o.ankomstdato||'—'}</div>
         <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
       </div>`;
@@ -31,19 +31,19 @@ function renderArkiv() {
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
     ?ferdig.map(o=>`<div class="box" style="margin-bottom:6px;padding:8px">
         <div class="row" style="margin-bottom:4px">
-          <div><b>${ordreLabelFull(o)}</b> <span class="small muted">${o.type} ${o.variant}</span></div>
+          <div><b>${ordreLabelFull(o)}</b> <span class="small muted">${esc(o.type)} ${esc(o.variant)}</span></div>
           <div style="display:flex;gap:3px">
             <button class="btn sm" onclick="openOrdre('${o.id}',true)" style="font-size:10px;padding:2px 7px;border-radius:8px">Åpne</button>
             <button class="btn sm" onclick="genPDF('${o.id}')" style="font-size:10px;padding:2px 7px;border-radius:8px">📄 PDF</button>
             <button class="btn sm" onclick="gjenopprett('${o.id}')" style="font-size:10px;padding:2px 7px;border-radius:8px">Gjenopprett</button>
           </div>
         </div>
-        <div class="small muted">${o.kunde} · Ankomst: ${o.ankomstdato||'—'}</div>
+        <div class="small muted">${esc(o.kunde)} · Ankomst: ${o.ankomstdato||'—'}</div>
         <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
         <div class="small muted">Drivstoff: ${o.drivstoff?.totalpris?o.drivstoff.totalpris+' kr':'—'}</div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${o.fakturert
-            ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${o.fakturertAv}</span>
+            ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${esc(o.fakturertAv)}</span>
                <button class="btn sm" onclick="toggleFakturert('${o.id}')" style="font-size:11px;padding:4px 10px">Fjern fakturert</button>`
             :`<span class="pill bad" style="font-size:11px">Ikke fakturert</span>
                <button class="btn sm red" onclick="toggleFakturert('${o.id}')" style="font-size:11px;padding:4px 10px">✔ Merk fakturert</button>`}
@@ -64,7 +64,7 @@ function visKundeHistorikk(kunde) {
         <b>${ordreLabel(o)}</b>
         <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
       </div>
-      <div class="small muted" style="margin-top:4px">${o.merke||''} ${o.type||''} ${o.variant||''}</div>
+      <div class="small muted" style="margin-top:4px">${esc(o.merke)} ${esc(o.type)} ${esc(o.variant)}</div>
       <div class="small muted">${o.ankomstdato||'Ingen dato'} · ${o.status==='arkivert'?'Arkivert':'Aktiv'}</div>
     </div>`;
   }).join('') : '<div class="muted small">Ingen ordrer funnet for denne kunden.</div>';
@@ -246,7 +246,7 @@ function renderMoterListe() {
       : 'Alle';
     return `
     <div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-      <div><b>${m.tittel}</b><div class="small muted">${fmtDatoKort(m.dato)} kl. ${m.tid} · ${deltakerNavn}${m.opprettetAv?' · satt av '+m.opprettetAv:''}</div></div>
+      <div><b>${esc(m.tittel)}</b><div class="small muted">${fmtDatoKort(m.dato)} kl. ${m.tid} · ${esc(deltakerNavn)}${m.opprettetAv?' · satt av '+esc(m.opprettetAv):''}</div></div>
       <button class="btn sm" onclick="slettMote('${m.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
     </div>`;
   }).join('') : '<div class="muted small">Ingen kommende møter</div>';

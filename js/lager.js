@@ -282,7 +282,7 @@ function renderVareDetalj() {
         <div class="small">${tid} · ${esc(h.ansattNavn||'—')}</div>
         <b style="color:${positiv?'#4ade80':'#f87171'}">${positiv?'+':''}${fmtAntall(h.endring)}</b>
       </div>
-      ${(o || h.kommentar) ? `<div class="small muted" style="margin-top:2px">${o?`Ordre: ${esc(ordreLabel(o))}`:''}${o && h.kommentar?' · ':''}${esc(h.kommentar||'')}</div>` : ''}
+      ${(o || h.kommentar) ? `<div class="small muted" style="margin-top:2px">${o?`Ordre: ${ordreLabel(o)}`:''}${o && h.kommentar?' · ':''}${esc(h.kommentar||'')}</div>` : ''}
     </div>`;
   }).join('') : '<div class="muted small">Ingen historikk ennå</div>';
 }

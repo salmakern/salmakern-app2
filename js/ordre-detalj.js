@@ -129,9 +129,9 @@ function buildOrdreDetail() {
             <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
           </label>
         </div>
-        ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${o.chassis}</div>`:''}
-        <div class="muted" style="margin-top:2px">${o.type}${o.variant?' – '+o.variant:''}</div>
-        <div class="small muted">Kontaktperson: ${o.eier||'–'}</div>
+        ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${esc(o.chassis)}</div>`:''}
+        <div class="muted" style="margin-top:2px">${esc(o.type)}${o.variant?' – '+esc(o.variant):''}</div>
+        <div class="small muted">Kontaktperson: ${o.eier?esc(o.eier):'–'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:7px 12px;')}
@@ -271,7 +271,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <div class="h">Tvangsflyt</div>
         <div style="margin-top:6px">${tf.map(t=>`<span class="pill ${t.ok?'ok':'bad'}">${t.lbl}</span>`).join('')}</div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
-          ${o.godkjent?`<span class="pill ok">Godkjent av ${o.godkjennerNavn}</span>`:`
+          ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
             ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:6px">${erAdmin?'Tvangsflyt ikke fullført (du kan overstyre som admin):':'Fullfør tvangsflyt først:'}</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
             <button class="btn red" style="width:100%" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
         </div>
@@ -427,8 +427,10 @@ function sfOmbygging(id, felt, val) {
 // SAVE HELPERS
 // ════════════════════════════════════════════════════
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
-function ordreLabel(o){ return o.regnr || (o.chassis ? 'Chassis: '+o.chassis : 'Uten reg.nr'); }
-function ordreLabelFull(o){ return (o.regnr && o.chassis) ? o.regnr+' · Chassis: '+o.chassis : ordreLabel(o); }
+// Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
+// regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.
+function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
+function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · Chassis: '+esc(o.chassis) : ordreLabel(o); }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, siden de allerede er satt opp per modell
 function alleKjenteModeller() {

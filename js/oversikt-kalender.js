@@ -73,7 +73,7 @@ function renderOrdreList() {
               <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
               ${statusDropdown(o.id, o.ordreStatus)}
             </div>
-            <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.variant||''}</span>
+            <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}</span>
             ${dokStatusKortHTML(o)}
             <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
             <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>

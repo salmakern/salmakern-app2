@@ -26,10 +26,10 @@ function renderBeskjeder() {
   el.innerHTML = S.beskjeder.slice(0,10).map(b=>`
     <div class="box" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-        <div style="flex:1">${b.tekst.replace(/\n/g,'<br>')}</div>
+        <div style="flex:1">${esc(b.tekst).replace(/\n/g,'<br>')}</div>
         ${erAdmin?`<button onclick="slettBeskjed('${b.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>`:''}
       </div>
-      <div class="small muted" style="margin-top:6px">${b.av} · ${new Date(b.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
+      <div class="small muted" style="margin-top:6px">${esc(b.av)} · ${new Date(b.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
     </div>`).join('');
 }
 
@@ -68,10 +68,10 @@ function renderKontakter() {
     <div class="box" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
         <div>
-          <div><b>${k.navn}</b> <span class="pill" style="font-size:11px;padding:2px 8px">${k.type}</span></div>
-          ${k.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${k.tlf}" style="color:#ef4444;font-weight:600;text-decoration:none">${k.tlf}</a></div>`:''}
-          ${k.epost?`<div class="small">✉ <a href="mailto:${k.epost}" style="color:#a1a1aa;text-decoration:none">${k.epost}</a></div>`:''}
-          ${k.notat?`<div class="small muted" style="margin-top:4px">${k.notat}</div>`:''}
+          <div><b>${esc(k.navn)}</b> <span class="pill" style="font-size:11px;padding:2px 8px">${esc(k.type)}</span></div>
+          ${k.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${esc(k.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(k.tlf)}</a></div>`:''}
+          ${k.epost?`<div class="small">✉ <a href="mailto:${esc(k.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(k.epost)}</a></div>`:''}
+          ${k.notat?`<div class="small muted" style="margin-top:4px">${esc(k.notat)}</div>`:''}
         </div>
         ${erAdmin?`<button onclick="slettKontakt('${k.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>`:''}
       </div>
@@ -317,12 +317,12 @@ function renderHMS() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
         <div style="flex:1">
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-            <span class="pill warn" style="font-size:11px">${h.type}</span>
+            <span class="pill warn" style="font-size:11px">${esc(h.type)}</span>
             ${h.lukket?'<span class="pill ok" style="font-size:11px">Lukket</span>':''}
           </div>
-          <div class="small">${h.beskrivelse}</div>
-          ${h.tiltak?`<div class="small muted" style="margin-top:4px">Tiltak: ${h.tiltak}</div>`:''}
-          <div class="small muted" style="margin-top:4px">${h.av} · ${new Date(h.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
+          <div class="small">${esc(h.beskrivelse)}</div>
+          ${h.tiltak?`<div class="small muted" style="margin-top:4px">Tiltak: ${esc(h.tiltak)}</div>`:''}
+          <div class="small muted" style="margin-top:4px">${esc(h.av)} · ${new Date(h.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
         </div>
         ${erAdmin?`<button class="btn sm" onclick="toggleHMSLukket('${h.id}')">${h.lukket?'Gjenåpne':'Lukk'}</button>`:''}
       </div>
