@@ -212,14 +212,23 @@ function opprettOrdre() {
   const regnr  = document.getElementById('n_regnr').value.trim().toUpperCase();
   const chassis= document.getElementById('n_chassis').value.trim().toUpperCase();
   if (!regnr && !chassis){ alert('Fyll inn enten reg.nr eller chassis-nr'); return; }
-  // Advarsel (ikke blokkering) hvis samme chassis/reg.nr allerede finnes på en aktiv
-  // ordre - fanger opp at bilen kanskje er registrert fra før, uten å hindre en bevisst
-  // ny registrering (f.eks. samme bil inn til service en gang til).
-  const duplikat = S.ordrer.find(o => o.status==='aktiv' && (
-    (chassis && samsvarerChassis(o.chassis, chassis)) ||
-    (regnr && (o.regnr||'').toUpperCase() === regnr)
-  ));
-  if (duplikat && !confirm(`Det finnes allerede en aktiv ordre for dette (${ordreLabel(duplikat)}). Opprette en ny ordre likevel?`)) return;
+
+  // Chassis-nr er en unik identifikator for selve bilen - finnes det allerede en aktiv
+  // ordre på samme chassis, åpnes DEN i stedet for å opprette en duplikat-ordre.
+  if (chassis) {
+    const eksisterende = S.ordrer.find(o => o.status==='aktiv' && samsvarerChassis(o.chassis, chassis));
+    if (eksisterende) {
+      visToast(`Finnes allerede en ordre på dette chassis-nummeret - åpner ${ordreLabel(eksisterende)}`);
+      closeModal('nyOrdre');
+      openOrdre(eksisterende.id);
+      return;
+    }
+  }
+  // Reg.nr er ikke like unikt garantert over tid (skilt kan i sjeldne tilfeller
+  // flyttes/endres), så her advarer vi i stedet for å tvinge gjenbruk.
+  const duplikatRegnr = regnr ? S.ordrer.find(o => o.status==='aktiv' && (o.regnr||'').toUpperCase() === regnr) : null;
+  if (duplikatRegnr && !confirm(`Det finnes allerede en aktiv ordre for dette reg.nr-et (${ordreLabel(duplikatRegnr)}). Opprette en ny ordre likevel?`)) return;
+
   const id='ord_'+Date.now();
   const ny=mkOrdre(id,regnr,
     document.getElementById('n_kunde').value.trim(),
