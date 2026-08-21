@@ -182,7 +182,7 @@ function buildOrdreDetail() {
             </div>
             <div>
               <label>Chassis-nr (VIN)</label>
-              <input value="${esc(o.chassis)}" maxlength="17" oninput="this.nextElementSibling.textContent=this.value.length+'/17'" onchange="sf('${o.id}','chassis',this.value)">
+              <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase" oninput="this.nextElementSibling.textContent=this.value.length+'/17'" onchange="sf('${o.id}','chassis',this.value);this.value=this.value.toUpperCase()">
               <div class="small muted" style="margin-top:2px">${(o.chassis||'').length}/17</div>
             </div>
           </div>
@@ -489,6 +489,10 @@ function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().
 
 function sf(id, field, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  // Chassis-nr normaliseres alltid til store bokstaver her - uansett hvilket skjema/felt
+  // som kaller sf() med det - slik at det matcher konsekvent mot Admin-ark uten å være
+  // avhengig av at hvert enkelt inputfelt husker å gjøre det selv.
+  if (field === 'chassis') val = (val||'').trim().toUpperCase();
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
 }

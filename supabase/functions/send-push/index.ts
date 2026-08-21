@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       // --- Time på biltilsynet, sendes når det er 30 minutter eller mindre igjen ---
       const { data: ordre, error: ordreErr } = await supabase
         .from('ordrer')
-        .select('id, chassis, regnr, kunde, tid_biltilsynet, tid_biltilsynet_tid')
+        .select('id, chassis, regnr, kunde, tid_biltilsynet, tid_biltilsynet_tid, tid_biltilsynet_sted')
         .eq('tid_biltilsynet', naa.dato)
         .eq('biltilsyn_varslet', false)
         .not('tid_biltilsynet_tid', 'is', null)
@@ -139,7 +139,8 @@ Deno.serve(async (req) => {
         const diff = (t * 60 + m) - naa.minutter
         if (diff >= 0 && diff <= 30) {
           const bil = o.chassis || o.regnr || o.kunde || 'Bil'
-          meldinger.push({ title: 'Time på biltilsynet snart', body: `${bil} skal på biltilsynet kl. ${o.tid_biltilsynet_tid}` })
+          const stedTekst = o.tid_biltilsynet_sted ? ` (${o.tid_biltilsynet_sted})` : ''
+          meldinger.push({ title: 'Time på biltilsynet snart', body: `${bil} skal på biltilsynet kl. ${o.tid_biltilsynet_tid}${stedTekst}` })
           varsletOrdreIder.push(o.id)
         }
       }
