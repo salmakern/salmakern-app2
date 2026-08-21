@@ -43,8 +43,8 @@ function renderDrivstoffSatser() {
   el.innerHTML = S.drivstoffSatser.map(s=>`
     <div class="box" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
       <div>
-        <b>${s.navn}</b>
-        <span class="pill" style="font-size:11px;margin-left:4px">${typeNavn[s.type]||s.type}</span>
+        <b>${esc(s.navn)}</b>
+        <span class="pill" style="font-size:11px;margin-left:4px">${esc(typeNavn[s.type]||s.type)}</span>
         <div class="small muted" style="margin-top:3px">
           ${s.type==='kr_rabatt'?`–${s.verdi} kr/L`:s.type==='prosent_rabatt'?`–${s.verdi}%`:s.type==='uten_moms'?'÷1,25':s.type==='uten_mva'?'×0,8 (–20%)':s.type==='bos'?'(×0,8)÷0,97':''}
         </div>
@@ -82,7 +82,7 @@ function beregnDrivstoffHTML(df, innhold=false) {
         ${literpris?`<div class="small muted">Pumpepris</div><div class="small" style="text-align:right">${kr(literpris)} kr/L</div>`:''}
         ${liter?`<div class="small muted">Antall liter</div><div class="small" style="text-align:right">${kr(liter)} L</div>`:''}
         ${totalpumpe?`<div class="small muted">Totalt ved pumpe</div><div class="small" style="text-align:right;font-weight:700">${kr(totalpumpe)} kr</div>`:''}
-        ${sats?`<div class="small muted">Sats</div><div class="small" style="text-align:right;color:#fde68a">${sats.navn}${forklaring?' · '+forklaring:''}</div>`:''}
+        ${sats?`<div class="small muted">Sats</div><div class="small" style="text-align:right;color:#fde68a">${esc(sats.navn)}${forklaring?' · '+esc(forklaring):''}</div>`:''}
         ${sats&&liter?`<div class="small muted">Kundepris per liter</div><div class="small" style="text-align:right">${kr(kundeLiterpris)} kr/L</div>`:''}
         ${sats&&liter?`<div class="small muted" style="font-weight:700">Kundepris totalt</div><div style="text-align:right;font-weight:800;font-size:15px;color:#86efac">${kr(kundetotal)} kr</div>`:''}
         ${sats&&besparelse>0?`<div class="small muted">Besparelse</div><div class="small" style="text-align:right;color:#a1a1aa">–${kr(besparelse)} kr</div>`:''}
