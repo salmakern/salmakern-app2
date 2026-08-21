@@ -162,7 +162,7 @@ function updateClock() {
   if(!timerStart) return;
   const ms=Date.now()-timerStart;
   const mins=Math.floor(ms/60000);
-  const pause=mins>=480?30:(mins>=240?0:0); // 30 min pause if >=8 hours
+  const pause=mins>=480?30:0; // 30 min pause if >=8 hours
   const netto=Math.max(0,mins-pause);
   const t=h=>h.toString().padStart(2,'0');
   document.getElementById('clockTime').textContent=`${t(Math.floor(netto/60))} t ${t(netto%60)} min`;
