@@ -212,6 +212,14 @@ function opprettOrdre() {
   const regnr  = document.getElementById('n_regnr').value.trim().toUpperCase();
   const chassis= document.getElementById('n_chassis').value.trim().toUpperCase();
   if (!regnr && !chassis){ alert('Fyll inn enten reg.nr eller chassis-nr'); return; }
+  // Advarsel (ikke blokkering) hvis samme chassis/reg.nr allerede finnes på en aktiv
+  // ordre - fanger opp at bilen kanskje er registrert fra før, uten å hindre en bevisst
+  // ny registrering (f.eks. samme bil inn til service en gang til).
+  const duplikat = S.ordrer.find(o => o.status==='aktiv' && (
+    (chassis && samsvarerChassis(o.chassis, chassis)) ||
+    (regnr && (o.regnr||'').toUpperCase() === regnr)
+  ));
+  if (duplikat && !confirm(`Det finnes allerede en aktiv ordre for dette (${ordreLabel(duplikat)}). Opprette en ny ordre likevel?`)) return;
   const id='ord_'+Date.now();
   const ny=mkOrdre(id,regnr,
     document.getElementById('n_kunde').value.trim(),
@@ -559,6 +567,26 @@ async function gjenopprettFotos(id) {
   if (gjenopprettet === 0) { visToast('Alle plasser er allerede fylt — ingen mangler å gjenopprette'); return; }
   save(id); buildOrdreDetail();
   visToast(gjenopprettet + ' bilde(r) gjenopprettet fra Storage!', 'ok');
+}
+
+// Rydder opp ALLE Storage-filer som hører til en ordre (bilder - ankomst/levering/
+// avstand-skader/signatur - og dokumenter, alt ligger under en mappe navngitt med
+// ordre-id-en i sin respektive bucket) - kalles når selve ordren slettes for godt,
+// slik at filene ikke blir liggende igjen og ta opp lagringsplass uten grunn.
+async function slettOrdreStorageFiler(id) {
+  if (!db) return;
+  for (const bucket of ['bilder', 'ordre-dokumenter']) {
+    try {
+      const { data: filer, error } = await db.storage.from(bucket).list(String(id));
+      if (error) { console.warn(`Kunne ikke liste ${bucket}-filer for ordre ${id}:`, error.message); continue; }
+      if (filer?.length) {
+        const { error: rmErr } = await db.storage.from(bucket).remove(filer.map(f => `${id}/${f.name}`));
+        if (rmErr) console.warn(`Kunne ikke slette ${bucket}-filer for ordre ${id}:`, rmErr.message);
+      }
+    } catch (e) {
+      console.warn(`Uventet feil ved opprydding av ${bucket}-filer for ordre ${id}:`, e);
+    }
+  }
 }
 
 async function slettFoto(id, side, idx) {

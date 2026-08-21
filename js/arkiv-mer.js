@@ -80,12 +80,32 @@ function slettOrdre(id) {
   // skrivefeil, når det egentlig bare er rester etter en slettet ordre).
   const aar = o.ankomstdato ? Number(String(o.ankomstdato).slice(0,4)) : null;
   const arkRad = o.chassis ? (S.adminArk||[]).find(r => r.aar === aar && samsvarerChassis(r.chassisNr, o.chassis)) : null;
+
+  // Var denne ordren PRIMÆR i en flåte, gjør den som ligger rett under den i samme
+  // sorterte rekkefølge som vises i flåte-detaljen til ny primær - fins ingen "under",
+  // faller den tilbake på den som nå ble sist. Er flåten tom etter dette, nullstilles
+  // primæren (ingen igjen å velge blant).
+  let flate = null;
+  if (o.flateId) {
+    const f = (S.flater||[]).find(x=>x.id===o.flateId);
+    if (f && f.primaerOrdreId === o.id) {
+      const medlemmer = S.ordrer.filter(x=>x.flateId===f.id).sort(sorterOrdre);
+      const idx = medlemmer.findIndex(x=>x.id===o.id);
+      const gjenvarende = medlemmer.filter(x=>x.id!==o.id);
+      const nyPrimaer = gjenvarende[idx] || gjenvarende[idx-1] || null;
+      f.primaerOrdreId = nyPrimaer ? nyPrimaer.id : null;
+      flate = f;
+    }
+  }
+
   S.ordrer = S.ordrer.filter(x=>x.id!==id);
   S.timer  = S.timer.filter(t=>t.ordreId!==id);
   if (arkRad) S.adminArk = S.adminArk.filter(r=>r.id!==arkRad.id);
   if (db) {
     db.from('ordrer').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message)});
     if (arkRad) db.from('admin_ark').delete().eq('id',arkRad.id).then(r=>{if(r.error)console.error('Kunne ikke slette admin-ark-rad:',r.error.message)});
+    if (flate) db.from('flater').update({primaer_ordre_id:flate.primaerOrdreId}).eq('id',flate.id).then(r=>{if(r.error)console.error('Kunne ikke oppdatere flåtens primær-ordre:',r.error.message)});
+    slettOrdreStorageFiler(id);
   }
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   tilbakeOrdreList(); renderAll();
