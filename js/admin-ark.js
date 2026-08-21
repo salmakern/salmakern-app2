@@ -4,6 +4,13 @@
 let adminArkAar = new Date().getFullYear();
 let adminArkTable = null;
 
+// Chassis-nummer skal matche uansett store/små bokstaver - en admin_ark-rad skrevet inn
+// som "test123" må fortsatt finne/kobles til en ordre lagret som "TEST123". Ren "==="
+// sammenligning brøt sammen for slikt (Time bekreftet synket da aldri til ordren/kalenderen).
+function samsvarerChassis(a, b) {
+  return !!a && !!b && String(a).trim().toUpperCase() === String(b).trim().toUpperCase();
+}
+
 // Brukeren kan dra i det innebygde endre-størrelse-håndtaket nederst til høyre på
 // tabellboksen (CSS resize:both) for å gjøre arket høyere/bredere enn det som
 // automatisk tilpasses vinduet/innholdet - siden/tabellen får da scrolle for å vise
@@ -50,7 +57,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
   rader.forEach((rad, idx) => {
     const posisjonsbasertVentendeTimer = ventendeTimerSnapshot[idx] ?? '';
     let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
-    if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => r.chassisNr === rad.chassisNr && !r.arkivert);
+    if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, rad.chassisNr) && !r.arkivert);
     if (!ark) {
       if (!rad.chassisNr) return;
       ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
@@ -94,7 +101,7 @@ function adminArkNaviger(dir) {
 // låst innhold sporløst fra visningen etter arkivering.
 function adminArkFinnRadForVisning(chassisNr) {
   if (!chassisNr) return null;
-  return (S.adminArk||[]).find(r => r.chassisNr === chassisNr) || null;
+  return (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, chassisNr)) || null;
 }
 
 function adminArkFlateNavn(o) {
@@ -220,7 +227,7 @@ function adminArkNyRad() {
 // {timeBekreftet:'2026-08-07', timeBekreftetTid:'09:00'}) - lagres samlet i én upsert.
 async function adminArkLagreFelter(rad, endringer) {
   let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
-  if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => r.chassisNr === rad.chassisNr && !r.arkivert);
+  if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, rad.chassisNr) && !r.arkivert);
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: (S.adminArk||[]).length,
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
@@ -243,7 +250,7 @@ async function adminArkLagreFelter(rad, endringer) {
   // tilsvarende kalenderplasseringen igjen (ellers blir det stående en "spøkelses-time" i
   // oversikten som ikke lenger stemmer med noe bekreftet).
   if ('timeBekreftet' in endringer || 'timeBekreftetTid' in endringer) {
-    const o = S.ordrer.find(x => x.chassis === ark.chassisNr);
+    const o = S.ordrer.find(x => samsvarerChassis(x.chassis, ark.chassisNr));
     if (o) {
       o.tidBiltilsynet = ark.timeBekreftet||'';
       o.tidBiltilsynetTid = ark.timeBekreftetTid||'';
@@ -787,7 +794,14 @@ function renderAdminArk() {
       cell.restoreOldValue();
       return;
     }
-    adminArkLagreFelter(rad, {[felt]: cell.getValue()});
+    // Chassis-nr normaliseres til store bokstaver med en gang det skrives inn - forhindrer
+    // at en admin_ark-rad og en ordre havner med ulik store/små-skriving av samme
+    // chassisnummer og dermed aldri finner hverandre (samsvarerChassis tåler det uansett,
+    // men konsekvent visning er ryddigere). Bruker row.update (ikke cell.setValue) for
+    // visnings-normaliseringen - det siste ville trigget et nytt cellEdited-kall.
+    const verdi = felt === 'chassisNr' ? (cell.getValue()||'').trim().toUpperCase() : cell.getValue();
+    adminArkLagreFelter(rad, {[felt]: verdi})
+      .then(() => { if (felt === 'chassisNr' && verdi !== cell.getValue()) cell.getRow().update({ chassisNr: verdi }); });
   });
 
   adminArkTable.on('rowMoved', () => {

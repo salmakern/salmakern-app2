@@ -210,7 +210,7 @@ function apneNyOrdreModal() {
 
 function opprettOrdre() {
   const regnr  = document.getElementById('n_regnr').value.trim().toUpperCase();
-  const chassis= document.getElementById('n_chassis').value.trim();
+  const chassis= document.getElementById('n_chassis').value.trim().toUpperCase();
   if (!regnr && !chassis){ alert('Fyll inn enten reg.nr eller chassis-nr'); return; }
   const id='ord_'+Date.now();
   const ny=mkOrdre(id,regnr,
