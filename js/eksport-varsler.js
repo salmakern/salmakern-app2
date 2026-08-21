@@ -123,14 +123,26 @@ ${o.godkjent?`<span class="badge-ok">Godkjent av ${o.godkjennerNavn}</span>`:'<s
 <div style="font-size:13px">${o.utstyr?.hengerfeste==='hengerfeste' ? 'Hengerfeste (' + (o.utstyr?.hengerfesteMontert==='montert'?'montert':'ikke montert') + ')' : 'Ikke hengerfeste'}</div>
 </body></html>`;
 
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='Ordre-'+label.replace(/[^a-zA-Z0-9\-]/g,'_')+'-'+new Date().toISOString().split('T')[0]+'.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(a.href);
+  // Åpner rapporten i et eget vindu og trigger nettleserens utskriftsdialog, der
+  // "Lagre som PDF" gir en ekte PDF-fil - en ren HTML-nedlasting kalt "PDF" var
+  // misvisende hvis den ble sendt videre til noen som forventet en faktisk PDF.
+  const printVindu = window.open('', '_blank');
+  if (!printVindu) { alert('Nettleseren blokkerte utskriftsvinduet - tillat sprettoppvinduer for denne siden og prøv igjen.'); return; }
+  printVindu.document.write(html);
+  printVindu.document.close();
+
+  // Venter til bilder (logo + foto) er ferdig lastet før utskriftsdialogen åpnes,
+  // ellers kan de mangle i PDF-en - med en makstid i tilfelle et bilde henger seg opp.
+  let skrevetUt = false;
+  const skrivUt = () => { if (skrevetUt) return; skrevetUt = true; printVindu.focus(); printVindu.print(); };
+  const bilder = [...printVindu.document.images];
+  if (!bilder.length) { skrivUt(); }
+  else {
+    let lastet = 0;
+    const sjekkFerdig = () => { lastet++; if (lastet >= bilder.length) skrivUt(); };
+    bilder.forEach(img => img.complete ? sjekkFerdig() : (img.addEventListener('load', sjekkFerdig), img.addEventListener('error', sjekkFerdig)));
+  }
+  setTimeout(skrivUt, 4000);
 }
 
 // ════════════════════════════════════════════════════
