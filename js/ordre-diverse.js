@@ -567,11 +567,11 @@ async function gjenopprettFotos(id) {
     if (deler.length < 2) return;
     const side = deler[0];
     const idx = parseInt(deler[1]);
-    if (isNaN(idx) || idx < 0 || idx > 5 || (side !== 'a' && side !== 'l')) return;
+    if (isNaN(idx) || idx < 0 || idx > 5 || !FOTO_SIDER[side]) return;
     const { data } = db.storage.from('bilder').getPublicUrl(`${id}/${fil.name}`);
     const url = data.publicUrl;
-    if (side === 'a' && !o.bilderAnkomst[idx]) { o.bilderAnkomst[idx] = url; gjenopprettet++; }
-    if (side === 'l' && !o.bilderLevering[idx]) { o.bilderLevering[idx] = url; gjenopprettet++; }
+    const felt = FOTO_SIDER[side].felt;
+    if (!o[felt][idx]) { o[felt][idx] = url; gjenopprettet++; }
   });
   if (gjenopprettet === 0) { visToast('Alle plasser er allerede fylt — ingen mangler å gjenopprette'); return; }
   save(id); buildOrdreDetail();
