@@ -23,7 +23,7 @@ function lagreDrivstoffSats() {
   const ingenVerdi = ['uten_moms','uten_mva','bos'].includes(type);
   if (!ingenVerdi && !verdi) { alert('Verdi er påkrevd'); return; }
   S.drivstoffSatser.push({id:'ds'+(++S.nextId), navn, type, verdi});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   closeModal('nyDrivstoffSats');
   ['dsNavn','dsVerdi'].forEach(i=>{ const el=document.getElementById(i); if(el) el.value=''; });
   renderDrivstoffSatser();
@@ -32,7 +32,7 @@ function lagreDrivstoffSats() {
 function slettDrivstoffSats(id) {
   if (!confirm('Slette denne satsen?')) return;
   S.drivstoffSatser = S.drivstoffSatser.filter(s=>s.id!==id);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  saveInnstillinger();
   renderDrivstoffSatser();
 }
 
