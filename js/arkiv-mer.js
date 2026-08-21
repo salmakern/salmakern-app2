@@ -114,8 +114,16 @@ function renderMer() {
   document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
   document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
+  document.getElementById('merHelsesjekkKort').style.display = erAdmin ? 'block' : 'none';
 
   if (erAdmin) {
+    const ukoblet = finnUkobledeAdminArkRader();
+    document.getElementById('helsesjekkUkoblet').innerHTML = ukoblet.length
+      ? ukoblet.map(r=>`<div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div><b>${esc(r.chassisNr)}</b> <span class="small muted">(${r.aar}${r.forhandler?' · '+esc(r.forhandler):''})</span></div>
+          <button class="btn sm" onclick="apneUkobletAdminArkRad(${r.aar})">Åpne i Admin-ark</button>
+        </div>`).join('')
+      : '<div class="muted small">Ingen ukoblede rader funnet</div>';
     document.getElementById('dagensPINVal').textContent = S.dagensPIN;
     const gpsEl = document.getElementById('gpsStatus');
     const radEl = document.getElementById('gpsRadius');
@@ -178,6 +186,20 @@ function renderMer() {
   renderMoterListe();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
   if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
+}
+
+// Admin-ark-rader med et chassis-nr som er skrevet inn, men som ikke matcher NOEN ordre
+// (samsvarerChassis er samme case-uavhengige sammenligning som selve Admin-ark bruker) -
+// typisk en skrivefeil et sted, siden raden da aldri kobles til riktig bil/ordre.
+// Arkiverte rader (låste, gamle år) hoppes over - de er historikk, ikke noe å rette nå.
+function finnUkobledeAdminArkRader() {
+  return (S.adminArk||[])
+    .filter(r => !r.arkivert && r.chassisNr && !S.ordrer.some(o => samsvarerChassis(o.chassis, r.chassisNr)))
+    .sort((a,b) => b.aar - a.aar);
+}
+function apneUkobletAdminArkRad(aar) {
+  adminArkAar = aar;
+  showPage('admin', document.getElementById('adminTab'));
 }
 
 // ════════════════════════════════════════════════════
