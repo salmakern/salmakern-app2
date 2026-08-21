@@ -163,6 +163,11 @@ function renderOrdreRapport() {
 function saveInnstillinger() {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   if (!db) return;
+  // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig (og potensielt
+  // race-utsatt) reinnlesning like etterpå - se samme mønster for ordre (save()).
+  ignorerRealtimeInnstillinger = true;
+  clearTimeout(ignorerRealtimeInnstillingerTimer);
+  ignorerRealtimeInnstillingerTimer = setTimeout(()=>{ignorerRealtimeInnstillinger=false;}, 10000);
   db.from('innstillinger').upsert({
     id: 1,
     dagens_pin: S.dagensPIN,

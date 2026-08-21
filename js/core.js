@@ -80,6 +80,9 @@ let activeOrdreId = null;
 let openedFromArkiv = false;
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
 const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
+const ignorerRealtimeAdminArk = new Set(); // admin_ark-ID-er vi nettopp lagret
+let ignorerRealtimeInnstillinger = false; // innstillinger er én rad - enkelt flagg holder
+let ignorerRealtimeInnstillingerTimer = null;
 let flyttOrdreId  = null;
 let timerStart    = null;
 let timerType     = 'normal';
@@ -435,6 +438,41 @@ function subscribeRealtime() {
       }
       if (document.getElementById('lager')?.classList.contains('active')) refreshOppskriftVisning();
       if (activeOrdreId) renderOrdreLagerbruk();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'admin_ark'}, p => {
+      S.adminArk = S.adminArk || [];
+      if (p.eventType==='INSERT') {
+        if (!S.adminArk.find(r=>r.id===p.new.id)) S.adminArk.push(dbToAdminArkRad(p.new));
+      } else if (p.eventType==='UPDATE') {
+        if (ignorerRealtimeAdminArk.has(p.new.id)) return;
+        const i=S.adminArk.findIndex(r=>r.id===p.new.id); if(i>=0) S.adminArk[i]=dbToAdminArkRad(p.new);
+      } else if (p.eventType==='DELETE') {
+        S.adminArk = S.adminArk.filter(r=>r.id!==p.old.id);
+      }
+      if (document.getElementById('admin')?.classList.contains('active')) renderAdminArk();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'moter'}, p => {
+      S.moter = S.moter || [];
+      if (p.eventType==='INSERT') {
+        if (!S.moter.find(m=>m.id===p.new.id)) S.moter.push(dbToMote(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.moter.findIndex(m=>m.id===p.new.id); if(i>=0) S.moter[i]=dbToMote(p.new);
+      } else if (p.eventType==='DELETE') {
+        S.moter = S.moter.filter(m=>m.id!==p.old.id);
+      }
+      if (me) renderAll();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'innstillinger'}, p => {
+      if (ignorerRealtimeInnstillinger || !p.new) return;
+      const row = p.new;
+      S.dagensPIN = row.dagens_pin || '1234';
+      S.gps = {lat: row.gps_lat||null, lng: row.gps_lng||null, radius: row.gps_radius||300};
+      S.utstyrMaler = row.utstyr_maler || [];
+      S.drivstoffSatser = row.drivstoff_satser || [];
+      S.beskjeder = row.beskjeder || [];
+      S.kontakter = row.kontakter || [];
+      S.hms = row.hms || [];
+      if (me) renderMer();
     })
     .subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {

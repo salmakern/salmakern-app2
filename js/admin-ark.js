@@ -79,6 +79,12 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
   adminArkTable.getRows().forEach((r, idx) => r.update({ ventendeTimer: ventendeTimerSnapshot[idx] ?? '' }));
   adminArkOppdaterVentendeTimerSnapshot();
   if (oppdateringer.length) {
+    // Samme echo-unngåelse som adminArkLagreFelter() - uten denne vil hver
+    // rekkefølge-endring (drag/flytt rad) trigge en full re-rendering av tabellen.
+    oppdateringer.forEach(o => {
+      ignorerRealtimeAdminArk.add(o.id);
+      setTimeout(()=>ignorerRealtimeAdminArk.delete(o.id), 10000);
+    });
     const { error } = await db.from('admin_ark').upsert(oppdateringer, {onConflict:'id'});
     if (error) console.error('Rekkefølge-lagring feilet:', error.message);
   }
@@ -242,6 +248,10 @@ async function adminArkLagreFelter(rad, endringer) {
     serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
     fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
     time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
+  // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig re-rendering av
+  // hele Admin-ark-tabellen like etterpå (samme mønster som ordre bruker via save()).
+  ignorerRealtimeAdminArk.add(ark.id);
+  setTimeout(()=>ignorerRealtimeAdminArk.delete(ark.id), 10000);
   const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
   // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
