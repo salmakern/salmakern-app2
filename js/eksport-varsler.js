@@ -113,6 +113,8 @@ ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bak
 <div style="font-size:13px"><b>Pris:</b> ${o.drivstoff.pris||'--'} kr &nbsp;|&nbsp; <b>Sats:</b> ${o.drivstoff.sats||'--'} kr</div>
 <h2>Bilder - Ankomst</h2>
 <div class="foto-grid">${o.bilderAnkomst.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'<span style="font-size:13px;color:#999">Ingen bilder</span>'}</div>
+<h2>Bilder - Avstand/skader</h2>
+<div class="foto-grid">${(o.bilderAvstandSkader||[]).filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'<span style="font-size:13px;color:#999">Ingen bilder</span>'}</div>
 <h2>Bilder - Levering</h2>
 <div class="foto-grid">${o.bilderLevering.filter(Boolean).map(b=>`<img class="foto" src="${b}">`).join('')||'<span style="font-size:13px;color:#999">Ingen bilder</span>'}</div>
 <h2>Godkjenning</h2>

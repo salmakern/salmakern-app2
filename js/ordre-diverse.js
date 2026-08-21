@@ -482,8 +482,7 @@ async function lastOppFoto(e, id, side, idx) {
   const o = S.ordrer.find(x=>x.id===id);
   if (!o) { visToast('Ordren ble oppdatert under opplasting — prøv igjen'); return; }
 
-  if (side==='a') o.bilderAnkomst[idx]=url;
-  else            o.bilderLevering[idx]=url;
+  o[FOTO_SIDER[side].felt][idx]=url;
   if (!inFlightFotos[id]) inFlightFotos[id]={};
   inFlightFotos[id][`${side}_${idx}`]=url;
   logChange(o,'Bilde lastet opp');
@@ -492,17 +491,17 @@ async function lastOppFoto(e, id, side, idx) {
   // Oppdater kun denne fotoboksen — ikke full rebuild
   oppdaterFotoboks(o, side, idx);
   // Oppdater telleren i korttittelen
-  const ankomstTeller = document.getElementById(`bildeTeller_a_${id}`);
-  const leveringTeller = document.getElementById(`bildeTeller_l_${id}`);
-  if(ankomstTeller) ankomstTeller.textContent = o.bilderAnkomst.filter(Boolean).length+'/6';
-  if(leveringTeller) leveringTeller.textContent = o.bilderLevering.filter(Boolean).length+'/6';
+  Object.keys(FOTO_SIDER).forEach(s => {
+    const teller = document.getElementById(`bildeTeller_${s}_${id}`);
+    if (teller) teller.textContent = o[FOTO_SIDER[s].felt].filter(Boolean).length + '/' + FOTO_SIDER[s].labler.length;
+  });
 }
 
 function oppdaterFotoboks(o, side, idx) {
   const boksId = `foboks_${side}_${idx}`;
   const boks = document.getElementById(boksId);
   if(!boks) return;
-  const url = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
+  const url = o[FOTO_SIDER[side].felt][idx];
   const imgId = `fo_${side}_${idx}_src`;
   if(url) {
     boks.innerHTML = `<img id="${imgId}" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none';this.parentElement.querySelector('.fo-feil')?.style&&(this.parentElement.querySelector('.fo-feil').style.display='flex')">
@@ -514,9 +513,7 @@ function oppdaterFotoboks(o, side, idx) {
       </div>`;
     boks.onclick = ()=>openLightbox(imgId);
   } else {
-    const lbl = side==='a'
-      ? ['Front','Høyre','Venstre','Bak','Div 1','Div 2'][idx]
-      : ['Front','Høyre','Venstre','Bak','Div 1','Div 2'][idx];
+    const lbl = FOTO_SIDER[side].labler[idx];
     boks.innerHTML = `<div style="font-size:22px">📷</div><div>${lbl}</div>`;
     boks.onclick = ()=>document.getElementById(`fo_${side}_${idx}`).click();
   }
@@ -566,14 +563,14 @@ async function gjenopprettFotos(id) {
 
 async function slettFoto(id, side, idx) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
-  const url = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
+  const felt = FOTO_SIDER[side].felt;
+  const url = o[felt][idx];
   // Slett fra Supabase Storage hvis det er en URL (ikke base64)
   if (db && url && url.startsWith('http')) {
     const filnavn = url.split('/bilder/')[1];
     if (filnavn) await db.storage.from('bilder').remove([filnavn]);
   }
-  if (side==='a') o.bilderAnkomst[idx]=null;
-  else            o.bilderLevering[idx]=null;
+  o[felt][idx]=null;
   save(id); buildOrdreDetail();
 }
 

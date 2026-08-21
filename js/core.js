@@ -63,6 +63,16 @@ function sorterOrdre(a,b) {
   return (a.ankomstdato||'').localeCompare(b.ankomstdato||'');
 }
 
+// Delt oppslag for de tre bilde-seksjonene på ordredetaljen (Ankomst/Levering/
+// Avstand-skader) - felt-navnet på ordre-objektet og etikettene på hver boks.
+// Brukes både av rendering (ordre-detalj.js) og opplasting/sletting (ordre-diverse.js)
+// slik at man slipper egne if/else-grener for hver side hvert sted.
+const FOTO_SIDER = {
+  a: { felt: 'bilderAnkomst', labler: ['Front','Høyre','Venstre','Bak','Div 1','Div 2'] },
+  l: { felt: 'bilderLevering', labler: ['Front','Høyre','Venstre','Bak','Div 1','Div 2'] },
+  s: { felt: 'bilderAvstandSkader', labler: ['Avstand','Skade 1','Skade 2'] }
+};
+
 let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[], moter:[]};
 let me = null;
@@ -117,6 +127,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       visningsMalNavn:    o.visningsMalNavn      || '',
       bilderAnkomst:      o.bilderAnkomst        || [null,null,null,null,null,null],
       bilderLevering:     o.bilderLevering       || [null,null,null,null,null,null],
+      bilderAvstandSkader: o.bilderAvstandSkader || [null,null,null],
       ansatteSignert:     o.ansatteSignert       || [],
       endringer:          o.endringer            || [],
     }));
@@ -154,10 +165,9 @@ async function loadFromSupabase() {
     Object.entries(fotos).forEach(([key, url]) => {
       const [side, idxStr] = key.split('_');
       const idx = parseInt(idxStr);
-      const dbUrl = side==='a' ? o.bilderAnkomst[idx] : o.bilderLevering[idx];
-      if (dbUrl === url) { tomme.push(key); }
-      else if (side==='a') o.bilderAnkomst[idx] = url;
-      else o.bilderLevering[idx] = url;
+      const felt = FOTO_SIDER[side].felt;
+      if (o[felt][idx] === url) { tomme.push(key); }
+      else o[felt][idx] = url;
     });
     tomme.forEach(k => delete fotos[k]);
     if (!Object.keys(fotos).length) delete inFlightFotos[ordreId];
@@ -261,6 +271,7 @@ function dbToOrdre(r) {
     utstyr:r.utstyr||{har:'',skalHa:'',hengerfeste:'ikke_hengerfeste',hengerfesteMontert:'ikke_montert'},
     bilderAnkomst:r.bilder_ankomst||[null,null,null,null,null,null],
     bilderLevering:r.bilder_levering||[null,null,null,null,null,null],
+    bilderAvstandSkader:r.bilder_avstand_skader||[null,null,null],
     ansatteSignert:r.ansatte_signert||[], signatur:r.signatur||null,
     godkjent:r.godkjent||false, godkjennerNavn:r.godkjenner_navn||'',
     diagnose:r.diagnose||false, diagnoseAv:r.diagnose_av||'',
@@ -284,7 +295,7 @@ function ordreToDb(o) {
     status:o.status, ordre_status:o.ordreStatus||'ikke_paabegynt',
     kalender_dato:o.kalenderDato||null, kalender_tid:o.kalenderTid,
     vekter:o.vekter, drivstoff:o.drivstoff, utstyr:o.utstyr,
-    bilder_ankomst:o.bilderAnkomst, bilder_levering:o.bilderLevering,
+    bilder_ankomst:o.bilderAnkomst, bilder_levering:o.bilderLevering, bilder_avstand_skader:o.bilderAvstandSkader,
     ansatte_signert:o.ansatteSignert, signatur:o.signatur||null,
     godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn,
     diagnose:o.diagnose||false, diagnose_av:o.diagnoseAv||'',
@@ -641,6 +652,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
     utstyr:{har, skalHa, hengerfeste:'ikke_hengerfeste', hengerfesteMontert:'ikke_montert'},
     bilderAnkomst:[null,null,null,null,null,null],
     bilderLevering:[null,null,null,null,null,null],
+    bilderAvstandSkader:[null,null,null],
     ansatteSignert:[], signatur:null,
     godkjent:false, godkjennerNavn:'',
     diagnose:false, diagnoseAv:'',

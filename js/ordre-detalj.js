@@ -70,6 +70,29 @@ function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
   </div>`;
 }
 
+// Genererer et bilde-kort (Ankomst/Levering/Avstand-skader) - felt og etiketter hentes
+// fra den delte FOTO_SIDER-oppslaget i core.js, slik at opplasting/sletting/rendering
+// alle er enige om hvilket felt på ordren og hvilke bokser som hører til hver side.
+function fotoSeksjonHTML(o, side, tittel) {
+  const { felt, labler } = FOTO_SIDER[side];
+  const bilder = o[felt] || (o[felt] = labler.map(() => null));
+  return `<div class="card">
+    <div class="h">${tittel} (<span id="bildeTeller_${side}_${o.id}">${bilder.filter(Boolean).length}/${labler.length}</span>)</div>
+    <div class="photo-grid">${labler.map((lbl,i)=>`
+      <div class="photo-box" id="foboks_${side}_${i}" onclick="${bilder[i]?`openLightbox('fo_${side}_${i}_src')`:`document.getElementById('fo_${side}_${i}').click()`}">
+        ${bilder[i]
+          ? `<img id="fo_${side}_${i}_src" src="${bilder[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+             <div class="hover-del" onclick="event.stopPropagation()">
+               <button data-viewonly onclick="openLightbox('fo_${side}_${i}_src')" title="Vis fullt bilde">🔍</button>
+               <button onclick="document.getElementById('fo_${side}_${i}').click()" title="Bytt bilde">📷</button>
+               <button onclick="slettFoto('${o.id}','${side}',${i})" title="Slett">🗑</button>
+             </div>`
+          : `<div style="font-size:22px">📷</div><div>${lbl}</div>`}
+      </div>
+      <input type="file" id="fo_${side}_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','${side}',${i})">`).join('')}</div>
+  </div>`;
+}
+
 function buildOrdreDetail() {
   try {
   const o = S.ordrer.find(x=>x.id===activeOrdreId);
@@ -223,37 +246,9 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </select>
       </div>
 
-      <div class="card">
-        <div class="h">Bilder – Ankomst (<span id="bildeTeller_a_${o.id}">${o.bilderAnkomst.filter(Boolean).length}/6</span>)</div>
-        <div class="photo-grid">${['Front','Høyre','Venstre','Bak','Div 1','Div 2'].map((lbl,i)=>`
-          <div class="photo-box" id="foboks_a_${i}" onclick="${o.bilderAnkomst[i]?`openLightbox('fo_a_${i}_src')`:`document.getElementById('fo_a_${i}').click()`}">
-            ${o.bilderAnkomst[i]
-              ? `<img id="fo_a_${i}_src" src="${o.bilderAnkomst[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
-                 <div class="hover-del" onclick="event.stopPropagation()">
-                   <button data-viewonly onclick="openLightbox('fo_a_${i}_src')" title="Vis fullt bilde">🔍</button>
-                   <button onclick="document.getElementById('fo_a_${i}').click()" title="Bytt bilde">📷</button>
-                   <button onclick="slettFoto('${o.id}','a',${i})" title="Slett">🗑</button>
-                 </div>`
-              : `<div style="font-size:22px">📷</div><div>${lbl}</div>`}
-          </div>
-          <input type="file" id="fo_a_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','a',${i})">`).join('')}</div>
-      </div>
-
-      <div class="card">
-        <div class="h">Bilder – Levering (<span id="bildeTeller_l_${o.id}">${o.bilderLevering.filter(Boolean).length}/6</span>)</div>
-        <div class="photo-grid">${['Front','Høyre','Venstre','Bak','Div 1','Div 2'].map((lbl,i)=>`
-          <div class="photo-box" id="foboks_l_${i}" onclick="${o.bilderLevering[i]?`openLightbox('fo_l_${i}_src')`:`document.getElementById('fo_l_${i}').click()`}">
-            ${o.bilderLevering[i]
-              ? `<img id="fo_l_${i}_src" src="${o.bilderLevering[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
-                 <div class="hover-del" onclick="event.stopPropagation()">
-                   <button data-viewonly onclick="openLightbox('fo_l_${i}_src')" title="Vis fullt bilde">🔍</button>
-                   <button onclick="document.getElementById('fo_l_${i}').click()" title="Bytt bilde">📷</button>
-                   <button onclick="slettFoto('${o.id}','l',${i})" title="Slett">🗑</button>
-                 </div>`
-              : `<div style="font-size:22px">📷</div><div>${lbl}</div>`}
-          </div>
-          <input type="file" id="fo_l_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','l',${i})">`).join('')}</div>
-      </div>
+      ${fotoSeksjonHTML(o, 'a', 'Bilder – Ankomst')}
+      ${fotoSeksjonHTML(o, 's', 'Bilder – Avstand/skader')}
+      ${fotoSeksjonHTML(o, 'l', 'Bilder – Levering')}
 
       <div class="card" id="ordretimerKort_${o.id}">
         ${ordreTimerKortHTML(o)}
@@ -401,6 +396,8 @@ function tvangsflyt(o) {
     {lbl:'Diagnose utført',   ok: !!o.diagnose},
     {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
     {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
+    // Kun det første bildet (Avstand) er tvangskrevd - de to skade-bildene er valgfrie.
+    {lbl:'Avstand-bilde',     ok: !!(o.bilderAvstandSkader && o.bilderAvstandSkader[0])},
     {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
     {lbl:'Ombygging valgt',   ok: ombyggingValgt}
