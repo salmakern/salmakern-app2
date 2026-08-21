@@ -315,7 +315,7 @@ function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,
     forhandler:r.forhandler||'', kontaktperson:r.kontaktperson||'',
     serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:!!r.papirer, dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
-    merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
+    merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', timeBekreftetSted:r.time_bekreftet_sted||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToMote(r) {
   return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet, deltakerIder:r.deltaker_ider||[] };

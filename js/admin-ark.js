@@ -62,7 +62,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
       if (!rad.chassisNr) return;
       ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
         forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-        serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
+        serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
       S.adminArk = [...(S.adminArk||[]), ark];
     } else {
       ark.rekkefolge = idx;
@@ -72,7 +72,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
       forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
       serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
       fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
-      time_bekreftet_tid: ark.timeBekreftetTid||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
+      time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
   });
   // Oppdaterer selve tabellvisningen slik at Ventende timer-kolonnen faktisk viser
   // den posisjonsbaserte verdien med en gang, ikke verdien som fulgte bilen(e).
