@@ -772,7 +772,11 @@ function renderAdminArk() {
     }
 
     if (!ADMIN_ARK_EDITERBARE_FELT.includes(felt)) return;
-    if (felt !== 'chassisNr' && felt !== 'forhandler' && felt !== 'kontaktperson' && !rad.chassisNr) {
+    // Ventende timer skal kunne fylles inn på en fri rad UTEN at bilen/chassis-nummeret
+    // er kjent ennå - det er jo poenget med en "ventende" (uavklart) time. De andre
+    // feltene krever fortsatt chassis-nr (eller er selve identifikasjonsfeltene).
+    const KREVER_IKKE_CHASSIS = new Set(['chassisNr', 'forhandler', 'kontaktperson', 'ventendeTimer']);
+    if (!KREVER_IKKE_CHASSIS.has(felt) && !rad.chassisNr) {
       visToast('Denne raden mangler chassisnummer og kan ikke lagres');
       cell.restoreOldValue();
       return;
