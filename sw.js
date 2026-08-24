@@ -1,9 +1,12 @@
+// v9 - fikser "Response body is already used"-feil i fetch-handleren under (res.clone()
+// ble kalt inni en asynkron .then() i stedet for synkront med en gang - kunne feile hvis
+// svar-kroppen allerede var i bruk et annet sted når det asynkrone kallet endelig kjørte)
 // v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
 // Appen kjører under /salmakern-app2/ på GitHub Pages - faste stier, ikke relative
 // (Safari løste relative manifest-stier feil, så vi tar ingen sjanser her heller).
-const CACHE = 'salmakern-v8';
+const CACHE = 'salmakern-v9';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/salmakern-app2/manifest.json',
@@ -58,7 +61,12 @@ self.addEventListener('fetch', e => {
     fetch(e.request)
       .then(res => {
         if (res && res.status === 200 && e.request.method === 'GET') {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+          // res.clone() MÅ kalles synkront her, med en gang - kalles den inni den asynkrone
+          // caches.open()-kjeden i stedet (som den gjorde før), kan svar-kroppen allerede
+          // være i bruk et annet sted (f.eks. av selve siden som leser den samme responsen)
+          // når klon-kallet endelig kjører, og feiler da med "Response body is already used".
+          const kopi = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, kopi));
         }
         return res;
       })
