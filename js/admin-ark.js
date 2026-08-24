@@ -751,51 +751,8 @@ function renderAdminArk() {
     movableRows: kanRedigere,
     clipboard: true,
     clipboardPasteAction: 'update',
-    // Excel-lik markering: klikk-og-dra over flere celler (også på tvers av kolonner/
-    // rader) for å markere et område, kopier/lim inn med Ctrl+C/Ctrl+V, piltaster for å
-    // flytte aktiv celle, Delete for å tømme markerte celler.
-    selectableRange: kanRedigere,
-    selectableRangeColumns: true,
-    // selectableRangeRows er bevisst AV: den lar Tabulator behandle et klikk på '#'-
-    // kolonnen (helt til venstre) som "velg hele raden", som setter områdets sluttpunkt
-    // rett til siste kolonne FØR rangeAdded/rangeChanged rekker å fyre - vakten under fikk
-    // dermed aldri sjanse til å krympe den unna Time bekreftet/Ventende timer (bekreftet
-    // direkte i konsollen). '#'-kolonnen har uansett sin egen, mer fleksible fler-rad-
-    // markering fra før (radMerking), så denne funksjonen er ren duplisering å miste.
-    selectableRangeRows: false,
-    selectableRangeClearCells: true,
     placeholder: 'Ingen ordre for ' + adminArkAar
   });
-  // '#', 'Time bekreftet' og 'Ventende timer' har sin egen hånd-bygde klikk-og-dra-
-  // markering (radMerking/tbFlytting/vtMerking - se kolonnedefinisjonene over), bygget
-  // og finpusset lenge FØR Tabulators innebygde område-markering ble skrudd på her.
-  // Tabulators SelectRange-modul lytter på de samme rå mousedown/mousemove-hendelsene
-  // uansett hvilken kolonne det gjelder, og har ingen egen måte å ekskludere enkelt-
-  // kolonner på - så uten dette ville de to systemene startet HVER SIN markering
-  // samtidig i disse tre kolonnene. Løsningen: så snart et område beveger seg inn i en
-  // av de beskyttede kolonnene, krympes det umiddelbart tilbake til kolonnen rett ved
-  // siden av, slik at Tabulators markering aldri får bli synlig/aktiv der.
-  const BESKYTTEDE_KOLONNER = ['#', 'Time bekreftet', 'Ventende timer'];
-  function adminArkKrympOmradeVedBehov(range) {
-    const kolonner = range.getColumns();
-    const idx = kolonner.findIndex(c => BESKYTTEDE_KOLONNER.includes(c.getDefinition().title));
-    if (idx === -1) return; // ingen beskyttet kolonne i området - ingenting å gjøre
-    // Krymper området til kolonnen rett til venstre for den første beskyttede kolonnen som
-    // er berørt. Området starter i seg selv i en beskyttet kolonne (idx===0, f.eks. et
-    // enkeltklikk rett på Ventende timer) - da er det ingen "kolonnen ved siden av" å falle
-    // tilbake på innenfor selve området, så vi bruker Chassis.nr (alltid til stede) i stedet.
-    const rows = range.getRows();
-    const trygtField = idx > 0 ? kolonner[idx - 1].getField() : 'chassisNr';
-    const startCelle = rows[0]?.getCell(trygtField);
-    const sluttCelle = rows[rows.length - 1]?.getCell(trygtField);
-    if (startCelle && sluttCelle) range.setBounds(startCelle, sluttCelle);
-  }
-  // Tabulator fyrer "rangeAdded" (ikke "rangeChanged") for selve FØRSTE cellen et område
-  // dekker (f.eks. i det man trykker ned museknappen) - "rangeChanged" fyrer først fra og
-  // med NESTE oppdatering (når man drar videre). Uten begge ville et raskt dra-forbi rett
-  // over en beskyttet kolonne i én bevegelse kunne unngå vakten helt.
-  adminArkTable.on('rangeAdded', adminArkKrympOmradeVedBehov);
-  adminArkTable.on('rangeChanged', adminArkKrympOmradeVedBehov);
 
   // Tabulator bygger radene asynkront - et snapshot tatt rett etter new Tabulator(...)
   // kan derfor bli tomt. tableBuilt garanterer at radene faktisk finnes når vi leser dem.
@@ -827,11 +784,10 @@ function renderAdminArk() {
     // Forhandler/Kontaktperson/Chassis.nr er kun redigerbare for LØSE rader (kunLose i
     // kolonnedefinisjonen) - for en rad som kommer fra en ekte ordre er disse hentet FRA
     // ordren og skal ikke kunne endres herfra. `editable`-innstillingen hindrer vanlig
-    // klikk-og-skriv-redigering, men verken celleområde-utfylling (dra ned for å kopiere
-    // en verdi til flere celler), lim inn (Ctrl+V) eller Delete-tømming av et markert
-    // område går via `editable` i det hele tatt - Tabulator kaller cell.setValue()
-    // direkte uansett, som fortsatt trigger cellEdited og ville lagret endringen. Derfor
-    // en egen sjekk her, ikke bare i kolonnedefinisjonen.
+    // klikk-og-skriv-redigering, men lim inn (Ctrl+V, clipboardPasteAction:'update' lenger
+    // opp) går via `editable` i det hele tatt - Tabulator kaller cell.setValue() direkte
+    // uansett, som fortsatt trigger cellEdited og ville lagret endringen. Derfor en egen
+    // sjekk her, ikke bare i kolonnedefinisjonen.
     if (['forhandler', 'kontaktperson', 'chassisNr'].includes(felt) && rad._erOrdre) {
       cell.restoreOldValue();
       return;
