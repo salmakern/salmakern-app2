@@ -95,7 +95,15 @@ nettleseren, bare i Node. De fleste funksjoner er trygge å laste slik; noen (so
 `test/sikkerhet-og-matching.test.js` for eksempel).
 
 Testdekningen er bevisst smal: de stedene penger og riktighet er involvert (lønn/overtid,
-XSS-escaping, chassis-matching), ikke et forsøk på å dekke hele appen.
+XSS-escaping, chassis-matching, offline-køen for mislykkede lagringer), ikke et forsøk på å
+dekke hele appen.
+
+**Node `vm`-særtrekk å huske på**: `let`/`const` deklarert på toppnivå i en fil som kjøres med
+`vm.runInContext()` blir IKKE synlige som egenskaper på sandbox-objektet etterpå (`S`, `db`,
+`me`, `offlineKo` er alle sånn i `core.js`) - kun `function`-deklarasjoner (og `var`) blir det.
+Løsningen (brukt i `test/offline-ko.test.js`): kjør en liten ekstra `vm.runInContext(...)` i
+SAMME context rett etter kildefilen, med hjelpe-funksjoner som `function _getS(){return S;}` -
+de deler toppnivå-scope med første kjøring og kan derfor lese/skrive de "usynlige" bindingene.
 
 ## Kjente begrensninger i dette utviklingsmiljøet
 

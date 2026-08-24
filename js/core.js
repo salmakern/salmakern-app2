@@ -505,6 +505,7 @@ function subscribeRealtime() {
     .subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {
         realtimeReconnectForsok = 0;
+        prosesserOfflineKo(); // sanntidskanalen kom opp igjen - sterkt signal om at nettet er tilbake
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn('Sanntid frakoblet:', status, err);
         if (!realtimeReconnectTimer && db && me) {
@@ -730,6 +731,54 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa)
   };
 }
 
+// ════════════════════════════════════════════════════
+// OFFLINE-KØ - mislykkede ordre-lagringer (f.eks. dårlig dekning på
+// verkstedet) prøves automatisk igjen i stedet for å bare vise en toast og
+// stole på at noen husker å prøve på nytt selv. save() skriver alltid hele
+// ordrens nåværende tilstand (ikke en diff), så et nytt forsøk er trygt å
+// gjøre om igjen uansett hvor mange andre endringer som har skjedd i
+// mellomtiden - det er alltid SISTE tilstand som til slutt blir lagret.
+// ════════════════════════════════════════════════════
+const OFFLINE_KO_STORE = 'salmakern_offline_ko';
+let offlineKo = new Set();
+try { offlineKo = new Set(JSON.parse(localStorage.getItem(OFFLINE_KO_STORE) || '[]')); } catch(e) {}
+
+function lagreOfflineKo() {
+  try { localStorage.setItem(OFFLINE_KO_STORE, JSON.stringify([...offlineKo])); } catch(e) {}
+}
+function oppdaterLagreStatusBadge() {
+  const el = document.getElementById('lagreStatusBadge');
+  if (!el) return;
+  if (offlineKo.size > 0) {
+    el.textContent = `⏳ ${offlineKo.size} endring${offlineKo.size===1?'':'er'} venter`;
+    el.className = 'small';
+    el.style.color = '#facc15';
+  } else {
+    el.textContent = '✔ Lagret';
+    el.className = 'ok-text small';
+    el.style.color = '';
+  }
+}
+let offlineKoKjorer = false;
+async function prosesserOfflineKo() {
+  if (!db || offlineKo.size === 0 || offlineKoKjorer) return;
+  offlineKoKjorer = true;
+  for (const id of [...offlineKo]) {
+    // Ordren kan ha blitt slettet lokalt (av denne eller en annen enhet) mens den lå i
+    // køen - save() returnerer da "suksess" uten å røre køen (ingenting å lagre lenger),
+    // som ellers ville latt id-en bli en spøkelses-oppføring som aldri forsvinner.
+    if (!S.ordrer.find(o => o.id === id)) { offlineKo.delete(id); lagreOfflineKo(); oppdaterLagreStatusBadge(); continue; }
+    const feil = await save(id);
+    if (feil) break; // fortsatt offline/feil - vent til neste forsøk i stedet for å hamre løs
+  }
+  offlineKoKjorer = false;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', prosesserOfflineKo);
+  // Sikkerhetsnett i tilfelle 'online'-eventet ikke trigger pålitelig på alle enheter
+  setInterval(prosesserOfflineKo, 30000);
+}
+
 // Returnerer et Promise som løses med feilmeldingen (eller null ved suksess) -
 // de aller fleste stedene bruker save() uten å vente på det (som før), men
 // steder der det er kritisk å faktisk vite om lagringen lyktes (f.eks.
@@ -753,7 +802,17 @@ function save(ordreId) {
   delete payload.godkjent; delete payload.godkjenner_navn;
   return db.from('ordrer').upsert(payload)
     .then(r=>{
-      if (r.error) { console.error('Lagringsfeil:', r.error.message); visToast('Lagringsfeil: ' + r.error.message); return r.error.message; }
+      if (r.error) {
+        console.error('Lagringsfeil:', r.error.message);
+        const nyIKo = !offlineKo.has(ordreId);
+        offlineKo.add(ordreId); lagreOfflineKo(); oppdaterLagreStatusBadge();
+        // Kun toast første gang den havner i køen - unngår gjentatte toaster
+        // hvis flere felt endres mens man fortsatt er offline.
+        if (nyIKo) visToast('Ingen kontakt med serveren - prøver igjen automatisk');
+        return r.error.message;
+      }
+      if (offlineKo.has(ordreId)) { offlineKo.delete(ordreId); lagreOfflineKo(); }
+      oppdaterLagreStatusBadge();
       return null;
     });
 }
@@ -806,6 +865,7 @@ async function tryLogin() {
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appScreen').style.display='block';
     document.getElementById('headerUser').textContent = me.navn + ' · ' + me.rolle;
+    oppdaterLagreStatusBadge();
     // Vis/skjul Timer-fanen basert på tilgang
     const timerTab = document.getElementById('timerTab');
     if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
@@ -820,6 +880,7 @@ async function tryLogin() {
       await loadFromSupabase();
       subscribeRealtime();
       renderAll();
+      prosesserOfflineKo(); // send inn evt. lagringer som ble liggende i køen forrige økt
     } catch(e) {
       console.warn('Datahenting etter innlogging feilet:', e);
       visToast('Klarte ikke å hente data. Trykk 🔄 øverst for å prøve igjen.');
