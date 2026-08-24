@@ -770,7 +770,7 @@ function renderAdminArk() {
   // av de beskyttede kolonnene, krympes det umiddelbart tilbake til kolonnen rett ved
   // siden av, slik at Tabulators markering aldri får bli synlig/aktiv der.
   const BESKYTTEDE_KOLONNER = ['#', 'Time bekreftet', 'Ventende timer'];
-  adminArkTable.on('rangeChanged', range => {
+  function adminArkKrympOmradeVedBehov(range) {
     const kolonner = range.getColumns();
     const idx = kolonner.findIndex(c => BESKYTTEDE_KOLONNER.includes(c.getDefinition().title));
     if (idx === -1) return; // ingen beskyttet kolonne i området - ingenting å gjøre
@@ -783,7 +783,13 @@ function renderAdminArk() {
     const startCelle = rows[0]?.getCell(trygtField);
     const sluttCelle = rows[rows.length - 1]?.getCell(trygtField);
     if (startCelle && sluttCelle) range.setBounds(startCelle, sluttCelle);
-  });
+  }
+  // Tabulator fyrer "rangeAdded" (ikke "rangeChanged") for selve FØRSTE cellen et område
+  // dekker (f.eks. i det man trykker ned museknappen) - "rangeChanged" fyrer først fra og
+  // med NESTE oppdatering (når man drar videre). Uten begge ville et raskt dra-forbi rett
+  // over en beskyttet kolonne i én bevegelse kunne unngå vakten helt.
+  adminArkTable.on('rangeAdded', adminArkKrympOmradeVedBehov);
+  adminArkTable.on('rangeChanged', adminArkKrympOmradeVedBehov);
 
   // Tabulator bygger radene asynkront - et snapshot tatt rett etter new Tabulator(...)
   // kan derfor bli tomt. tableBuilt garanterer at radene faktisk finnes når vi leser dem.
