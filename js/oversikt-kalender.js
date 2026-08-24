@@ -282,6 +282,7 @@ async function endreStatus(id, nyStatus) {
   const forrigeArkivStatus = o.status;
   const forrigeEndringer = [...o.endringer];
   const forrigeDatoKlarHenting = o.datoKlarHenting;
+  const forrigeAnkomstdato = o.ankomstdato;
   o.ordreStatus = nyStatus;
   // Ordren arkiveres automatisk når den er hentet - MEN kun hvis den allerede er
   // ferdig godkjent (tvangsflyt fullført og godkjenner har lukket den via signatur-
@@ -294,6 +295,13 @@ async function endreStatus(id, nyStatus) {
   // statusen - satt her (ikke bare regnet ut fra endringer-loggen) slik at den er
   // en fast, stabil verdi uansett hvor mange ganger statusen evt. flipper frem og tilbake.
   if (nyStatus === 'klar_henting') o.datoKlarHenting = new Date().toISOString().split('T')[0];
+  // En bil "På vei" er ikke fysisk ankommet ennå, så den skal ikke ha en ankomstdato -
+  // og motsatt: bilen regnes som ankommet først når den går til "Ikke påbegynt", så
+  // ankomstdato settes automatisk da (kun hvis den ikke allerede har en - overskriver
+  // ikke en dato som evt. er satt/rettet manuelt fra før). Det manuelle datofeltet på
+  // ordren fungerer som før uansett, så en feil kan alltid rettes opp for hånd etterpå.
+  if (nyStatus === 'paa_vei') o.ankomstdato = '';
+  else if (nyStatus === 'ikke_paabegynt' && !o.ankomstdato) o.ankomstdato = new Date().toISOString().split('T')[0];
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
@@ -304,7 +312,7 @@ async function endreStatus(id, nyStatus) {
   if (db) {
     // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
     // ikke herfra - ellers sendes varselet dobbelt.
-    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, endringer:o.endringer, dato_klar_henting:o.datoKlarHenting||null}).eq('id', id);
+    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, endringer:o.endringer, dato_klar_henting:o.datoKlarHenting||null, ankomstdato:o.ankomstdato||null}).eq('id', id);
     if (error) feil = error.message;
   }
   if (feil) {
@@ -312,6 +320,7 @@ async function endreStatus(id, nyStatus) {
     o.status = forrigeArkivStatus;
     o.endringer = forrigeEndringer;
     o.datoKlarHenting = forrigeDatoKlarHenting;
+    o.ankomstdato = forrigeAnkomstdato;
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }
