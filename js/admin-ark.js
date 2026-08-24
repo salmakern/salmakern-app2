@@ -824,6 +824,19 @@ function renderAdminArk() {
     const felt = cell.getField();
     const rad = cell.getRow().getData();
 
+    // Forhandler/Kontaktperson/Chassis.nr er kun redigerbare for LØSE rader (kunLose i
+    // kolonnedefinisjonen) - for en rad som kommer fra en ekte ordre er disse hentet FRA
+    // ordren og skal ikke kunne endres herfra. `editable`-innstillingen hindrer vanlig
+    // klikk-og-skriv-redigering, men verken celleområde-utfylling (dra ned for å kopiere
+    // en verdi til flere celler), lim inn (Ctrl+V) eller Delete-tømming av et markert
+    // område går via `editable` i det hele tatt - Tabulator kaller cell.setValue()
+    // direkte uansett, som fortsatt trigger cellEdited og ville lagret endringen. Derfor
+    // en egen sjekk her, ikke bare i kolonnedefinisjonen.
+    if (['forhandler', 'kontaktperson', 'chassisNr'].includes(felt) && rad._erOrdre) {
+      cell.restoreOldValue();
+      return;
+    }
+
     if (felt === 'flateVis') {
       if (rad._flateErEkte) { cell.restoreOldValue(); return; }
       if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
