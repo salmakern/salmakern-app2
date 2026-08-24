@@ -6,8 +6,36 @@ const SUPA_KEY     = 'sb_publishable_46JAdcBUbQYS8NbDwP-MXg_zKWA8Ojz';
 const STORE        = 'salmakern_v2';
 const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mqyAfXkQUbeLhPzKiv6y6CpfmTeYJDc';
 
+// Feilovervåking (Sentry) - av så lenge denne er tom. For å skru på: opprett gratis konto
+// på sentry.io → nytt prosjekt (type "Browser") → lim DSN-en (ser ut som
+// "https://xxxx@xxxx.ingest.sentry.io/xxxx") inn her. Se CLAUDE.md "Feilovervåking".
+const SENTRY_DSN = '';
+
 // Sporer bilder som er lastet opp i minnet men ikke nødvendigvis bekreftet i Supabase ennå
 const inFlightFotos = {};
+
+// Laster Sentry sitt CDN-bundle KUN hvis en DSN er satt over - ellers null ekstra
+// nettverkskall/kostnad for de som ikke har konfigurert det ennå. Fanger både JS-feil og
+// avviste Promises (f.eks. en mislykket Supabase-lagring ingen fikk med seg fordi
+// feilen bare gikk til console.error, usynlig med mindre noen hadde devtools åpne).
+function initFeilovervaking() {
+  if (!SENTRY_DSN) return;
+  const script = document.createElement('script');
+  script.src = 'https://browser.sentry-cdn.com/8.45.0/bundle.min.js';
+  script.crossOrigin = 'anonymous';
+  script.onload = () => {
+    if (!window.Sentry) return;
+    window.Sentry.init({
+      dsn: SENTRY_DSN,
+      environment: location.hostname === 'localhost' ? 'utvikling' : 'produksjon',
+      // Ikke send med noe fra selve appens tilstand (S) automatisk - unngår at
+      // kunde-/ansattdata utilsiktet havner i feilrapporter.
+      beforeSend(event) { return event; }
+    });
+  };
+  document.head.appendChild(script);
+}
+initFeilovervaking();
 
 // Gjør om 'YYYY-MM-DD' til 'DD.MM.YYYY' for visning. Lagret/redigert verdi er fortsatt ISO.
 function fmtDatoKort(iso) {

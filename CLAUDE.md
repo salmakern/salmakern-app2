@@ -54,6 +54,20 @@ appen (Admin-ark, ordre, flåte).
 lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min
 lockout per anonym Auth-sesjon, se `20260824000000_pin_rate_limiting_og_search_path.sql`).
 
+## Feilovervåking
+
+Sentry-integrasjonen (`initFeilovervaking()` i `core.js`) er ferdig koblet opp, men står av
+til en DSN er satt - null ekstra nettverkskall/kostnad frem til da. For å skru på:
+
+1. Opprett en gratis konto på [sentry.io](https://sentry.io)
+2. Nytt prosjekt → velg plattform "Browser" (rent JavaScript, ikke React/Vue/etc.)
+3. Kopier DSN-en (ser ut som `https://xxxx@xxxx.ingest.sentry.io/xxxx`)
+4. Lim den inn som verdien til `SENTRY_DSN` øverst i `js/core.js`
+
+Etter det fanges JS-feil og avviste Promises automatisk og dukker opp i Sentry sitt
+dashbord - inkludert mislykkede lagringer som i dag bare logges til `console.error` og er
+usynlige med mindre noen tilfeldigvis har utviklerverktøy åpne.
+
 ## Database
 
 Se [`supabase/README.md`](supabase/README.md) for migrasjonskonvensjon, nyttige
