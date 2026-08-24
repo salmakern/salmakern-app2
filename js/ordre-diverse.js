@@ -294,11 +294,13 @@ let godkjCtx = null, godkjDrawing = false, godkjLastX = 0, godkjLastY = 0;
 async function bekreftGodkjenn() {
   const pin=document.getElementById('godkjPIN').value;
   let godkjenner = null;
+  let forMangeForsok = false;
   if (db) {
     const { data, error } = await db.rpc('login_med_pin', { kandidat_pin: pin });
-    if (!error && data && data.length && (data[0].rolle==='godkjenner'||data[0].rolle==='admin')) godkjenner = data[0];
+    if (error?.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
+    else if (!error && data && data.length && (data[0].rolle==='godkjenner'||data[0].rolle==='admin')) godkjenner = data[0];
   }
-  if (!godkjenner){document.getElementById('godkjErr').textContent='Feil PIN eller ikke godkjenner';return;}
+  if (!godkjenner){document.getElementById('godkjErr').textContent = forMangeForsok ? 'For mange feilforsøk – vent noen minutter og prøv igjen' : 'Feil PIN eller ikke godkjenner';return;}
   godkjennGodkjenner = godkjenner;
   document.getElementById('godkjPIN').value='';
   document.getElementById('godkjErr').textContent='';

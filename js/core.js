@@ -754,10 +754,14 @@ async function tryLogin() {
   // Funksjonen kobler i tillegg vår anonyme Auth-sesjon til ansatt-raden
   // (via auth.uid()), slik at RLS og Realtime vet hvem som spør etterpå.
   let user = null;
+  let forMangeForsok = false;
   if (db) {
     try {
       const { data, error } = await db.rpc('logg_inn_med_pin', { kandidat_pin: pinBuf });
-      if (error) console.warn('PIN-sjekk feilet:', error.message);
+      if (error) {
+        console.warn('PIN-sjekk feilet:', error.message);
+        if (error.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
+      }
       else if (data && data.length) user = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
     } catch(e) { console.warn('PIN-sjekk feilet:', e); }
   } else {
@@ -794,7 +798,9 @@ async function tryLogin() {
     }
     document.getElementById('loadingOverlay').style.display = 'none';
   } else {
-    document.getElementById('pinErr').textContent = 'Feil PIN – prøv igjen';
+    document.getElementById('pinErr').textContent = forMangeForsok
+      ? 'For mange feilforsøk – vent noen minutter og prøv igjen'
+      : 'Feil PIN – prøv igjen';
     pinBuf = '';
     refreshPinDots();
   }
