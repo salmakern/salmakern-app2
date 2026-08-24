@@ -1,0 +1,99 @@
+# Salmakern-appen
+
+Internt PWA-verktøy for Telemark Salmakerverksted: ordrehåndtering, timeregistrering/lønn,
+lager, admin-ark og mer. Ren HTML/CSS/JS - ingen byggesteg, ingen rammeverk. Backend er
+Supabase (Postgres + Auth + Storage + Realtime + Edge Functions). Deployes til GitHub Pages.
+
+## Arkitektur
+
+`salmakern.html` laster 11 script-tagger fra `js/` i denne rekkefølgen:
+
+```
+core.js → oversikt-kalender.js → ordre-detalj.js → ordre-diverse.js → timer.js →
+arkiv-mer.js → ansatte-utstyr.js → eksport-varsler.js → flate.js → lager.js → admin-ark.js
+```
+
+**Alt deler globalt scope.** Det finnes ingen moduler/import-export - `S` (hele appens
+tilstand), `me` (innlogget ansatt), `db` (Supabase-klient), og delte hjelpefunksjoner som
+`esc()`, `ordreLabel()`, `samsvarerChassis()`, `visToast()` er globale, definert i én fil og
+brukt fritt i alle andre. Rekkefølgen over spiller mindre rolle enn den ser ut som, siden
+nesten alt kalles fra event-handlere/render-kall som først kjører etter at alle scriptene er
+lastet - men vær obs på dette hvis du legger til kode som kjører på toppnivå (utenfor en
+funksjon), som f.eks. de to lytterne i admin-ark.js linje 21 og 326.
+
+## Etablerte mønstre (les dette før du endrer noe)
+
+**Escaping**: ALL fritekst en ansatt skriver inn (kundenavn, merknader, meldinger,
+kategorinavn, osv.) skal gjennom `esc()` (definert i `ordre-detalj.js`) før den settes i
+`innerHTML`. Verdier som også brukes inni en `onclick="funksjon('...')"`-attributt trenger
+BEGGE deler: `esc(verdi).replace(/'/g,"\\'")` - én for HTML-attributt-konteksten, én for
+JS-streng-konteksten inni den. Se `js/lager.js` (`visKategoriDetalj`) for eksempel.
+
+**Batch-skriving til Supabase**: ALDRI ett databasekall per rad i en løkke - det har vist
+seg upålitelig i praksis (noen kall forsvinner stille ved mange samtidige enkeltkall). Samle
+endringer i en liste/objekt under løkken, send ÉN `upsert`/`insert`/`delete(.in())` etter.
+Se `flyttVare()` i `lager.js` for det opprinnelige mønsteret, og `lagerBatchNy()`/
+`lagerBatchFlush()` for en gjenbrukbar variant.
+
+**Sanntid (Realtime) og egen-echo**: `subscribeRealtime()` i `core.js` abonnerer på
+`postgres_changes` for alle tabeller. Uten unntak ville hver lokal lagring trigge en
+UPDATE-event tilbake til seg selv med en gang, som re-rendrer hele siden ("føles som en
+reload"). Mønsteret: rett før et lagre-kall, marker raden i et ignorer-Set
+(`ignorerRealtimeFor`/`ignorerRealtimeAdminArk`/etc., eller et enkelt boolsk flagg for
+enkeltrad-tabeller som `innstillinger`), fjern markeringen igjen etter 10 sek via
+`setTimeout`. Realtime-handleren sjekker dette settet/flagget og hopper over UPDATE-er den
+selv forårsaket. **Ny tabell som trenger sanntid → husk denne markeringen**, ellers er du
+tilbake til "siden refresher seg selv"-bugen.
+
+**Chassis-sammenligning**: bruk alltid `samsvarerChassis(a, b)` (case-uavhengig + trim), ikke
+`===` direkte - chassisnummer kan skrives inn med ulik store/små bokstaver flere steder i
+appen (Admin-ark, ordre, flåte).
+
+**PIN-innlogging**: ingen passord, kun 4-sifret PIN sjekket server-side via
+`logg_inn_med_pin`/`login_med_pin` (Postgres-funksjoner, se `supabase/migrations/`). PIN-er
+lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min
+lockout per anonym Auth-sesjon, se `20260824000000_pin_rate_limiting_og_search_path.sql`).
+
+## Database
+
+Se [`supabase/README.md`](supabase/README.md) for migrasjonskonvensjon, nyttige
+`supabase`-CLI-kommandoer (advisors, migration list/repair, backups), og backup-status.
+
+Kort versjon: nye skjemaendringer → ny fil i `supabase/migrations/`, kjør med
+`npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file <fil>` (ikke
+`db push` - krever Docker, som ikke er tilgjengelig i dette utviklingsmiljøet).
+
+## Testing
+
+```bash
+npm install        # én gang
+npm run check       # node --check på alle js/*.js - fanger syntaksfeil
+npm test            # Vitest - se test/
+npm run lint         # ESLint (bevisst begrenset - se eslint.config.js)
+```
+
+CI (`.github/workflows/ci.yml`) kjører alle tre på hver push/PR mot `main`.
+
+Testene i `test/` laster enkeltfunksjoner fra `js/*.js` inn i en isolert Node `vm`-context
+(`test/helpers/load-script.js`) - samme grunnprinsipp som manuell iframe-injeksjonstesting i
+nettleseren, bare i Node. De fleste funksjoner er trygge å laste slik; noen (som
+`admin-ark.js`) har kode på toppnivå som trenger minimale `window`/`document`-stubber (se
+`test/sikkerhet-og-matching.test.js` for eksempel).
+
+Testdekningen er bevisst smal: de stedene penger og riktighet er involvert (lønn/overtid,
+XSS-escaping, chassis-matching), ikke et forsøk på å dekke hele appen.
+
+## Kjente begrensninger i dette utviklingsmiljøet
+
+- Ingen Docker → `supabase db pull`/`db dump`/`db push` fungerer ikke. Bruk
+  `supabase db query --file` i stedet (se `supabase/README.md`).
+- `window.open()` returnerer alltid `null` i det AI-agent-styrte nettleserverktøyet som er
+  brukt til testing her, selv ved et ekte simulert klikk - ikke en reell bug, bare en
+  begrensning i selve testverktøyet (popup-blokkering). PDF-utskrift (`genPDF` i
+  `eksport-varsler.js`) må derfor bekreftes manuelt av en ekte bruker i en ekte nettleser.
+- Samme verktøy har vist seg å cache `<script src>`-lastede JS-filer aggressivt på tvers av
+  "ferske" faner selv etter Service Worker- og CacheStorage-tømming - `fetch()` med
+  `cache:'no-store'` og en cache-buster-query fungerer pålitelig for å hente fersk kildekode
+  til inspeksjon, men å faktisk kjøre den ferske versjonen i en levende side har vært upålitelig.
+  Stol på isolerte Node-tester (`npm test`) for logikkverifisering fremfor å jage denne
+  cachen videre.
