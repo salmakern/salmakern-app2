@@ -426,6 +426,12 @@ function sfOmbygging(id, felt, val) {
 // ════════════════════════════════════════════════════
 // SAVE HELPERS
 // ════════════════════════════════════════════════════
+/**
+ * HTML-escaper &, < og " - bruk på ALL fritekst en ansatt har skrevet inn
+ * før den settes i innerHTML (se CLAUDE.md "Escaping").
+ * @param {string | null | undefined} s
+ * @returns {string}
+ */
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 // Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
 // regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.

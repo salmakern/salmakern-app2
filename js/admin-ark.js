@@ -7,6 +7,11 @@ let adminArkTable = null;
 // Chassis-nummer skal matche uansett store/små bokstaver - en admin_ark-rad skrevet inn
 // som "test123" må fortsatt finne/kobles til en ordre lagret som "TEST123". Ren "==="
 // sammenligning brøt sammen for slikt (Time bekreftet synket da aldri til ordren/kalenderen).
+/**
+ * @param {string | null | undefined} a
+ * @param {string | null | undefined} b
+ * @returns {boolean}
+ */
 function samsvarerChassis(a, b) {
   return !!a && !!b && String(a).trim().toUpperCase() === String(b).trim().toUpperCase();
 }

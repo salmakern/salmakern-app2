@@ -1,10 +1,22 @@
 // ════════════════════════════════════════════════════
 // TIMER (LØNN)
 // ════════════════════════════════════════════════════
+// JSDoc-typer på de lønnskritiske beregningsfunksjonene under (se CLAUDE.md
+// "Typesjekking") - gir hover-dokumentasjon i editoren. Prøvde `@ts-check`
+// for hele filen også, men resten av filen er tung på
+// `document.getElementById(id).value/.disabled`, som TypeScript krever en
+// eksplisitt type-cast for per kall (HTMLElement har ikke .value/.disabled) -
+// det er en helt annen og mye større jobb enn å typedokumentere disse fire
+// rene funksjonene, så det er bevisst latt være for nå.
+
 // Delt pauseregel for både automatisk klokke og manuell registrering: 30 min
 // lunsjpause trekkes fra kun ved 8+ timer (480 min), aldri et fast fratrekk
 // uansett vaktlengde. Egen funksjon nettopp fordi denne regelen tidligere fantes
 // to steder og kom ut av sync (manuell registrering trakk alltid fra 30 min).
+/**
+ * @param {number} raaMinutter
+ * @returns {{ pause: number, netto: number }}
+ */
 function beregnNettoMinutter(raaMinutter) {
   const pause = raaMinutter >= 480 ? 30 : 0;
   return { pause, netto: Math.max(0, raaMinutter - pause) };
@@ -12,6 +24,11 @@ function beregnNettoMinutter(raaMinutter) {
 
 // "kl 07:30"-"kl 15:30"-tekst → antall minutter etter samme pauseregel som
 // beregnNettoMinutter (brukt av manuell timeregistrering).
+/**
+ * @param {string} start "TT:MM"
+ * @param {string} stopp "TT:MM"
+ * @returns {{ raatid: number, pause: number, mins: number }}
+ */
 function beregnManuellMinutter(start, stopp) {
   const [sh,sm]=start.split(':').map(Number);
   const [eh,em]=stopp.split(':').map(Number);
@@ -273,12 +290,21 @@ function renderTimerHistorikk() {
 
 let timerMaanedOffset=0; // 0=nåværende måned, -1=forrige, osv
 
+/**
+ * @param {string} datoStr "ÅÅÅÅ-MM-DD"
+ * @returns {boolean}
+ */
 function erHelg(datoStr) {
   const d = new Date(datoStr);
   const dag = d.getDay(); // 0=søn, 6=lør
   return dag === 0 || dag === 6;
 }
 
+/**
+ * @param {number} mins
+ * @param {string} datoStr "ÅÅÅÅ-MM-DD"
+ * @returns {{ normal: number, ot50: number, ot100: number }}
+ */
 function beregnOvertid(mins, datoStr) {
   if (erHelg(datoStr)) {
     return {normal: 0, ot50: 0, ot100: mins};
