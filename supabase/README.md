@@ -52,3 +52,10 @@ altså gjenopprette til begynnelsen av en gitt dag, men ikke til et vilkårlig
 tidspunkt midt på dagen (f.eks. "ti minutter før noen slettet feil ordre ved
 et uhell"). PITR er et betalt tillegg i Supabase og krever et bevisst valg om
 å oppgradere - ikke gjort her, siden det er en kostnadsbeslutning.
+
+**Oppdatering 2026-08-24**: Henrik fikk prisen (7 dager ~$100/mnd, 14 dager ~$200/mnd,
+28 dager ~$400/mnd - siden dere allerede har daglige backups er dere trolig på Pro-planen,
+så dette kommer i tillegg) og valgte bevisst å IKKE aktivere PITR - daglige backups er nok
+for en virksomhet i denne størrelsen. Ikke ta opp igjen med mindre noe endrer seg
+(f.eks. mye høyere transaksjonsvolum, eller et konkret hendelse som gjør at det plutselig
+er relevant).
