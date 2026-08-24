@@ -34,9 +34,16 @@ function renderOrdreList() {
   const sokFokusert = aktivtEl?.id === 'ordreSok';
   const focusTag = aktivtEl?.tagName;
   if (!sokFokusert && listEl?.contains(aktivtEl) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
-  const sokCursorPos = sokFokusert ? aktivtEl.selectionStart : null;
   detailEl.style.display = 'none';
   listEl.style.display   = 'block';
+  // Søkefeltet (#ordreSok) ligger statisk i salmakern.html og røres IKKE her - det ble
+  // tidligere ødelagt og gjenskapt via innerHTML på hvert eneste tastetrykk, som gjorde
+  // søk upålitelig på mobil (virtuelt tastatur/markørposisjon mistet seg) og førte til at
+  // søketeksten kunne bli usynlig (feltet så tomt ut) mens listen fortsatt var filtrert
+  // på den gamle søketeksten, f.eks. etter "← Alle ordrer" fra en ordre-detalj. Nå
+  // beholder nettleseren verdi/fokus/markør helt av seg selv siden elementet aldri
+  // slettes - kun resultat-grid-en under bygges på nytt.
+  const resultatEl = document.getElementById('ordreListeResultat');
   const gammelSok = document.getElementById('ordreSok')?.value || '';
   const sokTekst = gammelSok.toLowerCase().trim();
   const alle = S.ordrer.filter(o => {
@@ -50,46 +57,27 @@ function renderOrdreList() {
            (o.modell||'').toLowerCase().includes(sokTekst) ||
            (o.chassis||'').toLowerCase().includes(sokTekst);
   }).sort(sorterOrdre);
-  listEl.innerHTML = `
-    ${me ? `<div class="card" style="margin-bottom:14px">
-      <div class="h">Flåtegodkjenning</div>
-      <div class="muted small" style="margin-bottom:8px">Grupper ordrer i flåter og se status på tvers.</div>
-      <button class="btn" style="width:100%" onclick="visFlaterModal()">Åpne flåtegodkjenning</button>
-    </div>` : ''}
-    <div class="card">
-      <div class="row">
-        <div><div class="h">Alle ordrer</div><div class="muted small">${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne</div></div>
-        <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
+  const antallEl = document.getElementById('ordreListAntall');
+  if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
+  if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
+    const si = statusInfo(o.ordreStatus);
+    return `<div style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:14px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0">
+      ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
+        ${statusDropdown(o.id, o.ordreStatus)}
       </div>
-      <div style="margin-top:10px">
-        <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype..." oninput="renderOrdreList()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
-      </div>
-      <div class="grid g3" style="margin-top:12px">
-        ${alle.length ? alle.map(o=>{
-          const si = statusInfo(o.ordreStatus);
-          return `<div style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:14px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0">
-            ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-              <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
-              ${statusDropdown(o.id, o.ordreStatus)}
-            </div>
-            <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}</span>
-            ${dokStatusKortHTML(o)}
-            <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
-            <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
-            <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-              <span class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
-              ${godkjentKortHTML(o)}
-            </div>
-          </div>`;
-        }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`}
+      <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}</span>
+      ${dokStatusKortHTML(o)}
+      <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
+      <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
+      <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+        <span class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
+        ${godkjentKortHTML(o)}
       </div>
     </div>`;
-  if (sokFokusert) {
-    const inp = document.getElementById('ordreSok');
-    if (inp) { inp.value = gammelSok; inp.focus(); const pos = sokCursorPos ?? gammelSok.length; inp.setSelectionRange(pos, pos); }
-  }
+  }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`;
 }
 
 // ════════════════════════════════════════════════════

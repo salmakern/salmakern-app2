@@ -281,7 +281,23 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <!-- ── ORDRE DETAIL ── -->
     <section id="ordre" class="page">
-      <div id="ordreList" style="display:none"></div>
+      <div id="ordreList" style="display:none">
+        <div class="card" style="margin-bottom:14px">
+          <div class="h">Flåtegodkjenning</div>
+          <div class="muted small" style="margin-bottom:8px">Grupper ordrer i flåter og se status på tvers.</div>
+          <button class="btn" style="width:100%" onclick="visFlaterModal()">Åpne flåtegodkjenning</button>
+        </div>
+        <div class="card">
+          <div class="row">
+            <div><div class="h">Alle ordrer</div><div class="muted small" id="ordreListAntall">0 ordrer · Klikk for å åpne</div></div>
+            <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
+          </div>
+          <div style="margin-top:10px">
+            <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype..." oninput="renderOrdreList()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+          </div>
+          <div class="grid g3" id="ordreListeResultat" style="margin-top:12px"></div>
+        </div>
+      </div>
       <div id="ordreDetail"></div>
     </section>
 
