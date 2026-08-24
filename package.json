@@ -1,0 +1,16 @@
+{
+  "name": "salmakern-appen",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Salmakern-appen - internt verktøy for Telemark Salmakerverksted. Ingen byggesteg - js/*.js lastes rett inn som script-tagger. devDependencies er kun for testing/linting.",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "vitest run",
+    "lint": "eslint js/*.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "vitest": "^4.1.11"
+  }
+}
