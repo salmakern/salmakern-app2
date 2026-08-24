@@ -756,7 +756,13 @@ function renderAdminArk() {
     // flytte aktiv celle, Delete for å tømme markerte celler.
     selectableRange: kanRedigere,
     selectableRangeColumns: true,
-    selectableRangeRows: true,
+    // selectableRangeRows er bevisst AV: den lar Tabulator behandle et klikk på '#'-
+    // kolonnen (helt til venstre) som "velg hele raden", som setter områdets sluttpunkt
+    // rett til siste kolonne FØR rangeAdded/rangeChanged rekker å fyre - vakten under fikk
+    // dermed aldri sjanse til å krympe den unna Time bekreftet/Ventende timer (bekreftet
+    // direkte i konsollen). '#'-kolonnen har uansett sin egen, mer fleksible fler-rad-
+    // markering fra før (radMerking), så denne funksjonen er ren duplisering å miste.
+    selectableRangeRows: false,
     selectableRangeClearCells: true,
     placeholder: 'Ingen ordre for ' + adminArkAar
   });
