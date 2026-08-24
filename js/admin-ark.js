@@ -176,9 +176,12 @@ function adminArkByggRader() {
       fakturertVis: o.fakturert ? '✓' : '',
       fraktselskap: ark?.fraktselskap || '',
       // Viser datoen ordren ble satt til Klar for henting (satt av endreStatus() i
-      // oversikt-kalender.js). Eldre ordre som allerede sto i denne statusen før dette
-      // feltet fantes har ingen lagret dato ennå - faller da tilbake til et kryss.
-      henteklarVis: o.ordreStatus === 'klar_henting' ? (o.datoKlarHenting ? fmtDatoKort(o.datoKlarHenting) : '✓') : '',
+      // oversikt-kalender.js) - blir stående permanent i arket selv etter at ordren
+      // går videre til Hentet eller en annen status, siden dette er en historikk-dato
+      // og ikke en live statusindikator. Eldre ordre som allerede sto i denne statusen
+      // før dette feltet fantes har ingen lagret dato ennå - faller da tilbake til et
+      // kryss, men bare mens ordren fortsatt faktisk STÅR i klar_henting-status.
+      henteklarVis: o.datoKlarHenting ? fmtDatoKort(o.datoKlarHenting) : (o.ordreStatus === 'klar_henting' ? '✓' : ''),
       merknader: ark?.merknader || '',
       flateVis: adminArkFlateNavn(o) || ark?.flateHypotetisk || '',
       _flateErEkte: !!adminArkFlateNavn(o),
