@@ -54,6 +54,20 @@ appen (Admin-ark, ordre, flåte).
 lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min
 lockout per anonym Auth-sesjon, se `20260824000000_pin_rate_limiting_og_search_path.sql`).
 
+## PDF-eksport
+
+`genPDF()` i `eksport-varsler.js` bygger en rik HTML/CSS-mal (logo, tabeller, bildegallerier,
+godkjenningsmerker) og bruker nettleserens print-til-PDF-dialog - fungerer på alle vanlige
+nettlesere, men litt klønete på iOS Safari spesifikt (noen flere trykk enn en direkte
+nedlasting). Ekte SERVER-side PDF-generering (Supabase Edge Function) ble vurdert, men Deno-
+runtimen har ingen HTML/CSS-rendering tilgjengelig - kun lavnivå-biblioteker som `pdf-lib`
+(tegner tekst/linjer på x/y-koordinater, ingen automatisk layout). Å bruke det ville betydd å
+bygge HELE PDF-malen på nytt i en helt annen, mye mer arbeidskrevende API, med reell risiko for
+visuelle avvik i et dokument som brukes forretningsmessig - og vedlikeholde layouten to steder
+fremover. Eneste reelle "ordentlig HTML-til-PDF"-vei er en betalt tredjeparts-API, som krever
+en kontoopprettelse (samme begrensning som Sentry under). Vurdert og bevisst latt være - print-
+til-PDF-løsningen som allerede er på plass fungerer, bare ikke like elegant på alle enheter.
+
 ## Feilovervåking
 
 Sentry-integrasjonen (`initFeilovervaking()` i `core.js`) er ferdig koblet opp, men står av
