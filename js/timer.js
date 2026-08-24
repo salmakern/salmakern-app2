@@ -1,6 +1,25 @@
 // ════════════════════════════════════════════════════
 // TIMER (LØNN)
 // ════════════════════════════════════════════════════
+// Delt pauseregel for både automatisk klokke og manuell registrering: 30 min
+// lunsjpause trekkes fra kun ved 8+ timer (480 min), aldri et fast fratrekk
+// uansett vaktlengde. Egen funksjon nettopp fordi denne regelen tidligere fantes
+// to steder og kom ut av sync (manuell registrering trakk alltid fra 30 min).
+function beregnNettoMinutter(raaMinutter) {
+  const pause = raaMinutter >= 480 ? 30 : 0;
+  return { pause, netto: Math.max(0, raaMinutter - pause) };
+}
+
+// "kl 07:30"-"kl 15:30"-tekst → antall minutter etter samme pauseregel som
+// beregnNettoMinutter (brukt av manuell timeregistrering).
+function beregnManuellMinutter(start, stopp) {
+  const [sh,sm]=start.split(':').map(Number);
+  const [eh,em]=stopp.split(':').map(Number);
+  const raatid=(eh*60+em)-(sh*60+sm);
+  const { pause, netto }=beregnNettoMinutter(raatid);
+  return { raatid, pause, mins: netto };
+}
+
 function initTimerPage() {
   const d=new Date();
   document.getElementById('timerDatoLbl').textContent=d.toLocaleDateString('no',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -118,13 +137,7 @@ function doLagreManuellTimer() {
   if(!me) return;
   const start=document.getElementById('mFra').value;
   const stopp=document.getElementById('mTil').value;
-  const [sh,sm]=start.split(':').map(Number);
-  const [eh,em]=stopp.split(':').map(Number);
-  const raatid=(eh*60+em)-(sh*60+sm);
-  // Samme pauseregel som den automatiske klokken (updateClock/lagreTimer) - kun 30 min
-  // lunsjpause ved 8+ timer, ikke et fast fratrekk uansett lengde på vakten.
-  const pause=raatid>=480?30:0;
-  const mins=Math.max(0,raatid-pause);
+  const { mins }=beregnManuellMinutter(start,stopp);
   const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
   const entry={
     id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
@@ -166,8 +179,7 @@ function updateClock() {
   if(!timerStart) return;
   const ms=Date.now()-timerStart;
   const mins=Math.floor(ms/60000);
-  const pause=mins>=480?30:0; // 30 min pause if >=8 hours
-  const netto=Math.max(0,mins-pause);
+  const { pause, netto }=beregnNettoMinutter(mins);
   const t=h=>h.toString().padStart(2,'0');
   document.getElementById('clockTime').textContent=`${t(Math.floor(netto/60))} t ${t(netto%60)} min`;
   const startStr=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
@@ -189,9 +201,7 @@ function lagreTimer() {
     return;
   } else if (timerStart) {
     const ms=Date.now()-timerStart;
-    mins=Math.floor(ms/60000);
-    const pause=mins>=480?30:0;
-    mins=Math.max(0,mins-pause);
+    mins=beregnNettoMinutter(Math.floor(ms/60000)).netto;
     start=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
     stopp=new Date().toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
   } else if (['ferie','permisjon'].includes(timerType)) {
