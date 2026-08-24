@@ -676,8 +676,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div><label>Type</label><input id="n_type"></div>
       <div><label>Modell</label><input id="n_modell"></div>
       <div><label>Variant</label><input id="n_variant"></div>
-      <div><label>Ankomstdato</label><input type="date" id="n_dato"></div>
+      <div id="n_dato_wrap"><label>Ankomstdato</label><input type="date" id="n_dato"></div>
       <div><label>Versjon</label><input id="n_versjon"></div>
+    </div>
+    <div style="margin-top:10px">
+      <label>Status ved opprettelse</label>
+      <div style="display:flex;gap:16px;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer">
+          <input type="radio" name="n_status" value="ikke_paabegynt" checked onchange="oppdaterNyOrdreStatusFelt()"> Ikke påbegynt
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer">
+          <input type="radio" name="n_status" value="paa_vei" onchange="oppdaterNyOrdreStatusFelt()"> På vei
+        </label>
+      </div>
     </div>
     <div class="box" style="margin-top:10px"><span class="small muted">Sett kunde = eier:</span> <button class="btn sm" onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">Kopier</button></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">

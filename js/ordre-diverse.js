@@ -205,6 +205,9 @@ async function arkiver(id) {
   renderAll(); tilbakeOrdreList();
 }
 function apneNyOrdreModal() {
+  const statusRadio = document.querySelector('input[name="n_status"][value="ikke_paabegynt"]');
+  if (statusRadio) statusRadio.checked = true;
+  oppdaterNyOrdreStatusFelt();
   openModal('nyOrdre');
 }
 
@@ -229,13 +232,18 @@ function opprettOrdre() {
   const duplikatRegnr = regnr ? S.ordrer.find(o => o.status==='aktiv' && (o.regnr||'').toUpperCase() === regnr) : null;
   if (duplikatRegnr && !confirm(`Det finnes allerede en aktiv ordre for dette reg.nr-et (${ordreLabel(duplikatRegnr)}). Opprette en ny ordre likevel?`)) return;
 
+  // Samme regel som endreStatus(): en bil "På vei" er ikke fysisk ankommet ennå og skal
+  // derfor ikke ha en ankomstdato, uansett hva som evt. står i datofeltet i skjemaet.
+  const startStatus = document.querySelector('input[name="n_status"]:checked')?.value || 'ikke_paabegynt';
+  const ankomstdato = startStatus === 'paa_vei' ? '' : (document.getElementById('n_dato').value||new Date().toISOString().split('T')[0]);
+
   const id='ord_'+Date.now();
   const ny=mkOrdre(id,regnr,
     document.getElementById('n_kunde').value.trim(),
     document.getElementById('n_eier').value.trim(),
     document.getElementById('n_type').value.trim(),
     document.getElementById('n_variant').value.trim(),
-    document.getElementById('n_dato').value||new Date().toISOString().split('T')[0],'','','','');
+    ankomstdato,'','','','',startStatus);
   ny.merke   = document.getElementById('n_merke').value.trim();
   ny.type    = document.getElementById('n_type').value.trim();
   ny.modell  = document.getElementById('n_modell').value.trim();
@@ -247,7 +255,18 @@ function opprettOrdre() {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
+  const statusRadio = document.querySelector('input[name="n_status"][value="ikke_paabegynt"]');
+  if (statusRadio) statusRadio.checked = true;
+  oppdaterNyOrdreStatusFelt();
   openOrdre(id);
+}
+
+// Viser/skjuler Ankomstdato-feltet i "Ny ordre"-skjemaet basert på valgt status - feltet
+// er meningsløst (og verdien blir uansett forkastet, se opprettOrdre()) når "På vei" er valgt.
+function oppdaterNyOrdreStatusFelt() {
+  const paaVei = document.querySelector('input[name="n_status"]:checked')?.value === 'paa_vei';
+  const wrap = document.getElementById('n_dato_wrap');
+  if (wrap) wrap.style.display = paaVei ? 'none' : '';
 }
 
 // ════════════════════════════════════════════════════

@@ -102,3 +102,19 @@ describe('Ankomstdato følger status (På vei ⇄ Ikke påbegynt)', () => {
     expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
   });
 });
+
+describe('mkOrdre() respekterer valgt startstatus (Ny ordre-skjemaet)', () => {
+  // Regresjonstest for at "Ny ordre"-skjemaet kan velge startstatus - se
+  // opprettOrdre() i ordre-diverse.js, som sender status som siste argument.
+  it('bruker "ikke_paabegynt" som standard når ingen startstatus er oppgitt (bakoverkompatibelt med de to demo-kallene i core.js)', () => {
+    const sandbox = nyEnvironment();
+    const o = sandbox.mkOrdre('id1','AB123','Kunde','Eier','Type','Variant','2026-08-24','','','','');
+    expect(o.ordreStatus).toBe('ikke_paabegynt');
+  });
+  it('setter ordreStatus til "paa_vei" når det oppgis som startstatus', () => {
+    const sandbox = nyEnvironment();
+    const o = sandbox.mkOrdre('id2','AB123','Kunde','Eier','Type','Variant','','','','','','paa_vei');
+    expect(o.ordreStatus).toBe('paa_vei');
+    expect(o.ankomstdato).toBe(''); // opprettOrdre() sender alltid tom dato for På vei
+  });
+});

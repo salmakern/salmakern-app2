@@ -704,12 +704,12 @@ function defaultData() {
   };
 }
 
-function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa) {
+function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa,startStatus) {
   return {
     id, regnr, kunde, eier,
     ombygging:{nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false},
     merke:'', type:'', modell:'', variant, versjon:'', chassis:'',
-    ankomstdato: ankomst, status:'aktiv', ordreStatus:'ikke_paabegynt',
+    ankomstdato: ankomst, status:'aktiv', ordreStatus: startStatus || 'ikke_paabegynt',
     kalenderDato: kDato, kalenderTid: kTid,
     vekter: {
       totalvekt:{a:'',e:'',v:''}, vogntog:{a:'',e:'',v:''},
