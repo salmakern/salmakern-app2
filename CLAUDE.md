@@ -1,5 +1,28 @@
 # Salmakern-appen
 
+## Feilsøkingsnotat: "ingenting fungerer" på én spesifikk brukers PC (2026-08-24)
+
+En bruker rapporterte at Admin-ark sluttet å fungere (skriving/dra-og-slipp virket, men
+data nådde aldri ordre/kalender) - reproduserbart IKKE på noen andre enheter, ikke i noen
+annen nettleser, kun på denne ene PC-en med Edge. Etter lang feilsøking var den faktiske
+årsaken en KOMBINASJON av:
+
+1. **Edge sin "Tracking Prevention" blokkerte lagringstilgang for salmakern-siden selv**
+   (ikke en ekstern tjeneste - siden sin EGEN adresse dukket opp i konsollvarselet). Dette
+   kan stille ødelegge Supabase Auth-sesjonens vedvarenhet og annen lagringsavhengig logikk
+   uten noen synlig feilmelding i konsollen.
+2. En ekte bug i `sw.js` (`res.clone()` kalt asynkront i stedet for synkront - se git-
+   historikk for fiksen) som kastet "Response body is already used" i konsollen.
+3. Potensielt korrupt/utdatert `localStorage`-innhold spesifikt for den nettleseren.
+
+Løsningen som til slutt fungerte var å gjøre ALLE tre samtidig: skru sporingsforebygging
+til "Grunnleggende" i `edge://settings/privacy`, avregistrere service workeren via
+DevTools → Application → Service Workers → Unregister, og kjøre `localStorage.clear()` i
+konsollen - etterfulgt av en fullstendig omlasting og ny innlogging. Ingen av de tre alene
+ble bekreftet tilstrekkelig - de ble gjort sammen, så det er uklart hvilken som faktisk var
+avgjørende. Skjer dette igjen: prøv denne kombinasjonen FØR du antar det er en kodebug -
+spesielt hvis feilen kun rammer én bruker/enhet og alt fungerer normalt for andre.
+
 Internt PWA-verktøy for Telemark Salmakerverksted: ordrehåndtering, timeregistrering/lønn,
 lager, admin-ark og mer. Ren HTML/CSS/JS - ingen byggesteg, ingen rammeverk. Backend er
 Supabase (Postgres + Auth + Storage + Realtime + Edge Functions). Deployes til GitHub Pages.
