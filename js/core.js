@@ -173,7 +173,15 @@ async function loadFromSupabase() {
     db.from('timer_entries').select('*').order('created_at',{ascending:false}).limit(300),
     db.from('innstillinger').select('*').eq('id',1).maybeSingle()
   ]);
+  // VIKTIG: må sjekkes for ALLE spørringer, ikke bare ansatte - hvis f.eks. ordre-
+  // spørringen feiler forbigående (nettverksglipp, sesjonsfornyelse etter lang pause
+  // i bakgrunnen) uten at dette kastes, blir oR.data undefined/null og S.ordrer settes
+  // stille til [] under - hele ordrelisten "forsvinner" til neste fulle omlasting.
+  // (Dette var en reell bug - ordre kunne se ut til å forsvinne "tilfeldig" og kom
+  // tilbake ved refresh, nettopp fordi denne sjekken manglet for oR/tR.)
   if (aR.error) throw new Error(aR.error.message);
+  if (oR.error) throw new Error(oR.error.message);
+  if (tR.error) throw new Error(tR.error.message);
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
   const prevTimer  = S.timer  ? [...S.timer]  : [];
