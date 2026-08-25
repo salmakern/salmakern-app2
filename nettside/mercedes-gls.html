@@ -5,21 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mercedes-Benz GLS – Telemark Salmakerverksted</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="site.css?v=4">
-<style>
-.feat-list { list-style:none; display:flex; flex-direction:column; gap:10px; margin-bottom:24px; }
-.feat-list li { display:flex; gap:12px; align-items:flex-start; font-size:15px; color:#333; line-height:1.5; }
-.feat-list li::before { content:"\2713"; color:#c0392b; font-weight:800; flex-shrink:0; margin-top:1px; }
-.prod-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
-.prod-item { background:#faf9f7; border:1px solid #e2e0dc; border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
-.prod-item strong { font-size:14px; color:#111; font-weight:700; }
-.prod-item span { font-size:12px; color:#888; }
-.img-placeholder { background:#e8e6e3; border-radius:12px; height:240px; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:14px; border:2px dashed #ccc; margin-bottom:20px; flex-direction:column; gap:8px; }
-.model-layout { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:start; }
-@media(max-width:640px) { .model-layout { grid-template-columns:1fr; } }
-</style>
+<link rel="stylesheet" href="site.css?v=5">
 </head>
-<body>
+<body data-model-slug="mercedes-gls">
 <header>
   <a class="dealer-btn" href="https://forhandlerportal-umber.vercel.app/login" target="_blank" rel="noopener">Er du forhandler?</a>
   <div class="header-inner">
@@ -45,19 +33,32 @@
       <a class="btn btn-ghost" href="varebil.html">← Alle modeller</a>
     </div>
   </div>
+
   <div class="section section-gray">
-    <div class="section-inner" style="max-width:900px;">
+    <div class="section-inner" style="max-width:960px;">
       <div class="model-layout">
         <div>
           <div class="section-label">Hva vi gjør</div>
           <h2 style="margin-bottom:20px;">Våre fordeler</h2>
-          <ul class="feat-list"><li>God plass til fører — ekstra plass mulig mot tillegg</li><li>Ingen inngrep i taktrekk eller interiørdeler</li><li>Airbag-ledninger kuttes ikke</li><li>Isolering av gulv og sider med spesialskum fra Tyskland</li><li>Bruker aluminium der mulig — sparer ca. 4 000 kr i avgift</li><li>Beskyttelsesplater for dørpanel er standard</li><li>Baksetene pakkes ned og beskyttes</li><li>Hundebur kan leveres (pris på forespørsel)</li></ul>
-          
+          <ul class="feat-list">
+            <li>God plass til fører — ekstra plass mulig mot tillegg</li>
+            <li>Ingen inngrep i taktrekk eller interiørdeler</li>
+            <li>Airbag-ledninger kuttes ikke</li>
+            <li>Isolering av gulv og sider med spesialskum fra Tyskland</li>
+            <li>Bruker aluminium der mulig — sparer ca. 4 000 kr i avgift</li>
+            <li>Beskyttelsesplater for dørpanel er standard</li>
+            <li>Baksetene pakkes ned og beskyttes</li>
+            <li>Hundebur kan leveres (pris på forespørsel)</li>
+          </ul>
+
+          <div class="section-label" style="margin-top:28px; margin-bottom:12px;">Velg innredning</div>
+          <div class="prod-grid" id="prodGrid"></div>
         </div>
         <div>
-          <div class="img-placeholder"><span style="font-size:36px;">📷</span>Legg til bilder her</div>
-          <div class="section-label" style="margin-bottom:12px;">Tilgjengelige produkter</div>
-          <div class="prod-grid"><div class="prod-item"><strong>Standard ombygging</strong><span>Produkt 320–325</span></div><div class="prod-item"><strong>Heldekkende gulv</strong><span>Produkt 327</span></div><div class="prod-item"><strong>Gulv med lokk, krok og kasse</strong><span>Produkt 328</span></div><div class="prod-item"><strong>Gulv med hengslet lokk og gassfærer</strong><span>Produkt 329</span></div><div class="prod-item"><strong>Gulv og oppbevaringskasse</strong><span>Produkt 330</span></div><div class="prod-item"><strong>Oppbevaringskasse standard</strong><span>Produkt 331</span></div><div class="prod-item"><strong>Gummimatter</strong><span>Produkt 332–334</span></div></div>
+          <div class="gallery-main">
+            <img id="mainImg" src="" alt="Mercedes-Benz GLS ombygging">
+          </div>
+          <div class="gallery-thumbs" id="thumbContainer"></div>
         </div>
       </div>
       <div style="margin-top:48px; text-align:center; padding-top:32px; border-top:1px solid #e2e0dc;">
@@ -70,5 +71,6 @@
 <footer>
   <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
 </footer>
+<script src="model-sync.js?v=1" defer></script>
 </body>
 </html>
