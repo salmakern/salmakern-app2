@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bestilling – Telemark Salmakerverksted</title>
+<meta name="description" content="Send en forespørsel til Telemark Salmakerverksted – vi tar kontakt innen 1–2 virkedager.">
+<link rel="icon" href="/nettside/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css?v=4">
+</head>
+<body>
+
+<header>
+  <a class="dealer-btn" href="https://forhandlerportal-umber.vercel.app/login" target="_blank" rel="noopener">Er du forhandler?</a>
+  <div class="header-inner">
+    <div class="header-logos">
+      <a class="logo-link" href="index.html"><img src="/nettside/logo-transparent.png?v=5" alt="Salmaker'n"></a>
+      <img class="partner-logo" src="modul-system-logo.png" alt="Modul-System">
+      <img class="partner-logo" src="påbygger-logo.png" alt="Godkjent påbyggerverksted – Statens vegvesen">
+    </div>
+    <nav>
+      <a href="index.html">Hjem</a>
+      <a href="varebil.html">Ombygginger</a>
+      <a href="bestilling.html" class="active">Bestilling</a>
+      <a href="kontakt.html">Kontakt</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <div class="page-hero">
+    <h1>Send oss en <span>forespørsel</span></h1>
+    <p>Fyll ut skjemaet så tar vi kontakt med deg innen 1–2 virkedager.</p>
+  </div>
+
+  <div class="section section-gray">
+    <div class="section-inner" style="max-width:700px;">
+      <div class="section-label">Forespørsel</div>
+      <h2>Fortell oss om prosjektet ditt</h2>
+      <p class="section-lead">Jo mer du beskriver, desto bedre kan vi hjelpe deg.</p>
+      <form id="bestillingForm" action="https://formspree.io/f/DITT_FORMSPREE_ID" method="POST">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="navn">Navn *</label>
+            <input type="text" id="navn" name="navn" placeholder="Ditt navn" required>
+          </div>
+          <div class="form-group">
+            <label for="telefon">Telefon</label>
+            <input type="tel" id="telefon" name="telefon" placeholder="Ditt telefonnummer">
+          </div>
+          <div class="form-group">
+            <label for="epost">E-post *</label>
+            <input type="email" id="epost" name="epost" placeholder="din@epost.no" required>
+          </div>
+          <div class="form-group">
+            <label for="bilmodell">Bilmodell *</label>
+            <select id="bilmodell" name="bilmodell" required>
+              <option value="" disabled selected>Velg modell</option>
+              <option>KIA EV9</option>
+              <option>Mercedes GLS</option>
+              <option>Mercedes G-Klasse</option>
+              <option>Land Rover Defender 110</option>
+              <option>Land Rover Defender 130</option>
+              <option>Land Rover Defender OCTA</option>
+              <option>Land Rover Discovery 5</option>
+              <option>KGM Rexton</option>
+              <option>Dodge RAM</option>
+              <option>Dodge Durango</option>
+              <option>Mercedes EQV</option>
+              <option>Mercedes Vito</option>
+              <option>Mercedes Vito Tourer</option>
+              <option>Mercedes V-Klasse</option>
+              <option>Toyota Land Cruiser 150</option>
+              <option>Toyota Land Cruiser 250</option>
+              <option>VW ID. Buzz (kort)</option>
+              <option>VW ID. Buzz (lang)</option>
+              <option>Annen modell</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label for="beskrivelse">Hva ønsker du? *</label>
+            <textarea id="beskrivelse" name="beskrivelse" placeholder="Fortell hva du trenger — skillevegg, gulv, oppbevaringskasser, hengerfeste, annet..." required></textarea>
+          </div>
+        </div>
+        <div class="form-send">
+          <button type="submit" class="btn btn-primary">Send forespørsel</button>
+          <span class="form-note">* Obligatoriske felt</span>
+        </div>
+        <div class="form-success" id="formSuccess">
+          ✅ Takk! Vi har mottatt forespørselen og tar kontakt snart.
+        </div>
+      </form>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
+</footer>
+
+<script>
+  const form = document.getElementById('bestillingForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Sender...';
+    try {
+      const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'Accept': 'application/json' } });
+      if (res.ok) { form.reset(); document.getElementById('formSuccess').style.display = 'block'; btn.textContent = 'Sendt!'; }
+      else { btn.disabled = false; btn.textContent = 'Send forespørsel'; alert('Noe gikk galt. Send e-post til post@salmaker.as'); }
+    } catch { btn.disabled = false; btn.textContent = 'Send forespørsel'; alert('Noe gikk galt. Send e-post til post@salmaker.as'); }
+  });
+</script>
+</body>
+</html>

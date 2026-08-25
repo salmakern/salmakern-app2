@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dodge Durango – Telemark Salmakerverksted</title>
+<link rel="icon" href="/nettside/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css?v=4">
+<style>
+.feat-list { list-style:none; display:flex; flex-direction:column; gap:10px; margin-bottom:24px; }
+.feat-list li { display:flex; gap:12px; align-items:flex-start; font-size:15px; color:#333; line-height:1.5; }
+.feat-list li::before { content:"\2713"; color:#c0392b; font-weight:800; flex-shrink:0; margin-top:1px; }
+.prod-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+.prod-item { background:#faf9f7; border:1px solid #e2e0dc; border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; }
+.prod-item strong { font-size:14px; color:#111; font-weight:700; }
+.prod-item span { font-size:12px; color:#888; }
+.img-placeholder { background:#e8e6e3; border-radius:12px; height:240px; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:14px; border:2px dashed #ccc; margin-bottom:20px; flex-direction:column; gap:8px; }
+.model-layout { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:start; }
+@media(max-width:640px) { .model-layout { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="dealer-btn" href="https://forhandlerportal-umber.vercel.app/login" target="_blank" rel="noopener">Er du forhandler?</a>
+  <div class="header-inner">
+    <div class="header-logos">
+      <a class="logo-link" href="index.html"><img src="/nettside/logo-transparent.png?v=5" alt="Salmaker'n"></a>
+      <img class="partner-logo" src="modul-system-logo.png" alt="Modul-System">
+      <img class="partner-logo" src="påbygger-logo.png" alt="Godkjent påbyggerverksted – Statens vegvesen">
+    </div>
+    <nav>
+      <a href="index.html">Hjem</a>
+      <a href="varebil.html" class="active">Ombygginger</a>
+      <a href="bestilling.html">Bestilling</a>
+      <a href="kontakt.html">Kontakt</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="page-hero">
+    <h1>Dodge Durango</h1>
+    <p>Profesjonell ombygging til varebil — uten skader på interiøret.</p>
+    <div class="hero-btns">
+      <a class="btn btn-primary" href="bestilling.html">Be om tilbud</a>
+      <a class="btn btn-ghost" href="varebil.html">← Alle modeller</a>
+    </div>
+  </div>
+  <div class="section section-gray">
+    <div class="section-inner" style="max-width:900px;">
+      <div class="model-layout">
+        <div>
+          <div class="section-label">Hva vi gjør</div>
+          <h2 style="margin-bottom:20px;">Våre fordeler</h2>
+          <ul class="feat-list"><li>Maksimal plass til fører</li><li>Ingen inngrep i taktrekk eller interiørdeler</li><li>Skillevegg skreddersydd til modellen</li><li>Beskyttelsesplater for dørpanel er standard</li><li>Alle demonterte deler pakkes ned og merkes</li><li>Kan bygges tilbake til personbil</li></ul>
+          <div style="background:#fdf0ee;border:1px solid #f5c6c0;border-radius:10px;padding:16px 18px;margin-top:8px;"><p style="font-size:14px;color:#c0392b;font-weight:600;">Ta kontakt for full produktinformasjon og tilbud på denne modellen.</p></div>
+        </div>
+        <div>
+          <div class="img-placeholder"><span style="font-size:36px;">📷</span>Legg til bilder her</div>
+          <div class="section-label" style="margin-bottom:12px;">Tilgjengelige produkter</div>
+          <div class="prod-grid"><div class="prod-item"><strong>Standard ombygging</strong><span>Ta kontakt for produktnr.</span></div><div class="prod-item"><strong>Gulv og oppbevaring</strong><span>Etter ønske</span></div><div class="prod-item"><strong>Ekstrautstyr</strong><span>Pris på forespørsel</span></div></div>
+        </div>
+      </div>
+      <div style="margin-top:48px; text-align:center; padding-top:32px; border-top:1px solid #e2e0dc;">
+        <p style="color:#666; margin-bottom:16px; font-size:15px;">Klar for ombygging av din Dodge Durango?</p>
+        <a class="btn btn-primary" href="bestilling.html">Send forespørsel</a>
+      </div>
+    </div>
+  </div>
+</main>
+<footer>
+  <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
+</footer>
+</body>
+</html>

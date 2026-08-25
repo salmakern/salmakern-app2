@@ -1,6 +1,14 @@
 [[redirects]]
-  from = "/"
-  to = "/salmakern.html"
+  from = "/nettside"
+  to = "/nettside/index.html"
+  status = 200
+
+# salmakern.html (ansatt-booking) røres ikke - den ligger fortsatt på sin egen
+# adresse, uendret, og lenkes ikke til fra noe sted på den offentlige nettsiden.
+
+[[redirects]]
+  from = "/*"
+  to = "/nettside/:splat"
   status = 200
 
 [[headers]]

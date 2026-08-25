@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KIA EV9 – Telemark Salmakerverksted</title>
+<link rel="icon" href="/nettside/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site.css?v=4">
+<style>
+.feat-list { list-style:none; display:flex; flex-direction:column; gap:10px; margin-bottom:24px; }
+.feat-list li { display:flex; gap:12px; align-items:flex-start; font-size:15px; color:#333; line-height:1.5; }
+.feat-list li::before { content:"\2713"; color:#c0392b; font-weight:800; flex-shrink:0; margin-top:1px; }
+.model-layout { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:start; }
+@media(max-width:700px) { .model-layout { grid-template-columns:1fr; } }
+
+/* GALLERI */
+.gallery-main { width:100%; border-radius:12px; overflow:hidden; margin-bottom:10px; background:#111; }
+.gallery-main img { width:100%; height:420px; object-fit:cover; display:block; transition:opacity 0.3s; }
+.gallery-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.gallery-tab {
+  font-size:12px; font-weight:700; padding:6px 12px; border-radius:20px;
+  border:1px solid #e2e0dc; background:#faf9f7; color:#555; cursor:pointer;
+  transition:all 0.15s;
+}
+.gallery-tab.active { background:#c0392b; border-color:#c0392b; color:#fff; }
+.gallery-tab:hover:not(.active) { border-color:#c0392b; color:#c0392b; }
+.gallery-thumbs { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; max-height:220px; overflow-y:auto; }
+.gallery-thumbs img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:6px; cursor:pointer; border:2px solid transparent; transition:border-color 0.15s; }
+.gallery-thumbs img.active, .gallery-thumbs img:hover { border-color:#c0392b; }
+
+/* PRODUKTER */
+.prod-grid { display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; }
+.prod-item {
+  background:#faf9f7; border:1px solid #e2e0dc; border-radius:10px;
+  padding:12px 16px; display:flex; justify-content:space-between; align-items:center;
+  cursor:pointer; transition:all 0.15s;
+}
+.prod-item:hover, .prod-item.active { border-color:#c0392b; background:#fdf0ee; }
+.prod-item strong { font-size:14px; color:#111; font-weight:700; }
+.prod-item span { font-size:12px; color:#888; white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <a class="dealer-btn" href="https://forhandlerportal-umber.vercel.app/login" target="_blank" rel="noopener">Er du forhandler?</a>
+  <div class="header-inner">
+    <div class="header-logos">
+      <a class="logo-link" href="index.html"><img src="/nettside/logo-transparent.png?v=5" alt="Salmaker'n"></a>
+      <img class="partner-logo" src="modul-system-logo.png" alt="Modul-System">
+      <img class="partner-logo" src="påbygger-logo.png" alt="Godkjent påbyggerverksted – Statens vegvesen">
+    </div>
+    <nav>
+      <a href="index.html">Hjem</a>
+      <a href="varebil.html" class="active">Ombygginger</a>
+      <a href="bestilling.html">Bestilling</a>
+      <a href="kontakt.html">Kontakt</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <div class="page-hero">
+    <h1>KIA EV9</h1>
+    <p>Profesjonell ombygging til varebil — uten skader på interiøret.</p>
+    <div class="hero-btns">
+      <a class="btn btn-primary" href="bestilling.html">Be om tilbud</a>
+      <a class="btn btn-ghost" href="varebil.html">← Alle modeller</a>
+    </div>
+  </div>
+
+  <div class="section section-gray">
+    <div class="section-inner" style="max-width:960px;">
+      <div class="model-layout">
+
+        <!-- VENSTRE: Fordeler -->
+        <div>
+          <div class="section-label">Hva vi gjør</div>
+          <h2 style="margin-bottom:20px;">Våre fordeler</h2>
+          <ul class="feat-list">
+            <li>109 cm plass til fører — fra dashbord til nakkepute</li>
+            <li>Ingen inngrep i taktrekk eller interiørdeler</li>
+            <li>Airbag-ledninger kuttes ikke</li>
+            <li>Sideairbager fysisk testet — ingen konflikt med skillevegg</li>
+            <li>Beskyttelsesplater for dørpanel er standard</li>
+            <li>Baksetene pakkes ned og beskyttes mot skader</li>
+            <li>Nyttelast 650–700 kg — gulvplater dimensjonert for dette</li>
+            <li>Kan bygges tilbake til personbil</li>
+          </ul>
+          <p style="font-size:13px;color:#888;background:#f0eeec;border-radius:8px;padding:10px 14px;">
+            <strong>Varerommets størrelse:</strong> Lengde nedre del 155 cm · Lengde bakre del 75 cm
+          </p>
+
+          <div class="section-label" style="margin-top:28px; margin-bottom:12px;">Velg innredning</div>
+          <div class="prod-grid" id="prodGrid">
+            <div class="prod-item active" onclick="filterGallery(this,'std')">
+              <strong>Standard ombygging</strong><span>Prod. 500</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'panorama')">
+              <strong>Panorama Glasstak</strong><span>Prod. 501</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'gulv503')">
+              <strong>Heldekkende gulv</strong><span>Prod. 503</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'gulv504')">
+              <strong>Gulv med lokk, krok og oppbevaringskasse</strong><span>Prod. 504</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'gulv505')">
+              <strong>Gulv med hengslet lokk og gassfærer</strong><span>Prod. 505</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'gulv506')">
+              <strong>Gulv med oppbevaringskasse (høy og lav)</strong><span>Prod. 506–507</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'kasse508')">
+              <strong>Oppbevaringskasse standard (valgfri inndeling)</strong><span>Prod. 508</span>
+            </div>
+            <div class="prod-item" onclick="filterGallery(this,'gummi')">
+              <strong>Gummimatter</strong><span>Prod. 509–512</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- HØYRE: Galleri -->
+        <div>
+          <div class="gallery-main">
+            <img id="mainImg" src="bilder/kia-ev9/kia-ev9-3.jpeg" alt="KIA EV9 ombygging">
+          </div>
+          <div class="gallery-thumbs" id="thumbContainer">
+            <!-- fylles av JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:48px; text-align:center; padding-top:32px; border-top:1px solid #e2e0dc;">
+        <p style="color:#666; margin-bottom:16px; font-size:15px;">Klar for ombygging av din KIA EV9?</p>
+        <a class="btn btn-primary" href="bestilling.html">Send forespørsel</a>
+      </div>
+    </div>
+  </div>
+</main>
+<footer>
+  <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
+</footer>
+
+<script>
+const cats = {
+  std: [
+    'Standard ombygging bak.jpg',
+    'Standard ombygging side.jpg',
+    'Standard ombygging taktrekk.jpg',
+    'Standard ombygging foran.jpg',
+  ],
+  panorama: [
+    'Standard ombygging panorama bak.jpg',
+    'Standard ombygging panorama side.jpg',
+    'Standard ombygging panorama taktrekk.jpg',
+  ],
+  gulv503: [
+    'Heldekkende gulv bak.jpg',
+    'Heldekkende gulv side.jpg',
+  ],
+  gulv504: [
+    'Heldekkende gulv med lokk, krok og oppbevaringskasse bak.jpg',
+    'Heldekkende gulv med lokk, krok og oppbevaringskasse bak åpen.jpg',
+    'Heldekkende gulv med lokk, krok og oppbevaringskasse side åpen.jpg',
+    'Krok foran.jpg',
+  ],
+  gulv505: [
+    'Heldekkende gulv med hengslet lokk, gassfjærer og oppbevaringskasse bak åpen.jpg',
+    'Heldekkende gulv med hengslet lokk, gassfjærer og oppbevaringskasse side åpen.jpg',
+  ],
+  gulv506: [
+    'Gulv og oppbevaringskasse lav.jpg',
+    'Gulv og oppbevaringskasse standard.jpg',
+  ],
+  kasse508: [
+    'Oppbevaringskasse standard bak lokk.jpg',
+    'Oppbevaringskasse standard bak.jpg',
+    'Oppbevaringskasse standard side.jpg',
+  ],
+  gummi: [
+    'KIA_EV9_SOLTAK.jpg',
+    'KIA_EV9_SOLTAK_02.jpg',
+    'KIA_EV9_SOLTAK_03.jpg',
+    'KIA_EV9_SOLTAK_04.jpg',
+  ],
+};
+
+function buildThumbs(imgs) {
+  const container = document.getElementById('thumbContainer');
+  container.innerHTML = '';
+  imgs.forEach((name, i) => {
+    const img = document.createElement('img');
+    img.src = `bilder/kia-ev9/${name}`;
+    img.alt = '';
+    if (i === 0) {
+      img.classList.add('active');
+      document.getElementById('mainImg').src = img.src;
+    }
+    img.onclick = function() { setImg(this); };
+    container.appendChild(img);
+  });
+}
+
+function filterGallery(el, cat) {
+  document.querySelectorAll('.prod-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+  buildThumbs(cats[cat]);
+}
+
+function setImg(el) {
+  document.getElementById('mainImg').src = el.src;
+  document.querySelectorAll('.gallery-thumbs img').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+
+// Start med standard
+buildThumbs(cats.std);
+</script>
+</body>
+</html>
