@@ -6,6 +6,8 @@
   var prodGrid = document.getElementById("prodGrid");
   var mainImg = document.getElementById("mainImg");
   var thumbContainer = document.getElementById("thumbContainer");
+  var modelTitle = document.getElementById("modelTitle");
+  var featList = document.getElementById("featList");
   var modelImageUrl = null;
 
   function buildThumbs(images) {
@@ -70,16 +72,48 @@
     if (thumbContainer) thumbContainer.remove();
   }
 
-  fetch(API_BASE + "/api/public/models/" + slug)
+  function renderNotFound() {
+    if (modelTitle) modelTitle.textContent = "Modell ikke funnet";
+    if (featList) featList.remove();
+    if (prodGrid) {
+      prodGrid.innerHTML =
+        '<p style="font-size:14px;color:#666;">Fant ingen modell med dette navnet. ' +
+        '<a href="varebil.html" style="color:#c0392b;">Se alle modeller →</a></p>';
+    }
+    var galleryMain = document.querySelector(".gallery-main");
+    if (galleryMain) galleryMain.remove();
+    if (thumbContainer) thumbContainer.remove();
+  }
+
+  function renderFeatures(features) {
+    if (!featList || !features) return;
+    featList.innerHTML = "";
+    features.forEach(function (text) {
+      var li = document.createElement("li");
+      li.textContent = text;
+      featList.appendChild(li);
+    });
+  }
+
+  fetch(API_BASE + "/api/public/models/" + encodeURIComponent(slug))
     .then(function (res) {
       return res.ok ? res.json() : null;
     })
     .then(function (data) {
-      if (!data || !data.variants || data.variants.length === 0) {
+      if (!data) {
+        renderNotFound();
+        return;
+      }
+      if (modelTitle) {
+        modelTitle.textContent = data.name;
+        document.title = data.name + " – Telemark Salmakerverksted";
+      }
+      renderFeatures(data.features);
+      modelImageUrl = data.imageUrl || null;
+      if (!data.variants || data.variants.length === 0) {
         renderEmpty();
         return;
       }
-      modelImageUrl = data.imageUrl || null;
       renderVariants(data.variants);
     })
     .catch(function () {

@@ -52,7 +52,7 @@
         <div class="section-label">Bilmodeller</div>
         <h2>Modeller vi bygger om</h2>
         <p class="section-lead">Vi har erfaring med følgende modeller — er ikke bilen din på listen, ta kontakt!</p>
-        <div class="models-grid">
+        <div class="models-grid" id="modelsGrid">
           <a class="model-tag" href="kia-ev9.html">KIA EV9</a>
           <a class="model-tag" href="mercedes-gls.html">Mercedes GLS</a>
           <a class="model-tag" href="mercedes-g.html">Mercedes G-Klasse</a>
@@ -92,6 +92,7 @@
     document.getElementById('tab-modul').style.display = id === 'modul' ? '' : 'none';
   }
   </script>
+  <script src="model-list-sync.js" defer></script>
 
   <div class="cta-strip">
     <h2>Klar for å komme i gang?</h2>
