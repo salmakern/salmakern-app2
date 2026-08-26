@@ -1,16 +1,17 @@
+// v10 - salmaker.as er nå eget domene (ikke lenger github.io/salmakern-app2/),
+// så alle faste /salmakern-app2/-stier under er rettet til rot-stier. Cache-navnet
+// er bumpet for å tvinge nettlesere til å forkaste den gamle, feilaktige cachen.
 // v9 - fikser "Response body is already used"-feil i fetch-handleren under (res.clone()
 // ble kalt inni en asynkron .then() i stedet for synkront med en gang - kunne feile hvis
 // svar-kroppen allerede var i bruk et annet sted når det asynkrone kallet endelig kjørte)
 // v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-// Appen kjører under /salmakern-app2/ på GitHub Pages - faste stier, ikke relative
-// (Safari løste relative manifest-stier feil, så vi tar ingen sjanser her heller).
-const CACHE = 'salmakern-v9';
+const CACHE = 'salmakern-v10';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
-  '/salmakern-app2/manifest.json',
-  '/salmakern-app2/icon.svg'
+  '/manifest.json',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', e => {
@@ -81,18 +82,18 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/salmakern-app2/icon.svg',
-      badge: '/salmakern-app2/icon.svg',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
       tag: 'salmakern',
       renotify: true,
-      data: { url: data.url || '/salmakern-app2/salmakern.html' }
+      data: { url: data.url || '/salmakern.html' }
     })
   );
 });
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || '/salmakern-app2/salmakern.html';
+  const url = e.notification.data?.url || '/salmakern.html';
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
       const existing = all.find(c => c.url.includes('salmakern'));
