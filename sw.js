@@ -1,3 +1,6 @@
+// v11 - icon.svg var en skjør wrapper som viste seg å rendres helt sort som
+// app-ikon (samme mønster som en tidligere favicon-bug) - byttet til de
+// ekte icon-192/512.png-filene overalt. Cache-navnet er bumpet igjen.
 // v10 - salmaker.as er nå eget domene (ikke lenger github.io/salmakern-app2/),
 // så alle faste /salmakern-app2/-stier under er rettet til rot-stier. Cache-navnet
 // er bumpet for å tvinge nettlesere til å forkaste den gamle, feilaktige cachen.
@@ -7,11 +10,11 @@
 // v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-const CACHE = 'salmakern-v10';
+const CACHE = 'salmakern-v11';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
-  '/icon.svg'
+  '/icon-192.png'
 ];
 
 self.addEventListener('install', e => {
@@ -82,8 +85,8 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/icon.svg',
-      badge: '/icon.svg',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
       tag: 'salmakern',
       renotify: true,
       data: { url: data.url || '/salmakern.html' }
