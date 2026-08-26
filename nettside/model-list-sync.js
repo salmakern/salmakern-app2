@@ -27,6 +27,14 @@
   var modulGrid = document.getElementById("modulGrid");
   if (!vehicleGrid && !modulGrid) return;
 
+  // Hide the static fallback list until we know whether real data replaces it -
+  // avoids a visible flash of the old boxes right before they get swapped out.
+  if (vehicleGrid) vehicleGrid.style.visibility = "hidden";
+
+  function reveal() {
+    if (vehicleGrid) vehicleGrid.style.visibility = "";
+  }
+
   function buildTag(model) {
     var a = document.createElement("a");
     a.className = "model-tag-img";
@@ -90,5 +98,6 @@
     })
     .catch(function () {
       // Leave the existing static/placeholder content in place if the API is unreachable.
-    });
+    })
+    .finally(reveal);
 })();
