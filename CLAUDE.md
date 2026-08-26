@@ -156,3 +156,67 @@ de deler toppnivå-scope med første kjøring og kan derfor lese/skrive de "usyn
   til inspeksjon, men å faktisk kjøre den ferske versjonen i en levende side har vært upålitelig.
   Stol på isolerte Node-tester (`npm test`) for logikkverifisering fremfor å jage denne
   cachen videre.
+
+---
+
+# nettside/ — den offentlige markedsføringssiden (salmaker.as)
+
+**Viktig grensesnitt**: dette repoet inneholder BÅDE det interne bestillings-/admin-verktøyet
+beskrevet over (`salmakern.html`, PIN-beskyttet) OG den offentlige markedsføringssiden
+(`nettside/`, ren HTML/CSS/JS, ingen auth). **Rør aldri `salmakern.html` eller noe under det
+i forbindelse med `nettside/`-arbeid** - det er et bevisst skille av sikkerhetshensyn (unngå å
+eksponere det interne verktøyet for PIN-gjetting via lenker fra den offentlige siden).
+
+- Live: https://salmaker.as, servert via GitHub Pages fra dette repoet
+  (`https://salmakern.github.io/salmakern-app2/nettside/...` er den faktiske GH Pages-stien -
+  husk `/nettside/`-prefikset når du sjekker noe direkte med curl, rot-`index.html` er bare en
+  meta-refresh-viderekobling dit).
+- Ren statisk HTML/CSS/JS per side (`kia-ev9.html`, `varebil.html`, `bestilling.html`, osv.) -
+  ingen byggesteg. Bruk **relative** stier for bilder/CSS/JS (ikke `/nettside/...`) - GH Pages
+  gjør ekte navigasjon uten server-side rewrite, så absolutte stier brekker under
+  prosjekt-understien.
+
+## Synk mot Forhandlerportalen
+
+Modellsidene henter ombyggingsvarianter (navn, produktnummer, bilder - **aldri pris**) live fra
+Forhandlerportalens offentlige API i stedet for å ha dem hardkodet:
+
+- `model-sync.js` - kjører på hver modellside (både de 17 håndlagde sidene og den generiske
+  `modell.html?slug=X`), henter `GET /api/public/models/[slug]` fra
+  `forhandlerportal-umber.vercel.app`, fyller `#prodGrid` (produktliste) og
+  `#mainImg`/`#thumbContainer` (bildegalleri). Faller tilbake til en "ta kontakt"-melding hvis
+  modellen ikke finnes eller mangler varianter.
+- `model-list-sync.js` - kjører på `varebil.html`, henter `GET /api/public/models` (hele
+  lista), erstatter den statiske `#modelsGrid`-lenkelisten med ferske lenker + bilder. Modeller
+  med en av de 17 kjente slugene lenker til sin egendefinerte side; alt annet lenker til
+  `modell.html?slug=X`.
+- `modell.html` - generisk modellside for HELT NYE modeller lagt til i Forhandlerportalens
+  admin-panel. Trenger ingen ny HTML-fil lenger - admin setter navn, slug, "fordeler"-liste og
+  bilde, så fungerer siden automatisk.
+- CORS på API-siden er låst til `https://salmakern.github.io` (se
+  `forhandlerportal/src/lib/cors.ts`) - ved lokal testing av disse skriptene må `API_BASE` i
+  filen midlertidig pekes mot `http://localhost:3000` og CORS midlertidig åpnes, husk å
+  reversere begge deler før push.
+
+## Logofiler (kilden ligger her)
+
+Se Forhandlerportal-repoets `CLAUDE.md` for full forklaring av hvilken variant som brukes hvor
+- kort versjon: `logo-transparent.png` (hvit fyll, med skygge-effekt, bevist på mørk header
+her) og `SALMAKERN LOGOFORSLAG NY.png` (rotprosjektet, ren outline uten skygge, sort
+undertekst - kun lys bakgrunn) er de to filene som faktisk er i aktiv bruk. `logo-dark.png` i
+rotprosjektet (solid sort fyll, med skygge) er IKKE i bruk noe sted lenger - ikke gjenbruk den
+uten å sjekke med Henrik først.
+
+## Bestillingsskjema
+
+`bestilling.html` sender til Formspree (`https://formspree.io/f/mqpzrwpg`), AJAX via `fetch()`
+med `Accept: application/json` - ikke en vanlig HTML-skjemainnsending. `_cc`-felt (skjult
+input) sender kopi til `post@salmaker.as` i tillegg til hovedmottakeren på Formspree-kontoen.
+Første e-post fra en ny avsender havner ofte i søppelpost til mottakeren har markert den som
+"ikke søppelpost" - ikke et symptom på at integrasjonen er ødelagt.
+
+## Arbeidsvaner (gjelder også her, se Forhandlerportal sin CLAUDE.md for full begrunnelse)
+
+Se kritisk på visuelle endringer ved faktisk visningsstørrelse/bakgrunn før de vises frem som
+ferdige. Ved subjektive designvalg (f.eks. hvilken logofil/størrelse) - vis flere reelle
+alternativer side ved side og la Henrik velge, ikke bestem selv.
