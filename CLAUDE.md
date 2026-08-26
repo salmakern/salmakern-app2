@@ -186,6 +186,14 @@ eksponere det interne verktøyet for PIN-gjetting via lenker fra den offentlige 
   varsles til Henrik FØR den gjøres, med eksplisitt advarsel om at booking-appen kan bli
   utilgjengelig til HTTPS-sertifikatet er utstedt (kan ta fra minutter til flere timer) - ikke
   bare anta det er trygt fordi man "bare rører nettside/".
+  **Løst 2026-08-26**: sertifikatet var stuck fordi `www.salmaker.as` pekte til en gammel,
+  ubrukt tredjepartsløsning (`s.multiscreensite.com`) i stedet for `salmakern.github.io` -
+  GitHub prøver å validere www-varianten av domenet samtidig med apex-domenet, så en feil
+  der blokkerte utstedelsen for HELE domenet. Fikset ved å endre DNS-posten for `www` hos
+  Domeneshop til å peke på `salmakern.github.io`, deretter fjerne+legge til domenet på nytt
+  i GitHub Pages-innstillingene for å tvinge frem et nytt forsøk. `https://salmaker.as`,
+  booking og Forhandlerportalen er alle bekreftet fungerende over HTTPS nå. Hvis en fremtidig
+  domene-endring gir samme symptom (sertifikat henger i timevis), sjekk www-posten først.
 - Ren statisk HTML/CSS/JS per side (`kia-ev9.html`, `varebil.html`, `bestilling.html`, osv.) -
   ingen byggesteg. Bruk **relative** stier for bilder/CSS/JS (ikke `/nettside/...`) - GH Pages
   gjør ekte navigasjon uten server-side rewrite, så absolutte stier brekker under
