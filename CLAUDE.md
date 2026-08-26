@@ -171,6 +171,21 @@ eksponere det interne verktøyet for PIN-gjetting via lenker fra den offentlige 
   (`https://salmakern.github.io/salmakern-app2/nettside/...` er den faktiske GH Pages-stien -
   husk `/nettside/`-prefikset når du sjekker noe direkte med curl, rot-`index.html` er bare en
   meta-refresh-viderekobling dit).
+- **VIKTIG lærdom (2026-08-26)**: Fordi `salmakern.html` (booking) og `nettside/` deler samme
+  GitHub Pages-nettsted, rammer DNS-/domene-endringer på `salmaker.as` OGSÅ booking-verktøyet,
+  selv om man aldri rører selve filen. Da et egendefinert domene (CNAME) ble satt opp for
+  `nettside/`, begynte GitHub å 301-viderekoble den gamle `salmakern.github.io/...`-adressen
+  til `salmaker.as` for HELE nettstedet, inkludert `salmakern.html`. Henriks installerte
+  Edge-PWA-snarvei for booking (`Salmaker'n – Telemark Salmakerverksted.lnk`, app-id
+  `cfdjnpfdlofiphghklnedbambbemdihb`) fulgte automatisk med over til det nye domenet - og
+  siden `salmaker.as` sitt HTTPS-sertifikat ikke var klart ennå (GitHub-utstedelse tar tid),
+  brøt booking-appen fullstendig (`NET::ERR_CERT_COMMON_NAME_INVALID`, og siden GitHub Pages
+  setter HSTS kunne man heller ikke bare "fortsette likevel" i nettleseren - måtte fjernes via
+  `edge://net-internals/#hsts` → Delete domain security policies → `salmaker.as`).
+  **Konsekvens for fremtidig arbeid**: enhver DNS-/CNAME-/domene-endring på `salmaker.as` må
+  varsles til Henrik FØR den gjøres, med eksplisitt advarsel om at booking-appen kan bli
+  utilgjengelig til HTTPS-sertifikatet er utstedt (kan ta fra minutter til flere timer) - ikke
+  bare anta det er trygt fordi man "bare rører nettside/".
 - Ren statisk HTML/CSS/JS per side (`kia-ev9.html`, `varebil.html`, `bestilling.html`, osv.) -
   ingen byggesteg. Bruk **relative** stier for bilder/CSS/JS (ikke `/nettside/...`) - GH Pages
   gjør ekte navigasjon uten server-side rewrite, så absolutte stier brekker under
