@@ -1,5 +1,5 @@
 (function () {
-  var API_BASE = "https://forhandlerportal-umber.vercel.app";
+  var API_BASE = "https://forhandler.salmaker.as";
   var slug = document.body.dataset.modelSlug;
   if (!slug) return;
 

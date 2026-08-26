@@ -1,5 +1,5 @@
 (function () {
-  var API_BASE = "https://forhandlerportal-umber.vercel.app";
+  var API_BASE = "https://forhandler.salmaker.as";
 
   // Slugs that have their own dedicated, hand-written page on the site.
   // Any slug not in this list is linked through the generic modell.html page instead.
