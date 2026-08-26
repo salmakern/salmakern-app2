@@ -2,7 +2,9 @@
 nye_func_temp.txt
 salmakern-app/
 .claude/
-SALMAKERN LOGOFORSLAG NY.png
 
 supabase/.temp/
 node_modules/
+
+# Eget prosjekt med egen git-historikk/remote - skal aldri spores herfra
+forhandlerportal-app/

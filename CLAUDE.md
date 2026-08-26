@@ -198,14 +198,19 @@ Forhandlerportalens offentlige API i stedet for å ha dem hardkodet:
   filen midlertidig pekes mot `http://localhost:3000` og CORS midlertidig åpnes, husk å
   reversere begge deler før push.
 
-## Logofiler (kilden ligger her)
+## Logofiler
+
+"Master"-kopiene av alle logovarianter ligger samlet i `../logoer/` (én mappenivå opp fra
+dette repoet, altså `Claude app/logoer/`) - IKKE i `nettside/`. `nettside/logo-transparent.png`
+er en egen, aktiv kopi brukt av selve nettsiden (byte-identisk med `logoer/logo-transparent.png`
+i skrivende stund) - rør den kopien når du endrer noe som faktisk skal vises på salmaker.as.
 
 Se Forhandlerportal-repoets `CLAUDE.md` for full forklaring av hvilken variant som brukes hvor
-- kort versjon: `logo-transparent.png` (hvit fyll, med skygge-effekt, bevist på mørk header
-her) og `SALMAKERN LOGOFORSLAG NY.png` (rotprosjektet, ren outline uten skygge, sort
-undertekst - kun lys bakgrunn) er de to filene som faktisk er i aktiv bruk. `logo-dark.png` i
-rotprosjektet (solid sort fyll, med skygge) er IKKE i bruk noe sted lenger - ikke gjenbruk den
-uten å sjekke med Henrik først.
+- kort versjon: `logoer/logo-transparent.png` (hvit fyll, med skygge-effekt, bevist på mørk
+header her) og `logoer/SALMAKERN LOGOFORSLAG NY.png` (ren outline uten skygge, sort undertekst
+- kun lys bakgrunn) er de to filene som faktisk er i aktiv bruk. `logoer/logo-dark.png` (solid
+sort fyll, med skygge) er IKKE i bruk noe sted lenger - ikke gjenbruk den uten å sjekke med
+Henrik først.
 
 ## Bestillingsskjema
 
