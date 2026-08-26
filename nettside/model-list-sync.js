@@ -35,11 +35,32 @@
       grid.innerHTML = "";
       models.forEach(function (model) {
         var a = document.createElement("a");
-        a.className = "model-tag";
+        a.className = "model-tag-img";
         a.href = KNOWN_PAGES[model.slug]
           ? model.slug + ".html"
           : "modell.html?slug=" + encodeURIComponent(model.slug);
-        a.textContent = model.name;
+
+        var thumb = document.createElement("div");
+        thumb.className = "thumb";
+        if (model.imageUrl) {
+          var img = document.createElement("img");
+          img.src = model.imageUrl;
+          img.alt = model.name;
+          img.loading = "lazy";
+          thumb.appendChild(img);
+        } else {
+          var placeholder = document.createElement("span");
+          placeholder.className = "thumb-placeholder";
+          placeholder.textContent = "🚐";
+          thumb.appendChild(placeholder);
+        }
+
+        var label = document.createElement("div");
+        label.className = "label";
+        label.textContent = model.name;
+
+        a.appendChild(thumb);
+        a.appendChild(label);
         grid.appendChild(a);
       });
     })
