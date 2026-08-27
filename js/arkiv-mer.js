@@ -158,7 +158,10 @@ function renderMer() {
     if (gpsEl) gpsEl.textContent = S.gps?.lat
       ? `Lokasjon satt: ${S.gps.lat.toFixed(5)}, ${S.gps.lng.toFixed(5)}`
       : 'Ingen lokasjon satt ennå';
-    if (radEl) radEl.value = S.gps?.radius || 300;
+    // Ikke overskriv mens feltet er fokusert - ellers "stjeler" en sanntidsoppdatering
+    // (f.eks. en annen ansatt som logger inn med PIN, som trigger renderMer() via
+    // ansatte-tabellens realtime-abonnement) verdien midt i redigering.
+    if (radEl && document.activeElement !== radEl) radEl.value = S.gps?.radius || 300;
     const al = document.getElementById('ansatteListe');
     al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px">
       <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
