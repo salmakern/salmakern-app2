@@ -190,8 +190,11 @@ h2 { font-family: 'Barlow Condensed', sans-serif; font-size: clamp(26px, 3vw, 38
 /* ─── MODEL GRID ──────────────────────────────────────────── */
 .models-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px; margin-top: 32px;
+}
+@media (min-width: 520px) {
+  .models-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 }
 .model-tag {
   background: #faf9f7; border: 1px solid #e2e0dc;
@@ -347,6 +350,47 @@ footer a:hover { color: #8892a4; }
 .prod-item span { font-size:12px; color:#888; white-space:nowrap; }
 
 .img-placeholder { background:#e8e6e3; border-radius:12px; height:240px; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:14px; border:2px dashed #ccc; margin-bottom:20px; flex-direction:column; gap:8px; }
+
+/* ─── LIGHTBOX ────────────────────────────────────────────── */
+.lightbox {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.92);
+  align-items: center; justify-content: center;
+}
+.lightbox.open { display: flex; }
+.lightbox-img { max-width: 90vw; max-height: 85vh; object-fit: contain; }
+.lightbox-close {
+  position: absolute; top: 16px; right: 16px; z-index: 1;
+  width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 26px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.2); }
+.lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 30px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.lightbox-nav:hover { background: rgba(255,255,255,0.2); }
+.lightbox-prev { left: 12px; }
+.lightbox-next { right: 12px; }
+.lightbox-counter { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.7); font-size: 14px; }
+@media (max-width: 640px) {
+  .lightbox-nav { width: 40px; height: 40px; font-size: 24px; }
+}
+
+/* ─── FORRIGE/NESTE MODELL ────────────────────────────────── */
+.model-nav {
+  display: flex; justify-content: space-between; gap: 12px;
+  max-width: 1100px; margin: 16px auto 0; padding: 0 24px;
+}
+.model-nav-link {
+  font-size: 13px; font-weight: 600; color: #666; text-decoration: none;
+  max-width: 48%; transition: color 0.15s;
+}
+.model-nav-link:hover { color: #c0392b; }
+.model-nav-next { text-align: right; margin-left: auto; }
 
 /* ─── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 640px) {
