@@ -3,33 +3,6 @@
   var slug = document.body.dataset.modelSlug;
   if (!slug) return;
 
-  // Slugs that have their own dedicated, hand-written page on the site.
-  // Any slug not in this list is linked through the generic modell.html page instead.
-  // (Kept in sync with the same map in model-list-sync.js.)
-  var KNOWN_PAGES = {
-    "kia-ev9": true,
-    "mercedes-gls": true,
-    "mercedes-g": true,
-    "land-rover-defender-110": true,
-    "land-rover-defender-130": true,
-    "land-rover-defender-octa": true,
-    "land-rover-discovery-5": true,
-    "kgm-rexton": true,
-    "dodge-ram": true,
-    "dodge-durango": true,
-    "mercedes-eqv": true,
-    "mercedes-vito": true,
-    "mercedes-vklasse": true,
-    "toyota-lc-150": true,
-    "toyota-lc-250": true,
-    "vw-id-buzz-kort": true,
-    "vw-id-buzz-lang": true,
-  };
-
-  function urlForSlug(s) {
-    return KNOWN_PAGES[s] ? s + ".html" : "modell.html?slug=" + encodeURIComponent(s);
-  }
-
   var prodGrid = document.getElementById("prodGrid");
   var mainImg = document.getElementById("mainImg");
   var thumbContainer = document.getElementById("thumbContainer");
@@ -147,7 +120,31 @@
     }
   }
 
+  var currentVariants = [];
+  var currentVariantIndex = 0;
+  var variantNav = null;
+
+  function selectVariant(index) {
+    currentVariantIndex = index;
+    var items = prodGrid.querySelectorAll(".prod-item");
+    items.forEach(function (el, i) {
+      el.classList.toggle("active", i === index);
+    });
+    buildThumbs(currentVariants[index].imageUrls);
+    updateVariantNav();
+  }
+
+  function updateVariantNav() {
+    if (!variantNav) return;
+    var multi = currentVariants.length > 1;
+    variantNav.style.display = multi ? "" : "none";
+    if (!multi) return;
+    variantNav.querySelector(".variant-nav-label").textContent =
+      currentVariantIndex + 1 + " / " + currentVariants.length;
+  }
+
   function renderVariants(variants) {
+    currentVariants = variants;
     prodGrid.innerHTML = "";
     variants.forEach(function (variant, i) {
       var item = document.createElement("div");
@@ -159,15 +156,28 @@
       item.appendChild(strong);
       item.appendChild(span);
       item.addEventListener("click", function () {
-        prodGrid.querySelectorAll(".prod-item").forEach(function (el) {
-          el.classList.remove("active");
-        });
-        item.classList.add("active");
-        buildThumbs(variant.imageUrls);
+        selectVariant(i);
       });
       prodGrid.appendChild(item);
     });
-    if (variants.length > 0) buildThumbs(variants[0].imageUrls);
+
+    if (!variantNav) {
+      variantNav = document.createElement("div");
+      variantNav.className = "variant-nav";
+      variantNav.innerHTML =
+        '<button type="button" class="variant-nav-btn variant-nav-prev" aria-label="Forrige variant">&#8249; Forrige</button>' +
+        '<span class="variant-nav-label"></span>' +
+        '<button type="button" class="variant-nav-btn variant-nav-next" aria-label="Neste variant">Neste &#8250;</button>';
+      prodGrid.insertAdjacentElement("afterend", variantNav);
+      variantNav.querySelector(".variant-nav-prev").addEventListener("click", function () {
+        selectVariant((currentVariantIndex - 1 + currentVariants.length) % currentVariants.length);
+      });
+      variantNav.querySelector(".variant-nav-next").addEventListener("click", function () {
+        selectVariant((currentVariantIndex + 1) % currentVariants.length);
+      });
+    }
+
+    if (variants.length > 0) selectVariant(0);
   }
 
   function renderEmpty() {
@@ -207,47 +217,6 @@
     });
   }
 
-  // ── Forrige/neste modell-navigasjon ─────────────────────────────────
-  function renderModelNav(category) {
-    fetch(API_BASE + "/api/public/models")
-      .then(function (res) {
-        return res.ok ? res.json() : null;
-      })
-      .then(function (models) {
-        if (!models) return;
-        var sameCategory = models.filter(function (m) {
-          return (m.category || "KJORETOY") === category;
-        });
-        var index = sameCategory.findIndex(function (m) {
-          return m.slug === slug;
-        });
-        if (index === -1 || sameCategory.length < 2) return;
-
-        var prev = sameCategory[(index - 1 + sameCategory.length) % sameCategory.length];
-        var next = sameCategory[(index + 1) % sameCategory.length];
-
-        var nav = document.createElement("div");
-        nav.className = "model-nav";
-        nav.innerHTML =
-          '<a class="model-nav-link model-nav-prev" href="' +
-          urlForSlug(prev.slug) +
-          '">&larr; ' +
-          prev.name +
-          "</a>" +
-          '<a class="model-nav-link model-nav-next" href="' +
-          urlForSlug(next.slug) +
-          '">' +
-          next.name +
-          " &rarr;</a>";
-
-        var hero = document.querySelector(".page-hero");
-        if (hero) hero.insertAdjacentElement("afterend", nav);
-      })
-      .catch(function () {
-        // Ingen navigasjon hvis listen ikke kan hentes - siden fungerer fint uten.
-      });
-  }
-
   fetch(API_BASE + "/api/public/models/" + encodeURIComponent(slug))
     .then(function (res) {
       return res.ok ? res.json() : null;
@@ -263,7 +232,6 @@
       }
       renderFeatures(data.features);
       modelImageUrl = data.imageUrl || null;
-      renderModelNav(data.category || "KJORETOY");
       if (!data.variants || data.variants.length === 0) {
         renderEmpty();
         return;

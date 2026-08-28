@@ -380,17 +380,18 @@ footer a:hover { color: #8892a4; }
   .lightbox-nav { width: 40px; height: 40px; font-size: 24px; }
 }
 
-/* ─── FORRIGE/NESTE MODELL ────────────────────────────────── */
-.model-nav {
-  display: flex; justify-content: space-between; gap: 12px;
-  max-width: 1100px; margin: 16px auto 0; padding: 0 24px;
+/* ─── FORRIGE/NESTE VARIANT ───────────────────────────────── */
+.variant-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-top: 10px;
 }
-.model-nav-link {
-  font-size: 13px; font-weight: 600; color: #666; text-decoration: none;
-  max-width: 48%; transition: color 0.15s;
+.variant-nav-btn {
+  font-size: 13px; font-weight: 600; color: #666;
+  background: none; border: none; cursor: pointer; padding: 6px 4px;
+  transition: color 0.15s;
 }
-.model-nav-link:hover { color: #c0392b; }
-.model-nav-next { text-align: right; margin-left: auto; }
+.variant-nav-btn:hover { color: #c0392b; }
+.variant-nav-label { font-size: 12px; color: #999; }
 
 /* ─── RESPONSIVE ──────────────────────────────────────────── */
 @media (max-width: 640px) {
