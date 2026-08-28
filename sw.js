@@ -1,3 +1,10 @@
+// v12 - HTML/JS-grenen under hentet alltid ferskt over nett (riktig), men lagret
+// ALDRI resultatet i cachen - caches.match(e.request) i catch-fallbacken hadde derfor
+// ingenting å falle tilbake på. Konsekvens: appen fungerte i praksis ikke frakoblet i
+// det hele tatt, stikk i strid med at den har egen offline-kø for mislykkede lagringer.
+// Fikset ved å skrive et vellykket svar til cachen (samme synkrone res.clone()-mønster
+// som den generiske fallback-grenen lenger ned, se v9-notatet), uten å endre selve
+// nett-først-oppførselen.
 // v11 - icon.svg var en skjør wrapper som viste seg å rendres helt sort som
 // app-ikon (samme mønster som en tidligere favicon-bug) - byttet til de
 // ekte icon-192/512.png-filene overalt. Cache-navnet er bumpet igjen.
@@ -10,7 +17,7 @@
 // v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-const CACHE = 'salmakern-v11';
+const CACHE = 'salmakern-v12';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
@@ -58,7 +65,20 @@ self.addEventListener('fetch', e => {
     // Appens logikk ligger nå i js/-filene (ikke lenger inline i HTML-en), så
     // de må ferskest mulig - ellers kan gammel klientkode og ny database-
     // struktur komme ut av sync med hverandre rett etter en deploy.
-    e.respondWith(fetch(e.request, {cache:'no-store'}).catch(() => caches.match(e.request)));
+    e.respondWith(
+      fetch(e.request, {cache:'no-store'})
+        .then(res => {
+          if (res && res.status === 200) {
+            // res.clone() MÅ kalles synkront her, med en gang - se v9-notatet lenger ned.
+            // Uten dette har catch-fallbacken under ingenting å falle tilbake på ved
+            // reelt nettverksbrudd - appen lastet da ikke i det hele tatt frakoblet.
+            const kopi = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, kopi));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
     return;
   }
   e.respondWith(

@@ -18,7 +18,15 @@ function showPage(id, btn) {
   if (id==='admin')    renderAdminArk();
   renderGlobalLavLagerVarsel();
 }
-function renderAll() { renderOversikt(); renderArkiv(); renderMer(); renderOrdreList(); renderGlobalLavLagerVarsel(); }
+function renderAll() {
+  // Hver del kjøres isolert - en feil i én rendring (f.eks. utløst av uventet
+  // datatilstand rett etter en sanntids-gjenoppkobling) skal ikke stoppe de andre
+  // fra å oppdatere seg, og skal ikke kaste seg videre ut til kalleren (f.eks.
+  // gjenoppkoblings-handleren i core.js, der resten av UI-et da ble stående ufrisket).
+  [renderOversikt, renderArkiv, renderMer, renderOrdreList, renderGlobalLavLagerVarsel].forEach(fn => {
+    try { fn(); } catch(e) { console.error('renderAll: ' + fn.name + ' feilet:', e); }
+  });
+}
 
 function renderOrdreList() {
   const listEl   = document.getElementById('ordreList');

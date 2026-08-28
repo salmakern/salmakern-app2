@@ -204,7 +204,9 @@ async function loadFromSupabase() {
     Object.entries(fotos).forEach(([key, url]) => {
       const [side, idxStr] = key.split('_');
       const idx = parseInt(idxStr);
-      const felt = FOTO_SIDER[side].felt;
+      const sideInfo = FOTO_SIDER[side];
+      if (!sideInfo) { tomme.push(key); return; } // ukjent side-nøkkel - dropp i stedet for å krasje
+      const felt = sideInfo.felt;
       if (o[felt][idx] === url) { tomme.push(key); }
       else o[felt][idx] = url;
     });
@@ -232,6 +234,13 @@ async function loadFromSupabase() {
   // data i databasen med en tom liste. (Dette skjedde faktisk én gang.)
   if (sR.error) {
     console.warn('Innstillinger-lesing feilet, beholder eksisterende data i minnet:', sR.error.message);
+  } else if (ignorerRealtimeInnstillinger) {
+    // Vi har nettopp lagret innstillinger selv (saveInnstillinger() satte dette flagget
+    // i 10 sek) - denne innlastingen kan ha startet FØR vår egen skriving rakk å committe,
+    // og ville da stille overskrevet f.eks. en nettopp endret GPS-radius med den gamle
+    // verdien. Samme beskyttelse som realtime-abonnementet på 'innstillinger' allerede
+    // har (se .on('postgres_changes',...,'innstillinger') lenger ned) - utvidet hit fordi
+    // den ikke dekket vanlig gjeninnlasting (f.eks. sanntids-gjenoppkobling).
   } else {
     S.dagensPIN      = sR.data?.dagens_pin || '1234';
     S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
@@ -522,10 +531,15 @@ function subscribeRealtime() {
           realtimeReconnectTimer = setTimeout(async () => {
             realtimeReconnectTimer = null;
             if (db && me) {
+              // Egne try/catch for datahenting og rendering - en feil i den ene skal
+              // ikke skjule at den andre gikk fint, og uansett hva som feiler her MÅ
+              // subscribeRealtime() under kjøre, ellers gir vi opp gjenoppkoblingen stille.
               try {
                 await loadFromSupabase();
-                renderAll();
               } catch(e) { console.warn('Gjenoppkobling: datahenting feilet:', e); }
+              try {
+                renderAll();
+              } catch(e) { console.warn('Gjenoppkobling: rendering feilet:', e); }
               subscribeRealtime();
             }
           }, forsinkelse);
