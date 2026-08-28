@@ -353,4 +353,11 @@ footer a:hover { color: #8892a4; }
   .header-inner { justify-content: center; }
   nav a { padding: 8px 12px; font-size: 13px; }
   .hero-content { padding: 60px 20px; }
+  /* The 3 header logos are fixed at 72px height by default, which don't fit
+     side by side on a phone width and wrap onto 3 separate rows instead -
+     the header ends up taller than half the screen. Shrink them enough to
+     comfortably fit on one row. */
+  .header-logos { gap: 12px; }
+  .logo-link img { height: 30px; }
+  .partner-logo { height: 30px; max-width: 110px; }
 }
