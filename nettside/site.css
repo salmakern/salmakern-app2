@@ -80,8 +80,11 @@ nav a.active { color: #c0392b; background: #3d3d3d; font-weight: 700; }
 }
 .hero-bg img {
   position: absolute;
-  width: 100%; height: auto;
-  top: 50%; transform: translateY(-50%);
+  /* Source photo is 1600px wide - capping here stops it being upscaled
+     (and going soft/blurry) on wider desktop screens. The dark gradient
+     background already on .hero-bg covers the edges either side. */
+  width: 100%; max-width: 1600px; height: auto;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
   opacity: 0.25;
 }
 .hero-content {
