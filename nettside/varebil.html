@@ -42,13 +42,6 @@
   <div class="section section-gray" id="modeller">
     <div class="section-inner">
 
-      <!-- FANER -->
-      <div class="varebil-tabs">
-        <button class="varebil-tab active" onclick="visTab(this,'alle')">Alle modeller</button>
-        <button class="varebil-tab" onclick="visTab(this,'modul')">Modul Systemer</button>
-      </div>
-
-      <!-- ALLE MODELLER -->
       <div id="tab-alle">
         <div class="section-label">Bilmodeller</div>
         <h2>Modeller vi bygger om</h2>
@@ -75,28 +68,10 @@
         </div>
       </div>
 
-      <!-- MODUL SYSTEMER -->
-      <div id="tab-modul" style="display:none;">
-        <div class="section-label">Modul Systemer</div>
-        <h2>Modul Systemer</h2>
-        <p class="section-lead">Innredningsløsninger fra Modul-System.</p>
-        <div class="models-grid" id="modulGrid">
-          <p id="modulEmpty" style="grid-column:1/-1;color:#888;">Innhold kommer snart.</p>
-        </div>
-      </div>
-
     </div>
   </div>
 
-  <script>
-  function visTab(btn, id) {
-    document.querySelectorAll('.varebil-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-alle').style.display = id === 'alle' ? '' : 'none';
-    document.getElementById('tab-modul').style.display = id === 'modul' ? '' : 'none';
-  }
-  </script>
-  <script src="model-list-sync.js?v=3" defer></script>
+  <script src="model-list-sync.js?v=4" defer></script>
 
   <div class="cta-strip">
     <h2>Klar for å komme i gang?</h2>

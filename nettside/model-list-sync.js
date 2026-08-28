@@ -24,8 +24,7 @@
   };
 
   var vehicleGrid = document.getElementById("modelsGrid");
-  var modulGrid = document.getElementById("modulGrid");
-  if (!vehicleGrid && !modulGrid) return;
+  if (!vehicleGrid) return;
 
   // Hide the static fallback list until we know whether real data replaces it -
   // avoids a visible flash of the old boxes right before they get swapped out.
@@ -53,7 +52,7 @@
     } else {
       var placeholder = document.createElement("span");
       placeholder.className = "thumb-placeholder";
-      placeholder.textContent = model.category === "MODULSYSTEM" ? "📦" : "🚐";
+      placeholder.textContent = "🚐";
       thumb.appendChild(placeholder);
     }
 
@@ -73,28 +72,19 @@
     .then(function (models) {
       if (!models || models.length === 0) return;
 
+      // Modul-System-produkter har ingen egen seksjon på siden lenger (fjernet til
+      // det faktisk finnes noe å vise der) - filtrert bort her så de ikke dukker
+      // opp blandet inn i den vanlige bilmodell-listen.
       var vehicles = models.filter(function (m) {
         return m.category !== "MODULSYSTEM";
       });
-      var modulSystems = models.filter(function (m) {
-        return m.category === "MODULSYSTEM";
-      });
 
-      if (vehicleGrid && vehicles.length > 0) {
+      if (vehicles.length > 0) {
         vehicleGrid.innerHTML = "";
         vehicles.forEach(function (model) {
           vehicleGrid.appendChild(buildTag(model));
         });
       }
-
-      if (modulGrid && modulSystems.length > 0) {
-        modulGrid.innerHTML = "";
-        modulSystems.forEach(function (model) {
-          modulGrid.appendChild(buildTag(model));
-        });
-      }
-      // If there are no Modul-System models yet, leave the "kommer snart"
-      // placeholder already in the HTML in place.
     })
     .catch(function () {
       // Leave the existing static/placeholder content in place if the API is unreachable.
