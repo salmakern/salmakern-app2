@@ -635,7 +635,7 @@ if (!window._adminArkResizeBundet) {
   });
 }
 
-function renderAdminArk() {
+function renderAdminArk(scrollTilBunn) {
   vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
   adminArkOppdaterStatus();
   adminArkTilpassHoyde();
@@ -789,17 +789,35 @@ function renderAdminArk() {
 
   // Tabulator bygger radene asynkront - et snapshot tatt rett etter new Tabulator(...)
   // kan derfor bli tomt. tableBuilt garanterer at radene faktisk finnes når vi leser dem.
+  // De eldste/historiske radene ligger øverst, det aktive/nyeste nederst - så man skal
+  // starte nederst og bla oppover ved behov, ikke måtte scrolle forbi alt det historiske
+  // hver gang man åpner Admin-siden. Kun ved selve sidenavigeringen (showPage), ikke ved
+  // vanlige re-renderinger (sanntidsoppdatering fra andre) - det ville revet bort
+  // scroll-posisjonen til noen som står midt i og redigerer. Bruker Tabulator sin egen
+  // scrollToRow() (ikke rå scrollTop) siden virtual-DOM-rendringen ellers kan tilbakestille
+  // en manuell scrollTop-endring når den justerer synlig rad-vindu i etterkant.
+  function scrollAdminArkTilBunn() {
+    const rader = adminArkTable.getRows();
+    const siste = rader[rader.length - 1];
+    if (siste) adminArkTable.scrollToRow(siste, 'bottom', false).catch(()=>{});
+  }
   adminArkTable.on('tableBuilt', () => {
     adminArkOppdaterVentendeTimerSnapshot();
     adminArkOppdaterTabellBredde();
     if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {ord: adminArkSokTekst.toLowerCase().split(/\s+/).filter(Boolean)});
+    if (scrollTilBunn) scrollAdminArkTilBunn();
   });
   // De auto-brede kolonnene (Forhandler/Kontaktperson/Fraktselskap/Merknader) kan trenge
   // MER enn én layout-runde før Tabulator har regnet ut sin endelige, innholds-tilpassede
   // bredde - tableBuilt alene var for tidlig. renderComplete fyrer på nytt hver gang
   // Tabulator selv har måttet justere rad/kolonne-mål videre, så vi korrigerer boksbredden
   // igjen der - trygt å kalle flere ganger, den regner bare ut på nytt fra faktiske DOM-mål.
-  adminArkTable.on('renderComplete', () => adminArkOppdaterTabellBredde());
+  // Samme grunn til at scroll-til-bunn gjentas her - virtual-DOM-justeringen kan ellers
+  // rekke å skyve synlig rad-vindu tilbake til toppen igjen etter tableBuilt.
+  adminArkTable.on('renderComplete', () => {
+    adminArkOppdaterTabellBredde();
+    if (scrollTilBunn) scrollAdminArkTilBunn();
+  });
 
   adminArkTable.on('cellEdited', cell => {
     if (!adminArkSisteTastVarEnter) return;
