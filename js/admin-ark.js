@@ -5,6 +5,12 @@ let adminArkAar = new Date().getFullYear();
 let adminArkTable = null;
 let adminArkSokTekst = '';
 
+// "Sorterer sist"-verdi for tomme rader (Ny rad-knappen og de auto-genererte reserve-
+// radene). MÅ holde seg innenfor Postgres sin "integer"-kolonne (rekkefolge) - maks er
+// 2147483647. Number.MAX_SAFE_INTEGER (9007199254740991) er for stor og ville feilet med
+// en databasefeil ved lagring første gang noen skrev i en slik rad.
+const ADMIN_ARK_REKKEFOLGE_BUNN = 2147483647;
+
 // Filtrerer tabellen live på Chassis.nr/Forhandler/Merknader/Flåte mens man skriver
 // (som Ctrl+F i Excel). Flere ord adskilt med mellomrom kombineres med OG - hvert
 // ord kan stå i et hvilket som helst av de fire feltene (ikke nødvendigvis samme),
@@ -178,7 +184,11 @@ function parseTimeBekreftetTekst(tekst) {
 // adminArkLagreFelter) - slik at en ny ordre alltid havner nederst i arket,
 // uansett hvor mange rader som totalt finnes (på tvers av år/arkiverte rader).
 function adminArkNesteRekkefolge() {
-  const maks = Math.max(0, ...(S.adminArk||[]).filter(r=>r.aar===adminArkAar).map(r=>Number(r.rekkefolge)||0));
+  // Ekskluderer tomme rader (Ny rad/reserve-rader, som ligger helt i bunnen på
+  // ADMIN_ARK_REKKEFOLGE_BUNN) fra maks-utregningen - ellers ville en ny ordre uten
+  // admin-ark-kobling regne seg til ETT HØYERE tall enn selve bunn-grensen, som
+  // overskrider det Postgres sin "integer"-kolonne tåler ved lagring.
+  const maks = Math.max(0, ...(S.adminArk||[]).filter(r=>r.aar===adminArkAar && !adminArkErTomRad(r)).map(r=>Number(r.rekkefolge)||0));
   return maks + 1;
 }
 
@@ -264,7 +274,7 @@ const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','ser
 // Legger til en tom, ikke-lagret rad nederst i arket - blir først lagret i databasen
 // når brukeren skriver noe i en av cellene.
 function adminArkNyRad() {
-  const rad = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: Number.MAX_SAFE_INTEGER,
+  const rad = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
     forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
   S.adminArk = [...(S.adminArk||[]), rad];
   renderAdminArk();
@@ -635,10 +645,37 @@ if (!window._adminArkResizeBundet) {
   });
 }
 
+// En helt tom, ikke-lagret rad (samme form som adminArkNyRad() lager) - brukt til å
+// telle hvor mange "reserve"-rader som allerede ligger klare nederst i arket.
+function adminArkErTomRad(r) {
+  return !r.chassisNr && !r.forhandler && !r.kontaktperson && !r.serienummer &&
+         !r.mottatt && !r.papirer && !r.dokumenter && !r.fraktselskap && !r.merknader &&
+         !r.flateHypotetisk && !r.timeBekreftet && !r.ventendeTimer;
+}
+
+// Sørger for at det alltid finnes minst `antall` tomme, klikkbare rader nederst i arket
+// (som i Excel) - så man aldri trenger å trykke "+ Ny rad" manuelt for å få plass til å
+// skrive inn nok en bil. Rent i minnet til noen faktisk skriver noe i en av dem (samme
+// som adminArkNyRad()) - fyller bare på DIFFERANSEN, ikke antall*hver-gang.
+function adminArkSikreTommeRader(antall) {
+  const eksisterendeTomme = (S.adminArk||[]).filter(r => r.aar === adminArkAar && !r.arkivert && adminArkErTomRad(r));
+  const mangler = antall - eksisterendeTomme.length;
+  if (mangler <= 0) return;
+  const nye = [];
+  for (let i = 0; i < mangler; i++) {
+    nye.push({ id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
+      forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false });
+  }
+  S.adminArk = [...(S.adminArk||[]), ...nye];
+}
+
 function renderAdminArk(scrollTilBunn) {
   vtMerking = { aktiv:false, startIdx:null, rader:new Set(), fikkDrag:false };
   adminArkOppdaterStatus();
   adminArkTilpassHoyde();
+  const arkRaderIAarForBygg = (S.adminArk||[]).filter(r => r.aar === adminArkAar);
+  const kanRedigereForBygg = arkRaderIAarForBygg.length ? arkRaderIAarForBygg.some(r => !r.arkivert) : true;
+  if (kanRedigereForBygg) adminArkSikreTommeRader(10);
   const data = adminArkByggRader();
   const arkRaderIAar = (S.adminArk||[]).filter(r => r.aar === adminArkAar);
   const kanRedigere = arkRaderIAar.length ? arkRaderIAar.some(r => !r.arkivert) : true;
