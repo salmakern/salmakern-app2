@@ -6,21 +6,21 @@ let adminArkTable = null;
 let adminArkSokTekst = '';
 
 // Filtrerer tabellen live på Chassis.nr/Forhandler/Merknader/Flåte mens man skriver
-// (som Ctrl+F i Excel). Filteret lagres i en modulvariabel og gjenopprettes i
+// (som Ctrl+F i Excel). Flere ord adskilt med mellomrom kombineres med OG - hvert
+// ord kan stå i et hvilket som helst av de fire feltene (ikke nødvendigvis samme),
+// slik at f.eks. "gromstad 2026" finner en rad der forhandleren er Gromstad OG et
+// annet felt inneholder 2026. Filteret lagres i en modulvariabel og gjenopprettes i
 // renderAdminArk() etter hver re-rendring (f.eks. utløst av en annen ansatts
 // sanntids-redigering), siden tabellen der destroy()es og bygges helt på nytt -
 // uten dette ville søket stille falle bort igjen mens søkefeltet fortsatt viste teksten.
 function adminArkSokFilter(data, params) {
-  const t = params.tekst;
-  return (data.chassisNr||'').toLowerCase().includes(t) ||
-         (data.forhandler||'').toLowerCase().includes(t) ||
-         (data.merknader||'').toLowerCase().includes(t) ||
-         (data.flateVis||'').toLowerCase().includes(t);
+  const felt = [data.chassisNr, data.forhandler, data.merknader, data.flateVis].map(v => (v||'').toLowerCase());
+  return params.ord.every(o => felt.some(f => f.includes(o)));
 }
 function adminArkSok(tekst) {
   adminArkSokTekst = tekst || '';
   if (!adminArkTable) return;
-  if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {tekst: adminArkSokTekst.toLowerCase()});
+  if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {ord: adminArkSokTekst.toLowerCase().split(/\s+/).filter(Boolean)});
   else adminArkTable.clearFilter();
 }
 
@@ -792,7 +792,7 @@ function renderAdminArk() {
   adminArkTable.on('tableBuilt', () => {
     adminArkOppdaterVentendeTimerSnapshot();
     adminArkOppdaterTabellBredde();
-    if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {tekst: adminArkSokTekst.toLowerCase()});
+    if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {ord: adminArkSokTekst.toLowerCase().split(/\s+/).filter(Boolean)});
   });
   // De auto-brede kolonnene (Forhandler/Kontaktperson/Fraktselskap/Merknader) kan trenge
   // MER enn én layout-runde før Tabulator har regnet ut sin endelige, innholds-tilpassede
