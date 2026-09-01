@@ -872,14 +872,24 @@ function renderAdminArk(scrollTilBunn) {
     // "Uendelig" scroll nedover (som Excel) - fyller på 10 nye tomme rader hver gang man
     // nærmer seg bunnen av det som faktisk er lastet, i stedet for en fast øvre grense.
     // Ny lytter må settes på hver gang siden hele tabellen (og dermed elementet) bygges på
-    // nytt fra bunnen av ved en full re-rendring.
+    // nytt fra bunnen av ved en full re-rendring. Selve sjekken er rAF-throttlet - scroll-
+    // eventet fyrer svært ofte (mange ganger per sekund under en dra-bevegelse), og
+    // scrollHeight/clientHeight tvinger frem en layout-beregning hver gang de leses, så å
+    // gjøre det på HVERT event ga merkbar hakking i selve scrollingen på et stort ark.
+    // Med rAF gjøres sjekken maks én gang per skjermoppdatering i stedet.
     const holder = document.getElementById('adminArkTabell')?.querySelector('.tabulator-tableholder');
     if (holder && kanRedigere) {
+      let rafPlanlagt = false;
       holder.addEventListener('scroll', () => {
-        if (holder.scrollTop + holder.clientHeight >= holder.scrollHeight - 300) {
-          adminArkLeggTilFlereReserveRader(10);
-        }
-      });
+        if (rafPlanlagt) return;
+        rafPlanlagt = true;
+        requestAnimationFrame(() => {
+          rafPlanlagt = false;
+          if (holder.scrollTop + holder.clientHeight >= holder.scrollHeight - 300) {
+            adminArkLeggTilFlereReserveRader(10);
+          }
+        });
+      }, { passive: true });
     }
   });
   // De auto-brede kolonnene (Forhandler/Kontaktperson/Fraktselskap/Merknader) kan trenge
