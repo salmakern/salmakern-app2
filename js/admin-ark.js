@@ -853,10 +853,21 @@ function renderAdminArk(scrollTilBunn) {
   // scroll-posisjonen til noen som står midt i og redigerer. Bruker Tabulator sin egen
   // scrollToRow() (ikke rå scrollTop) siden virtual-DOM-rendringen ellers kan tilbakestille
   // en manuell scrollTop-endring når den justerer synlig rad-vindu i etterkant.
+  // Hopper over de tomme reserve-radene helt nederst - lander på den siste raden som
+  // FAKTISK har innhold, ikke på en blank rad (visnings-formen har andre feltnavn enn
+  // S.adminArk sin adminArkErTomRad(), derfor egen sjekk her).
+  function adminArkVisningRadErTom(r) {
+    return !r.chassisNr && !r.forhandler && !r.kontaktperson && !r.mottatt && !r.papirer &&
+           !r.dokumenter && !r.fraktselskap && !r.merknader && !r.flateVis && !r.timeBekreftet && !r.ventendeTimer;
+  }
   function scrollAdminArkTilBunn() {
     const rader = adminArkTable.getRows();
-    const siste = rader[rader.length - 1];
-    if (siste) adminArkTable.scrollToRow(siste, 'bottom', false).catch(()=>{});
+    let mal = null;
+    for (let i = rader.length - 1; i >= 0; i--) {
+      if (!adminArkVisningRadErTom(rader[i].getData())) { mal = rader[i]; break; }
+    }
+    if (!mal) mal = rader[rader.length - 1];
+    if (mal) adminArkTable.scrollToRow(mal, 'bottom', false).catch(()=>{});
   }
   // scrollTilBunn skal KUN gjelde den korte oppstarts-vinden rett etter at man navigerer
   // inn på siden - IKKE resten av tabellens levetid. Uten denne tidsgrensen ville f.eks.
