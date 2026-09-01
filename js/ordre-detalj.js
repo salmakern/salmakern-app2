@@ -396,11 +396,10 @@ function tvangsflyt(o) {
     {lbl:'Diagnose utført',   ok: !!o.diagnose},
     {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
     {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
-    // Kun det første bildet (Avstand) er tvangskrevd - de to skade-bildene er valgfrie.
-    {lbl:'Avstand-bilde',     ok: !!(o.bilderAvstandSkader && o.bilderAvstandSkader[0])},
     {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
-    {lbl:'Ombygging valgt',   ok: ombyggingValgt}
+    {lbl:'Ombygging valgt',   ok: ombyggingValgt},
+    {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)}
   ];
 }
 function ombyggingBoksHTML(o) {
