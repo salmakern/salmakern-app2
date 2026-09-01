@@ -858,11 +858,17 @@ function renderAdminArk(scrollTilBunn) {
     const siste = rader[rader.length - 1];
     if (siste) adminArkTable.scrollToRow(siste, 'bottom', false).catch(()=>{});
   }
+  // scrollTilBunn skal KUN gjelde den korte oppstarts-vinden rett etter at man navigerer
+  // inn på siden - IKKE resten av tabellens levetid. Uten denne tidsgrensen ville f.eks.
+  // uendelig-scroll-påfyllingen (som også trigger renderComplete) blitt tvangsscrollet
+  // til bunnen på nytt hver gang, som igjen utløser "nær bunnen" på nytt, som legger til
+  // flere rader, som scroller igjen... en evig løkke som så ut som siden "scrollet av seg selv".
+  const scrollTilBunnFrist = scrollTilBunn ? Date.now() + 1500 : 0;
   adminArkTable.on('tableBuilt', () => {
     adminArkOppdaterVentendeTimerSnapshot();
     adminArkOppdaterTabellBredde();
     if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {ord: adminArkSokTekst.toLowerCase().split(/\s+/).filter(Boolean)});
-    if (scrollTilBunn) scrollAdminArkTilBunn();
+    if (Date.now() < scrollTilBunnFrist) scrollAdminArkTilBunn();
     // "Uendelig" scroll nedover (som Excel) - fyller på 10 nye tomme rader hver gang man
     // nærmer seg bunnen av det som faktisk er lastet, i stedet for en fast øvre grense.
     // Ny lytter må settes på hver gang siden hele tabellen (og dermed elementet) bygges på
@@ -881,11 +887,11 @@ function renderAdminArk(scrollTilBunn) {
   // bredde - tableBuilt alene var for tidlig. renderComplete fyrer på nytt hver gang
   // Tabulator selv har måttet justere rad/kolonne-mål videre, så vi korrigerer boksbredden
   // igjen der - trygt å kalle flere ganger, den regner bare ut på nytt fra faktiske DOM-mål.
-  // Samme grunn til at scroll-til-bunn gjentas her - virtual-DOM-justeringen kan ellers
-  // rekke å skyve synlig rad-vindu tilbake til toppen igjen etter tableBuilt.
+  // Samme grunn til at scroll-til-bunn gjentas her (innenfor fristen) - virtual-DOM-
+  // justeringen kan ellers rekke å skyve synlig rad-vindu tilbake til toppen etter tableBuilt.
   adminArkTable.on('renderComplete', () => {
     adminArkOppdaterTabellBredde();
-    if (scrollTilBunn) scrollAdminArkTilBunn();
+    if (Date.now() < scrollTilBunnFrist) scrollAdminArkTilBunn();
   });
 
   adminArkTable.on('cellEdited', cell => {
