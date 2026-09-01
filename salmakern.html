@@ -293,8 +293,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <div><div class="h">Alle ordrer</div><div class="muted small" id="ordreListAntall">0 ordrer · Klikk for å åpne</div></div>
             <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
           </div>
-          <div style="margin-top:10px">
-            <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype..." oninput="renderOrdreList()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype..." oninput="renderOrdreList()" style="flex:1;min-width:180px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+            <select id="ordreStatusFilter" onchange="renderOrdreList()" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+              <option value="">Alle statuser</option>
+              <option value="paa_vei">På vei</option>
+              <option value="ikke_paabegynt">Ikke påbegynt</option>
+              <option value="paabegynt">Påbegynt</option>
+              <option value="ikke_veid">Ikke veid</option>
+              <option value="klar_visning">Klar for visning</option>
+              <option value="vist_biltilsyn">Vist på biltilsynet</option>
+              <option value="klar_henting">Klar for henting</option>
+              <option value="bestilt_frakt">Bestilt frakt</option>
+              <option value="hentet">Hentet</option>
+            </select>
           </div>
           <div class="grid g3" id="ordreListeResultat" style="margin-top:12px"></div>
         </div>
