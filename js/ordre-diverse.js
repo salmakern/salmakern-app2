@@ -287,29 +287,8 @@ function bekreftFlytt() {
 }
 
 // ════════════════════════════════════════════════════
-// SIGNATUR
-// ════════════════════════════════════════════════════
-async function lagreSignaturTilStorage(id, dataUrl) {
-  if (db) {
-    try {
-      const blob = await (await fetch(dataUrl)).blob();
-      const filnavn = `${id}/signatur_${Date.now()}.png`;
-      const { error } = await db.storage.from('bilder').upload(filnavn, blob, {contentType:'image/png', upsert:true, cacheControl:'31536000'});
-      if (!error) return db.storage.from('bilder').getPublicUrl(filnavn).data.publicUrl;
-      console.warn('Signatur-opplasting feilet:', error.message);
-    } catch(err) {
-      console.warn('Signatur-unntak:', err);
-    }
-  }
-  return dataUrl; // fallback til base64 kun hvis Storage feiler
-}
-
-// ════════════════════════════════════════════════════
 // GODKJENNING
 // ════════════════════════════════════════════════════
-let godkjennGodkjenner = null;
-let godkjCtx = null, godkjDrawing = false, godkjLastX = 0, godkjLastY = 0;
-
 async function bekreftGodkjenn() {
   const pin=document.getElementById('godkjPIN').value;
   let godkjenner = null;
@@ -320,59 +299,32 @@ async function bekreftGodkjenn() {
     else if (!error && data && data.length && (data[0].rolle==='godkjenner'||data[0].rolle==='admin')) godkjenner = data[0];
   }
   if (!godkjenner){document.getElementById('godkjErr').textContent = forMangeForsok ? 'For mange feilforsøk – vent noen minutter og prøv igjen' : 'Feil PIN eller ikke godkjenner';return;}
-  godkjennGodkjenner = godkjenner;
-  document.getElementById('godkjPIN').value='';
-  document.getElementById('godkjErr').textContent='';
-  closeModal('godkjenn');
-  // Åpne signaturbox
-  const o=S.ordrer.find(x=>x.id===activeOrdreId);
-  document.getElementById('godkjSignNavn').textContent = `Godkjent av ${godkjenner.navn} – la kunden signere`;
-  openModal('godkjennSign');
-  const c=document.getElementById('godkjCanvas');
-  c.width=c.offsetWidth||600;
-  godkjCtx=c.getContext('2d');
-  godkjCtx.strokeStyle='#f4f4f5'; godkjCtx.lineWidth=2.5; godkjCtx.lineCap='round';
-  clearGodkjCanvas();
-  const pos=e=>{const r=c.getBoundingClientRect(),t=e.touches?e.touches[0]:e;return{x:(t.clientX-r.left)*(c.width/r.width),y:(t.clientY-r.top)*(c.height/r.height)};};
-  c.onmousedown=e=>{godkjDrawing=true;const p=pos(e);godkjLastX=p.x;godkjLastY=p.y;};
-  c.onmousemove=e=>{if(!godkjDrawing)return;const p=pos(e);godkjCtx.beginPath();godkjCtx.moveTo(godkjLastX,godkjLastY);godkjCtx.lineTo(p.x,p.y);godkjCtx.stroke();godkjLastX=p.x;godkjLastY=p.y;};
-  c.onmouseup=c.onmouseleave=()=>{godkjDrawing=false;};
-  c.ontouchstart=e=>{e.preventDefault();godkjDrawing=true;const p=pos(e);godkjLastX=p.x;godkjLastY=p.y;};
-  c.ontouchmove=e=>{e.preventDefault();if(!godkjDrawing)return;const p=pos(e);godkjCtx.beginPath();godkjCtx.moveTo(godkjLastX,godkjLastY);godkjCtx.lineTo(p.x,p.y);godkjCtx.stroke();godkjLastX=p.x;godkjLastY=p.y;};
-  c.ontouchend=()=>{godkjDrawing=false;};
-}
-
-function clearGodkjCanvas() { if(godkjCtx) godkjCtx.clearRect(0,0,godkjCtx.canvas.width,godkjCtx.canvas.height); }
-
-async function lagreGodkjennSignatur(hoppOver=false) {
-  const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o||!godkjennGodkjenner) return;
-  const btn = document.querySelector('#godkjennSign .btn.red');
+  const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o) return;
+  const btn = document.querySelector('#godkjenn .btn.red');
   if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }
-  if (!hoppOver) {
-    const c=document.getElementById('godkjCanvas');
-    o.signatur = await lagreSignaturTilStorage(activeOrdreId, c.toDataURL());
-  }
-  o.godkjent=true; o.godkjennerNavn=godkjennGodkjenner.navn; o.status='arkivert';
+  o.godkjent=true; o.godkjennerNavn=godkjenner.navn; o.status='arkivert';
   const tvangsflytOk = tvangsflyt(o).every(t=>t.ok);
   const overstyrTekst = (!tvangsflytOk && me?.rolle==='admin') ? ' (tvangsflyt overstyrt av admin - ikke alle punkter var fullført)' : '';
-  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjennGodkjenner.navn+overstyrTekst};
+  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjenner.navn+overstyrTekst};
   o.endringer.push(endring);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   let feil = null;
   if (db) {
-    const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status, signatur:o.signatur, endringer:o.endringer}).eq('id', activeOrdreId);
+    const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status, endringer:o.endringer}).eq('id', activeOrdreId);
     if (error) feil = error.message;
   }
   if (feil) {
     // Lagringen feilet - ikke la det se ut som ordren er lukket når den ikke er det
     o.godkjent=false; o.godkjennerNavn=''; o.status='aktiv';
     o.endringer = o.endringer.filter(e=>e!==endring);
-    if (btn) { btn.disabled = false; btn.textContent = '✓ Fullfør og lukk ordre'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Godkjenn og lukk'; }
     visToast('Kunne ikke lukke ordren: ' + feil + ' — prøv igjen.');
     return;
   }
-  closeModal('godkjennSign'); tilbakeOrdreList(); renderAll();
-  godkjennGodkjenner=null;
+  document.getElementById('godkjPIN').value='';
+  document.getElementById('godkjErr').textContent='';
+  if (btn) { btn.disabled = false; btn.textContent = 'Godkjenn og lukk'; }
+  closeModal('godkjenn'); tilbakeOrdreList(); renderAll();
 }
 
 // ════════════════════════════════════════════════════

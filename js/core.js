@@ -814,7 +814,7 @@ function save(ordreId) {
   ignorerRealtimeFor.add(ordreId);
   setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
   // status/ordre_status/godkjent/godkjenner_navn utelates bevisst her - de har
-  // egne målrettede oppdateringer (endreStatus/arkiver/lagreGodkjennSignatur)
+  // egne målrettede oppdateringer (endreStatus/arkiver/bekreftGodkjenn)
   // og skal ALDRI skrives via denne generelle full-rad-lagringen. Grunnen: hvis
   // noen redigerer et vanlig felt (f.eks. merke) mens de har en litt gammel
   // kopi av ordren i minnet, ville denne lagringen ellers kunne skrive den
