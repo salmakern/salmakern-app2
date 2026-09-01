@@ -3,6 +3,19 @@
 // ════════════════════════════════════════════════════
 let adminArkAar = new Date().getFullYear();
 let adminArkTable = null;
+let adminArkSokTekst = '';
+
+// Filtrerer tabellen live på Chassis.nr mens man skriver (som Ctrl+F i Excel).
+// Filteret lagres i en modulvariabel og gjenopprettes i renderAdminArk() etter
+// hver re-rendring (f.eks. utløst av en annen ansatts sanntids-redigering),
+// siden tabellen der destroy()es og bygges helt på nytt - uten dette ville
+// søket stille falle bort igjen mens søkefeltet fortsatt viste teksten.
+function adminArkSok(tekst) {
+  adminArkSokTekst = tekst || '';
+  if (!adminArkTable) return;
+  if (adminArkSokTekst) adminArkTable.setFilter('chassisNr', 'like', adminArkSokTekst);
+  else adminArkTable.clearFilter();
+}
 
 // Chassis-nummer skal matche uansett store/små bokstaver - en admin_ark-rad skrevet inn
 // som "test123" må fortsatt finne/kobles til en ordre lagret som "TEST123". Ren "==="
@@ -772,6 +785,7 @@ function renderAdminArk() {
   adminArkTable.on('tableBuilt', () => {
     adminArkOppdaterVentendeTimerSnapshot();
     adminArkOppdaterTabellBredde();
+    if (adminArkSokTekst) adminArkTable.setFilter('chassisNr', 'like', adminArkSokTekst);
   });
   // De auto-brede kolonnene (Forhandler/Kontaktperson/Fraktselskap/Merknader) kan trenge
   // MER enn én layout-runde før Tabulator har regnet ut sin endelige, innholds-tilpassede
