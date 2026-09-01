@@ -152,12 +152,25 @@ function parseTimeBekreftetTekst(tekst) {
 // og "løse" admin_ark-rader uten noen matchende ordre ennå (lagt til med "+ Ny rad").
 // Så snart en ordre opprettes med samme chassis.nr, plukkes den løse raden opp av
 // ordre-grenen under og forsvinner fra de løse radene - de finner hverandre automatisk.
+// Gir neste ledige rekkefolge-verdi for inneværende år - én høyere enn det høyeste
+// som faktisk er i bruk. Brukes både ved visning av en helt ny, uten en lagret
+// admin_ark-rad ennå, og når den raden faktisk lagres for første gang (se
+// adminArkLagreFelter) - slik at en ny ordre alltid havner nederst i arket,
+// uansett hvor mange rader som totalt finnes (på tvers av år/arkiverte rader).
+function adminArkNesteRekkefolge() {
+  const maks = Math.max(0, ...(S.adminArk||[]).filter(r=>r.aar===adminArkAar).map(r=>Number(r.rekkefolge)||0));
+  return maks + 1;
+}
+
 function adminArkByggRader() {
   const ordre = (S.ordrer||[]).filter(o => {
     const aar = o.ankomstdato ? Number(String(o.ankomstdato).slice(0,4)) : null;
     return aar === adminArkAar;
   });
   const brukteArkId = new Set();
+  // Flere nye ordre uten lagret rad ennå skal likevel havne i riktig innbyrdes
+  // rekkefølge (eldst øverst av dem, nyest nederst) - ikke alfabetisk om hverandre.
+  let nesteRekkefolge = adminArkNesteRekkefolge();
   const ordreRader = ordre.map(o => {
     const ark = adminArkFinnRadForVisning(o.chassis);
     if (ark) brukteArkId.add(ark.id);
@@ -190,7 +203,7 @@ function adminArkByggRader() {
       timeBekreftetSted: ark?.timeBekreftetSted || '',
       timeBekreftetVis: fmtTimeBekreftetVis(ark?.timeBekreftet, ark?.timeBekreftetTid, ark?.timeBekreftetSted),
       ventendeTimer: ark?.ventendeTimer || '',
-      rekkefolge: ark?.rekkefolge ?? 999999,
+      rekkefolge: ark ? (ark.rekkefolge ?? 999999) : nesteRekkefolge++,
       _arkivert: ark?.arkivert || false
     };
   });
@@ -243,7 +256,7 @@ async function adminArkLagreFelter(rad, endringer) {
   let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
   if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, rad.chassisNr) && !r.arkivert);
   if (!ark) {
-    ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: (S.adminArk||[]).length,
+    ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: adminArkNesteRekkefolge(),
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
       serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
     S.adminArk = [...(S.adminArk||[]), ark];
