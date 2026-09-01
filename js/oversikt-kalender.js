@@ -65,7 +65,9 @@ function renderOrdreList() {
            (o.type||'').toLowerCase().includes(sokTekst) ||
            (o.merke||'').toLowerCase().includes(sokTekst) ||
            (o.modell||'').toLowerCase().includes(sokTekst) ||
-           (o.chassis||'').toLowerCase().includes(sokTekst);
+           (o.chassis||'').toLowerCase().includes(sokTekst) ||
+           (o.utstyr?.skalHa||'').toLowerCase().includes(sokTekst) ||
+           (o.utstyr?.har||'').toLowerCase().includes(sokTekst);
   }).sort(sorterOrdre);
   const antallEl = document.getElementById('ordreListAntall');
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
