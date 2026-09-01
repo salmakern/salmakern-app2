@@ -39,7 +39,7 @@ function renderOrdreList() {
   // Ikke rebuild mens bruker har et interaktivt element fokusert (bakgrunnsoppdatering ville lukket picker/miste input)
   // - unntatt søkefeltet selv, ellers slutter søk-mens-du-skriver å virke siden feltet har fokus mens man skriver i det.
   const aktivtEl = document.activeElement;
-  const sokFokusert = aktivtEl?.id === 'ordreSok' || aktivtEl?.id === 'ordreStatusFilter';
+  const sokFokusert = aktivtEl?.id === 'ordreSok' || aktivtEl?.id === 'ordreStatusFilter' || aktivtEl?.id === 'ordreTvangsflytFilter';
   const focusTag = aktivtEl?.tagName;
   if (!sokFokusert && listEl?.contains(aktivtEl) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   detailEl.style.display = 'none';
@@ -55,9 +55,11 @@ function renderOrdreList() {
   const gammelSok = document.getElementById('ordreSok')?.value || '';
   const sokTekst = gammelSok.toLowerCase().trim();
   const statusFilter = document.getElementById('ordreStatusFilter')?.value || '';
+  const tvangsflytFilter = document.getElementById('ordreTvangsflytFilter')?.value || '';
   const alle = S.ordrer.filter(o => {
     if (o.status !== 'aktiv') return false;
     if (statusFilter && o.ordreStatus !== statusFilter) return false;
+    if (!ordreMatcherTvangsflytFilter(o, tvangsflytFilter)) return false;
     if (!sokTekst) return true;
     return (o.regnr||'').toLowerCase().includes(sokTekst) ||
            (o.kunde||'').toLowerCase().includes(sokTekst) ||

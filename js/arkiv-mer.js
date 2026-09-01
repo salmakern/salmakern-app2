@@ -7,10 +7,12 @@ function renderArkiv() {
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o)).sort(sorterOrdre);
   const kunIkkeFakturert = document.getElementById('arkivFilterIkkeFakturert')?.checked;
   const kunFakturert = document.getElementById('arkivFilterFakturert')?.checked;
+  const tvangsflytFilter = document.getElementById('arkivTvangsflytFilter')?.value || '';
   let ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
     .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
   if (kunIkkeFakturert && !kunFakturert) ferdig = ferdig.filter(o=>!o.fakturert);
   else if (kunFakturert && !kunIkkeFakturert) ferdig = ferdig.filter(o=>!!o.fakturert);
+  ferdig = ferdig.filter(o=>ordreMatcherTvangsflytFilter(o, tvangsflytFilter));
   const fakturertAntall = ferdig.filter(o=>o.fakturert).length;
   const fakturertSammendrag = document.getElementById('arkivFakturertSammendrag');
   if (fakturertSammendrag) fakturertSammendrag.textContent = ferdig.length ? `${fakturertAntall} av ${ferdig.length} fakturert` : '';

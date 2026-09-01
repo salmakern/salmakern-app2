@@ -307,6 +307,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <option value="bestilt_frakt">Bestilt frakt</option>
               <option value="hentet">Hentet</option>
             </select>
+            <select id="ordreTvangsflytFilter" onchange="renderOrdreList()" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+              <option value="">Alle (tvangsflyt)</option>
+              <option value="_alle">Mangler noe (alle krav)</option>
+              <option value="Diagnose utført">Diagnose utført</option>
+              <option value="6 bilder ankomst">6 bilder ankomst</option>
+              <option value="6 bilder levering">6 bilder levering</option>
+              <option value="Ansatt meldt på">Ansatt meldt på</option>
+              <option value="Vekter fylt ut">Vekter fylt ut</option>
+              <option value="Ombygging valgt">Ombygging valgt</option>
+              <option value="Time på biltilsynet">Time på biltilsynet</option>
+            </select>
           </div>
           <div class="grid g3" id="ordreListeResultat" style="margin-top:12px"></div>
         </div>
@@ -403,6 +414,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <input type="checkbox" id="arkivFilterFakturert" onchange="renderArkiv()" style="width:16px;height:16px;accent-color:#16a34a">
               <span class="small">Vis kun fakturert</span>
             </label>
+            <select id="arkivTvangsflytFilter" onchange="renderArkiv()" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:6px 9px;font-size:13px">
+              <option value="">Alle (tvangsflyt)</option>
+              <option value="_alle">Manglet noe (alle krav)</option>
+              <option value="Diagnose utført">Diagnose utført</option>
+              <option value="6 bilder ankomst">6 bilder ankomst</option>
+              <option value="6 bilder levering">6 bilder levering</option>
+              <option value="Ansatt meldt på">Ansatt meldt på</option>
+              <option value="Vekter fylt ut">Vekter fylt ut</option>
+              <option value="Ombygging valgt">Ombygging valgt</option>
+              <option value="Time på biltilsynet">Time på biltilsynet</option>
+            </select>
           </div>
           <div id="arkivFerdig" style="margin-top:10px"></div>
         </div>

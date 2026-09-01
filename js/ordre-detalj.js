@@ -402,6 +402,18 @@ function tvangsflyt(o) {
     {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)}
   ];
 }
+
+// Brukt av tvangsflyt-filteret på Ordre- og Ordrearkiv-siden (#ordreTvangsflytFilter/
+// #arkivTvangsflytFilter). verdi='' betyr "ingen filter" (vis alt), verdi='_alle'
+// betyr "mangler minst ett krav", ellers er verdi selve lbl-teksten til ett bestemt
+// tvangsflyt-punkt (f.eks. "Vekter fylt ut") - viser da kun ordre som mangler NETTOPP det.
+function ordreMatcherTvangsflytFilter(o, verdi) {
+  if (!verdi) return true;
+  const tf = tvangsflyt(o);
+  if (verdi === '_alle') return !tf.every(t=>t.ok);
+  const punkt = tf.find(t=>t.lbl===verdi);
+  return !!punkt && !punkt.ok;
+}
 function ombyggingBoksHTML(o) {
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
