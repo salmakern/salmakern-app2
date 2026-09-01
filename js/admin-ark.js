@@ -271,15 +271,6 @@ function adminArkByggRader() {
 
 const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','merknader','ventendeTimer'];
 
-// Legger til en tom, ikke-lagret rad nederst i arket - blir først lagret i databasen
-// når brukeren skriver noe i en av cellene.
-function adminArkNyRad() {
-  const rad = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
-    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
-  S.adminArk = [...(S.adminArk||[]), rad];
-  renderAdminArk();
-}
-
 // endringer er et objekt med ett eller flere felt->verdi (f.eks. {serienummer:'x'} eller
 // {timeBekreftet:'2026-08-07', timeBekreftetTid:'09:00'}) - lagres samlet i én upsert.
 async function adminArkLagreFelter(rad, endringer) {
@@ -600,13 +591,11 @@ async function radFlyttFlereRader(kildePosisjoner, maalPosisjon) {
 function adminArkOppdaterStatus() {
   const el = document.getElementById('adminArkStatus');
   const btn = document.getElementById('adminArkArkiverBtn');
-  const nyRadBtn = document.getElementById('adminArkNyRadBtn');
   document.getElementById('adminArkAarTittel').textContent = adminArkAar;
   const radene = (S.adminArk||[]).filter(r => r.aar === adminArkAar);
   const harAktive = radene.some(r => !r.arkivert);
   const harNoen = radene.length > 0;
   const laast = harNoen && !harAktive;
-  if (nyRadBtn) nyRadBtn.style.display = laast ? 'none' : '';
   if (!harNoen) { el.textContent = ''; btn.style.display = 'none'; return; }
   if (laast) {
     el.innerHTML = '<span style="color:#facc15">🔒 Dette arket er arkivert (skrivebeskyttet)</span>';
@@ -645,28 +634,59 @@ if (!window._adminArkResizeBundet) {
   });
 }
 
-// En helt tom, ikke-lagret rad (samme form som adminArkNyRad() lager) - brukt til å
-// telle hvor mange "reserve"-rader som allerede ligger klare nederst i arket.
+// En helt tom, ikke-lagret rad - brukt til å telle hvor mange "reserve"-rader
+// som allerede ligger klare nederst i arket.
 function adminArkErTomRad(r) {
   return !r.chassisNr && !r.forhandler && !r.kontaktperson && !r.serienummer &&
          !r.mottatt && !r.papirer && !r.dokumenter && !r.fraktselskap && !r.merknader &&
          !r.flateHypotetisk && !r.timeBekreftet && !r.ventendeTimer;
 }
 
+// Lager én tom, ikke-lagret admin_ark-rad (S.adminArk-form) for gitt år.
+function adminArkNyTomRadObjekt() {
+  return { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
+    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+}
+// Samme rad, men i visnings-formen Tabulator/adminArkByggRader() bruker (se loseRader
+// lenger ned) - trengs for å legge raden rett inn i den LEVENDE tabellen (addData) uten
+// en full re-rendring, se adminArkLeggTilFlereReserveRader().
+function adminArkTomRadTilVisning(r) {
+  return { _ordreId:null, _arkId:r.id, _erOrdre:false, forhandler:'', kontaktperson:'', chassisNr:'', serienummer:'',
+    mottatt:false, dato:'', papirer:false, dokumenter:false, fakturertVis:'', fraktselskap:'', henteklarVis:'',
+    merknader:'', flateVis:'', _flateErEkte:false, timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'',
+    timeBekreftetVis:'', ventendeTimer:'', rekkefolge:r.rekkefolge, _arkivert:false };
+}
+
 // Sørger for at det alltid finnes minst `antall` tomme, klikkbare rader nederst i arket
-// (som i Excel) - så man aldri trenger å trykke "+ Ny rad" manuelt for å få plass til å
-// skrive inn nok en bil. Rent i minnet til noen faktisk skriver noe i en av dem (samme
-// som adminArkNyRad()) - fyller bare på DIFFERANSEN, ikke antall*hver-gang.
+// (som i Excel) - man skal aldri trenge å be om plass til å skrive inn nok en bil. Rent
+// i minnet til noen faktisk skriver noe i en av dem - fyller bare på DIFFERANSEN, ikke
+// antall*hver-gang. Brukes ved selve sidevisningen (renderAdminArk); se
+// adminArkLeggTilFlereReserveRader() for
+// påfylling mens man skroller (uten full re-rendring av tabellen).
 function adminArkSikreTommeRader(antall) {
   const eksisterendeTomme = (S.adminArk||[]).filter(r => r.aar === adminArkAar && !r.arkivert && adminArkErTomRad(r));
   const mangler = antall - eksisterendeTomme.length;
   if (mangler <= 0) return;
   const nye = [];
-  for (let i = 0; i < mangler; i++) {
-    nye.push({ id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
-      forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false });
-  }
+  for (let i = 0; i < mangler; i++) nye.push(adminArkNyTomRadObjekt());
   S.adminArk = [...(S.adminArk||[]), ...nye];
+}
+
+// Kalles når man skroller nær bunnen av arket - legger til flere tomme rader RETT INN
+// i den levende Tabulator-tabellen (addData, ikke en full re-rendring av hele arket),
+// slik at man kan bla "uendelig" langt ned uten noensinne å treffe en fast bunn-grense.
+let adminArkFyllerPaa = false;
+async function adminArkLeggTilFlereReserveRader(antall) {
+  if (adminArkFyllerPaa || !adminArkTable) return;
+  adminArkFyllerPaa = true;
+  try {
+    const nye = [];
+    for (let i = 0; i < antall; i++) nye.push(adminArkNyTomRadObjekt());
+    S.adminArk = [...(S.adminArk||[]), ...nye];
+    await adminArkTable.addData(nye.map(adminArkTomRadTilVisning));
+  } finally {
+    adminArkFyllerPaa = false;
+  }
 }
 
 function renderAdminArk(scrollTilBunn) {
@@ -843,6 +863,18 @@ function renderAdminArk(scrollTilBunn) {
     adminArkOppdaterTabellBredde();
     if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {ord: adminArkSokTekst.toLowerCase().split(/\s+/).filter(Boolean)});
     if (scrollTilBunn) scrollAdminArkTilBunn();
+    // "Uendelig" scroll nedover (som Excel) - fyller på 10 nye tomme rader hver gang man
+    // nærmer seg bunnen av det som faktisk er lastet, i stedet for en fast øvre grense.
+    // Ny lytter må settes på hver gang siden hele tabellen (og dermed elementet) bygges på
+    // nytt fra bunnen av ved en full re-rendring.
+    const holder = document.getElementById('adminArkTabell')?.querySelector('.tabulator-tableholder');
+    if (holder && kanRedigere) {
+      holder.addEventListener('scroll', () => {
+        if (holder.scrollTop + holder.clientHeight >= holder.scrollHeight - 300) {
+          adminArkLeggTilFlereReserveRader(10);
+        }
+      });
+    }
   });
   // De auto-brede kolonnene (Forhandler/Kontaktperson/Fraktselskap/Merknader) kan trenge
   // MER enn én layout-runde før Tabulator har regnet ut sin endelige, innholds-tilpassede
