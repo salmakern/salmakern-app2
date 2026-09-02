@@ -510,12 +510,23 @@ function openKalenderStedModal(id) {
   document.getElementById('kalStedForslag').innerHTML = kalenderStedForslag().map(s => `<option value="${esc(s)}">`).join('');
   openModal('kalenderSted');
 }
-function bekreftKalenderSted() {
+async function bekreftKalenderSted() {
   const o = S.ordrer.find(x => x.id === kalenderStedOrdreId); if (!o) return;
   const sted = document.getElementById('kalStedInput').value.trim();
-  o.tidBiltilsynetSted = sted;
-  logChange(o, 'Sted satt til: ' + (sted || '(tomt)'));
-  save(kalenderStedOrdreId); renderAll();
+  // Gjenbruker adminArkLagreFelter() (samme funksjon Admin-ark-cellene selv bruker) i
+  // stedet for å skrive til ordren direkte herfra - den har ALLEREDE logikken som speiler
+  // Time bekreftet begge veier (oppretter/oppdaterer riktig admin_ark-rad OG skriver
+  // tid_biltilsynet/tid_biltilsynet_tid/tid_biltilsynet_sted + kalender_dato/kalender_tid
+  // tilbake til selve ordren), se kommentaren i admin-ark.js. Kalenderens dato/tid
+  // (allerede satt av selve draget) sendes inn som Time bekreftet sin dato/tid, slik at
+  // en time satt via dra-og-slipp i Oversikten blir identisk med én satt i Admin-arket -
+  // synlig og redigerbar begge steder (bedt om av brukeren 2026-09-02).
+  await adminArkLagreFelter({chassisNr: o.chassis, _erOrdre: true}, {
+    timeBekreftet: o.kalenderDato || '',
+    timeBekreftetTid: o.kalenderTid || '',
+    timeBekreftetSted: sted
+  });
+  renderAll();
   if (activeOrdreId===kalenderStedOrdreId) buildOrdreDetail();
   closeModal('kalenderSted');
 }
