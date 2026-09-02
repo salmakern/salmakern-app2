@@ -226,8 +226,11 @@ function renderMer() {
 // typisk en skrivefeil et sted, siden raden da aldri kobles til riktig bil/ordre.
 // Arkiverte rader (låste, gamle år) hoppes over - de er historikk, ikke noe å rette nå.
 function finnUkobledeAdminArkRader() {
+  // Radene fra engangsimporten av historiske ordre (id-prefiks ark_import2026_, se
+  // supabase/README.md-historikken/CLAUDE.md) er BEVISST uten tilknyttet ordre - de skal
+  // ikke drukne ekte, ferske ukoblede rader i denne lista.
   return (S.adminArk||[])
-    .filter(r => !r.arkivert && r.chassisNr && !S.ordrer.some(o => samsvarerChassis(o.chassis, r.chassisNr)))
+    .filter(r => !r.arkivert && r.chassisNr && !r.id.startsWith('ark_import2026_') && !S.ordrer.some(o => samsvarerChassis(o.chassis, r.chassisNr)))
     .sort((a,b) => b.aar - a.aar);
 }
 function apneUkobletAdminArkRad(aar) {
