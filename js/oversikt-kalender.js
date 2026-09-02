@@ -285,6 +285,16 @@ async function endreStatus(id, nyStatus) {
   const forrigeEndringer = [...o.endringer];
   const forrigeDatoKlarHenting = o.datoKlarHenting;
   const forrigeAnkomstdato = o.ankomstdato;
+  // Ingen skal kunne begynne å jobbe på en bil uten at det er registrert HVEM som gjør
+  // det - blokkerer derfor akkurat denne overgangen med mindre minst én ansatt allerede
+  // er meldt på. Andre statusoverganger er upåvirket.
+  if (forrigeStatus === 'ikke_paabegynt' && nyStatus === 'paabegynt' && !o.ansatteSignert.length) {
+    visToast('Minst én ansatt må meldes på ordren før den kan settes til Påbegynt.');
+    if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
+    renderAll();
+    if (activeOrdreId===id) buildOrdreDetail();
+    return;
+  }
   o.ordreStatus = nyStatus;
   // Ordren arkiveres automatisk når den er hentet - MEN kun hvis den allerede er
   // ferdig godkjent (tvangsflyt fullført og godkjenner har lukket den via signatur-

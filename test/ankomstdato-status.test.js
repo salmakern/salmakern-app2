@@ -64,7 +64,9 @@ describe('Ankomstdato følger status (På vei ⇄ Ikke påbegynt)', () => {
   let sandbox, ordre;
   beforeEach(() => {
     sandbox = nyEnvironment();
-    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false };
+    // ansatteSignert har én ansatt fra starten - se egen describe-blokk lenger ned for
+    // selve ansatt-kravet for ikke_paabegynt→paabegynt.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}] };
     sandbox._setS({ ordrer: [ordre] });
     settDbUtfall(sandbox, true);
   });
@@ -100,6 +102,33 @@ describe('Ankomstdato følger status (På vei ⇄ Ikke påbegynt)', () => {
     // Skal fortsatt være den opprinnelige datoen, ikke tømt, siden lagringen feilet
     expect(sandbox._getS().ordrer[0].ankomstdato).toBe('2026-08-20');
     expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
+  });
+});
+
+describe('Krever ansatt meldt på før "Ikke påbegynt" → "Påbegynt" (bedt om av brukeren 2026-09-02)', () => {
+  let sandbox, ordre;
+  beforeEach(() => {
+    sandbox = nyEnvironment();
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [] };
+    sandbox._setS({ ordrer: [ordre] });
+    settDbUtfall(sandbox, true);
+  });
+
+  it('blokkerer overgangen når ingen ansatt er meldt på', async () => {
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
+    expect(sandbox._getS().ordrer[0].endringer.length).toBe(0);
+  });
+
+  it('tillater overgangen når minst én ansatt er meldt på', async () => {
+    ordre.ansatteSignert = [{id:1, navn:'Test Testesen', tid:'09:00'}];
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paabegynt');
+  });
+
+  it('påvirker ikke andre statusoverganger (f.eks. til "På vei")', async () => {
+    await sandbox.endreStatus('ord_1', 'paa_vei');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paa_vei');
   });
 });
 
