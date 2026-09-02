@@ -507,27 +507,56 @@ function openKalenderStedModal(id) {
   kalenderStedOrdreId = id;
   const o = S.ordrer.find(x => x.id === id);
   document.getElementById('kalStedInput').value = o?.tidBiltilsynetSted || '';
-  document.getElementById('kalStedForslag').innerHTML = kalenderStedForslag().map(s => `<option value="${esc(s)}">`).join('');
+  renderKalStedForslag();
   openModal('kalenderSted');
+}
+// Egen forslagsliste (klikkbare "chips") i stedet for nettleserens innebygde <datalist> -
+// datalist har vist seg upålitelig på tvers av nettlesere/mobil (spesielt iPhone, der
+// forslagene ofte ikke vises i det hele tatt) - bygges på nytt for hvert tastetrykk,
+// filtrert på det som allerede er skrevet, som en enkel type-ahead.
+function renderKalStedForslag() {
+  const el = document.getElementById('kalStedForslagListe');
+  if (!el) return;
+  const sokTekst = (document.getElementById('kalStedInput')?.value || '').toLowerCase().trim();
+  const forslag = kalenderStedForslag().filter(s => !sokTekst || s.toLowerCase().includes(sokTekst));
+  el.innerHTML = forslag.map(s => `<button type="button" class="btn sm" style="padding:4px 10px;font-size:12px" onclick="velgKalSted('${esc(s).replace(/'/g,"\\'")}')">${esc(s)}</button>`).join('') || '<span class="small muted">Ingen tidligere steder matcher</span>';
+}
+function velgKalSted(sted) {
+  document.getElementById('kalStedInput').value = sted;
+  renderKalStedForslag();
 }
 async function bekreftKalenderSted() {
   const o = S.ordrer.find(x => x.id === kalenderStedOrdreId); if (!o) return;
   const sted = document.getElementById('kalStedInput').value.trim();
-  // Gjenbruker adminArkLagreFelter() (samme funksjon Admin-ark-cellene selv bruker) i
-  // stedet for å skrive til ordren direkte herfra - den har ALLEREDE logikken som speiler
-  // Time bekreftet begge veier (oppretter/oppdaterer riktig admin_ark-rad OG skriver
-  // tid_biltilsynet/tid_biltilsynet_tid/tid_biltilsynet_sted + kalender_dato/kalender_tid
-  // tilbake til selve ordren), se kommentaren i admin-ark.js. Kalenderens dato/tid
-  // (allerede satt av selve draget) sendes inn som Time bekreftet sin dato/tid, slik at
-  // en time satt via dra-og-slipp i Oversikten blir identisk med én satt i Admin-arket -
-  // synlig og redigerbar begge steder (bedt om av brukeren 2026-09-02).
-  await adminArkLagreFelter({chassisNr: o.chassis, _erOrdre: true}, {
-    timeBekreftet: o.kalenderDato || '',
-    timeBekreftetTid: o.kalenderTid || '',
-    timeBekreftetSted: sted
-  });
+  if (o.chassis) {
+    // Gjenbruker adminArkLagreFelter() (samme funksjon Admin-ark-cellene selv bruker) -
+    // den finner/oppretter riktig admin_ark-rad OG speiler tid_biltilsynet/
+    // tid_biltilsynet_tid/tid_biltilsynet_sted + kalender_dato/kalender_tid tilbake til
+    // selve ordren, se kommentaren i admin-ark.js. Kalenderens dato/tid (allerede satt
+    // av selve draget) sendes inn som Time bekreftet sin dato/tid, slik at en time satt
+    // via dra-og-slipp i Oversikten blir identisk med én satt i Admin-arket - synlig og
+    // redigerbar begge steder (bedt om av brukeren 2026-09-02).
+    await adminArkLagreFelter({chassisNr: o.chassis, _erOrdre: true}, {
+      timeBekreftet: o.kalenderDato || '',
+      timeBekreftetTid: o.kalenderTid || '',
+      timeBekreftetSted: sted
+    });
+  } else {
+    // Ingen chassis.nr utfylt ennå - adminArkLagreFelter() sitt gjenoppslag av ordren
+    // (samsvarerChassis) feiler STILLE når chassis er tomt (krever ikke-tomme verdier
+    // på begge sider), som gjorde at verken ordren eller Admin-arket faktisk ble
+    // oppdatert for slike ordre. Setter feltene direkte på ordren i stedet - Admin-
+    // arket kan uansett ikke kobles til uten et chassis.nr å matche mot.
+    o.tidBiltilsynet = o.kalenderDato || '';
+    o.tidBiltilsynetTid = o.kalenderTid || '';
+    o.tidBiltilsynetSted = sted;
+    logChange(o, 'Time på biltilsynet satt fra kalender: ' + o.tidBiltilsynet + ' ' + o.tidBiltilsynetTid + (sted?' '+sted:''));
+    save(o.id);
+    visToast('Sted lagret på ordren. Legg til chassis.nr for at det også skal vises i Admin-arket.');
+  }
   renderAll();
   if (activeOrdreId===kalenderStedOrdreId) buildOrdreDetail();
+  if (document.getElementById('admin')?.classList.contains('active')) renderAdminArk();
   closeModal('kalenderSted');
 }
 
