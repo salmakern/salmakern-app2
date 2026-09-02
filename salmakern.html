@@ -763,6 +763,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
+<div class="modal" id="kalenderSted">
+  <div class="modal-box">
+    <div class="h">Sted for biltilsyn</div>
+    <div class="muted small" style="margin:8px 0">Hvor skal bilen til biltilsyn?</div>
+    <input id="kalStedInput" list="kalStedForslag" placeholder="F.eks. Skien" style="width:100%">
+    <datalist id="kalStedForslag"></datalist>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="bekreftKalenderSted()">Lagre</button>
+      <button class="btn" onclick="closeModal('kalenderSted')">Hopp over</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="nyttMote">
   <div class="modal-box">
     <div class="h">Nytt møte</div>

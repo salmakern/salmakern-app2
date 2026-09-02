@@ -481,9 +481,43 @@ function dragOrdreEnd(e) {
       o.kalenderTid  = slot.dataset.tid;
       logChange(o, 'Flyttet til kalender (dra): ' + o.kalenderDato + ' ' + o.kalenderTid);
       save(id); renderAll();
+      openKalenderStedModal(id);
     }
   }
   _dragOrdre = null;
+}
+
+let kalenderStedOrdreId = null;
+// Steder brukt før på tvers av alle ordre (Time på biltilsynet-feltet), pluss noen faste
+// grunnleggende forslag - bygges på nytt hver gang modalen åpnes, siden lista vokser etter
+// hvert som flere ordre får satt et sted.
+function kalenderStedForslag() {
+  const faste = ['Skien', 'Drammen', 'Notodden', 'Tønsberg', 'Arendal'];
+  const brukt = S.ordrer.map(o => (o.tidBiltilsynetSted||'').trim()).filter(Boolean);
+  const alle = [...faste, ...brukt];
+  const sett = new Map(); // case-ufølsom dedup, beholder først-sette skrivemåte
+  alle.forEach(s => { const key = s.toLowerCase(); if (!sett.has(key)) sett.set(key, s); });
+  return [...sett.values()].sort((a,b) => a.localeCompare(b,'no'));
+}
+
+// Åpnes rett etter at en ordre er dratt/sluppet i kalenderen - foreslår sted (samme felt
+// som Time på biltilsynet) basert på steder brukt før, siden kalender-drag ellers ikke
+// sier noe om HVOR bilen skal (bedt om av brukeren 2026-09-02).
+function openKalenderStedModal(id) {
+  kalenderStedOrdreId = id;
+  const o = S.ordrer.find(x => x.id === id);
+  document.getElementById('kalStedInput').value = o?.tidBiltilsynetSted || '';
+  document.getElementById('kalStedForslag').innerHTML = kalenderStedForslag().map(s => `<option value="${esc(s)}">`).join('');
+  openModal('kalenderSted');
+}
+function bekreftKalenderSted() {
+  const o = S.ordrer.find(x => x.id === kalenderStedOrdreId); if (!o) return;
+  const sted = document.getElementById('kalStedInput').value.trim();
+  o.tidBiltilsynetSted = sted;
+  logChange(o, 'Sted satt til: ' + (sted || '(tomt)'));
+  save(kalenderStedOrdreId); renderAll();
+  if (activeOrdreId===kalenderStedOrdreId) buildOrdreDetail();
+  closeModal('kalenderSted');
 }
 
 let _openCalMenu = null;
