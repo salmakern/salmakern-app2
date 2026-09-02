@@ -107,6 +107,11 @@ function buildOrdreDetail() {
   const kanLukke = tvangsflytOk || erAdmin; // admin kan overstyre ufullstendig tvangsflyt
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
   const headerH = document.querySelector('.top')?.offsetHeight || 0;
+  // "meldt på"/"meldt av"-hendelser vises i egen boks under Ansatte på ordren i stedet for
+  // i den generelle Endringer-loggen - samme underliggende o.endringer, splittet ved visning.
+  const erAnsattEndring = e => /meldt på$|meldt av$/.test(e.txt);
+  const ansatteEndringer = o.endringer.filter(erAnsattEndring);
+  const generelleEndringer = o.endringer.filter(e => !erAnsattEndring(e));
 
   document.getElementById('ordreDetail').innerHTML = `
   <div style="position:sticky;top:${headerH}px;z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -198,6 +203,22 @@ function buildOrdreDetail() {
       </div>
 
       <div class="card">
+        <div class="h">Ansatte på ordren</div>
+        <div style="margin-top:6px" id="ansOrdre">${renderAnsOrdre(o)}</div>
+        ${!o.ansatteSignert.find(a=>a.id===me.id)
+          ?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`
+          :`<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+              <span class="small ok-text">✓ Du er meldt på</span>
+              <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
+            </div>`
+        }
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Endringer</div>
+          ${ansatteEndringer.length?[...ansatteEndringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+        </div>
+      </div>
+
+      <div class="card">
         <div class="h">Ombygging</div>
         <div id="ombyggingBoks_${o.id}">${ombyggingBoksHTML(o)}</div>
       </div>
@@ -261,7 +282,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Endringer</div>
-        ${o.endringer.length?[...o.endringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+        ${generelleEndringer.length?[...generelleEndringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
       </div>
     </div>
 
@@ -286,19 +307,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </div>
         <div class="small muted" style="margin-top:8px">Settes under Time bekreftet i Admin-arket</div>
       </div>
-
-      <div class="card">
-        <div class="h">Ansatte på ordren</div>
-        <div style="margin-top:6px" id="ansOrdre">${renderAnsOrdre(o)}</div>
-        ${!o.ansatteSignert.find(a=>a.id===me.id)
-          ?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`
-          :`<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-              <span class="small ok-text">✓ Du er meldt på</span>
-              <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
-            </div>`
-        }
-      </div>
-
 
       <div class="card">
         <div class="h">Diagnose</div>
