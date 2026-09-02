@@ -166,7 +166,7 @@ function renderMer() {
     if (radEl && document.activeElement !== radEl) radEl.value = S.gps?.radius || 300;
     const al = document.getElementById('ansatteListe');
     al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px">
-      <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
+      <div><b>${a.navn}</b> <span class="small muted">${rolleVis(a.rolle)}</span>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
         <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
@@ -361,7 +361,7 @@ function renderTimerOversikt() {
     const erAdm = me && me.rolle === 'admin';
     return `<div class="box" style="margin-bottom:8px;${erAdm?'cursor:pointer':''}" ${erAdm?`onclick="visAnsattDetalj(${a.id})"`:''}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px">
-        <div><b>${a.navn}</b> <span class="small muted">${a.rolle}</span>${erAdm?'<span class="small muted" style="font-size:10px"> ▶ detaljer</span>':''}</div>
+        <div><b>${a.navn}</b> <span class="small muted">${rolleVis(a.rolle)}</span>${erAdm?'<span class="small muted" style="font-size:10px"> ▶ detaljer</span>':''}</div>
         <div class="small" style="font-weight:700;color:#f4f4f5">${fmtTid(totMins)} totalt</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;margin-top:8px">

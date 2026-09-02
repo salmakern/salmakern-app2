@@ -82,6 +82,9 @@ const STATUSER = [
   {id:'hentet',         lbl:'Hentet',               border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
 ];
 function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
+// rolle lagres/sammenlignes alltid med små bokstaver (ansatt/godkjenner/admin) - denne
+// er KUN for visning, rører aldri selve verdien noe sted den brukes i logikk/sammenligning.
+function rolleVis(rolle) { return rolle ? rolle.charAt(0).toUpperCase() + rolle.slice(1) : ''; }
 const STATUS_SORT = {hentet:0,bestilt_frakt:1,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8};
 function sorterOrdre(a,b) {
   const pd = (b.prioritert?1:0) - (a.prioritert?1:0);
@@ -886,7 +889,7 @@ async function tryLogin() {
     try { await db.auth.refreshSession(); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appScreen').style.display='block';
-    document.getElementById('headerUser').textContent = me.navn + ' · ' + me.rolle;
+    document.getElementById('headerUser').textContent = me.navn + ' · ' + rolleVis(me.rolle);
     oppdaterLagreStatusBadge();
     // Vis/skjul Timer-fanen basert på tilgang
     const timerTab = document.getElementById('timerTab');
