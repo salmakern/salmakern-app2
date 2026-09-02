@@ -514,10 +514,14 @@ function openKalenderStedModal(id) {
 // datalist har vist seg upålitelig på tvers av nettlesere/mobil (spesielt iPhone, der
 // forslagene ofte ikke vises i det hele tatt) - bygges på nytt for hvert tastetrykk,
 // filtrert på det som allerede er skrevet, som en enkel type-ahead.
-function renderKalStedForslag() {
+// brukFilter=false (standard - ved åpning/fokus) viser HELE lista uansett hva feltet
+// allerede inneholder (f.eks. forhåndsutfylt fra et sted satt fra før) - filtrerer man
+// alltid ned til det som står der fra start, blir resten av forslagene usynlige helt
+// til feltet tømmes manuelt først. Kun selve tastetrykk (oninput) skal faktisk filtrere.
+function renderKalStedForslag(brukFilter) {
   const el = document.getElementById('kalStedForslagListe');
   if (!el) return;
-  const sokTekst = (document.getElementById('kalStedInput')?.value || '').toLowerCase().trim();
+  const sokTekst = brukFilter ? (document.getElementById('kalStedInput')?.value || '').toLowerCase().trim() : '';
   const forslag = kalenderStedForslag().filter(s => !sokTekst || s.toLowerCase().includes(sokTekst));
   el.innerHTML = forslag.map(s => `<button type="button" class="btn sm" style="padding:4px 10px;font-size:12px" onclick="velgKalSted('${esc(s).replace(/'/g,"\\'")}')">${esc(s)}</button>`).join('') || '<span class="small muted">Ingen tidligere steder matcher</span>';
 }
