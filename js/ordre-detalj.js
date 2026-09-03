@@ -212,6 +212,7 @@ function buildOrdreDetail() {
               <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
             </div>`
         }
+        ${adminAnsOrdreVelgHTML(o)}
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Endringer</div>
           ${ansatteEndringer.length?[...ansatteEndringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
@@ -394,8 +395,44 @@ function toggleGodkjentBiltilsyn(id) {
 }
 
 function renderAnsOrdre(o) {
+  const erAdmin = me && me.rolle === 'admin';
   if (!o.ansatteSignert.length) return '<div class="small muted">Ingen ansatte meldt på</div>';
-  return o.ansatteSignert.map(a=>`<div class="small" style="margin-bottom:3px">${a.navn} – ${a.tid}</div>`).join('');
+  return o.ansatteSignert.map(a=>`<div class="small" style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:3px">
+    <span>${esc(a.navn)} – ${a.tid}</span>
+    ${erAdmin?`<button class="btn sm" style="padding:2px 8px;font-size:11px;background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="adminMeldAvAnsatt('${o.id}',${a.id})">✕</button>`:''}
+  </div>`).join('');
+}
+// Lar admin melde PÅ en hvilken som helst aktiv ansatt (ikke bare seg selv) på ordren -
+// f.eks. når en ansatt glemmer å melde seg på selv, eller admin fordeler arbeid
+// (bedt om av brukeren 2026-09-03).
+function adminAnsOrdreVelgHTML(o) {
+  if (!(me && me.rolle === 'admin')) return '';
+  const ledige = (S.ansatte||[]).filter(a => a.aktiv && !o.ansatteSignert.find(x=>x.id===a.id));
+  if (!ledige.length) return '';
+  return `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+    <select id="ansOrdreVelgAnsatt_${o.id}" style="flex:1;min-width:140px">
+      ${ledige.map(a=>`<option value="${a.id}">${esc(a.navn)}</option>`).join('')}
+    </select>
+    <button class="btn sm" onclick="adminMeldPaaAnsatt('${o.id}')">+ Meld på</button>
+  </div>`;
+}
+function adminMeldPaaAnsatt(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  const select = document.getElementById('ansOrdreVelgAnsatt_'+ordreId);
+  const ansattId = Number(select?.value);
+  const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId);
+  if (!ansatt || o.ansatteSignert.find(a=>a.id===ansattId)) return;
+  o.ansatteSignert.push({id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())});
+  logChange(o, ansatt.navn+' meldt på');
+  save(ordreId); buildOrdreDetail();
+}
+function adminMeldAvAnsatt(ordreId, ansattId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  const ansatt = o.ansatteSignert.find(a=>a.id===ansattId); if(!ansatt) return;
+  if (!confirm('Vil du melde av ' + ansatt.navn + ' fra denne ordren?')) return;
+  o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==ansattId);
+  logChange(o, ansatt.navn+' meldt av');
+  save(ordreId); buildOrdreDetail();
 }
 
 function tvangsflyt(o) {
