@@ -199,6 +199,18 @@ async function loadFromSupabase() {
     }
     return fresh;
   });
+  // Ekstra sikkerhetsnett utover feilsjekken over: en spørring kan "lykkes" (ingen
+  // oR.error) men likevel returnere 0 rader hvis sesjonen/RLS-tilgangen akkurat da var
+  // ugyldig et lite øyeblikk (f.eks. rett før en token-fornyelse rekker å fullføre) -
+  // PostgREST rapporterer ikke det som en feil, bare et tomt resultat. En ekte bedrift
+  // mister ikke ALLE sine ordre mellom to innlastinger, så en brå tom liste der vi FØR
+  // hadde ordre er mer sannsynlig denne racen enn en faktisk tømt database - behold da
+  // det vi allerede hadde i minnet i stedet for å stille godta den mistenkelige tomme
+  // listen (samme klasse bug som ble fikset for oR.error, bare uten en ekte feil å fange).
+  if (!S.ordrer.length && prevOrdrer.length) {
+    console.warn('loadFromSupabase: ordre-spørringen ga 0 rader mens vi hadde ' + prevOrdrer.length + ' fra før - beholder gammel liste, mistenker forbigående sesjonsfeil.');
+    S.ordrer = prevOrdrer;
+  }
   // Re-appliser bilder som er i minnet men ikke bekreftet i Supabase ennå
   Object.entries(inFlightFotos).forEach(([ordreId, fotos]) => {
     const o = S.ordrer.find(x=>String(x.id)===String(ordreId));
@@ -224,6 +236,11 @@ async function loadFromSupabase() {
   });
 
   S.timer = (tR.data||[]).map(dbToTimer);
+  // Samme sikkerhetsnett som for S.ordrer over - se kommentaren der.
+  if (!S.timer.length && prevTimer.length) {
+    console.warn('loadFromSupabase: timer-spørringen ga 0 rader mens vi hadde ' + prevTimer.length + ' fra før - beholder gammel liste.');
+    S.timer = prevTimer;
+  }
   // Behold nye timer-oppføringer som ikke er bekreftet i Supabase ennå
   const freshTimerIds = new Set(S.timer.map(t => String(t.id)));
   prevTimer.forEach(t => {
