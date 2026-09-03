@@ -409,21 +409,30 @@ function adminAnsOrdreVelgHTML(o) {
   if (!(me && me.rolle === 'admin')) return '';
   const ledige = (S.ansatte||[]).filter(a => a.aktiv && !o.ansatteSignert.find(x=>x.id===a.id));
   if (!ledige.length) return '';
-  return `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
-    <select id="ansOrdreVelgAnsatt_${o.id}" style="flex:1;min-width:140px">
-      ${ledige.map(a=>`<option value="${a.id}">${esc(a.navn)}</option>`).join('')}
-    </select>
-    <button class="btn sm" onclick="adminMeldPaaAnsatt('${o.id}')">+ Meld på</button>
+  // Avkrysningsbokser (ikke <select multiple>, som er tungvint å betjene på mobil) - kan
+  // velge flere ansatte samtidig og melde dem alle på med ett trykk (bedt om av brukeren
+  // 2026-09-03, etter først å ha fått kun ett-av-gangen-varianten).
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #27272a">
+    <div class="small muted" style="margin-bottom:6px">Meld på flere ansatte:</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${ledige.map(a=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" class="ansOrdreVelgCheck_${o.id}" value="${a.id}" style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+        <span class="small">${esc(a.navn)}</span>
+      </label>`).join('')}
+    </div>
+    <button class="btn sm" style="margin-top:8px;width:100%" onclick="adminMeldPaaAnsatt('${o.id}')">+ Meld på valgte</button>
   </div>`;
 }
 function adminMeldPaaAnsatt(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const select = document.getElementById('ansOrdreVelgAnsatt_'+ordreId);
-  const ansattId = Number(select?.value);
-  const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId);
-  if (!ansatt || o.ansatteSignert.find(a=>a.id===ansattId)) return;
-  o.ansatteSignert.push({id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())});
-  logChange(o, ansatt.navn+' meldt på');
+  const valgteIder = Array.from(document.querySelectorAll('.ansOrdreVelgCheck_'+ordreId+':checked')).map(c=>Number(c.value));
+  if (!valgteIder.length) return;
+  valgteIder.forEach(ansattId => {
+    const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId);
+    if (!ansatt || o.ansatteSignert.find(a=>a.id===ansattId)) return;
+    o.ansatteSignert.push({id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())});
+    logChange(o, ansatt.navn+' meldt på');
+  });
   save(ordreId); buildOrdreDetail();
 }
 function adminMeldAvAnsatt(ordreId, ansattId) {
