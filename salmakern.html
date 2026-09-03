@@ -776,6 +776,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
+<div class="modal" id="adminMeldPaa">
+  <div class="modal-box">
+    <div class="h">Meld på ansatte</div>
+    <div class="muted small" style="margin:8px 0">Velg hvem som skal være meldt på denne ordren.</div>
+    <div id="adminMeldPaaListe" style="display:flex;flex-direction:column;max-height:50vh;overflow:auto"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="bekreftAdminMeldPaa()">Lagre</button>
+      <button class="btn" onclick="closeModal('adminMeldPaa')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="nyttMote">
   <div class="modal-box">
     <div class="h">Nytt møte</div>

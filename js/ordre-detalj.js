@@ -212,7 +212,7 @@ function buildOrdreDetail() {
               <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
             </div>`
         }
-        ${adminAnsOrdreVelgHTML(o)}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="apneAdminMeldPaaModal('${o.id}')">👥 Meld på ansatte</button>`:''}
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Endringer</div>
           ${ansatteEndringer.length?[...ansatteEndringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
@@ -395,53 +395,45 @@ function toggleGodkjentBiltilsyn(id) {
 }
 
 function renderAnsOrdre(o) {
-  const erAdmin = me && me.rolle === 'admin';
   if (!o.ansatteSignert.length) return '<div class="small muted">Ingen ansatte meldt på</div>';
-  return o.ansatteSignert.map(a=>`<div class="small" style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:3px">
-    <span>${esc(a.navn)} – ${a.tid}</span>
-    ${erAdmin?`<button class="btn sm" style="padding:2px 8px;font-size:11px;background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="adminMeldAvAnsatt('${o.id}',${a.id})">✕</button>`:''}
-  </div>`).join('');
+  return o.ansatteSignert.map(a=>`<div class="small" style="margin-bottom:3px">${esc(a.navn)} – ${a.tid}</div>`).join('');
 }
-// Lar admin melde PÅ en hvilken som helst aktiv ansatt (ikke bare seg selv) på ordren -
-// f.eks. når en ansatt glemmer å melde seg på selv, eller admin fordeler arbeid
-// (bedt om av brukeren 2026-09-03).
-function adminAnsOrdreVelgHTML(o) {
-  if (!(me && me.rolle === 'admin')) return '';
-  const ledige = (S.ansatte||[]).filter(a => a.aktiv && !o.ansatteSignert.find(x=>x.id===a.id));
-  if (!ledige.length) return '';
-  // Avkrysningsbokser (ikke <select multiple>, som er tungvint å betjene på mobil) - kan
-  // velge flere ansatte samtidig og melde dem alle på med ett trykk (bedt om av brukeren
-  // 2026-09-03, etter først å ha fått kun ett-av-gangen-varianten).
-  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #27272a">
-    <div class="small muted" style="margin-bottom:6px">Meld på flere ansatte:</div>
-    <div style="display:flex;flex-direction:column;gap:6px">
-      ${ledige.map(a=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" class="ansOrdreVelgCheck_${o.id}" value="${a.id}" style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
-        <span class="small">${esc(a.navn)}</span>
-      </label>`).join('')}
-    </div>
-    <button class="btn sm" style="margin-top:8px;width:100%" onclick="adminMeldPaaAnsatt('${o.id}')">+ Meld på valgte</button>
-  </div>`;
-}
-function adminMeldPaaAnsatt(ordreId) {
+// Lar admin melde ansatte på/av ordren via et eget vindu i stedet for kun seg selv -
+// f.eks. når en ansatt glemmer å melde seg på selv, eller admin fordeler arbeid. Viser
+// ALLE aktive ansatte med avmerket boks for de som allerede er meldt på - admin kan både
+// legge til og fjerne i samme vindu ved å hake av/på, i stedet for separate knapper for
+// hvert (bedt om av brukeren 2026-09-03, etter to tidligere runder med enklere varianter).
+let adminMeldPaaOrdreId = null;
+function apneAdminMeldPaaModal(ordreId) {
+  adminMeldPaaOrdreId = ordreId;
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const valgteIder = Array.from(document.querySelectorAll('.ansOrdreVelgCheck_'+ordreId+':checked')).map(c=>Number(c.value));
-  if (!valgteIder.length) return;
-  valgteIder.forEach(ansattId => {
-    const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId);
-    if (!ansatt || o.ansatteSignert.find(a=>a.id===ansattId)) return;
-    o.ansatteSignert.push({id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())});
-    logChange(o, ansatt.navn+' meldt på');
+  const alle = (S.ansatte||[]).filter(a => a.aktiv);
+  document.getElementById('adminMeldPaaListe').innerHTML = alle.length ? alle.map(a => {
+    const paameldt = !!o.ansatteSignert.find(x=>x.id===a.id);
+    return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">
+      <input type="checkbox" class="adminMeldPaaCheck" value="${a.id}" ${paameldt?'checked':''} style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+      <span class="small">${esc(a.navn)}</span>
+    </label>`;
+  }).join('') : '<div class="small muted">Ingen aktive ansatte funnet</div>';
+  openModal('adminMeldPaa');
+}
+function bekreftAdminMeldPaa() {
+  const o = S.ordrer.find(x=>x.id===adminMeldPaaOrdreId); if(!o) return;
+  document.querySelectorAll('#adminMeldPaaListe .adminMeldPaaCheck').forEach(c => {
+    const ansattId = Number(c.value);
+    const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId); if (!ansatt) return;
+    const erAlleredePaameldt = !!o.ansatteSignert.find(a=>a.id===ansattId);
+    if (c.checked && !erAlleredePaameldt) {
+      o.ansatteSignert.push({id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())});
+      logChange(o, ansatt.navn+' meldt på');
+    } else if (!c.checked && erAlleredePaameldt) {
+      o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==ansattId);
+      logChange(o, ansatt.navn+' meldt av');
+    }
   });
-  save(ordreId); buildOrdreDetail();
-}
-function adminMeldAvAnsatt(ordreId, ansattId) {
-  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const ansatt = o.ansatteSignert.find(a=>a.id===ansattId); if(!ansatt) return;
-  if (!confirm('Vil du melde av ' + ansatt.navn + ' fra denne ordren?')) return;
-  o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==ansattId);
-  logChange(o, ansatt.navn+' meldt av');
-  save(ordreId); buildOrdreDetail();
+  save(adminMeldPaaOrdreId);
+  buildOrdreDetail();
+  closeModal('adminMeldPaa');
 }
 
 function tvangsflyt(o) {
