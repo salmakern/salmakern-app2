@@ -97,7 +97,7 @@ function settGPSLokasjon() {
   if(btn){btn.textContent='Henter posisjon...';btn.disabled=true;}
   navigator.geolocation.getCurrentPosition(pos=>{
     S.gps.lat=pos.coords.latitude; S.gps.lng=pos.coords.longitude;
-    saveInnstillinger();
+    saveGPS();
     if(btn){btn.textContent='Sett arbeidsplasslokasjon';btn.disabled=false;}
     renderMer();
     alert('✅ GPS-lokasjon lagret!');
@@ -113,7 +113,7 @@ function settGPSLokasjon() {
 
 function endreGPSRadius(val) {
   S.gps.radius=Number(val);
-  saveInnstillinger();
+  saveGPS();
 }
 
 function startTimer() {

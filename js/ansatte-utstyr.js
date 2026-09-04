@@ -168,18 +168,40 @@ function saveInnstillinger() {
   ignorerRealtimeInnstillinger = true;
   clearTimeout(ignorerRealtimeInnstillingerTimer);
   ignorerRealtimeInnstillingerTimer = setTimeout(()=>{ignorerRealtimeInnstillinger=false;}, 10000);
+  // gps_lat/gps_lng/gps_radius er BEVISST utelatt her - de skrives KUN via saveGPS(),
+  // aldri via denne generelle "lagre alt"-funksjonen. Var med her før, og kunne da bli
+  // overskrevet med en utdatert GPS-verdi fra minnet hver gang NOEN lagret noe helt
+  // urelatert (f.eks. genererte en ny PIN) på en enhet som ikke hadde fått med seg en
+  // fersk GPS-endring via sanntid ennå - reell bug rapportert 2026-09-04.
   db.from('innstillinger').upsert({
     id: 1,
     dagens_pin: S.dagensPIN,
-    gps_lat: S.gps?.lat||null,
-    gps_lng: S.gps?.lng||null,
-    gps_radius: S.gps?.radius||300,
     utstyr_maler: S.utstyrMaler||[],
     drivstoff_satser: S.drivstoffSatser||[],
     beskjeder: S.beskjeder||[],
     kontakter: S.kontakter||[],
     hms: S.hms||[]
   }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
+}
+
+// Lagrer KUN GPS-feltene (målrettet update, ikke hele innstillinger-raden via
+// saveInnstillinger() over) - unngår at en annen ansatt/enhet som lagrer noe HELT
+// urelatert (f.eks. genererer ny PIN, redigerer en melding) med en litt utdatert kopi
+// av S.gps i minnet (f.eks. fordi enheten var frakoblet sanntid en liten stund)
+// uforvarende skriver den GAMLE GPS-verdien tilbake og overskriver en nettopp satt
+// lokasjon/radius. Reell bug: lokasjonen kunne "hoppe" til feil koordinater en stund
+// etter at den ble satt riktig, uten at noen bevisst endret GPS igjen.
+function saveGPS() {
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if (!db) return;
+  ignorerRealtimeInnstillinger = true;
+  clearTimeout(ignorerRealtimeInnstillingerTimer);
+  ignorerRealtimeInnstillingerTimer = setTimeout(()=>{ignorerRealtimeInnstillinger=false;}, 10000);
+  db.from('innstillinger').update({
+    gps_lat: S.gps?.lat||null,
+    gps_lng: S.gps?.lng||null,
+    gps_radius: S.gps?.radius||300
+  }).eq('id', 1).then(r=>{ if(r.error) console.error('GPS-lagring feil:',r.error.message); });
 }
 
 // ════════════════════════════════════════════════════
