@@ -24,6 +24,16 @@ if ('serviceWorker' in navigator) {
           if (nySW.state === 'activated') visOppdateringsToast();
         });
       });
+      // Nettleseren sjekker selv etter en ny sw.js KUN ved navigasjon (side lastes på
+      // nytt) - ikke mens fanen bare står åpen. Med appen liggende åpen store deler av
+      // dagen oppdaget den derfor aldri en ny utrulling før noen manuelt oppdaterte
+      // siden. reg.update() tvinger frem den samme sjekken uten navigasjon - kjøres jevnlig
+      // OG hver gang fanen blir synlig igjen (bytter tilbake fra en annen app/fane), som
+      // er akkurat når man faktisk ville lagt merke til en manglende endring.
+      setInterval(() => reg.update(), 5*60*1000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update();
+      });
     }).catch(() => {});
   });
   navigator.serviceWorker.addEventListener('controllerchange', () => {
