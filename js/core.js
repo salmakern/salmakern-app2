@@ -331,7 +331,7 @@ function dbToOrdre(r) {
   return {
     id:r.id, regnr:r.regnr, kunde:r.kunde||'', eier:r.eier||'',
     ombygging:r.ombygging||{nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false},
-    merke:r.merke||'', type:r.type||'', modell:r.modell||'', variant:r.variant||'', versjon:r.versjon||'', chassis:r.chassis||'',
+    merke:r.merke||'', type:r.type||'', modell:r.modell||'', variant:r.variant||'', versjon:r.versjon||'', chassis:r.chassis||'', farge:r.farge||'',
     ankomstdato:r.ankomstdato||'', status:r.status||'aktiv',
     ordreStatus:r.ordre_status||'ikke_paabegynt',
     kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
@@ -359,7 +359,7 @@ function ordreToDb(o) {
   return {
     id:o.id, regnr:o.regnr, kunde:o.kunde, eier:o.eier,
     ombygging:o.ombygging||{nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false},
-    merke:o.merke||'', type:o.type||'', modell:o.modell||'', variant:o.variant||'', versjon:o.versjon||'', chassis:o.chassis, ankomstdato:o.ankomstdato||null,
+    merke:o.merke||'', type:o.type||'', modell:o.modell||'', variant:o.variant||'', versjon:o.versjon||'', chassis:o.chassis, farge:o.farge||'', ankomstdato:o.ankomstdato||null,
     status:o.status, ordre_status:o.ordreStatus||'ikke_paabegynt',
     kalender_dato:o.kalenderDato||null, kalender_tid:o.kalenderTid,
     vekter:o.vekter, drivstoff:o.drivstoff, utstyr:o.utstyr,
@@ -750,7 +750,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa,
   return {
     id, regnr, kunde, eier,
     ombygging:{nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false},
-    merke:'', type:'', modell:'', variant, versjon:'', chassis:'',
+    merke:'', type:'', modell:'', variant, versjon:'', chassis:'', farge:'',
     ankomstdato: ankomst, status:'aktiv', ordreStatus: startStatus || 'ikke_paabegynt',
     kalenderDato: kDato, kalenderTid: kTid,
     vekter: {

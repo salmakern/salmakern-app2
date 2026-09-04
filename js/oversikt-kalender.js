@@ -81,7 +81,7 @@ function renderOrdreList() {
         <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
         ${statusDropdown(o.id, o.ordreStatus)}
       </div>
-      <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}</span>
+      <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</span>
       ${dokStatusKortHTML(o)}
       <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
       <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
@@ -122,6 +122,7 @@ function renderOversikt(q) {
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
+          ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
@@ -141,6 +142,7 @@ function renderOversikt(q) {
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
+          ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">

@@ -24,7 +24,7 @@ function renderArkiv() {
           <b>${ordreLabelFull(o)}</b>
           <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
         </div>
-        <div class="small muted" style="margin-top:3px">${esc(o.type)} ${esc(o.variant)} · ${esc(o.kunde)}</div>
+        <div class="small muted" style="margin-top:3px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''} · ${esc(o.kunde)}</div>
         <div class="small muted">Ankomst: ${o.ankomstdato||'—'}</div>
         <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
       </div>`;
@@ -33,7 +33,7 @@ function renderArkiv() {
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
     ?ferdig.map(o=>`<div class="box" style="margin-bottom:6px;padding:8px">
         <div class="row" style="margin-bottom:4px">
-          <div><b>${ordreLabelFull(o)}</b> <span class="small muted">${esc(o.type)} ${esc(o.variant)}</span></div>
+          <div><b>${ordreLabelFull(o)}</b> <span class="small muted">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</span></div>
           <div style="display:flex;gap:3px">
             <button class="btn sm" onclick="openOrdre('${o.id}',true)" style="font-size:10px;padding:2px 7px;border-radius:8px">Åpne</button>
             <button class="btn sm" onclick="genPDF('${o.id}')" style="font-size:10px;padding:2px 7px;border-radius:8px">📄 PDF</button>
