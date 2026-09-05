@@ -4,74 +4,132 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Toyota Land Cruiser 150 – Telemark Salmakerverksted</title>
+<meta name="description" content="Toyota Land Cruiser 150 ombygd til varebil av Telemark Salmakerverksted – skillevegg, gulv og oppbevaringskasser.">
 <link rel="icon" type="image/png" sizes="192x192" href="ikoner/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="ikoner/icon-512.png">
-<link rel="stylesheet" href="site.css?v=6">
+<link rel="stylesheet" href="site.css?v=7">
 </head>
 <body data-model-slug="toyota-lc-150">
-<header>
-  <a class="dealer-btn" href="https://forhandler.salmaker.as/login" target="_blank" rel="noopener">Er du forhandler?</a>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mono">GODKJENT PÅBYGGERVERKSTED · STATENS VEGVESEN · SKIEN</span>
+    <a href="https://forhandler.salmaker.as/login" class="mono">ER DU FORHANDLER? →</a>
+  </div>
+</div>
+
+<header class="site-header">
   <div class="header-inner">
-    <div class="header-logos">
-      <a class="logo-link" href="index.html"><img src="logo-transparent.png?v=5" alt="Salmaker'n"></a>
-      <img class="partner-logo" src="modul-system-logo.png" alt="Modul-System">
-      <img class="partner-logo" src="påbygger-logo.png" alt="Godkjent påbyggerverksted – Statens vegvesen">
-    </div>
-    <nav>
-      <a href="index.html">Hjem</a>
-      <a href="varebil.html" class="active">Ombygginger</a>
-      <a href="bestilling.html">Bestilling</a>
-      <a href="kontakt.html">Kontakt</a>
+    <a href="index.html" class="logo-link"><img src="logo-transparent.png?v=5" alt="Salmaker'n – Telemark Salmakerverksted"></a>
+    <nav class="main-nav">
+      <a href="varebil.html" class="nav-link is-active">Ombygginger</a>
+      <a href="index.html#prosessen" class="nav-link">Prosessen</a>
+      <a href="index.html#sporsmal" class="nav-link">Spørsmål</a>
+      <a href="kontakt.html" class="nav-link">Kontakt</a>
+      <a href="bestilling.html" class="nav-cta">Send forespørsel</a>
     </nav>
   </div>
 </header>
+
 <main>
-  <div class="page-hero">
-    <h1>Toyota Land Cruiser 150</h1>
-    <p>Profesjonell ombygging til varebil — uten skader på interiøret.</p>
-    <div class="hero-btns">
-      <a class="btn btn-primary" href="bestilling.html">Be om tilbud</a>
-      <a class="btn btn-ghost" href="varebil.html">← Alle modeller</a>
-    </div>
-  </div>
 
-  <div class="section section-gray">
-    <div class="section-inner" style="max-width:960px;">
-      <div class="model-layout">
+  <section class="page-hero-dark">
+    <div class="section-inner">
+      <a href="varebil.html" class="back-link mono">← ALLE MODELLER</a>
+      <div class="model-hero-grid">
         <div>
-
-          <div class="section-label" style="margin-bottom:12px;">Velg innredning</div>
-          <div class="prod-grid" id="prodGrid"></div>
-        </div>
-        <div>
-          <div class="gallery-main">
-            <img id="mainImg" src="" alt="Toyota Land Cruiser 150 ombygging">
+          <div class="eyebrow">OMBYGGING TIL VAREBIL · KLASSE N1</div>
+          <h1 id="modelTitle">Toyota Land Cruiser 150</h1>
+          <p>Profesjonell ombygging til varebil — uten skader på interiøret.</p>
+          <div class="hero-btns">
+            <a href="bestilling.html" class="btn btn-primary">Be om tilbud</a>
+            <a href="tel:35593395" class="btn btn-ghost">Ring 35 59 33 95</a>
           </div>
-          <div class="gallery-thumbs" id="thumbContainer"></div>
+        </div>
+        <div class="model-hero-media gallery-main">
+          <img id="mainImg" src="" alt="Toyota Land Cruiser 150 ombygging">
         </div>
       </div>
-      <div style="margin-top:40px;">
-          <div class="section-label">Hva vi gjør</div>
-          <h2 style="margin-bottom:20px;">Våre fordeler</h2>
-          <ul class="feat-list">
-            <li>Maksimal plass til fører</li>
-            <li>Ingen inngrep i taktrekk eller interiørdeler</li>
-            <li>Skillevegg skreddersydd til modellen</li>
-            <li>Beskyttelsesplater for dørpanel er standard</li>
-            <li>Alle demonterte deler pakkes ned og merkes</li>
-            <li>Kan bygges tilbake til personbil</li>
-          </ul>
+      <div class="gallery-thumbs" id="thumbContainer" style="margin-top:10px;"></div>
+    </div>
+  </section>
+
+  <section class="model-section">
+    <div class="section-inner">
+      <div class="model-section-head">
+        <h2>Velg innredning</h2>
+        <p class="mono">VARIANTER OG BILDER HENTES FRA FORHANDLERPORTALEN</p>
       </div>
-      <div style="margin-top:48px; text-align:center; padding-top:32px; border-top:1px solid #e2e0dc;">
-        <p style="color:#666; margin-bottom:16px; font-size:15px;">Klar for ombygging av din Toyota Land Cruiser 150?</p>
-        <a class="btn btn-primary" href="bestilling.html">Send forespørsel</a>
+      <div id="prodGrid" class="reveal prod-grid"></div>
+    </div>
+  </section>
+
+  <section class="section-inner" style="padding-top:clamp(56px, 7vw, 96px); padding-bottom:clamp(56px, 7vw, 96px);">
+    <div class="why-grid">
+      <div>
+        <div class="eyebrow">HVA VI GJØR</div>
+        <h2>Våre fordeler</h2>
+        <p class="body-lead" style="max-width:38ch;">Alle mål er kontrollert på bil, ikke hentet fra datablad. Det er forskjellen på en innredning som passer og en som nesten passer.</p>
+      </div>
+      <ul id="featList" class="feat-list">
+        <li>Maksimal plass til fører</li>
+        <li>Ingen inngrep i taktrekk eller interiørdeler</li>
+        <li>Skillevegg skreddersydd til modellen</li>
+        <li>Beskyttelsesplater for dørpanel er standard</li>
+        <li>Alle demonterte deler pakkes ned og merkes</li>
+        <li>Kan bygges tilbake til personbil</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="cta-red cta-red-simple">
+    <div class="section-inner">
+      <h2>Klar for ombygging av din Toyota Land Cruiser 150?</h2>
+      <div class="hero-btns">
+        <a href="bestilling.html" class="btn btn-on-red">Send forespørsel</a>
+        <a href="varebil.html" class="btn btn-outline-on-red">Andre modeller</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-grid">
+    <div>
+      <img src="logo-transparent.png?v=5" alt="Salmaker'n">
+      <p>Telemark Salmakerverksted AS — godkjent påbyggerverksted for ombygging av personbiler til varebil. Skien, Telemark.</p>
+    </div>
+    <div>
+      <div class="footer-col-label">SIDER</div>
+      <div class="footer-links">
+        <a href="index.html">Hjem</a>
+        <a href="varebil.html">Ombygginger</a>
+        <a href="bestilling.html">Bestilling</a>
+        <a href="kontakt.html">Kontakt</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">KONTAKT</div>
+      <div class="footer-links muted">
+        <a href="tel:35593395">35 59 33 95</a>
+        <a href="mailto:post@salmaker.as">post@salmaker.as</a>
+        <span>Bataljonvegen 25, 3734 Skien</span>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">FORHANDLER</div>
+      <div class="footer-links">
+        <a href="https://forhandler.salmaker.as/login">Logg inn i forhandlerportal</a>
       </div>
     </div>
   </div>
-</main>
-<footer>
-  <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
+  <div class="footer-bottom">
+    <div class="footer-bottom-inner">© 2026 TELEMARK SALMAKERVERKSTED AS · BATALJONVEGEN 25, 3734 SKIEN · POST@SALMAKER.AS</div>
+  </div>
 </footer>
-<script src="model-sync.js?v=3" defer></script>
+
+<script src="reveal.js" defer></script>
+<script src="model-sync.js?v=4" defer></script>
 </body>
 </html>

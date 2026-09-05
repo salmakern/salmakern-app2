@@ -7,99 +7,138 @@
 <meta name="description" content="Kontakt Telemark Salmakerverksted – telefon, e-post, adresse og åpningstider.">
 <link rel="icon" type="image/png" sizes="192x192" href="ikoner/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="ikoner/icon-512.png">
-<link rel="stylesheet" href="site.css?v=6">
+<link rel="stylesheet" href="site.css?v=7">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
 
-<header>
-  <a class="dealer-btn" href="https://forhandler.salmaker.as/login" target="_blank" rel="noopener">Er du forhandler?</a>
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mono">GODKJENT PÅBYGGERVERKSTED · STATENS VEGVESEN · SKIEN</span>
+    <a href="https://forhandler.salmaker.as/login" class="mono">ER DU FORHANDLER? →</a>
+  </div>
+</div>
+
+<header class="site-header">
   <div class="header-inner">
-    <div class="header-logos">
-      <a class="logo-link" href="index.html"><img src="logo-transparent.png?v=5" alt="Salmaker'n"></a>
-      <img class="partner-logo" src="modul-system-logo.png" alt="Modul-System">
-      <img class="partner-logo" src="påbygger-logo.png" alt="Godkjent påbyggerverksted – Statens vegvesen">
-    </div>
-    <nav>
-      <a href="index.html">Hjem</a>
-      <a href="varebil.html">Ombygginger</a>
-      <a href="bestilling.html">Bestilling</a>
-      <a href="kontakt.html" class="active">Kontakt</a>
+    <a href="index.html" class="logo-link"><img src="logo-transparent.png?v=5" alt="Salmaker'n – Telemark Salmakerverksted"></a>
+    <nav class="main-nav">
+      <a href="varebil.html" class="nav-link">Ombygginger</a>
+      <a href="index.html#prosessen" class="nav-link">Prosessen</a>
+      <a href="kontakt.html" class="nav-link is-active">Kontakt</a>
+      <a href="bestilling.html" class="nav-cta">Send forespørsel</a>
     </nav>
   </div>
 </header>
 
 <main>
 
-  <div class="page-hero">
-    <h1>Ta <span>kontakt</span></h1>
-    <p>Vi er tilgjengelige på telefon og e-post mandag til fredag. Velkommen innom!</p>
-  </div>
+  <section>
+    <div class="section-inner" style="padding:clamp(48px, 6vw, 88px) var(--pad-x) clamp(32px, 4vw, 56px);">
+      <div class="eyebrow">KONTAKT</div>
+      <h1 style="font-size:clamp(36px, 5.2vw, 70px); line-height:0.95; margin-bottom:22px;">Ta kontakt</h1>
+      <p class="body-lead" style="font-size:clamp(16px, 1.7vw, 19px); max-width:52ch;">Vi er tilgjengelige på telefon og e-post mandag til fredag. Velkommen innom verkstedet i Skien — det er en fordel om du ringer først, så har vi tid til deg.</p>
+    </div>
+  </section>
 
-  <div class="section section-gray">
+  <section style="border-top:1px solid var(--surface);">
     <div class="section-inner">
-      <div class="section-label">Kontaktinformasjon</div>
-      <h2>Finn oss</h2>
-      <div class="contact-grid">
-        <div class="contact-card">
-          <div class="contact-icon">📞</div>
-          <div>
-            <h3>Telefon</h3>
-            <p><a href="tel:35593395">35 59 33 95</a></p>
-          </div>
+      <div class="contact-info-grid">
+        <div>
+          <div class="mono-label mono">TELEFON</div>
+          <a class="big-link" href="tel:35593395">35 59 33 95</a>
+          <p class="sub">Man–fre 07:30–15:30</p>
         </div>
-        <div class="contact-card">
-          <div class="contact-icon">✉️</div>
-          <div>
-            <h3>E-post</h3>
-            <p><a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
-          </div>
+        <div>
+          <div class="mono-label mono">E-POST</div>
+          <a class="big-link" href="mailto:post@salmaker.as" style="word-break:break-word;">post@salmaker.as</a>
+          <p class="sub">Svar innen 1–2 virkedager</p>
         </div>
-        <div class="contact-card">
-          <div class="contact-icon">📍</div>
-          <div>
-            <h3>Adresse</h3>
-            <p>Bataljonvegen 25<br>3734 Skien</p>
-          </div>
+        <div>
+          <div class="mono-label mono">ADRESSE</div>
+          <p style="font-size:clamp(18px, 1.9vw, 24px); font-weight:700; letter-spacing:-0.015em; line-height:1.25;">Bataljonvegen 25<br>3734 Skien</p>
+          <p class="sub">Telemark Salmakerverksted AS</p>
         </div>
-        <div class="contact-card">
-          <div class="contact-icon">🕐</div>
-          <div>
-            <h3>Åpningstider</h3>
-            <p>Man–fre: 07:30–15:30</p>
-          </div>
+        <div>
+          <div class="mono-label mono">FORHANDLER</div>
+          <a class="big-link" href="https://forhandler.salmaker.as/login" style="font-size:clamp(18px, 1.9vw, 24px);">Logg inn i portalen →</a>
+          <p class="sub">Priser, produktnummer og ordre</p>
         </div>
-      </div>
-      <div class="map-wrapper">
-        <div id="map" style="height:320px; width:100%;"></div>
-      </div>
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <script>
-        const map = L.map('map').setView([59.1836, 9.6073], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
-        const redIcon = L.icon({
-          iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-          iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
-        });
-        L.marker([59.1836, 9.6073], {icon: redIcon})
-          .addTo(map)
-          .bindPopup('<strong>Telemark Salmakerverksted</strong><br>Bataljonvegen 25, 3734 Skien')
-          .openPopup();
-      </script>
-      <div style="margin-top:28px; text-align:center;">
-        <a class="btn btn-primary" href="bestilling.html">Send forespørsel online</a>
       </div>
     </div>
-  </div>
+  </section>
+
+  <section style="border-top:1px solid var(--surface);">
+    <div class="section-inner" style="padding:clamp(40px, 5vw, 72px) var(--pad-x);">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:clamp(28px, 4vw, 56px); align-items:center;">
+        <div class="map-block">
+          <div id="map"></div>
+        </div>
+        <div>
+          <h2 style="font-size:clamp(24px, 2.8vw, 36px); margin-bottom:16px;">Finn oss i Skien</h2>
+          <p class="body-lead" style="max-width:42ch; margin-bottom:26px;">Verkstedet ligger i Bataljonvegen 25, ti minutter fra E18. Vi tar imot biler fra hele landet — flere kunder kombinerer innlevering med henting samme uke.</p>
+          <div class="hero-btns">
+            <a href="https://www.google.com/maps/search/?api=1&query=Bataljonvegen+25,+3734+Skien" class="btn btn-primary" style="padding:16px 28px;">Åpne i kart</a>
+            <a href="bestilling.html" class="btn btn-ghost" style="padding:16px 28px;">Send forespørsel online</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
 </main>
 
-<footer>
-  <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
+<footer class="site-footer" style="border-top:1px solid var(--surface);">
+  <div class="footer-grid">
+    <div>
+      <img src="logo-transparent.png?v=5" alt="Salmaker'n">
+      <p>Telemark Salmakerverksted AS — godkjent påbyggerverksted for ombygging av personbiler til varebil. Skien, Telemark.</p>
+    </div>
+    <div>
+      <div class="footer-col-label">SIDER</div>
+      <div class="footer-links">
+        <a href="index.html">Hjem</a>
+        <a href="varebil.html">Ombygginger</a>
+        <a href="bestilling.html">Bestilling</a>
+        <a href="kontakt.html">Kontakt</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">KONTAKT</div>
+      <div class="footer-links muted">
+        <a href="tel:35593395">35 59 33 95</a>
+        <a href="mailto:post@salmaker.as">post@salmaker.as</a>
+        <span>Bataljonvegen 25, 3734 Skien</span>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">ÅPNINGSTIDER</div>
+      <div class="footer-links muted">
+        <span>Man–fre 07:30–15:30</span>
+        <span>Lør–søn stengt</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-bottom-inner">© 2026 TELEMARK SALMAKERVERKSTED AS · BATALJONVEGEN 25, 3734 SKIEN · POST@SALMAKER.AS</div>
+  </div>
 </footer>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map').setView([59.1836, 9.6073], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+  const redIcon = L.icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34]
+  });
+  L.marker([59.1836, 9.6073], {icon: redIcon})
+    .addTo(map)
+    .bindPopup('<strong>Telemark Salmakerverksted</strong><br>Bataljonvegen 25, 3734 Skien')
+    .openPopup();
+</script>
 </body>
 </html>

@@ -182,8 +182,8 @@
 
   function renderEmpty() {
     prodGrid.innerHTML =
-      '<div style="background:#fdf0ee;border:1px solid #f5c6c0;border-radius:10px;padding:16px 18px;">' +
-      '<p style="font-size:14px;color:#c0392b;font-weight:600;">Ta kontakt for full produktinformasjon og tilbud på denne modellen.</p></div>';
+      '<div style="background:#2d2d2d;border:1px solid #3d3d3d;padding:16px 18px;">' +
+      '<p style="font-size:14px;color:#e2725f;font-weight:600;">Ta kontakt for full produktinformasjon og tilbud på denne modellen.</p></div>';
     var galleryMain = document.querySelector(".gallery-main");
     if (galleryMain) {
       var placeholder = document.createElement("div");
@@ -199,8 +199,8 @@
     if (featList) featList.remove();
     if (prodGrid) {
       prodGrid.innerHTML =
-        '<p style="font-size:14px;color:#666;">Fant ingen modell med dette navnet. ' +
-        '<a href="varebil.html" style="color:#c0392b;">Se alle modeller →</a></p>';
+        '<p style="font-size:14px;color:#9ca3af;">Fant ingen modell med dette navnet. ' +
+        '<a href="varebil.html" style="color:#e2725f;">Se alle modeller →</a></p>';
     }
     var galleryMain = document.querySelector(".gallery-main");
     if (galleryMain) galleryMain.remove();

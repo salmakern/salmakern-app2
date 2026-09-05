@@ -7,99 +7,140 @@
 <meta name="description" content="Send en forespørsel til Telemark Salmakerverksted – vi tar kontakt innen 1–2 virkedager.">
 <link rel="icon" type="image/png" sizes="192x192" href="ikoner/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="ikoner/icon-512.png">
-<link rel="stylesheet" href="site.css?v=6">
+<link rel="stylesheet" href="site.css?v=7">
 </head>
 <body>
 
-<header>
-  <a class="dealer-btn" href="https://forhandler.salmaker.as/login" target="_blank" rel="noopener">Er du forhandler?</a>
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mono">GODKJENT PÅBYGGERVERKSTED · STATENS VEGVESEN · SKIEN</span>
+    <a href="https://forhandler.salmaker.as/login" class="mono">ER DU FORHANDLER? →</a>
+  </div>
+</div>
+
+<header class="site-header">
   <div class="header-inner">
-    <div class="header-logos">
-      <a class="logo-link" href="index.html"><img src="logo-transparent.png?v=5" alt="Salmaker'n"></a>
-      <img class="partner-logo" src="modul-system-logo.png" alt="Modul-System">
-      <img class="partner-logo" src="påbygger-logo.png" alt="Godkjent påbyggerverksted – Statens vegvesen">
-    </div>
-    <nav>
-      <a href="index.html">Hjem</a>
-      <a href="varebil.html">Ombygginger</a>
-      <a href="bestilling.html" class="active">Bestilling</a>
-      <a href="kontakt.html">Kontakt</a>
+    <a href="index.html" class="logo-link"><img src="logo-transparent.png?v=5" alt="Salmaker'n – Telemark Salmakerverksted"></a>
+    <nav class="main-nav">
+      <a href="varebil.html" class="nav-link">Ombygginger</a>
+      <a href="index.html#prosessen" class="nav-link">Prosessen</a>
+      <a href="kontakt.html" class="nav-link">Kontakt</a>
+      <a href="bestilling.html" class="nav-cta">Send forespørsel</a>
     </nav>
   </div>
 </header>
 
 <main>
 
-  <div class="page-hero">
-    <h1>Send oss en <span>forespørsel</span></h1>
-    <p>Fyll ut skjemaet så tar vi kontakt med deg innen 1–2 virkedager.</p>
-  </div>
+  <section>
+    <div class="section-inner" style="padding:clamp(48px, 6vw, 88px) var(--pad-x); display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:clamp(36px, 5vw, 76px); align-items:start;">
 
-  <div class="section section-gray">
-    <div class="section-inner" style="max-width:700px;">
-      <div class="section-label">Forespørsel</div>
-      <h2>Fortell oss om prosjektet ditt</h2>
-      <p class="section-lead">Jo mer du beskriver, desto bedre kan vi hjelpe deg.</p>
-      <form id="bestillingForm" action="https://formspree.io/f/mqpzrwpg" method="POST">
+      <div>
+        <div class="eyebrow">FORESPØRSEL</div>
+        <h1 style="font-size:clamp(34px, 4.6vw, 62px); line-height:0.96; margin-bottom:22px;">Fortell oss om bilen</h1>
+        <p class="body-lead" style="font-size:17px; max-width:44ch; margin-bottom:34px;">Jo mer du beskriver, desto mer presist tilbud kan vi gi. Vi tar kontakt innen 1–2 virkedager.</p>
+        <div class="request-steps">
+          <div class="row-list-item tight"><span class="num mono">01</span><span class="body">Vi går gjennom modell, årsmodell og ønsket innredning</span></div>
+          <div class="row-list-item tight"><span class="num mono">02</span><span class="body">Du får pris, leveringstid og anbefalt løsning</span></div>
+          <div class="row-list-item tight"><span class="num mono">03</span><span class="body">Vi avtaler innlevering på verkstedet i Skien</span></div>
+        </div>
+        <p style="font-size:15px; line-height:1.6; color:var(--text-muted); margin-top:28px;">Vil du heller snakke med noen? Ring <a href="tel:35593395">35 59 33 95</a> man–fre 07:30–15:30.</p>
+      </div>
+
+      <form id="bestillingForm" class="form-panel" action="https://formspree.io/f/mqpzrwpg" method="POST">
         <input type="hidden" name="_cc" value="post@salmaker.as">
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="navn">Navn *</label>
-            <input type="text" id="navn" name="navn" placeholder="Ditt navn" required>
-          </div>
-          <div class="form-group">
-            <label for="telefon">Telefon</label>
-            <input type="tel" id="telefon" name="telefon" placeholder="Ditt telefonnummer">
-          </div>
-          <div class="form-group">
-            <label for="epost">E-post *</label>
-            <input type="email" id="epost" name="epost" placeholder="din@epost.no" required>
-          </div>
-          <div class="form-group">
-            <label for="bilmodell">Bilmodell *</label>
-            <select id="bilmodell" name="bilmodell" required>
-              <option value="" disabled selected>Velg modell</option>
+        <div class="form-row-2">
+          <label class="form-field">
+            <span class="flabel mono">NAVN *</span>
+            <input type="text" name="navn" placeholder="Ola Nordmann" required>
+          </label>
+          <label class="form-field">
+            <span class="flabel mono">TELEFON</span>
+            <input type="tel" name="telefon" placeholder="900 00 000">
+          </label>
+        </div>
+        <label class="form-field">
+          <span class="flabel mono">E-POST *</span>
+          <input type="email" name="epost" placeholder="ola@firma.no" required>
+        </label>
+        <div class="form-row-2">
+          <label class="form-field">
+            <span class="flabel mono">BILMODELL *</span>
+            <select name="modell" required>
+              <option value="">Velg modell</option>
               <option>KIA EV9</option>
               <option>Mercedes GLS</option>
               <option>Mercedes G-Klasse</option>
+              <option>Mercedes V-Klasse</option>
+              <option>Mercedes EQV</option>
+              <option>Mercedes Vito</option>
+              <option>Mercedes Vito Tourer</option>
               <option>Land Rover Defender 110</option>
               <option>Land Rover Defender 130</option>
               <option>Land Rover Defender OCTA</option>
               <option>Land Rover Discovery 5</option>
-              <option>KGM Rexton</option>
-              <option>Dodge RAM</option>
-              <option>Dodge Durango</option>
-              <option>Mercedes EQV</option>
-              <option>Mercedes Vito</option>
-              <option>Mercedes Vito Tourer</option>
-              <option>Mercedes V-Klasse</option>
               <option>Toyota Land Cruiser 150</option>
               <option>Toyota Land Cruiser 250</option>
               <option>VW ID. Buzz (kort)</option>
               <option>VW ID. Buzz (lang)</option>
+              <option>Dodge RAM</option>
+              <option>Dodge Durango</option>
+              <option>KGM Rexton</option>
               <option>Annen modell</option>
             </select>
-          </div>
-          <div class="form-group full">
-            <label for="beskrivelse">Hva ønsker du? *</label>
-            <textarea id="beskrivelse" name="beskrivelse" placeholder="Fortell hva du trenger — skillevegg, gulv, oppbevaringskasser, hengerfeste, annet..." required></textarea>
-          </div>
+          </label>
+          <label class="form-field">
+            <span class="flabel mono">ÅRSMODELL</span>
+            <input type="text" name="aarsmodell" placeholder="2024">
+          </label>
         </div>
-        <div class="form-send">
-          <button type="submit" class="btn btn-primary">Send forespørsel</button>
-          <span class="form-note">* Obligatoriske felt</span>
-        </div>
-        <div class="form-success" id="formSuccess">
-          ✅ Takk! Vi har mottatt forespørselen og tar kontakt snart.
-        </div>
+        <label class="form-field">
+          <span class="flabel mono">HVA ØNSKER DU? *</span>
+          <textarea name="melding" rows="6" placeholder="Skillevegg og gulv, ønsker også kasser på venstre side. Bilen er ny og skal registreres som varebil." required></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary" style="width:100%;">Send forespørsel</button>
+        <p class="form-note">* OBLIGATORISKE FELT</p>
+        <div class="form-success" id="formSuccess">Takk! Vi har mottatt forespørselen og tar kontakt snart.</div>
       </form>
+
     </div>
-  </div>
+  </section>
 
 </main>
 
-<footer>
-  <p>© 2026 Telemark Salmakerverksted AS &nbsp;·&nbsp; Bataljonvegen 25, 3734 Skien &nbsp;·&nbsp; <a href="mailto:post@salmaker.as">post@salmaker.as</a></p>
+<footer class="site-footer">
+  <div class="footer-grid">
+    <div>
+      <img src="logo-transparent.png?v=5" alt="Salmaker'n">
+      <p>Telemark Salmakerverksted AS — godkjent påbyggerverksted for ombygging av personbiler til varebil. Skien, Telemark.</p>
+    </div>
+    <div>
+      <div class="footer-col-label">SIDER</div>
+      <div class="footer-links">
+        <a href="index.html">Hjem</a>
+        <a href="varebil.html">Ombygginger</a>
+        <a href="bestilling.html">Bestilling</a>
+        <a href="kontakt.html">Kontakt</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">KONTAKT</div>
+      <div class="footer-links muted">
+        <a href="tel:35593395">35 59 33 95</a>
+        <a href="mailto:post@salmaker.as">post@salmaker.as</a>
+        <span>Bataljonvegen 25, 3734 Skien</span>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">FORHANDLER</div>
+      <div class="footer-links">
+        <a href="https://forhandler.salmaker.as/login">Logg inn i forhandlerportal</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-bottom-inner">© 2026 TELEMARK SALMAKERVERKSTED AS · BATALJONVEGEN 25, 3734 SKIEN · POST@SALMAKER.AS</div>
+  </div>
 </footer>
 
 <script>
