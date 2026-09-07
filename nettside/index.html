@@ -130,23 +130,23 @@
     </div>
     <div class="reveal model-teaser-grid">
       <a href="kia-ev9.html" class="model-teaser-card">
-        <div class="model-teaser-thumb"><span>BILDE FRA FORHANDLERPORTAL</span></div>
+        <div class="model-teaser-thumb" data-slug="kia-ev9"><span>BILDE FRA FORHANDLERPORTAL</span></div>
         <div class="model-teaser-body"><div class="name">KIA EV9</div><div class="tags">SKILLEVEGG · GULV · KASSER</div></div>
       </a>
       <a href="land-rover-defender-130.html" class="model-teaser-card">
-        <div class="model-teaser-thumb"><span>BILDE FRA FORHANDLERPORTAL</span></div>
+        <div class="model-teaser-thumb" data-slug="land-rover-defender-130"><span>BILDE FRA FORHANDLERPORTAL</span></div>
         <div class="model-teaser-body"><div class="name">Land Rover Defender 130</div><div class="tags">SKILLEVEGG · GULV · KASSER</div></div>
       </a>
       <a href="mercedes-gls.html" class="model-teaser-card">
-        <div class="model-teaser-thumb"><span>BILDE FRA FORHANDLERPORTAL</span></div>
+        <div class="model-teaser-thumb" data-slug="mercedes-gls"><span>BILDE FRA FORHANDLERPORTAL</span></div>
         <div class="model-teaser-body"><div class="name">Mercedes GLS</div><div class="tags">SKILLEVEGG · GULV · KASSER</div></div>
       </a>
       <a href="vw-id-buzz-lang.html" class="model-teaser-card">
-        <div class="model-teaser-thumb"><span>BILDE FRA FORHANDLERPORTAL</span></div>
+        <div class="model-teaser-thumb" data-slug="vw-id-buzz-lang"><span>BILDE FRA FORHANDLERPORTAL</span></div>
         <div class="model-teaser-body"><div class="name">VW ID. Buzz (lang)</div><div class="tags">SKILLEVEGG · GULV · KASSER</div></div>
       </a>
       <a href="toyota-lc-250.html" class="model-teaser-card">
-        <div class="model-teaser-thumb"><span>BILDE FRA FORHANDLERPORTAL</span></div>
+        <div class="model-teaser-thumb" data-slug="toyota-lc-250"><span>BILDE FRA FORHANDLERPORTAL</span></div>
         <div class="model-teaser-body"><div class="name">Toyota Land Cruiser 250</div><div class="tags">SKILLEVEGG · GULV · KASSER</div></div>
       </a>
       <a href="varebil.html" class="model-teaser-cta">
@@ -313,6 +313,30 @@
   box.addEventListener('touchstart', function (e) { dragging = true; fromEvent(e); });
   box.addEventListener('touchmove', function (e) { if (dragging) fromEvent(e); });
   box.addEventListener('touchend', function () { dragging = false; });
+})();
+</script>
+<script>
+(function () {
+  var API_BASE = "https://forhandler.salmaker.as";
+  var thumbs = document.querySelectorAll(".model-teaser-thumb[data-slug]");
+  thumbs.forEach(function (thumb) {
+    var slug = thumb.dataset.slug;
+    fetch(API_BASE + "/api/public/models/" + encodeURIComponent(slug))
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        if (!data || !data.imageUrl) return;
+        thumb.innerHTML = "";
+        var img = document.createElement("img");
+        img.src = data.imageUrl;
+        img.alt = data.name || "";
+        img.loading = "lazy";
+        img.style.cssText = "width:100%;height:100%;object-fit:cover;display:block;";
+        thumb.appendChild(img);
+      })
+      .catch(function () {
+        // Leave the existing placeholder in place if the API is unreachable.
+      });
+  });
 })();
 </script>
 </body>
