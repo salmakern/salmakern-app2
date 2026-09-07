@@ -248,13 +248,14 @@ function opprettOrdre() {
   ny.type    = document.getElementById('n_type').value.trim();
   ny.modell  = document.getElementById('n_modell').value.trim();
   ny.versjon = document.getElementById('n_versjon').value.trim();
+  ny.farge   = document.getElementById('n_farge').value.trim();
   ny.chassis = chassis;
   ny._localAt = Date.now();
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
-  ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
+  ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_farge','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
   const statusRadio = document.querySelector('input[name="n_status"][value="ikke_paabegynt"]');
   if (statusRadio) statusRadio.checked = true;
   oppdaterNyOrdreStatusFelt();
