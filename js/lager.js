@@ -273,7 +273,12 @@ function lagreVare() {
       .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
     if (mangler > 0) varselMangelfullLevering({navn, enhet}, forventet, antall, mangler);
     closeModal('nyVareModal');
-    renderLagerListe();
+    // Oppdater den visningen man faktisk står i - "+ Ny vare" kan trykkes både fra
+    // hovedoversikten OG inne fra en kategori (apneNyVareIKategori()), og da må
+    // kategoriDetaljView oppdateres, ikke den skjulte hovedoversikten (samme fiks som
+    // lagreLagerEndring() allerede har for samme problem).
+    if (document.getElementById('kategoriDetaljView')?.style.display === 'block') renderKategoriDetalj();
+    else renderLagerListe();
   }
 }
 
