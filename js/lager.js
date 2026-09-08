@@ -78,12 +78,15 @@ function renderLagerListe() {
   el.innerHTML = `<div class="grid g3">${kategorier.map(kat => {
     const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
     const sumEnheter = grupper[kat].reduce((s,v)=>s+(Number(v.antall)||0),0);
+    const sumMin = grupper[kat].reduce((s,v)=>s+(Number(v.minAntall)||0),0);
+    const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, sumEnheter/sumMin*100)) : 100;
     return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${esc(kat).replace(/'/g,"\\'")}')">
       <div class="row">
         <b>${esc(kat)}</b>
         ${lavtIKat?`<span class="pill bad" style="margin:0;font-size:11px">${lavtIKat} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
       </div>
       <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter på lager</div>
+      <div style="margin-top:8px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden"><div style="height:100%;width:${fyllPct}%;background:#ef4444;border-radius:999px"></div></div>
     </div>`;
   }).join('')}</div>`;
 }
