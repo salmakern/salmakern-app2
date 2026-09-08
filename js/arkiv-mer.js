@@ -461,7 +461,9 @@ function renderTimerOversikt() {
     </div>` : '';
 
   document.getElementById('adminStatInnhold').innerHTML =
-    (rader.join('') || '<div class="muted small">Ingen timer registrert denne måneden</div>') + totalRad;
+    `<div class="tallrad-scroll"><div>` +
+    (rader.join('') || '<div class="muted small">Ingen timer registrert denne måneden</div>') +
+    `</div></div>` + totalRad;
 }
 
 // ════════════════════════════════════════════════════
@@ -519,6 +521,7 @@ function renderStempelkort() {
   const UKEDAG = ['Søndag','Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag'];
 
   el.innerHTML = `<div class="muted small" style="margin-bottom:10px">Rå inn/ut-klokking gruppert per dag. Én linje per ansatt som stemplet inn den dagen.</div>` +
+    `<div class="tallrad-scroll"><div>` +
     datoer.map(dag => {
       const d = new Date(dag);
       const rader = relevante.filter(t => t.dato === dag).sort((a,b) => (a.start||'').localeCompare(b.start||''));
@@ -546,7 +549,7 @@ function renderStempelkort() {
         </div>
         ${raderHTML}
       </div>`;
-    }).join('');
+    }).join('') + `</div></div>`;
 }
 
 function renderAarsStatistikk() {
