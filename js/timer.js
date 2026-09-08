@@ -64,16 +64,23 @@ function initTimerPage() {
 function setTimerType(t) {
   timerType=t;
   highlightTimerType();
-  document.getElementById('manuellFelt').style.display=t==='manuell'?'block':'none';
-  document.getElementById('ferieFelt').style.display=(t==='ferie'||t==='permisjon')?'block':'none';
+  const vis=(id,paa)=>{const el=document.getElementById(id); if(el) el.style.display=paa?'block':'none';};
+  vis('normalFelt', t==='normal');
+  vis('manuellFelt', t==='manuell');
+  vis('ferieFelt', t==='ferie'||t==='permisjon');
+  vis('sykFelt', t==='syk'||t==='egenmelding');
   const today=new Date().toISOString().split('T')[0];
   if(t==='manuell'){
     const mDato=document.getElementById('mDato'); if(mDato&&!mDato.value) mDato.value=today;
+  }
+  if(t==='syk'||t==='egenmelding'){
+    const sDato=document.getElementById('sDato'); if(sDato&&!sDato.value) sDato.value=today;
   }
   if(t==='ferie'||t==='permisjon'){
     document.getElementById('fFra').value=today;
     document.getElementById('fTil').value=today;
   }
+  oppdaterTilstandPille();
 }
 
 function highlightTimerType() {
@@ -182,12 +189,12 @@ function oppdaterKlokkeRing(grader, kjorer) {
   const tilstand = document.getElementById('clockTilstand');
   if (!el) return;
   if (kjorer) {
-    el.style.background = `conic-gradient(from 180deg, #16a34a 0deg, #22c55e ${grader/2}deg, #4ade80 ${grader}deg, #27272a ${grader}deg 360deg)`;
+    el.style.background = `conic-gradient(from 0deg, #16a34a 0deg, #22c55e ${grader/2}deg, #4ade80 ${grader}deg, #27272a ${grader}deg 360deg)`;
     el.style.animation = 'pulseGlow 3s ease-in-out infinite';
     el.style.boxShadow = 'none';
     if (tilstand) { tilstand.textContent = '● GÅR NÅ'; tilstand.style.color = '#4ade80'; }
   } else if (grader > 0) {
-    el.style.background = `conic-gradient(from 180deg, #dc2626 0deg, #ef4444 ${grader/2}deg, #f87171 ${grader}deg, #27272a ${grader}deg 360deg)`;
+    el.style.background = `conic-gradient(from 0deg, #dc2626 0deg, #ef4444 ${grader/2}deg, #f87171 ${grader}deg, #27272a ${grader}deg 360deg)`;
     el.style.animation = 'none';
     el.style.boxShadow = '0 0 34px rgba(239,68,68,.16)';
     if (tilstand) { tilstand.textContent = '■ STOPPET'; tilstand.style.color = '#f87171'; }
@@ -199,6 +206,15 @@ function oppdaterKlokkeRing(grader, kjorer) {
   }
 }
 
+function oppdaterTilstandPille() {
+  const p=document.getElementById('timerTilstandPille');
+  if(!p) return;
+  if(timerType!=='normal'){ p.textContent=timerType; p.style.color='#a1a1aa'; p.style.borderColor='#27272a'; return; }
+  if(timerTick){ p.textContent='● Klokka går'; p.style.color='#4ade80'; p.style.borderColor='rgba(34,197,94,.32)'; }
+  else if(klokkeGraderSist>0){ p.textContent='■ Stoppet'; p.style.color='#fca5a5'; p.style.borderColor='rgba(239,68,68,.32)'; }
+  else { p.textContent='Ikke startet'; p.style.color='#a1a1aa'; p.style.borderColor='#27272a'; }
+}
+
 function doStartTimer(notat) {
   const btn=document.getElementById('startBtn');
   if(btn){btn.textContent='▶ Start';btn.disabled=true;}
@@ -208,6 +224,7 @@ function doStartTimer(notat) {
   timerTick=setInterval(updateClock,1000);
   updateClock();
   console.log('Timer startet:',notat);
+  oppdaterTilstandPille();
 }
 
 function stoppTimer() {
@@ -215,6 +232,7 @@ function stoppTimer() {
   document.getElementById('startBtn').disabled=false;
   document.getElementById('stoppBtn').disabled=true;
   oppdaterKlokkeRing(klokkeGraderSist, false);
+  oppdaterTilstandPille();
 }
 
 function updateClock() {
@@ -308,8 +326,7 @@ function renderTimerHistorikk() {
   const today=new Date().toISOString().split('T')[0];
   const mine=S.timer.filter(t=>t.ansattId===me.id&&t.dato===today);
   if(!mine.length){el.innerHTML='<div class="muted small">Ingen timer registrert i dag</div>';return;}
-  el.innerHTML='<div class="h" style="margin-bottom:8px">Registrert i dag</div>'+
-    mine.map(t=>`<div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+  el.innerHTML=mine.map(t=>`<div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
       <div><div class="small"><b>${t.dato}</b> – ${t.type}</div><div class="small muted">${t.start} – ${t.stopp}</div></div>
       <div class="small">${t.mins?Math.floor(t.mins/60)+'t '+t.mins%60+'m':'–'}</div>
     </div>`).join('');
