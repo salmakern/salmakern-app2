@@ -65,7 +65,12 @@ function renderLagerListe() {
   if (sok) {
     // Ved søk: vis treffene direkte, uten å måtte inn i en kategori
     varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
-    el.innerHTML = varer.length ? `<div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>` : '<div class="card"><div class="muted small">Ingen varer funnet</div></div>';
+    el.innerHTML = varer.length
+      ? `<div class="small muted" style="margin-bottom:10px">${varer.length} treff på «${esc(sok)}»</div><div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>`
+      : `<div class="box" style="text-align:center;padding:24px">
+           <div class="muted small">Ingen varer matcher «${esc(sok)}»</div>
+           <button class="btn sm red" style="margin-top:10px" onclick="apneNyVare()">+ Opprett «${esc(sok)}» som ny vare</button>
+         </div>`;
     return;
   }
 
@@ -80,31 +85,62 @@ function renderLagerListe() {
     const sumEnheter = grupper[kat].reduce((s,v)=>s+(Number(v.antall)||0),0);
     const sumMin = grupper[kat].reduce((s,v)=>s+(Number(v.minAntall)||0),0);
     const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, sumEnheter/sumMin*100)) : 100;
-    return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${esc(kat).replace(/'/g,"\\'")}')">
+    return `<div class="box" style="cursor:pointer;border-color:${lavtIKat?'rgba(239,68,68,.3)':'#27272a'}" onclick="visKategoriDetalj('${esc(kat).replace(/'/g,"\\'")}')">
       <div class="row">
         <b>${esc(kat)}</b>
         ${lavtIKat?`<span class="pill bad" style="margin:0;font-size:11px">${lavtIKat} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
       </div>
-      <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter på lager</div>
-      <div style="margin-top:8px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden"><div style="height:100%;width:${fyllPct}%;background:#ef4444;border-radius:999px"></div></div>
+      <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter</div>
+      <div style="margin-top:9px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden">
+        <div style="height:100%;width:${fyllPct}%;background:${fyllPct<=100?'#ef4444':'#22c55e'};border-radius:999px"></div>
+      </div>
+      ${sumMin>0?`<div class="small muted" style="margin-top:4px;font-size:11px">${Math.round(fyllPct)}% av samlet minimum (${fmtAntall(sumMin)})</div>`:''}
     </div>`;
   }).join('')}</div>`;
 }
 
 function vareBoksHTML(v, kanFlytte) {
   const lavt = erLavBeholdning(v);
-  return `<div class="box" style="cursor:pointer;position:relative;border-color:${lavt && !v.bestilt?'rgba(239,68,68,.35)':'#27272a'}" onclick="visVareDetalj('${v.id}')">
-    ${kanFlytte?`<div style="position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:1px;z-index:1">
-      <button onclick="event.stopPropagation();flyttVare('${v.id}',-1)" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:11px;line-height:1;padding:2px" title="Flytt opp">▲</button>
-      <button onclick="event.stopPropagation();flyttVare('${v.id}',1)" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:11px;line-height:1;padding:2px" title="Flytt ned">▼</button>
+  const bestilt = !!v.bestilt;
+  const harMin = v.minAntall > 0;
+  // Hvor langt under minimum: gir "mangler 6" i stedet for bare "lavt"
+  const mangler = harMin && v.antall < v.minAntall ? v.minAntall - v.antall : 0;
+  const fyllPct = harMin ? Math.max(3, Math.min(100, (Number(v.antall)||0) / v.minAntall * 100)) : 100;
+  const stripeFarge = !harMin ? '#3f3f46' : (lavt ? '#ef4444' : (fyllPct < 150 ? '#facc15' : '#22c55e'));
+
+  return `<div class="box" style="position:relative;padding:14px;display:flex;flex-direction:column;gap:11px;border-color:${lavt?'rgba(239,68,68,.35)':(bestilt?'rgba(34,197,94,.3)':'#27272a')}">
+    ${kanFlytte?`<div style="position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:2px;z-index:1">
+      <button onclick="event.stopPropagation();flyttVare('${v.id}',-1)" title="Flytt opp"
+        style="background:#18181b;border:1px solid #27272a;color:#a1a1aa;border-radius:8px 8px 4px 4px;width:26px;height:19px;font-size:9px;line-height:1;padding:0;cursor:pointer">▲</button>
+      <button onclick="event.stopPropagation();flyttVare('${v.id}',1)" title="Flytt ned"
+        style="background:#18181b;border:1px solid #27272a;color:#a1a1aa;border-radius:4px 4px 8px 8px;width:26px;height:19px;font-size:9px;line-height:1;padding:0;cursor:pointer">▼</button>
     </div>`:''}
-    <div class="row" style="${kanFlytte?'padding-right:16px':''}">
-      <b>${esc(v.navn)}</b>
-      <span style="font-weight:700;${lavt && !v.bestilt?'color:#fca5a5':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
+
+    <div onclick="visVareDetalj('${v.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:8px;${kanFlytte?'padding-right:34px':''}">
+      <div style="min-width:0">
+        <b style="font-size:15px">${esc(v.navn)}</b>
+        ${v.tegningsnummer?`<div class="small muted" style="font-size:11.5px">${esc(v.tegningsnummer)}</div>`:''}
+      </div>
+      <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+        <span style="font-size:27px;font-weight:800;letter-spacing:-.6px;line-height:1;color:${lavt?'#fca5a5':'#f4f4f5'}">${fmtAntall(v.antall)}</span>
+        <span class="muted" style="font-size:13px">${esc(v.enhet)}</span>
+        ${bestilt?'<span class="pill ok" style="margin:0;font-size:11px;padding:3px 9px">✓ Bestilt</span>'
+          :(mangler?`<span class="pill bad" style="margin:0;font-size:11px;padding:3px 9px">mangler ${fmtAntall(mangler)}</span>`:'')}
+      </div>
+      ${harMin?`<div>
+        <div style="height:4px;border-radius:999px;background:#0f0f12;overflow:hidden">
+          <div style="height:100%;width:${fyllPct}%;background:${stripeFarge};border-radius:999px"></div>
+        </div>
+        <div class="small muted" style="font-size:10.5px;margin-top:3px">min ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</div>
+      </div>`:''}
     </div>
-    ${lavt && !v.bestilt?`<span class="pill bad" style="font-size:11px;padding:3px 9px">LAVT · min ${fmtAntall(v.minAntall)}</span>`:''}
-    ${v.tegningsnummer?`<div class="small muted" style="margin-top:2px">${esc(v.tegningsnummer)}</div>`:''}
-    ${lavt?`<div class="small" style="color:${v.bestilt?'#4ade80':'#f87171'};margin-top:4px">${v.bestilt?'✓ Bestilt':'⚠ Lav beholdning'}</div>`:''}
+
+    <div style="display:flex;gap:7px">
+      <button onclick="event.stopPropagation();fyllPaLager('${v.id}')"
+        style="flex:1;background:#18181b;border:1px solid #27272a;color:#4ade80;border-radius:14px;padding:9px;font-size:13px;cursor:pointer">+ Fyll på</button>
+      <button onclick="event.stopPropagation();taUtFraLager('${v.id}')"
+        style="flex:1;background:#18181b;border:1px solid #27272a;color:#fca5a5;border-radius:14px;padding:9px;font-size:13px;cursor:pointer">− Ta ut</button>
+    </div>
   </div>`;
 }
 
@@ -121,8 +157,28 @@ function renderKategoriDetalj() {
   if (!aktivKategori) return;
   document.getElementById('kategoriDetaljTittel').textContent = aktivKategori;
   const varer = (S.lagervarer||[]).filter(v => (v.kategori || 'Uten kategori') === aktivKategori).sort(sorterLagerVarer);
+  const lave = varer.filter(erLavBeholdning);
   const el = document.getElementById('kategoriVareListe');
-  el.innerHTML = varer.length ? `<div class="grid g3">${varer.map(v => vareBoksHTML(v, true)).join('')}</div>` : '<div class="card"><div class="muted small">Ingen varer i denne kategorien ennå</div></div>';
+
+  if (!varer.length) {
+    el.innerHTML = `<div class="box" style="text-align:center;padding:24px">
+      <div class="muted small">Ingen varer i denne kategorien ennå</div>
+      <button class="btn sm red" style="margin-top:10px" onclick="apneNyVareIKategori()">+ Legg til første vare</button>
+    </div>`;
+    return;
+  }
+
+  const varsel = lave.length ? `
+    <div class="box" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;border-color:rgba(239,68,68,.35)">
+      <span style="flex-shrink:0;width:32px;height:32px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.4);color:#fca5a5;display:flex;align-items:center;justify-content:center;font-weight:800">!</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:#fca5a5;font-size:13.5px">${lave.length} vare${lave.length===1?'':'r'} under minimum</div>
+        <div class="small muted">${lave.slice(0,3).map(v=>esc(v.navn)).join(', ')}${lave.length>3?` +${lave.length-3} til`:''}</div>
+      </div>
+      <button class="btn sm" style="flex-shrink:0" onclick="settKategoriBestilt('${esc(aktivKategori).replace(/'/g,"\\'")}');renderKategoriDetalj()">✓ Merk bestilt</button>
+    </div>` : '';
+
+  el.innerHTML = varsel + `<div class="grid g3">${varer.map(v => vareBoksHTML(v, true)).join('')}</div>`;
 }
 
 function apneNyVareIKategori() {
@@ -292,19 +348,24 @@ function renderVareDetalj() {
     const positiv = h.endring > 0;
     const o = h.ordreId ? S.ordrer.find(x=>x.id===h.ordreId) : null;
     const tid = h.createdAt ? new Date(h.createdAt).toLocaleString('no-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-    return `<div class="box" style="margin-bottom:5px;padding:8px 10px">
-      <div class="row">
-        <div class="small">${tid} · ${esc(h.ansattNavn||'—')}</div>
-        <b style="color:${positiv?'#4ade80':'#f87171'}">${positiv?'+':''}${fmtAntall(h.endring)}</b>
+    return `<div class="box" style="margin-bottom:6px;padding:11px 13px;display:flex;gap:12px;align-items:flex-start">
+      <span style="flex-shrink:0;min-width:46px;text-align:center;padding:4px 8px;border-radius:10px;font-weight:800;font-size:14px;
+        background:${positiv?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)'};color:${positiv?'#4ade80':'#f87171'}">${positiv?'+':''}${fmtAntall(h.endring)}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px">${esc(h.ansattNavn||'—')}<span class="muted small"> · ${tid}</span></div>
+        ${h.kommentar?`<div class="small muted" style="margin-top:2px">${esc(h.kommentar)}</div>`:''}
+        ${o?`<span class="pill" style="margin:5px 0 0;font-size:11px;padding:3px 10px">${ordreLabel(o)}</span>`:''}
       </div>
-      ${(o || h.kommentar) ? `<div class="small muted" style="margin-top:2px">${o?`Ordre: ${ordreLabel(o)}`:''}${o && h.kommentar?' · ':''}${esc(h.kommentar||'')}</div>` : ''}
     </div>`;
-  }).join('') : '<div class="muted small">Ingen historikk ennå</div>';
+  }).join('') : '<div class="box" style="text-align:center;padding:20px"><div class="muted small">Ingen historikk ennå</div></div>';
 }
 
-function fyllPaLager() {
+function fyllPaLager(vareId) {
+  const id = vareId || aktivVareId; if (!id) return;
+  const v = (S.lagervarer||[]).find(x=>x.id===id); if (!v) return;
   document.getElementById('lagerEndringTittel').textContent = 'Fyll på lager';
-  document.getElementById('lagerEndringVareId').value = aktivVareId;
+  document.getElementById('lagerEndringUndertekst').textContent = `${v.navn} · ${fmtAntall(v.antall)} ${v.enhet} på lager`;
+  document.getElementById('lagerEndringVareId').value = id;
   document.getElementById('lagerEndringFortegn').value = '1';
   document.getElementById('lagerEndringAntall').value = '';
   document.getElementById('lagerEndringKommentar').value = '';
@@ -313,9 +374,12 @@ function fyllPaLager() {
   document.getElementById('lagerEndringAntallLabel').textContent = 'Mottatt antall';
   openModal('lagerEndringModal');
 }
-function taUtFraLager() {
+function taUtFraLager(vareId) {
+  const id = vareId || aktivVareId; if (!id) return;
+  const v = (S.lagervarer||[]).find(x=>x.id===id); if (!v) return;
   document.getElementById('lagerEndringTittel').textContent = 'Ta ut fra lager';
-  document.getElementById('lagerEndringVareId').value = aktivVareId;
+  document.getElementById('lagerEndringUndertekst').textContent = `${v.navn} · ${fmtAntall(v.antall)} ${v.enhet} på lager`;
+  document.getElementById('lagerEndringVareId').value = id;
   document.getElementById('lagerEndringFortegn').value = '-1';
   document.getElementById('lagerEndringAntall').value = '';
   document.getElementById('lagerEndringKommentar').value = '';
@@ -345,7 +409,10 @@ function lagreLagerEndring() {
   registrerLagerEndring(v, endring, endring>0?'inn':'ut', null, kommentar);
   if (mangler > 0) varselMangelfullLevering(v, forventetRaw, antallRaw, mangler);
   closeModal('lagerEndringModal');
-  renderVareDetalj();
+  // Oppdater den visningen man faktisk står i
+  if (document.getElementById('vareDetaljView')?.style.display === 'block') renderVareDetalj();
+  else if (document.getElementById('kategoriDetaljView')?.style.display === 'block') renderKategoriDetalj();
+  else renderLagerListe();
 }
 
 function varselMangelfullLevering(v, forventet, mottatt, mangler) {
@@ -460,19 +527,53 @@ function visBestillingsliste() {
   const grupper = bestillingslisteGruppert();
   const antall = Object.values(grupper).reduce((s,a)=>s+a.length, 0);
   const el = document.getElementById('bestillingslisteInnhold');
-  el.innerHTML = antall
-    ? Object.entries(grupper).map(([kat, varer]) => `
-        <div style="margin-bottom:14px">
-          <div style="font-weight:700;color:#f87171;margin-bottom:4px">${esc(kat)}</div>
-          ${varer.map(v=>`
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #27272a30">
-              <span>${esc(v.navn)}${v.tegningsnummer?` <span class="small muted">(${esc(v.tegningsnummer)})</span>`:''}</span>
-              <span class="small muted">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</span>
-            </div>`).join('')}
-        </div>`).join('')
-    : '<div class="muted small">Ingen varer er under lav-grensen akkurat nå.</div>';
+
+  el.innerHTML = antall ? `
+    <div class="box" style="display:flex;align-items:center;gap:13px;margin-bottom:12px;border-color:rgba(239,68,68,.35)">
+      <span style="flex-shrink:0;width:36px;height:36px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.4);color:#fca5a5;display:flex;align-items:center;justify-content:center;font-weight:800">!</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:#fca5a5">${antall} vare${antall===1?'':'r'} under minimum</div>
+        <div class="small muted">Fordelt på ${Object.keys(grupper).length} kategori${Object.keys(grupper).length===1?'':'er'}</div>
+      </div>
+    </div>` + Object.entries(grupper).map(([kat, varer]) => `
+      <div class="box" style="padding:0;overflow:hidden;margin-bottom:9px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #27272a">
+          <b style="font-size:14px">${esc(kat)}</b>
+          <div style="display:flex;gap:7px;align-items:center;flex-shrink:0">
+            <span class="pill bad" style="margin:0;font-size:11px;padding:3px 10px">${varer.length}</span>
+            <button class="btn sm" style="padding:4px 10px;font-size:11.5px"
+              onclick="settKategoriBestilt('${esc(kat).replace(/'/g,"\\'")}');visBestillingsliste()">✓ Bestilt</button>
+          </div>
+        </div>
+        ${varer.map(v=>`
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid #ffffff08">
+            <input type="checkbox" class="bestill-chk" data-vare-id="${v.id}"
+              style="width:17px;height:17px;accent-color:#22c55e;flex-shrink:0;cursor:pointer">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(v.navn)}</div>
+              ${v.tegningsnummer?`<div class="small muted" style="font-size:11.5px">${esc(v.tegningsnummer)}</div>`:''}
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:13px;color:#fca5a5;font-weight:700">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)}</div>
+              <div class="small muted" style="font-size:11px">${esc(v.enhet)}</div>
+            </div>
+          </div>`).join('')}
+      </div>`).join('')
+    : '<div class="box" style="text-align:center;padding:26px"><div style="font-size:26px;margin-bottom:6px">✓</div><div class="muted small">Ingen varer er under lav-grensen akkurat nå.</div></div>';
+
   document.getElementById('bestillingslisteHandlinger').style.display = antall ? 'flex' : 'none';
   openModal('bestillingslisteModal');
+}
+
+// Merker bare varene brukeren faktisk har huket av. I praksis bestiller man fra
+// én leverandør av gangen, ikke hele listen samtidig.
+function bestillAvhukede() {
+  const ids = [...document.querySelectorAll('.bestill-chk:checked')].map(c => c.dataset.vareId);
+  if (!ids.length) { visToast('Huk av varene du har bestilt'); return; }
+  ids.forEach(id => settVareBestilt(id, true));
+  renderLagerListe();
+  visToast(`${ids.length} vare${ids.length===1?'':'r'} merket som bestilt`);
+  visBestillingsliste();
 }
 
 function bestillingslisteSomTekst() {
@@ -496,60 +597,98 @@ function kopierBestillingsliste() {
 
 // Åpner et rent, utskriftsvennlig ark og trigger utskriftsdialogen direkte -
 // ingen PDF-nedlasting nødvendig, bruker skriver rett fra nettleseren.
-function skrivUtBestillingsliste() {
+// Felles ark for både utskrift og PDF - samme mal, så de aldri kommer i utakt.
+function bestillingslisteArkHTML() {
   const grupper = bestillingslisteGruppert();
   const antallVarer = Object.values(grupper).reduce((s,v)=>s+v.length,0);
-  const dato = new Date().toLocaleDateString('no');
+  const dato = new Date().toLocaleDateString('nb-NO', {day:'numeric', month:'long', year:'numeric'});
+  const LOGO = document.querySelector('#appScreen img')?.src || '';
+
   const innhold = Object.entries(grupper).map(([kat, varer]) => `
-    <h2>${esc(kat)}</h2>
+    <h2>${esc(kat)} <span class="kat-antall">${varer.length} vare${varer.length===1?'':'r'}</span></h2>
     <table>
       ${varer.map(v=>`
         <tr>
           <td class="boks"></td>
-          <td>${esc(v.navn)}${v.tegningsnummer?` <span class="tegn">(${esc(v.tegningsnummer)})</span>`:''}</td>
-          <td class="antall">${fmtAntall(v.antall)} / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</td>
+          <td>${esc(v.navn)}${v.tegningsnummer?` <span class="tegn">${esc(v.tegningsnummer)}</span>`:''}</td>
+          <td class="antall"><b>${fmtAntall(v.antall)}</b> / ${fmtAntall(v.minAntall)} ${esc(v.enhet)}</td>
         </tr>`).join('')}
     </table>`).join('');
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bestillingsliste ${dato}</title>
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bestillingsliste ${dato}</title>
     <style>
-      body{font-family:Arial,sans-serif;color:#18181b;background:#fff;padding:24px;max-width:700px;margin:0 auto}
-      .topp{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #18181b;padding-bottom:10px}
-      h1{font-size:20px}
+      *{box-sizing:border-box}
+      body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;background:#fff;padding:32px;max-width:760px;margin:0 auto}
+      .topp{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #cc0000;padding-bottom:14px;margin-bottom:6px}
+      .topp img{height:48px;object-fit:contain}
+      h1{font-size:22px;font-weight:bold;color:#cc0000;margin:0}
+      .undertittel{font-size:12.5px;color:#666;margin-top:3px}
       .topp-h{text-align:right}
-      .dato{color:#555}
-      .antall-varsel{font-weight:700;margin-top:2px}
-      h2{font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#52525b;border-bottom:1px solid #d4d4d8;padding-bottom:4px;margin-top:24px}
+      .dato{font-size:13px;color:#555}
+      .antall-varsel{font-weight:bold;font-size:14px;margin-top:3px}
+      h2{font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#cc0000;
+         border-bottom:1px solid #e5e5e5;padding-bottom:5px;margin:26px 0 2px;
+         display:flex;justify-content:space-between;align-items:baseline}
+      .kat-antall{font-size:11px;letter-spacing:0;text-transform:none;color:#999;font-weight:normal}
       table{width:100%;border-collapse:collapse}
-      td{padding:6px 4px;border-bottom:1px dotted #d4d4d8;font-size:14.5px}
-      td.boks{width:22px}
-      td.boks::before{content:'';display:block;width:15px;height:15px;border:1.5px solid #18181b;border-radius:3px}
-      td.antall{text-align:right;color:#555;white-space:nowrap}
-      .tegn{color:#71717a;font-size:12px}
-      .signaturer{display:flex;gap:24px;margin-top:40px}
+      td{padding:8px 4px;border-bottom:1px dotted #d4d4d8;font-size:14px;vertical-align:middle}
+      td.boks{width:26px}
+      td.boks::before{content:'';display:block;width:16px;height:16px;border:1.5px solid #1a1a1a;border-radius:3px}
+      td.antall{text-align:right;color:#555;white-space:nowrap;font-size:13px}
+      .tegn{color:#999;font-size:12px}
+      .signaturer{display:flex;gap:28px;margin-top:44px;page-break-inside:avoid}
       .sign{flex:1}
-      .sign-linje{height:34px;border-bottom:1px solid #18181b}
-      .sign-lbl{font-size:12.5px;color:#52525b;margin-top:6px}
-      @media print{ body{padding:0} }
+      .sign-linje{height:36px;border-bottom:1px solid #1a1a1a}
+      .sign-lbl{font-size:12px;color:#666;margin-top:6px}
+      .bunn{margin-top:28px;padding-top:10px;border-top:1px solid #e5e5e5;font-size:11px;color:#999;text-align:center}
+      @media print{ body{padding:0} h2{page-break-after:avoid} tr{page-break-inside:avoid} }
     </style></head>
     <body>
       <div class="topp">
-        <h1>Bestillingsliste<div class="small" style="font-size:12px;color:#71717a;font-weight:400">Salmaker'n · varelager</div></h1>
+        ${LOGO?`<img src="${LOGO}" alt="Salmaker'n">`:'<div></div>'}
         <div class="topp-h">
-          <div class="dato">${dato}</div>
-          <div class="antall-varsel">${antallVarer} vare${antallVarer===1?'':'r'} under minimum</div>
+          <h1>Bestillingsliste</h1>
+          <div class="undertittel">Salmaker'n · varelager</div>
         </div>
       </div>
-      ${innhold || '<p>Ingen varer er under lav-grensen akkurat nå.</p>'}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        <span class="dato">${dato}</span>
+        <span class="antall-varsel">${antallVarer} vare${antallVarer===1?'':'r'} under minimum</span>
+      </div>
+      ${innhold || '<p style="color:#666">Ingen varer er under lav-grensen akkurat nå.</p>'}
       <div class="signaturer">
         <div class="sign"><div class="sign-linje"></div><div class="sign-lbl">Bestilt av</div></div>
         <div class="sign"><div class="sign-linje"></div><div class="sign-lbl">Dato</div></div>
       </div>
+      <div class="bunn">Generert fra Salmaker'n · ${dato}</div>
     </body></html>`;
+}
+
+// Åpner arket i eget vindu og trigger utskriftsdialogen. Venter på logoen først,
+// ellers mangler den i PDF-en - samme mønster som genPDF().
+function apneBestillingslisteArk() {
   const vindu = window.open('', '_blank');
-  if (!vindu) { visToast('Nettleseren blokkerte utskriftsvinduet – tillat popup og prøv igjen'); return; }
-  vindu.document.write(html);
+  if (!vindu) { visToast('Nettleseren blokkerte vinduet – tillat popup og prøv igjen'); return; }
+  vindu.document.write(bestillingslisteArkHTML());
   vindu.document.close();
-  vindu.onload = () => vindu.print();
+
+  let skrevetUt = false;
+  const skrivUt = () => { if (skrevetUt) return; skrevetUt = true; vindu.focus(); vindu.print(); };
+  const bilder = [...vindu.document.images];
+  if (!bilder.length) skrivUt();
+  else {
+    let lastet = 0;
+    const ferdig = () => { if (++lastet >= bilder.length) skrivUt(); };
+    bilder.forEach(img => img.complete ? ferdig() : (img.addEventListener('load', ferdig), img.addEventListener('error', ferdig)));
+  }
+  setTimeout(skrivUt, 4000);
+}
+
+function skrivUtBestillingsliste() { apneBestillingslisteArk(); }
+
+function lastNedBestillingslistePDF() {
+  visToast('Velg «Lagre som PDF» i utskriftsdialogen');
+  apneBestillingslisteArk();
 }
 
 function bestillAltFraListe() {
@@ -617,9 +756,14 @@ function renderOppskriftModellerListe() {
   if (!modeller.length) { el.innerHTML = '<div class="card"><div class="muted small">Ingen modeller ennå. Lag en utstyr-mal med en biltype under Mer først.</div></div>'; return; }
   el.innerHTML = `<div class="grid g3">${modeller.map(m => {
     const varianter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===m);
+    const antallDeler = new Set(varianter.flatMap(o => (o.ingredienser||[]).map(i=>i.vareId))).size;
     return `<div class="box" style="cursor:pointer" onclick="visOppskriftModell('${esc(m).replace(/'/g,"\\'")}')">
       <div class="row"><b>${esc(m)}</b><span style="color:#a1a1aa">›</span></div>
-      <div class="small muted" style="margin-top:2px">${varianter.length ? varianter.length+' variant'+(varianter.length===1?'':'er') : 'Ingen oppskrift ennå'}</div>
+      <div class="small muted" style="margin-top:2px">${
+        varianter.length
+          ? `${varianter.length} variant${varianter.length===1?'':'er'} · ${antallDeler} deler totalt`
+          : 'Ingen oppskrift ennå'
+      }</div>
     </div>`;
   }).join('')}</div>`;
 }
@@ -657,21 +801,28 @@ function renderOppskriftModellDetalj() {
     </div>`).join('') : '<div class="muted small">Ingen deler lagt til på noen variant ennå</div>';
 
   const variantEl = document.getElementById('oppskriftVariantListeKort');
-  variantEl.innerHTML = varianter.length ? varianter.map(o => `
-    <div class="box" style="margin-bottom:6px;padding:10px">
+  variantEl.innerHTML = varianter.length ? varianter.map(o => {
+    const deler = (o.ingredienser||[]).map(i => {
+      const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
+      return v ? `<span class="pill" style="margin:0;font-size:11.5px;padding:3px 10px">${fmtAntall(i.antall)} ${esc(v.enhet)} · ${esc(v.navn)}</span>` : null;
+    }).filter(Boolean);
+    return `<div class="box" style="margin-bottom:7px;padding:13px 14px">
       <div class="row">
         <b>${o.variant ? esc(o.variant) : 'Generelt (alle varianter)'}</b>
-        <div style="display:flex;gap:6px;align-items:center">
-          <span class="pill" style="font-size:11px;padding:3px 10px">${(o.ingredienser||[]).length} deler</span>
-          <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎ Rediger</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <span class="pill" style="margin:0;font-size:11px;padding:3px 10px">${(o.ingredienser||[]).length} deler</span>
+          <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎</button>
           <button class="btn sm red" onclick="slettOppskrift('${o.id}')">🗑</button>
         </div>
       </div>
-      <div class="small muted" style="margin-top:4px">${(o.ingredienser||[]).map(i=>{
-        const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
-        return v ? `${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}` : null;
-      }).filter(Boolean).join(', ') || 'Ingen deler lagt til'}</div>
-    </div>`).join('') : '<div class="muted small">Ingen varianter opprettet ennå for denne modellen</div>';
+      ${deler.length
+        ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">${deler.join('')}</div>`
+        : '<div class="small muted" style="margin-top:6px">Ingen deler lagt til</div>'}
+    </div>`;
+  }).join('') : `<div class="box" style="text-align:center;padding:22px">
+      <div class="muted small">Ingen varianter opprettet ennå for denne modellen</div>
+      <button class="btn sm red" style="margin-top:10px" onclick="apneNyOppskrift('${esc(modell).replace(/'/g,"\\'")}')">+ Ny variant</button>
+    </div>`;
 }
 
 let oppskriftVisAlleVarer = false;
@@ -696,14 +847,30 @@ function fyllOppskriftVareListe(forhaandsvalgt) {
         ${oppskriftVisAlleVarer ? '↩ Vis kun varer i "'+esc(biltype)+'"-kategorien' : '+ Vis alle varer i lageret (ikke bare "'+esc(biltype)+'")'}
       </a>
     </div>` : ''}
-    ${varer.map(v => {
-      const valgt = forhaandsvalgt[v.id] != null;
-      return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a">
-        <input type="checkbox" class="oppskrift-vare-chk" data-vare-id="${v.id}" ${valgt?'checked':''} onchange="this.nextElementSibling.style.display=this.checked?'inline-block':'none'" style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
-        <input type="number" class="oppskrift-vare-antall" min="0" step="any" value="${valgt?forhaandsvalgt[v.id]:1}" style="width:64px;display:${valgt?'inline-block':'none'};flex-shrink:0">
-        <span style="font-size:13px;flex:1">${esc(v.navn)} <span class="muted small">(${esc(v.enhet)})</span></span>
-      </label>`;
-    }).join('')}
+    ${(() => {
+      const grupper = {};
+      varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
+      return Object.entries(grupper).map(([kat, katVarer]) => {
+        const valgtIKat = katVarer.filter(v => forhaandsvalgt[v.id] != null).length;
+        return `<div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:5px;border-bottom:1px solid #27272a;margin-bottom:4px">
+            <span class="small" style="font-weight:700;letter-spacing:.5px">${esc(kat)}</span>
+            <span class="small muted" style="font-size:11px">${valgtIKat} av ${katVarer.length} valgt</span>
+          </div>
+          ${katVarer.map(v => {
+            const valgt = forhaandsvalgt[v.id] != null;
+            return `<label style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #ffffff08">
+              <input type="checkbox" class="oppskrift-vare-chk" data-vare-id="${v.id}" ${valgt?'checked':''}
+                onchange="this.nextElementSibling.style.display=this.checked?'inline-block':'none'"
+                style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+              <input type="number" class="oppskrift-vare-antall" min="0" step="any" value="${valgt?forhaandsvalgt[v.id]:1}"
+                style="width:64px;display:${valgt?'inline-block':'none'};flex-shrink:0">
+              <span style="font-size:13px;flex:1;min-width:0">${esc(v.navn)} <span class="muted small">(${esc(v.enhet)})</span></span>
+            </label>`;
+          }).join('')}
+        </div>`;
+      }).join('');
+    })()}
   `;
 }
 

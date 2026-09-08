@@ -187,7 +187,7 @@ function renderWeek() {
   const el = document.getElementById('weekCal');
   const DAY_NAMES = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
   const START_H = 7, END_H = 16;
-  const SLOT_PX = 28;
+  const SLOT_PX = 32;
   const HOUR_PX = SLOT_PX * 2;
 
   const now = new Date();
@@ -232,7 +232,7 @@ function renderWeek() {
 
     const slotEls = slots30.map(s => {
       const tid = `${String(s.h).padStart(2,'0')}:${s.m===0?'00':'30'}`;
-      return `<div class="cal-slot" data-dato="${ds}" data-tid="${tid}" style="height:${SLOT_PX}px"></div>`;
+      return `<div class="cal-slot${s.m===0?' cal-hel-time':''}" data-dato="${ds}" data-tid="${tid}" style="height:${SLOT_PX}px"></div>`;
     }).join('');
 
     const nowLine = (isToday && nowFrac >= START_H && nowFrac <= END_H)
@@ -294,11 +294,13 @@ function renderWeek() {
     <span class="small muted" style="margin-left:4px">${rangeLabel}</span>
   </div>
   <div class="cal-wrap">
-    <div class="cal-head"><div class="cal-gutter"></div>${headCols}</div>
-    <div class="cal-body-scroll">
-      <div class="cal-body">
-        <div class="cal-times">${timeCol}</div>
-        <div class="cal-cols">${dayCols}</div>
+    <div class="cal-scroll">
+      <div class="cal-head"><div class="cal-gutter"></div>${headCols}</div>
+      <div class="cal-body-scroll">
+        <div class="cal-body">
+          <div class="cal-times">${timeCol}</div>
+          <div class="cal-cols">${dayCols}</div>
+        </div>
       </div>
     </div>
   </div>`;
@@ -449,6 +451,7 @@ function dragOrdreStart(e, id) {
   if (e.button !== undefined && e.button !== 0) return;
   if (e.target.closest('button, select, input, a, textarea')) return;
   const startX = e.clientX, startY = e.clientY;
+  const kortEl = e.target.closest('.drag-card');
 
   if (e.pointerType === 'touch') {
     // Vent på et lite trykk-og-hold før vi griper ordren, ellers blir
@@ -461,14 +464,14 @@ function dragOrdreStart(e, id) {
     };
     document.addEventListener('pointermove', onEarlyMove);
     document.addEventListener('pointerup', cancelArm);
-    _longPressTimer = setTimeout(() => { cancelArm(); armDrag(id, startX, startY); }, 350);
+    _longPressTimer = setTimeout(() => { cancelArm(); armDrag(id, startX, startY, kortEl); }, 350);
   } else {
     e.preventDefault();
-    armDrag(id, startX, startY);
+    armDrag(id, startX, startY, kortEl);
   }
 }
-function armDrag(id, startX, startY) {
-  _dragOrdre = { id, startX, startY, x: startX, y: startY, moved: false, ghostEl: null };
+function armDrag(id, startX, startY, kortEl) {
+  _dragOrdre = { id, startX, startY, x: startX, y: startY, moved: false, ghostEl: null, kortEl };
   document.addEventListener('pointermove', dragOrdreMove);
   document.addEventListener('pointerup', dragOrdreEnd);
   _dragScrollRAF = setInterval(dragAutoScroll, 16);
@@ -491,6 +494,7 @@ function dragOrdreMove(e) {
     document.body.appendChild(g);
     _dragOrdre.ghostEl = g;
     document.body.style.userSelect = 'none';
+    _dragOrdre.kortEl?.classList.add('dragger');
   }
   if (_dragOrdre.moved) {
     _dragOrdre.ghostEl.style.left = e.clientX + 'px';
@@ -512,8 +516,9 @@ function dragOrdreEnd(e) {
   document.removeEventListener('pointerup', dragOrdreEnd);
   if (_dragScrollRAF) { clearInterval(_dragScrollRAF); _dragScrollRAF = null; }
   if (!_dragOrdre) return;
-  const { id, moved, ghostEl } = _dragOrdre;
+  const { id, moved, ghostEl, kortEl } = _dragOrdre;
   if (ghostEl) ghostEl.remove();
+  kortEl?.classList.remove('dragger');
   document.body.style.userSelect = '';
   document.querySelectorAll('.cal-slot.drag-over').forEach(s => s.classList.remove('drag-over'));
   if (moved) {
@@ -629,6 +634,7 @@ function fjernFraKalender(id) {
   o.kalenderDato = ''; o.kalenderTid = '';
   logChange(o, 'Fjernet fra kalender');
   save(id); renderOversikt();
+  visToast(`${ordreLabel(o)} tatt ut av kalenderen`);
 }
 
 function openFlyttKalender(id) {

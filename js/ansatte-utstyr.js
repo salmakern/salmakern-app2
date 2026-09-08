@@ -81,26 +81,83 @@ function renderKontakter() {
 // ════════════════════════════════════════════════════
 // FRAVÆRSKALENDER
 // ════════════════════════════════════════════════════
+let fravarKalOffset = 0;
+function fravarKalNaviger(dir) { fravarKalOffset += dir; renderFravarKalender(); }
+
 function renderFravarKalender() {
   const el = document.getElementById('fravarKalender');
+  if (!el) return;
+
+  const FARGE = { syk:'#ef4444', egenmelding:'#ef4444', ferie:'#22c55e', permisjon:'#a1a1aa' };
+  const maanedNavn = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+
   const now = new Date();
-  const days = [];
-  for (let i=0; i<14; i++) {
-    const d = new Date(now); d.setDate(now.getDate()+i);
-    days.push(d.toISOString().split('T')[0]);
+  const forste = new Date(now.getFullYear(), now.getMonth() + fravarKalOffset, 1);
+  const aar = forste.getFullYear(), mnd = forste.getMonth();
+  const antallDager = new Date(aar, mnd+1, 0).getDate();
+  const prefix = `${aar}-${String(mnd+1).padStart(2,'0')}`;
+  const idag = new Date().toISOString().split('T')[0];
+
+  // Fravær per dato: { '2026-09-08': [{navn, type}] }
+  const perDag = {};
+  S.timer.filter(t => t.dato?.startsWith(prefix) && FARGE[t.type])
+    .forEach(t => { (perDag[t.dato] = perDag[t.dato] || []).push(t); });
+
+  // Mandag som første ukedag
+  const forsteUkedag = (forste.getDay() + 6) % 7;
+  const celler = [];
+  for (let i=0; i<forsteUkedag; i++) celler.push('<div></div>');
+
+  for (let d=1; d<=antallDager; d++) {
+    const ds = `${prefix}-${String(d).padStart(2,'0')}`;
+    const fravar = perDag[ds] || [];
+    const dow = new Date(aar, mnd, d).getDay();
+    const helg = dow===0 || dow===6;
+    const erIdag = ds === idag;
+    const hovedType = fravar[0]?.type;
+    const kant = fravar.length ? FARGE[hovedType] : (erIdag ? '#ef4444' : '#27272a');
+    const tittel = fravar.length ? fravar.map(t=>`${t.ansatt} – ${t.type}`).join('\n') : '';
+
+    // Én prikk per person som er borte, maks fire synlige
+    const prikker = fravar.slice(0,4).map(t =>
+      `<span style="width:5px;height:5px;border-radius:999px;background:${FARGE[t.type]}"></span>`).join('');
+
+    celler.push(`<div title="${esc(tittel)}" style="aspect-ratio:1;border-radius:10px;border:1px solid ${kant};background:${fravar.length?'#ffffff08':(helg?'#0c0c0e':'#0f0f12')};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px">
+      <span style="font-size:11px;color:${fravar.length||erIdag?'#f4f4f5':(helg?'#3f3f46':'#52525b')};font-weight:${erIdag?'700':'400'}">${d}</span>
+      <span style="display:flex;gap:2px;height:5px">${prikker}</span>
+    </div>`);
   }
-  const rows = days.map(dato => {
-    const dag = new Date(dato).getDay();
-    if (dag===0||dag===6) return null;
-    const fravær = S.timer.filter(t=>t.dato===dato&&['syk','egenmelding','ferie','permisjon'].includes(t.type));
-    if (!fravær.length) return null;
-    const datoFmt = new Date(dato).toLocaleDateString('no',{weekday:'short',day:'numeric',month:'short'});
-    return `<div class="box" style="margin-bottom:6px">
-      <div class="small" style="font-weight:700;margin-bottom:4px">${datoFmt}</div>
-      ${fravær.map(f=>`<div class="small muted">${f.ansatt} · <span style="color:#fde68a">${f.type}</span></div>`).join('')}
+
+  // Hvem er borte denne måneden, oppsummert
+  const perPerson = {};
+  Object.values(perDag).flat().forEach(t => {
+    const k = t.ansatt + '|' + t.type;
+    perPerson[k] = (perPerson[k] || 0) + 1;
+  });
+  const sammendrag = Object.entries(perPerson)
+    .sort((a,b) => b[1]-a[1])
+    .map(([k,n]) => {
+      const [navn, type] = k.split('|');
+      return `<span class="pill" style="margin:0;font-size:11px;padding:3px 10px;border-color:${FARGE[type]}55;color:${FARGE[type]}">${esc(navn)} · ${n}d ${type}</span>`;
+    }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <button class="btn sm" onclick="fravarKalNaviger(-1)">◀</button>
+      <span style="font-weight:700;font-size:13.5px">${maanedNavn[mnd]} ${aar}</span>
+      <button class="btn sm" onclick="fravarKalNaviger(1)">▶</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
+      ${['M','T','O','T','F','L','S'].map(d=>`<div class="small muted" style="text-align:center;font-size:10px">${d}</div>`).join('')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celler.join('')}</div>
+    ${sammendrag?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid #27272a">${sammendrag}</div>`
+      :'<div class="muted small" style="margin-top:12px">Ingen fravær registrert denne måneden</div>'}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11.5px" class="muted">
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#ef4444"></span>Syk</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#22c55e"></span>Ferie</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#a1a1aa"></span>Permisjon</span>
     </div>`;
-  }).filter(Boolean);
-  el.innerHTML = rows.length ? rows.join('') : '<div class="muted small">Ingen registrert fravær de neste 14 dagene</div>';
 }
 
 
@@ -369,6 +426,17 @@ function toggleKanForeLonn(id) {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   renderMer();
   if(me?.rolle==='admin'||me?.rolle==='godkjenner') renderTimerOversikt();
+}
+
+function endreAnsattRolle(id, rolle) {
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
+  a.rolle = rolle;
+  ignorerRealtimeAnsatt.add(String(id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
+  if(db) db.from('ansatte').update({rolle}).eq('id',id)
+    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  renderMer();
 }
 
 function toggleAnsatt(id) {

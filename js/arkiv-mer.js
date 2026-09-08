@@ -19,36 +19,48 @@ function renderArkiv() {
   document.getElementById('arkivAktiv').innerHTML=aktive.length
     ?aktive.map(o=>{
       const si=statusInfo(o.ordreStatus);
-      return `<div style="border:2px solid ${si.border};border-radius:12px;padding:10px;margin-bottom:6px;cursor:pointer;background:#111114" onclick="openOrdre('${o.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap">
-          <b>${ordreLabelFull(o)}</b>
-          <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
+      return `<div style="border:1px solid ${si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="openOrdre('${o.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <b style="font-size:15px">${ordreLabelFull(o)}</b>
+          <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;flex-shrink:0">${si.lbl}</span>
         </div>
-        <div class="small muted" style="margin-top:3px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''} · ${esc(o.kunde)}</div>
-        <div class="small muted">Ankomst: ${o.ankomstdato||'—'}</div>
-        <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
+        <div class="small muted" style="margin-top:4px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</div>
+        <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Tilvalg</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
+        </div>
       </div>`;
     }).join('')
     :'<div class="muted small">Ingen</div>';
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
-    ?ferdig.map(o=>`<div class="box" style="margin-bottom:6px;padding:8px">
-        <div class="row" style="margin-bottom:4px">
-          <div><b>${ordreLabelFull(o)}</b> <span class="small muted">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</span></div>
-          <div style="display:flex;gap:3px">
-            <button class="btn sm" onclick="openOrdre('${o.id}',true)" style="font-size:10px;padding:2px 7px;border-radius:8px">Åpne</button>
-            <button class="btn sm" onclick="genPDF('${o.id}')" style="font-size:10px;padding:2px 7px;border-radius:8px">📄 PDF</button>
-            <button class="btn sm" onclick="gjenopprett('${o.id}')" style="font-size:10px;padding:2px 7px;border-radius:8px">Gjenopprett</button>
+    ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div style="min-width:0">
+            <b style="font-size:15px">${ordreLabelFull(o)}</b>
+            <div class="small muted" style="margin-top:2px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</div>
           </div>
-        </div>
-        <div class="small muted">${esc(o.kunde)} · Ankomst: ${o.ankomstdato||'—'}</div>
-        <div class="small muted">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
-        <div class="small muted">Drivstoff: ${o.drivstoff?.totalpris?o.drivstoff.totalpris+' kr':'—'}</div>
-        <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${o.fakturert
-            ?`<span class="pill ok" style="font-size:11px">✔ Fakturert av ${esc(o.fakturertAv)}</span>
-               <button class="btn sm" onclick="toggleFakturert('${o.id}')" style="font-size:11px;padding:4px 10px">Fjern fakturert</button>`
-            :`<span class="pill bad" style="font-size:11px">Ikke fakturert</span>
-               <button class="btn sm red" onclick="toggleFakturert('${o.id}')" style="font-size:11px;padding:4px 10px">✔ Merk fakturert</button>`}
+            ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">✔ Fakturert</span>`
+            :`<span class="pill bad" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">Ikke fakturert</span>`}
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:10px">
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Tilvalg</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
+          ${o.drivstoff?.totalpris?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${esc(String(o.drivstoff.totalpris))} kr</span></div>`:''}
+          ${o.fakturert&&o.fakturertAv?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Fakturert av</span><span>${esc(o.fakturertAv)}</span></div>`:''}
+        </div>
+
+        <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
+          <button class="btn sm" onclick="genPDF('${o.id}')">📄 PDF</button>
+          <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
+          <span style="flex:1"></span>
+          ${o.fakturert
+            ?`<button class="btn sm" onclick="toggleFakturert('${o.id}')">Fjern fakturert</button>`
+            :`<button class="btn sm red" onclick="toggleFakturert('${o.id}')">✔ Merk fakturert</button>`}
         </div>
       </div>`).join('')
     :'<div class="muted small">Ingen arkiverte ordrer</div>';
@@ -176,8 +188,13 @@ function renderMer() {
     if (radEl && document.activeElement !== radEl) radEl.value = S.gps?.radius || 300;
     const al = document.getElementById('ansatteListe');
     al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px">
-      <div><b>${a.navn}</b> <span class="small muted">${rolleVis(a.rolle)}</span>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <div><b>${esc(a.navn)}</b>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select onchange="endreAnsattRolle(${a.id},this.value)" style="width:auto;padding:5px 8px;font-size:12px">
+          <option value="ansatt" ${a.rolle==='ansatt'?'selected':''}>Ansatt</option>
+          <option value="godkjenner" ${a.rolle==='godkjenner'?'selected':''}>Godkjenner</option>
+          <option value="admin" ${a.rolle==='admin'?'selected':''}>Admin</option>
+        </select>
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
         <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
         <button class="btn sm" onclick="slettAnsatt(${a.id})" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
@@ -357,6 +374,8 @@ function renderTimerOversikt() {
   if (lbl) lbl.textContent = `${maanedNavn[dato.getMonth()]} ${dato.getFullYear()}`;
 
   let totalNormal=0, totalOt50=0, totalOt100=0, totalMins=0;
+  const erAdm = me && me.rolle === 'admin';
+  const GRID = 'grid-template-columns:minmax(0,2fr) repeat(3,minmax(52px,1fr)) minmax(0,1.2fr)';
 
   const rader = S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false).map(a => {
     const timer = S.timer.filter(t => t.ansattId===a.id && t.dato?.startsWith(prefix));
@@ -368,52 +387,55 @@ function renderTimerOversikt() {
     let normal=0, ot50=0, ot100=0;
     arbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); normal+=ot.normal; ot50+=ot.ot50; ot100+=ot.ot100; });
     totalNormal+=normal; totalOt50+=ot50; totalOt100+=ot100; totalMins+=totMins;
-    const erAdm = me && me.rolle === 'admin';
-    return `<div class="box" style="margin-bottom:8px;${erAdm?'cursor:pointer':''}" ${erAdm?`onclick="visAnsattDetalj(${a.id})"`:''}>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px">
-        <div><b>${a.navn}</b> <span class="small muted">${rolleVis(a.rolle)}</span>${erAdm?'<span class="small muted" style="font-size:10px"> ▶ detaljer</span>':''}</div>
-        <div class="small" style="font-weight:700;color:#f4f4f5">${fmtTid(totMins)} totalt</div>
+
+    // Andel normal / 50% / 100% som én tynn stripe - gjør det synlig med ett blikk
+    // hvem som har mye overtid, uten å måtte sammenligne tall.
+    const sum = Math.max(1, normal+ot50+ot100);
+    const stripe = `<div style="display:flex;height:4px;border-radius:999px;overflow:hidden;background:#27272a;margin-top:7px">
+      <div style="width:${normal/sum*100}%;background:#52525b"></div>
+      <div style="width:${ot50/sum*100}%;background:#facc15"></div>
+      <div style="width:${ot100/sum*100}%;background:#f97316"></div>
+    </div>`;
+
+    const fravarTxt = [
+      sykDager>0?`<span style="color:#fca5a5">${sykDager}d syk</span>`:'',
+      ferieDager>0?`<span style="color:#86efac">${ferieDager}d ferie</span>`:'',
+      permDager>0?`<span style="color:#93c5fd">${permDager}d perm</span>`:''
+    ].filter(Boolean).join(' · ') || '<span class="muted">—</span>';
+
+    return `<div class="box" style="margin-bottom:7px;padding:12px 14px;${erAdm?'cursor:pointer':''}" ${erAdm?`onclick="visAnsattDetalj(${a.id})"`:''}>
+      <div style="display:grid;${GRID};gap:10px;align-items:center">
+        <div style="min-width:0">
+          <div style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.navn)}</div>
+          <div class="small muted">${rolleVis(a.rolle)} · ${fmtTid(totMins)} totalt</div>
+        </div>
+        <div style="text-align:right"><div class="small muted" style="font-size:10px">NORMAL</div><div style="font-weight:700">${fmtTid(normal)}</div></div>
+        <div style="text-align:right"><div class="small" style="font-size:10px;color:#fde68a">50%</div><div style="font-weight:700;color:#facc15">${ot50?fmtTid(ot50):'—'}</div></div>
+        <div style="text-align:right"><div class="small" style="font-size:10px;color:#fed7aa">100%</div><div style="font-weight:700;color:#f97316">${ot100?fmtTid(ot100):'—'}</div></div>
+        <div style="text-align:right;font-size:12px">${fravarTxt}</div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px;margin-top:8px">
-        <div style="background:#18181b;border-radius:10px;padding:8px;text-align:center">
-          <div class="small muted">Normal</div>
-          <div style="font-weight:700;font-size:15px;margin-top:2px">${fmtTid(normal)}</div>
-        </div>
-        <div style="background:#42200688;border-radius:10px;padding:8px;text-align:center">
-          <div class="small" style="color:#fde68a">50% overtid</div>
-          <div style="font-weight:700;font-size:15px;color:#facc15;margin-top:2px">${fmtTid(ot50)}</div>
-        </div>
-        <div style="background:#43140788;border-radius:10px;padding:8px;text-align:center">
-          <div class="small" style="color:#fed7aa">100% overtid</div>
-          <div style="font-weight:700;font-size:15px;color:#f97316;margin-top:2px">${fmtTid(ot100)}</div>
-        </div>
-        ${sykDager>0||ferieDager>0||permDager>0?`<div style="background:#09090b;border-radius:10px;padding:8px;text-align:center">
-          <div class="small muted">Fravær</div>
-          <div style="font-size:13px;margin-top:2px">${sykDager>0?`<span style="color:#fca5a5">Syk: ${sykDager}d</span> `:''}${ferieDager>0?`<span style="color:#a1a1aa">Ferie: ${ferieDager}d</span> `:''}${permDager>0?`<span style="color:#93c5fd">Perm: ${permDager}d</span>`:''}</div>
-        </div>`:''}
-      </div>
+      ${stripe}
     </div>`;
   });
 
-  // Totallinje
   const totalRad = totalMins > 0 ? `
-    <div style="background:#18181b;border:1px solid #3f3f46;border-radius:14px;padding:12px;margin-top:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="background:#18181b;border:1px solid #3f3f46;border-radius:18px;padding:16px;margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">
         <b style="font-size:15px">Total – alle ansatte</b>
-        <b style="font-size:15px">${fmtTid(totalMins)}</b>
+        <b style="font-size:22px;letter-spacing:-.5px">${fmtTid(totalMins)}</b>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
-        <div style="text-align:center">
-          <div class="small muted">Normal</div>
-          <div style="font-weight:800;font-size:16px;margin-top:2px">${fmtTid(totalNormal)}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div class="box" style="text-align:center;padding:12px">
+          <div class="small muted" style="font-size:10px;letter-spacing:.6px">NORMAL TID</div>
+          <div style="font-weight:800;font-size:19px;margin-top:3px">${fmtTid(totalNormal)}</div>
         </div>
-        <div style="text-align:center">
-          <div class="small" style="color:#fde68a">50% overtid</div>
-          <div style="font-weight:800;font-size:16px;color:#facc15;margin-top:2px">${fmtTid(totalOt50)}</div>
+        <div class="box" style="text-align:center;padding:12px;border-color:#facc1540">
+          <div class="small" style="font-size:10px;letter-spacing:.6px;color:#fde68a">50% OVERTID</div>
+          <div style="font-weight:800;font-size:19px;color:#facc15;margin-top:3px">${fmtTid(totalOt50)}</div>
         </div>
-        <div style="text-align:center">
-          <div class="small" style="color:#fed7aa">100% overtid</div>
-          <div style="font-weight:800;font-size:16px;color:#f97316;margin-top:2px">${fmtTid(totalOt100)}</div>
+        <div class="box" style="text-align:center;padding:12px;border-color:#f9731640">
+          <div class="small" style="font-size:10px;letter-spacing:.6px;color:#fed7aa">100% OVERTID</div>
+          <div style="font-weight:800;font-size:19px;color:#f97316;margin-top:3px">${fmtTid(totalOt100)}</div>
         </div>
       </div>
     </div>` : '';
@@ -435,6 +457,11 @@ function toggleStatVis() {
   if (btn) btn.textContent = statVis === 'maaned' ? '📅 Måned' : '📆 År';
   if (navBack) navBack.style.display = statVis === 'maaned' ? '' : 'none';
   if (navFwd)  navFwd.style.display  = statVis === 'maaned' ? '' : 'none';
+  if (btn) {
+    const aar = statVis === 'aar';
+    btn.style.color = aar ? '#fca5a5' : '';
+    btn.style.fontWeight = aar ? '700' : '';
+  }
   if (statVis === 'aar') renderAarsStatistikk();
   else renderTimerOversikt();
 }
@@ -443,7 +470,11 @@ let stempelkortAktiv = false;
 function toggleStempelkort() {
   stempelkortAktiv = !stempelkortAktiv;
   const btn = document.getElementById('stempelkortBtn');
-  if (btn) btn.style.background = stempelkortAktiv ? '#3f1f6e' : '';
+  if (btn) {
+    btn.style.background   = stempelkortAktiv ? 'rgba(239,68,68,.12)' : '';
+    btn.style.borderColor  = stempelkortAktiv ? '#ef4444' : '';
+    btn.style.color        = stempelkortAktiv ? '#fca5a5' : '';
+  }
   if (stempelkortAktiv) renderStempelkort();
   else {
     if (statVis === 'aar') renderAarsStatistikk();
@@ -461,29 +492,41 @@ function renderStempelkort() {
   document.getElementById('adminStatLbl').textContent = `${maanedNavn[dato.getMonth()]} ${dato.getFullYear()}`;
 
   const relevante = S.timer.filter(t => t.dato?.startsWith(prefix) && t.start && t.start !== '–');
-  const datoer = [...new Set(relevante.map(t => t.dato))].sort();
+  const datoer = [...new Set(relevante.map(t => t.dato))].sort().reverse();
 
   if (!datoer.length) { el.innerHTML = '<div class="muted small">Ingen stempelkort denne måneden</div>'; return; }
 
-  const dagerHTML = datoer.map(dag => {
-    const ukedag = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'][new Date(dag).getDay()];
-    const rader = relevante.filter(t => t.dato === dag).sort((a,b) => (a.start||'').localeCompare(b.start||''));
-    const raderHTML = rader.map(t => {
-      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-radius:6px;background:#18181b;margin-bottom:3px;font-size:13px">
-        <span style="min-width:120px;font-weight:600">${t.ansatt||'?'}</span>
-        <span style="color:#86efac">${t.start}</span>
-        <span class="muted" style="margin:0 4px">→</span>
-        <span style="color:#a1a1aa">${t.stopp||'–'}</span>
-        <span style="margin-left:8px;color:#f4f4f5;font-weight:600;min-width:60px;text-align:right">${t.mins>0?fmtTid(t.mins):''}</span>
+  const UKEDAG = ['Søndag','Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag'];
+
+  el.innerHTML = `<div class="muted small" style="margin-bottom:10px">Rå inn/ut-klokking gruppert per dag. Én linje per ansatt som stemplet inn den dagen.</div>` +
+    datoer.map(dag => {
+      const d = new Date(dag);
+      const rader = relevante.filter(t => t.dato === dag).sort((a,b) => (a.start||'').localeCompare(b.start||''));
+      const dagSum = rader.reduce((s,t)=>s+(t.mins||0),0);
+      const helg = d.getDay()===0 || d.getDay()===6;
+
+      const raderHTML = rader.map(t => `
+        <div style="display:grid;grid-template-columns:minmax(0,2fr) 66px 66px minmax(0,1fr);gap:10px;align-items:center;padding:11px 15px;border-top:1px solid #ffffff08;font-size:13.5px">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.ansatt||'?')}</span>
+          <span style="color:#4ade80">▸ ${t.start}</span>
+          <span style="color:#fca5a5">◂ ${t.stopp||'–'}</span>
+          <span style="text-align:right;font-weight:700">${t.mins>0?fmtTid(t.mins):'—'}</span>
+        </div>`).join('');
+
+      return `<div class="box" style="padding:0;overflow:hidden;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid #27272a">
+          <div style="display:flex;align-items:baseline;gap:9px;min-width:0">
+            <b style="font-size:15px">${d.getDate()}. ${maanedNavn[d.getMonth()].toLowerCase()}</b>
+            <span class="small" style="color:${helg?'#fca5a5':'#71717a'}">${UKEDAG[d.getDay()].toLowerCase()}</span>
+          </div>
+          <div style="display:flex;gap:7px;flex-shrink:0">
+            <span class="pill" style="margin:0;font-size:11px;padding:3px 10px">${rader.length} ansatt${rader.length===1?'':'e'}</span>
+            <span class="pill" style="margin:0;font-size:11px;padding:3px 10px;color:#f4f4f5">${fmtTid(dagSum)}</span>
+          </div>
+        </div>
+        ${raderHTML}
       </div>`;
     }).join('');
-    return `<div style="margin-bottom:10px">
-      <div class="small muted" style="font-weight:700;margin-bottom:4px">${ukedag} ${dag}</div>
-      ${raderHTML}
-    </div>`;
-  }).join('');
-
-  el.innerHTML = dagerHTML;
 }
 
 function renderAarsStatistikk() {

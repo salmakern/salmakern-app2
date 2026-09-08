@@ -169,32 +169,49 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 .modal-box{max-width:680px;width:100%;background:#18181b;border:1px solid #27272a;border-radius:22px;padding:20px;margin-top:40px}
 
 /* CALENDAR */
-.cal-wrap{border:1px solid #27272a;border-radius:16px;overflow:hidden;margin-top:12px;background:#18181b}
-.cal-head{display:flex;background:#18181b;border-bottom:1px solid #27272a}
-.cal-gutter{width:52px;flex-shrink:0;border-right:1px solid #27272a}
-.cal-col-head{flex:1;text-align:center;padding:8px 4px;border-left:1px solid #27272a;min-width:0}
-.cal-col-head.cal-today{background:#ef444410}
-.cal-day-name{font-size:10px;color:#a1a1aa;text-transform:uppercase;letter-spacing:.5px}
-.cal-day-num{font-size:20px;font-weight:700;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:2px auto 0;color:#f4f4f5}
+.cal-wrap{border:1px solid #27272a;border-radius:18px;overflow:hidden;margin-top:12px;background:#18181b}
+.cal-scroll{overflow-x:auto}
+.cal-head{display:flex;min-width:600px;background:#18181b;border-bottom:1px solid #27272a;position:sticky;top:0;z-index:5}
+.cal-gutter{width:46px;flex-shrink:0}
+.cal-col-head{flex:1;text-align:center;padding:10px 4px 8px;min-width:0}
+.cal-col-head+.cal-col-head{border-left:1px solid #1f1f23}
+.cal-day-name{font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:.8px}
+.cal-day-num{font-size:19px;font-weight:700;width:32px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;margin:3px auto 0;color:#f4f4f5}
 .cal-day-num.cal-today-num{background:#ef4444;color:#fff}
-.cal-body-scroll{overflow-y:auto;max-height:520px;background:#09090b}
-.cal-body{display:flex}
-.cal-times{width:52px;flex-shrink:0;border-right:1px solid #27272a;background:#09090b}
-.cal-hour-lbl{height:60px;font-size:10px;color:#52525b;padding:2px 6px 0;text-align:right;border-top:1px solid #27272a}
+.cal-body-scroll{overflow-y:auto;max-height:520px;background:#0f0f12}
+.cal-body{display:flex;min-width:600px}
+.cal-times{width:46px;flex-shrink:0;background:#0f0f12}
+.cal-hour-lbl{font-size:10.5px;color:#52525b;padding:1px 8px 0 0;text-align:right}
 .cal-cols{flex:1;display:flex}
-.cal-day-col{flex:1;border-left:1px solid #27272a;position:relative;min-width:0;background:#09090b}
-.cal-day-col.cal-today-col{background:#ef444408}
-.cal-slot{height:60px;border-top:1px solid #27272a}
+.cal-day-col{flex:1;position:relative;min-width:0;background:#0f0f12}
+.cal-day-col+.cal-day-col{border-left:1px solid #1f1f23}
+.cal-day-col.cal-today-col{background:#141418}
+/* Halvtimestreken er svakere enn timestreken, så øyet leser timene først */
+.cal-slot{border-top:1px dashed #1c1c20;position:relative}
+.cal-slot.cal-hel-time{border-top:1px solid #27272a}
+.cal-slot:hover{background:#ffffff05}
 .cal-slot.drag-over{background:#1e3a5f;box-shadow:inset 0 0 0 2px #60a5fa}
+/* Viser klokkeslettet i ruten man er over, så man ikke må gjette mot tidskolonnen */
+.cal-slot.drag-over::after{
+  content:attr(data-tid);
+  position:absolute;left:6px;top:50%;transform:translateY(-50%);
+  font-size:11px;font-weight:700;color:#93c5fd;pointer-events:none;
+  background:#0f172a;border:1px solid #60a5fa;border-radius:999px;padding:2px 8px;
+  white-space:nowrap;z-index:4}
 .drag-card{cursor:grab}
 .drag-card:active{cursor:grabbing}
-.drag-ghost{position:fixed;z-index:9999;pointer-events:none;background:#18181b;border:2px solid #60a5fa;color:#f4f4f5;padding:6px 12px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 20px #000a;transform:translate(-50%,-130%);white-space:nowrap}
-.cal-now{position:absolute;left:0;right:0;height:2px;background:#ef4444;pointer-events:none;z-index:3}
-.cal-now::before{content:'';position:absolute;left:-5px;top:-4px;width:10px;height:10px;background:#ef4444;border-radius:50%}
-.cal-event{position:absolute;left:3px;right:3px;background:#16a34a;border:1px solid #22c55e;border-radius:5px;padding:2px 5px;cursor:pointer;overflow:visible;z-index:1}
-.cal-event:hover{opacity:0.9}
-.cal-event-regnr{font-size:11px;font-weight:700;color:#fff;overflow-wrap:anywhere;line-height:1.15}
-.cal-event-info{font-size:10px;color:#bbf7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+.drag-card.dragger{opacity:.4;border-color:#60a5fa}
+.drag-ghost{position:fixed;z-index:9999;pointer-events:none;background:#18181b;border:2px solid #60a5fa;color:#f4f4f5;padding:6px 12px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 4px 20px #000a;transform:translate(-50%,-130%);white-space:nowrap}
+.cal-now{position:absolute;left:0;right:0;height:2px;background:#ef4444;pointer-events:none;z-index:3;box-shadow:0 0 12px rgba(239,68,68,.5)}
+.cal-now::before{content:'';position:absolute;left:-4px;top:-4px;width:10px;height:10px;background:#ef4444;border-radius:50%}
+.cal-event{position:absolute;left:4px;right:4px;border:1px solid;border-radius:10px;padding:4px 8px;cursor:pointer;overflow:visible;z-index:1;box-shadow:inset 0 0 0 1px #ffffff0d}
+.cal-event:hover{filter:brightness(1.12)}
+.cal-event .fjern{position:absolute;top:2px;right:3px;width:16px;height:16px;border-radius:999px;
+  border:none;background:#0009;color:#fff;font-size:10px;line-height:1;cursor:pointer;
+  display:none;align-items:center;justify-content:center;padding:0}
+.cal-event:hover .fjern{display:flex}
+.cal-event-regnr{font-size:11.5px;font-weight:700;overflow-wrap:anywhere;line-height:1.2}
+.cal-event-info{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;opacity:.85}
 
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:4px}
@@ -664,14 +681,28 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="card" id="merTimerOversikt" style="display:none;grid-column:1/-1">
         <div class="row" style="flex-wrap:wrap;gap:8px">
           <div class="h">Timer og overtid – alle ansatte</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn sm" id="statVisBtn" onclick="toggleStatVis()" style="min-width:80px">📅 Måned</button>
-            <button class="btn sm" onclick="adminStatNaviger(-1)" id="statNavBack">◀</button>
-            <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700"></span>
-            <button class="btn sm" onclick="adminStatNaviger(1)" id="statNavFwd">▶</button>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+
+            <div style="display:flex;gap:6px;align-items:center;background:#0f0f12;border:1px solid #27272a;border-radius:999px;padding:4px">
+              <button class="btn sm" id="statVisBtn" onclick="toggleStatVis()" style="min-width:78px;border:none;background:none">📅 Måned</button>
+              <button class="btn sm" onclick="adminStatNaviger(-1)" id="statNavBack" style="border:none;background:none;padding:5px 9px">◀</button>
+              <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700;font-size:13px"></span>
+              <button class="btn sm" onclick="adminStatNaviger(1)" id="statNavFwd" style="border:none;background:none;padding:5px 9px">▶</button>
+            </div>
+
             <button class="btn sm" id="stempelkortBtn" onclick="toggleStempelkort()">🕐 Stempelkort</button>
-            <button class="btn sm" onclick="eksportFiken()" style="background:#1e3a2f;border-color:#166534;color:#86efac">📥 Fiken</button>
-            <button class="btn sm" onclick="eksportExcel()" style="background:#1e3a5f;border-color:#1e40af;color:#93c5fd">📊 Excel</button>
+
+            <div style="display:flex;gap:8px;margin-left:auto">
+              <button class="btn sm" onclick="eksportFiken()" style="text-align:left;line-height:1.25;padding:9px 13px">
+                <span style="display:block">📥 Fiken</span>
+                <span class="muted" style="display:block;font-size:10px;font-weight:400">CSV · én rad per ansatt</span>
+              </button>
+              <button class="btn sm" onclick="eksportExcel()" style="text-align:left;line-height:1.25;padding:9px 13px">
+                <span style="display:block">📊 Excel</span>
+                <span class="muted" style="display:block;font-size:10px;font-weight:400">CSV · alle dager per ansatt</span>
+              </button>
+            </div>
+
           </div>
         </div>
         <div id="adminStatInnhold" style="margin-top:12px"></div>
@@ -819,42 +850,68 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div class="modal" id="nyOrdre">
   <div class="modal-box">
     <div class="h">Ny ordre</div>
-    <div class="small muted" style="margin-top:10px;margin-bottom:8px">Fyll inn reg.nr <b>eller</b> chassis-nr – minst ett av dem kreves.</div>
-    <div class="grid g2" style="margin-top:4px">
-      <div>
-        <label>Reg.nr</label>
-        <input id="n_regnr" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
-      </div>
-      <div>
-        <label>Chassis-nr (VIN)</label>
-        <input id="n_chassis" maxlength="17" oninput="document.getElementById('n_chassis_tel').textContent=this.value.length+'/17'">
-        <div class="small muted" id="n_chassis_tel" style="margin-top:2px">0/17</div>
-      </div>
-      <div><label>Forhandler</label><input id="n_kunde"></div>
-      <div><label>Kontaktperson</label><input id="n_eier"></div>
-      <div><label>Merke</label><input id="n_merke"></div>
-      <div><label>Type</label><input id="n_type"></div>
-      <div><label>Modell</label><input id="n_modell"></div>
-      <div><label>Variant</label><input id="n_variant"></div>
-      <div><label>Farge</label><input id="n_farge"></div>
-      <div id="n_dato_wrap"><label>Ankomstdato</label><input type="date" id="n_dato"></div>
-      <div><label>Versjon</label><input id="n_versjon"></div>
-    </div>
-    <div style="margin-top:10px">
-      <label>Status ved opprettelse</label>
-      <div style="display:flex;gap:16px;margin-top:6px">
-        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer">
-          <input type="radio" name="n_status" value="ikke_paabegynt" checked onchange="oppdaterNyOrdreStatusFelt()"> Ikke påbegynt
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-weight:400;cursor:pointer">
-          <input type="radio" name="n_status" value="paa_vei" onchange="oppdaterNyOrdreStatusFelt()"> På vei
-        </label>
+    <div class="small muted" style="margin-top:6px">Fyll inn reg.nr <b>eller</b> chassis-nr – minst ett av dem kreves.</div>
+
+    <div class="box" style="margin-top:14px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">IDENTIFIKASJON</div>
+      <div class="grid g2">
+        <div>
+          <label>Reg.nr</label>
+          <input id="n_regnr" placeholder="EL 84213" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+        </div>
+        <div>
+          <label>Chassis-nr (VIN)</label>
+          <input id="n_chassis" maxlength="17" placeholder="17 tegn" oninput="document.getElementById('n_chassis_tel').textContent=this.value.length+'/17'">
+          <div class="small muted" id="n_chassis_tel" style="margin-top:4px;text-align:right">0/17</div>
+        </div>
       </div>
     </div>
-    <div class="box" style="margin-top:10px"><span class="small muted">Sett kunde = eier:</span> <button class="btn sm" onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">Kopier</button></div>
-    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn red" onclick="opprettOrdre()">Opprett ordre</button>
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KJØRETØY</div>
+      <div class="grid g2">
+        <div><label>Merke</label><input id="n_merke" placeholder="Mercedes"></div>
+        <div><label>Type</label><input id="n_type" placeholder="Sprinter"></div>
+        <div><label>Modell</label><input id="n_modell" placeholder="L2H2"></div>
+        <div><label>Variant</label><input id="n_variant" placeholder="Med takluke"></div>
+        <div><label>Farge</label><input id="n_farge" placeholder="Arctic hvit"></div>
+        <div><label>Versjon</label><input id="n_versjon" placeholder="2019→"></div>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KUNDE</div>
+      <div class="grid g2">
+        <div><label>Forhandler</label><input id="n_kunde"></div>
+        <div>
+          <label>Kontaktperson</label>
+          <input id="n_eier">
+          <button class="btn sm" style="margin-top:6px;padding:4px 10px;font-size:12px"
+            onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">
+            Samme som forhandler
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">STATUS OG ANKOMST</div>
+      <div class="grid g2">
+        <div>
+          <label>Status ved opprettelse</label>
+          <select id="n_status" onchange="oppdaterNyOrdreStatusFelt()">
+            <option value="ikke_paabegynt" selected>Ikke påbegynt</option>
+            <option value="paa_vei">På vei</option>
+          </select>
+        </div>
+        <div id="n_dato_wrap"><label>Ankomstdato</label><input type="date" id="n_dato"></div>
+      </div>
+      <div class="small muted" style="margin-top:8px">«På vei» betyr at bilen ikke er fysisk ankommet — ankomstdato settes automatisk når den går til «Ikke påbegynt».</div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
       <button class="btn" onclick="closeModal('nyOrdre')">Avbryt</button>
+      <button class="btn red" onclick="opprettOrdre()">Opprett ordre</button>
     </div>
   </div>
 </div>
@@ -1178,25 +1235,45 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h" style="margin-bottom:12px" id="nyVareModalTittel">Ny vare</div>
     <input type="hidden" id="redigerVareId">
-    <label>Navn</label>
-    <input id="nyVareNavn" placeholder="F.eks. Skruer 4x40">
-    <label>Kategori (valgfritt)</label>
-    <input id="nyVareKategori" placeholder="F.eks. Skruer, Elektrisk, Modul-deler..." list="lagerKategoriListe">
-    <datalist id="lagerKategoriListe"></datalist>
-    <label>Tegningsnummer (valgfritt)</label>
-    <input id="nyVareTegningsnummer" placeholder="F.eks. TN-1234">
-    <div id="nyVareForventetWrap" style="display:none">
-      <label>Forventet antall (valgfritt)</label>
-      <input type="number" id="nyVareForventet" min="0" step="any" value="" placeholder="F.eks. hva du bestilte fra leverandør">
+
+    <div class="box" style="margin-top:14px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">VAREN</div>
+      <div><label>Navn</label><input id="nyVareNavn" placeholder="f.eks. Gassdemper 450N"></div>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label>Kategori</label>
+          <input id="nyVareKategori" list="lagerKategoriListe" placeholder="Beslag og dempere">
+          <datalist id="lagerKategoriListe"></datalist>
+        </div>
+        <div><label>Tegningsnummer <span class="muted">(valgfritt)</span></label><input id="nyVareTegningsnummer" placeholder="41-0982-B"></div>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><label id="nyVareAntallLabel">Antall på lager</label><input type="number" id="nyVareAntall" value="0"></div>
-      <div><label>Enhet</label><input id="nyVareEnhet" value="stk"></div>
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">BEHOLDNING</div>
+      <div class="grid g2">
+        <div><label id="nyVareAntallLabel">Mottatt antall</label><input type="number" id="nyVareAntall" step="any" value="0"></div>
+        <div><label>Enhet</label><input id="nyVareEnhet" value="stk" placeholder="stk, patron, rull…"></div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <div id="nyVareForventetWrap">
+          <label>Forventet antall <span class="muted">(valgfritt)</span></label>
+          <input type="number" id="nyVareForventet" step="any" placeholder="—">
+          <div class="small muted" style="margin-top:4px">Kom det mindre enn bestilt? Avviket noteres og varsles.</div>
+        </div>
+        <div>
+          <label>Varsle ved</label>
+          <input type="number" id="nyVareMinAntall" step="any" value="0">
+          <div class="small muted" style="margin-top:4px">0 = aldri varsle om lav beholdning.</div>
+        </div>
+      </div>
     </div>
-    <label>Varsle ved lav beholdning (antall)</label>
-    <input type="number" id="nyVareMinAntall" value="0">
-    <label>Notat (valgfritt)</label>
-    <input id="nyVareNotat">
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">NOTAT</div>
+      <textarea id="nyVareNotat" rows="3" placeholder="Leverandør, pakkestørrelse, hvilke modeller den passer…"></textarea>
+    </div>
+
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreVare()">Lagre</button>
       <button class="btn" onclick="closeModal('nyVareModal')">Avbryt</button>
@@ -1207,6 +1284,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div class="modal" id="lagerEndringModal">
   <div class="modal-box">
     <div class="h" style="margin-bottom:12px" id="lagerEndringTittel">Fyll på lager</div>
+    <div class="small muted" id="lagerEndringUndertekst" style="margin-top:4px"></div>
     <input type="hidden" id="lagerEndringVareId">
     <input type="hidden" id="lagerEndringFortegn">
     <div id="lagerEndringForventetWrap" style="display:none">
@@ -1230,9 +1308,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="muted small" style="margin-bottom:10px">Alle varer under lav-grensen, gruppert per kategori.</div>
     <div id="bestillingslisteInnhold"></div>
     <div id="bestillingslisteHandlinger" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn red" onclick="kopierBestillingsliste()">📋 Kopier liste</button>
+      <button class="btn sm" onclick="kopierBestillingsliste()">📋 Kopier</button>
+      <button class="btn sm" onclick="lastNedBestillingslistePDF()">📄 Last ned PDF</button>
       <button class="btn sm" onclick="skrivUtBestillingsliste()">🖨️ Skriv ut</button>
-      <button class="btn sm" onclick="bestillAltFraListe()">✓ Merk alt som bestilt</button>
+      <span style="flex:1"></span>
+      <button class="btn sm green" onclick="bestillAvhukede()">✓ Merk avhukede</button>
+      <button class="btn sm" onclick="bestillAltFraListe()">Merk alle</button>
     </div>
     <div style="margin-top:10px">
       <button class="btn" onclick="closeModal('bestillingslisteModal')">Lukk</button>
