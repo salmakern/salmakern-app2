@@ -144,6 +144,12 @@ input,select,textarea{width:100%;padding:9px 12px;border-radius:12px;background:
 }
 input:focus,select:focus,textarea:focus{outline:none;border-color:#ef4444}
 label{font-size:11px;color:#a1a1aa;display:block;margin-bottom:3px;margin-top:8px}
+/* Nedtrekkbar forslagsliste for Type/Variant/Versjon - vises ved fokus på feltet over,
+   feltet forblir fritekst (kan skrive inn en helt ny verdi som ikke er i lista). */
+.felt-wrap{position:relative}
+.felt-dropdown{display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#18181b;border:1px solid #3f3f46;border-radius:12px;max-height:220px;overflow-y:auto;z-index:60;box-shadow:0 8px 24px #000a}
+.felt-dropdown-item{padding:9px 12px;font-size:13.5px;cursor:pointer}
+.felt-dropdown-item:hover{background:#27272a}
 
 /* TABLE */
 table{width:100%;border-collapse:collapse}
@@ -916,22 +922,26 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KJØRETØY</div>
       <div class="grid g2">
         <div><label>Merke</label><input id="n_merke" placeholder="Mercedes"></div>
-        <div>
+        <div class="felt-wrap">
           <label>Type</label>
-          <input id="n_type" placeholder="Sprinter" oninput="renderVariantForslag('n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_type','n_versjon','n_versjon_forslag')">
-          <div id="n_type_forslag" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
+          <input id="n_type" placeholder="Sprinter" autocomplete="off"
+            oninput="renderVariantForslag('n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_type','n_versjon','n_versjon_forslag')"
+            onfocus="visFeltDropdown('n_type_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_type_forslag'))">
+          <div id="n_type_forslag" class="felt-dropdown"></div>
         </div>
         <div><label>Modell</label><input id="n_modell" placeholder="L2H2"></div>
-        <div>
+        <div class="felt-wrap">
           <label>Variant</label>
-          <input id="n_variant" placeholder="Med takluke">
-          <div id="n_variant_forslag" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
+          <input id="n_variant" placeholder="Med takluke" autocomplete="off"
+            onfocus="visFeltDropdown('n_variant_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_variant_forslag'))">
+          <div id="n_variant_forslag" class="felt-dropdown"></div>
         </div>
         <div><label>Farge</label><input id="n_farge" placeholder="Arctic hvit"></div>
-        <div>
+        <div class="felt-wrap">
           <label>Versjon</label>
-          <input id="n_versjon" placeholder="2019→">
-          <div id="n_versjon_forslag" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
+          <input id="n_versjon" placeholder="2019→" autocomplete="off"
+            onfocus="visFeltDropdown('n_versjon_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_versjon_forslag'))">
+          <div id="n_versjon_forslag" class="felt-dropdown"></div>
         </div>
       </div>
     </div>

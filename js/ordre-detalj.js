@@ -161,24 +161,27 @@ function buildOrdreDetail() {
           </div>
           <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
           <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
-          <div>
+          <div class="felt-wrap">
             <label>Type</label>
-            <input id="typeInput_${o.id}" value="${esc(o.type||'')}"
+            <input id="typeInput_${o.id}" value="${esc(o.type||'')}" autocomplete="off"
               oninput="renderVariantForslag('typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
-              onchange="sf('${o.id}','type',this.value)">
-            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${feltForslagHTML('typeInput_'+o.id, typeForslag())}</div>
+              onchange="sf('${o.id}','type',this.value)"
+              onfocus="visFeltDropdown('typeForslag_type_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_type_${o.id}'))">
+            <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag())}</div>
           </div>
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
-          <div>
+          <div class="felt-wrap">
             <label>Variant</label>
-            <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)">
-            <div id="typeForslag_var_${o.id}" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.type))}</div>
+            <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" autocomplete="off" onchange="sf('${o.id}','variant',this.value)"
+              onfocus="visFeltDropdown('typeForslag_var_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_var_${o.id}'))">
+            <div id="typeForslag_var_${o.id}" class="felt-dropdown">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.type))}</div>
           </div>
           <div><label>Farge</label><input value="${esc(o.farge||'')}" onchange="sf('${o.id}','farge',this.value)"></div>
-          <div>
+          <div class="felt-wrap">
             <label>Versjon</label>
-            <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)">
-            <div id="typeForslag_ver_${o.id}" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.type))}</div>
+            <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" autocomplete="off" onchange="sf('${o.id}','versjon',this.value)"
+              onfocus="visFeltDropdown('typeForslag_ver_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_ver_${o.id}'))">
+            <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.type))}</div>
           </div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
@@ -520,10 +523,11 @@ function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · Ch
 // filtreres til det som er brukt sammen med valgt Type - de henger som regel sammen
 // (f.eks. har "Sprinter" andre varianter enn "Crafter").
 //
-// Vises som klikkbare forslags-knapper (chips) under feltet, IKKE nettleserens
-// innebygde <datalist> - datalist har vist seg upålitelig på tvers av nettlesere/mobil
-// (spesielt iPhone, der forslagene ofte ikke vises i det hele tatt), se samme
-// begrunnelse ved kalStedForslagListe()/renderKalStedForslag() i oversikt-kalender.js.
+// Vises som en nedtrekkbar liste under feltet (samme mønster som en vanlig <select>,
+// men lar deg fortsatt skrive inn en helt ny verdi) - IKKE nettleserens innebygde
+// <datalist>, som har vist seg upålitelig på tvers av nettlesere/mobil (spesielt
+// iPhone, der forslagene ofte ikke vises i det hele tatt), se samme begrunnelse ved
+// kalStedForslagListe()/renderKalStedForslag() i oversikt-kalender.js.
 function frekvenssortert(verdier) {
   const tell = {};
   verdier.forEach(v => { if (v) tell[v] = (tell[v]||0) + 1; });
@@ -541,16 +545,29 @@ function versjonForslag(type) {
   return frekvenssortert(kilde.map(o=>o.versjon));
 }
 function feltForslagHTML(inputId, verdier) {
-  return verdier.slice(0,12).map(v =>
-    `<button type="button" class="btn sm" style="padding:4px 10px;font-size:12px" data-input="${inputId}" data-verdi="${esc(v)}" onclick="velgFeltForslag(this)">${esc(v)}</button>`
+  if (!verdier.length) return '<div class="small muted" style="padding:9px 12px">Ingen tidligere verdier</div>';
+  return verdier.slice(0,20).map(v =>
+    `<div class="felt-dropdown-item" data-input="${inputId}" data-verdi="${esc(v)}" onmousedown="event.preventDefault();velgFeltForslag(this)">${esc(v)}</div>`
   ).join('');
 }
-function velgFeltForslag(btn) {
-  const input = document.getElementById(btn.dataset.input);
+function velgFeltForslag(el) {
+  const input = document.getElementById(el.dataset.input);
   if (!input) return;
-  input.value = btn.dataset.verdi;
+  input.value = el.dataset.verdi;
   input.dispatchEvent(new Event('input', {bubbles:true}));
   input.dispatchEvent(new Event('change', {bubbles:true}));
+  skjulFeltDropdown(el.closest('.felt-dropdown'));
+}
+// Nedtrekkslisten vises ved fokus og skjules ved blur. onmousedown+preventDefault på
+// selve raden (i stedet for onclick) gjør at valget rekker å registreres FØR
+// blur-eventet skjuler lista - uten det ville feltet miste fokus og lista forsvinne
+// før klikket i det hele tatt nådde frem.
+function visFeltDropdown(listeId) {
+  const el = document.getElementById(listeId);
+  if (el) el.style.display = 'block';
+}
+function skjulFeltDropdown(el) {
+  if (el) el.style.display = 'none';
 }
 // Oppdaterer Variant/Versjon-forslagene til det som faktisk er brukt sammen med
 // innholdet i Type-feltet akkurat nå - kalt fra Type-feltets oninput.
