@@ -44,7 +44,7 @@ function oppdaterLagerVarselBadge() {
   const varer = S.lagervarer||[];
   const lave = varer.filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
   el.innerHTML = lave.length
-    ? `<a href="#" onclick="event.preventDefault();visBestillingsliste()" style="color:#f87171;text-decoration:underline;cursor:pointer">⚠ ${lave.length} vare${lave.length===1?'':'r'} med lav beholdning</a>`
+    ? `<a href="#" onclick="event.preventDefault();apneBestillingslisteGlobal()" style="color:#f87171;text-decoration:underline;cursor:pointer">⚠ ${lave.length} vare${lave.length===1?'':'r'} med lav beholdning</a>`
     : `${varer.length} vare${varer.length===1?'':'r'} på lager`;
 }
 
@@ -366,11 +366,12 @@ function lagreVare() {
       .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
     if (mangler > 0) varselMangelfullLevering({navn, enhet}, forventet, antall, mangler);
     closeModal('nyVareModal');
-    // Oppdater den visningen man faktisk står i - "+ Ny vare" kan trykkes både fra
-    // hovedoversikten OG inne fra en kategori (apneNyVareIKategori()), og da må
-    // kategoriDetaljView oppdateres, ikke den skjulte hovedoversikten (samme fiks som
-    // lagreLagerEndring() allerede har for samme problem).
+    // Oppdater den visningen man faktisk står i - "+ Ny vare" kan trykkes fra
+    // hovedoversikten, fra en modell (uten underkategori valgt ennå) og inne fra en
+    // underkategori (apneNyVareIKategori()), og da må riktig av de tre oppdateres, ikke
+    // den skjulte hovedoversikten (samme fiks som lagreLagerEndring() har for samme problem).
     if (document.getElementById('kategoriDetaljView')?.style.display === 'block') renderKategoriDetalj();
+    else if (document.getElementById('modellDetaljView')?.style.display === 'block') renderModellDetalj();
     else renderLagerListe();
   }
 }
@@ -610,25 +611,62 @@ function settKategoriBestilt(kategori, modell) {
 }
 
 // ════════════════════════════════════════════════════
-// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per modell+kategori
+// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per modell+kategori.
+// Kan også begrenses til én bestemt underkategori (bestillingslisteFilter) - satt av
+// apneBestillingslisteForKategori(), brukt til å laste ned/skrive ut en egen
+// bestillingsliste-PDF per underkategori (f.eks. for å sende til riktig leverandør) i
+// stedet for alltid den store samlelisten. Virker automatisk for enhver ny underkategori
+// som lages, siden det bare filtrerer på modell+kategori-verdiene, ikke en fast liste.
 // ════════════════════════════════════════════════════
+let bestillingslisteFilter = null; // null = alt, ellers {modell, kategori}
+
 function laveVarerForBestilling() {
   return (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
 }
 
 function bestillingslisteGruppert() {
   const grupper = {};
-  laveVarerForBestilling().forEach(v => {
+  let varer = laveVarerForBestilling();
+  if (bestillingslisteFilter) {
+    varer = varer.filter(v => (v.kategori||'Uten kategori') === bestillingslisteFilter.kategori && (v.modell||'') === (bestillingslisteFilter.modell||''));
+  }
+  varer.forEach(v => {
     const nokkel = v.modell ? `${v.modell} – ${v.kategori||'Uten kategori'}` : (v.kategori || 'Uten kategori');
     (grupper[nokkel] = grupper[nokkel] || []).push(v);
   });
   return grupper;
 }
 
+// Hovedinngangen fra Lager-oversikten og de globale lav-lager-varslene - viser ALT.
+function apneBestillingslisteGlobal() {
+  bestillingslisteFilter = null;
+  visBestillingsliste();
+}
+
+// Fra en underkategori-side (kategoriDetaljView) - viser KUN denne underkategorien, slik
+// at man kan laste den ned/skrive den ut for seg selv.
+function apneBestillingslisteForKategori(modell, kategori) {
+  bestillingslisteFilter = { modell: modell||'', kategori };
+  visBestillingsliste();
+}
+
 function visBestillingsliste() {
   const grupper = bestillingslisteGruppert();
   const antall = Object.values(grupper).reduce((s,a)=>s+a.length, 0);
   const el = document.getElementById('bestillingslisteInnhold');
+
+  const tittelEl = document.getElementById('bestillingslisteTittel');
+  const undertekstEl = document.getElementById('bestillingslisteUndertekst');
+  if (tittelEl && undertekstEl) {
+    if (bestillingslisteFilter) {
+      const navn = bestillingslisteFilter.modell ? `${bestillingslisteFilter.modell} – ${bestillingslisteFilter.kategori}` : bestillingslisteFilter.kategori;
+      tittelEl.textContent = 'Bestillingsliste – ' + navn;
+      undertekstEl.textContent = `Kun varer under lav-grensen i denne underkategorien.`;
+    } else {
+      tittelEl.textContent = 'Bestillingsliste';
+      undertekstEl.textContent = 'Alle varer under lav-grensen, gruppert per kategori.';
+    }
+  }
 
   el.innerHTML = antall ? `
     <div class="box" style="display:flex;align-items:center;gap:13px;margin-bottom:12px;border-color:rgba(239,68,68,.35)">
@@ -705,6 +743,9 @@ function bestillingslisteArkHTML() {
   const antallVarer = Object.values(grupper).reduce((s,v)=>s+v.length,0);
   const dato = new Date().toLocaleDateString('nb-NO', {day:'numeric', month:'long', year:'numeric'});
   const LOGO = document.querySelector('#appScreen img')?.src || '';
+  const omfangTekst = bestillingslisteFilter
+    ? (bestillingslisteFilter.modell ? `${bestillingslisteFilter.modell} – ${bestillingslisteFilter.kategori}` : bestillingslisteFilter.kategori)
+    : "Salmaker'n · varelager";
 
   const innhold = Object.entries(grupper).map(([kat, varer]) => `
     <h2>${esc(kat)} <span class="kat-antall">${varer.length} vare${varer.length===1?'':'r'}</span></h2>
@@ -750,7 +791,7 @@ function bestillingslisteArkHTML() {
         ${LOGO?`<img src="${LOGO}" alt="Salmaker'n">`:'<div></div>'}
         <div class="topp-h">
           <h1>Bestillingsliste</h1>
-          <div class="undertittel">Salmaker'n · varelager</div>
+          <div class="undertittel">${esc(omfangTekst)}</div>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
@@ -812,7 +853,7 @@ function renderGlobalLavLagerVarsel() {
   if (!lave.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'block';
   const navn = lave.slice(0,3).map(v=>esc(v.navn)).join(', ') + (lave.length>3?` +${lave.length-3} til`:'');
-  el.innerHTML = `<div onclick="visBestillingsliste()" style="cursor:pointer;background:#450a0a;border:1px solid #ef4444cc;border-radius:16px;padding:12px 14px;margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  el.innerHTML = `<div onclick="apneBestillingslisteGlobal()" style="cursor:pointer;background:#450a0a;border:1px solid #ef4444cc;border-radius:16px;padding:12px 14px;margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <span style="flex-shrink:0;width:32px;height:32px;border-radius:999px;background:#7f1d1d;color:#fca5a5;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px">!</span>
     <div style="flex:1;min-width:0">
       <div style="color:#fca5a5;font-weight:700;font-size:13px">${lave.length} vare${lave.length===1?'':'r'} under minimum</div>
@@ -966,6 +1007,11 @@ function fyllOppskriftVareListe(forhaandsvalgt) {
     return;
   }
 
+  // Hver underkategori vises som en nedtrekkbar boks ("X av Y valgt") i stedet for alltid
+  // synlig - samme mønster/funksjoner som Ombygging/Ekstra utstyr-listene på ordren
+  // (toggleOppskriftDropdown()/lukkAlleOppskriftDropdowns() lenger opp i denne filen).
+  // Trenger ikke gjenopprette åpen-tilstand ved re-render slik den andre bruken gjør,
+  // siden avkrysning her ikke trigger noen re-render av hele listen.
   el.innerHTML = `
     ${(!brukAlle || (biltype && iModell.length)) ? `<div class="small" style="margin-bottom:6px">
       <a href="#" onclick="event.preventDefault();oppskriftVisAlleVarer=!oppskriftVisAlleVarer;fyllOppskriftVareListe(lesOppskriftIngredienser());" style="color:#f87171">
@@ -975,28 +1021,43 @@ function fyllOppskriftVareListe(forhaandsvalgt) {
     ${(() => {
       const grupper = {};
       varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
-      return Object.entries(grupper).map(([kat, katVarer]) => {
+      return Object.entries(grupper).map(([kat, katVarer], idx) => {
         const valgtIKat = katVarer.filter(v => forhaandsvalgt[v.id] != null).length;
-        return `<div style="margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:5px;border-bottom:1px solid #27272a;margin-bottom:4px">
-            <span class="small" style="font-weight:700;letter-spacing:.5px">${esc(kat)}</span>
-            <span class="small muted" style="font-size:11px">${valgtIKat} av ${katVarer.length} valgt</span>
+        const ddId = 'oppskriftKatDD_' + idx + '_' + kat.replace(/[^a-zA-Z0-9]/g,'_');
+        return `<div class="felt-wrap oppskrift-dd-wrap" style="margin-bottom:10px">
+          <div onclick="toggleOppskriftDropdown(event,'${ddId}')" style="width:100%;padding:9px 12px;border-radius:12px;background:#27272a;color:#f4f4f5;border:1px solid ${valgtIKat?'#ef4444':'#3f3f46'};font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <span>${esc(kat)} — <span id="${ddId}_teller">${valgtIKat} av ${katVarer.length}</span> valgt</span>
+            <span style="flex-shrink:0;color:#a1a1aa">▾</span>
           </div>
-          ${katVarer.map(v => {
-            const valgt = forhaandsvalgt[v.id] != null;
-            return `<label style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #ffffff08">
-              <input type="checkbox" class="oppskrift-vare-chk" data-vare-id="${v.id}" ${valgt?'checked':''}
-                onchange="this.nextElementSibling.style.display=this.checked?'inline-block':'none'"
-                style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
-              <input type="number" class="oppskrift-vare-antall" min="0" step="any" value="${valgt?forhaandsvalgt[v.id]:1}"
-                style="width:64px;display:${valgt?'inline-block':'none'};flex-shrink:0">
-              <span style="font-size:13px;flex:1;min-width:0">${esc(v.navn)} <span class="muted small">(${esc(v.enhet)})</span></span>
-            </label>`;
-          }).join('')}
+          <div class="felt-dropdown" id="${ddId}">
+            ${katVarer.map(v => {
+              const valgt = forhaandsvalgt[v.id] != null;
+              return `<label style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #ffffff08">
+                <input type="checkbox" class="oppskrift-vare-chk" data-vare-id="${v.id}" ${valgt?'checked':''}
+                  onchange="this.nextElementSibling.style.display=this.checked?'inline-block':'none';oppdaterOppskriftKatTeller('${ddId}')"
+                  style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+                <input type="number" class="oppskrift-vare-antall" min="0" step="any" value="${valgt?forhaandsvalgt[v.id]:1}"
+                  style="width:64px;display:${valgt?'inline-block':'none'};flex-shrink:0">
+                <span style="font-size:13px;flex:1;min-width:0">${esc(v.navn)} <span class="muted small">(${esc(v.enhet)})</span></span>
+              </label>`;
+            }).join('')}
+          </div>
         </div>`;
       }).join('');
     })()}
   `;
+}
+
+// Oppdaterer "X av Y valgt"-teksten og rammefargen på trigger-raden når en avkrysning
+// endres inni en underkategori-dropdown i oppskrift-vare-velgeren.
+function oppdaterOppskriftKatTeller(ddId) {
+  const dd = document.getElementById(ddId); if (!dd) return;
+  const alle = dd.querySelectorAll('.oppskrift-vare-chk');
+  const valgt = dd.querySelectorAll('.oppskrift-vare-chk:checked');
+  const teller = document.getElementById(ddId + '_teller');
+  if (teller) teller.textContent = `${valgt.length} av ${alle.length}`;
+  const trigger = dd.previousElementSibling;
+  if (trigger) trigger.style.borderColor = valgt.length ? '#ef4444' : '#3f3f46';
 }
 
 function lesOppskriftIngredienser() {
