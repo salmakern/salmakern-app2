@@ -54,7 +54,6 @@ function initTimerPage() {
       timerTick = setInterval(updateClock,1000);
       document.getElementById('stoppBtn').disabled=false;
       document.getElementById('startBtn').disabled=true;
-      document.getElementById('clockEl').classList.add('running');
       updateClock();
     } else {
       localStorage.removeItem('timerStart_'+me?.id);
@@ -172,13 +171,40 @@ function doLagreManuellTimer() {
   timerPINMode='gps';
 }
 
+// Fremdriftsringen rundt klokka - klokkeGraderSist husker siste vinkel (0-360, andel
+// av en 7,5t arbeidsdag) slik at stopp kan fryse ringen der den var i stedet for å måtte
+// regne den på nytt. Går = grønn gradient + pulserende glød, stoppet = rød gradient uten
+// puls (fryser på siste vinkel), ikke startet = flat nøytral ring.
+let klokkeGraderSist = 0;
+function oppdaterKlokkeRing(grader, kjorer) {
+  klokkeGraderSist = grader;
+  const el = document.getElementById('clockEl');
+  const tilstand = document.getElementById('clockTilstand');
+  if (!el) return;
+  if (kjorer) {
+    el.style.background = `conic-gradient(from 180deg, #16a34a 0deg, #22c55e ${grader/2}deg, #4ade80 ${grader}deg, #27272a ${grader}deg 360deg)`;
+    el.style.animation = 'pulseGlow 3s ease-in-out infinite';
+    el.style.boxShadow = 'none';
+    if (tilstand) { tilstand.textContent = '● GÅR NÅ'; tilstand.style.color = '#4ade80'; }
+  } else if (grader > 0) {
+    el.style.background = `conic-gradient(from 180deg, #dc2626 0deg, #ef4444 ${grader/2}deg, #f87171 ${grader}deg, #27272a ${grader}deg 360deg)`;
+    el.style.animation = 'none';
+    el.style.boxShadow = '0 0 34px rgba(239,68,68,.16)';
+    if (tilstand) { tilstand.textContent = '■ STOPPET'; tilstand.style.color = '#f87171'; }
+  } else {
+    el.style.background = '#27272a';
+    el.style.animation = 'none';
+    el.style.boxShadow = 'none';
+    if (tilstand) { tilstand.textContent = 'IKKE STARTET'; tilstand.style.color = '#71717a'; }
+  }
+}
+
 function doStartTimer(notat) {
   const btn=document.getElementById('startBtn');
   if(btn){btn.textContent='▶ Start';btn.disabled=true;}
   timerStart=Date.now();
   localStorage.setItem('timerStart_'+me?.id, timerStart);
   document.getElementById('stoppBtn').disabled=false;
-  document.getElementById('clockEl').classList.add('running');
   timerTick=setInterval(updateClock,1000);
   updateClock();
   console.log('Timer startet:',notat);
@@ -188,8 +214,7 @@ function stoppTimer() {
   if(timerTick){clearInterval(timerTick);timerTick=null;}
   document.getElementById('startBtn').disabled=false;
   document.getElementById('stoppBtn').disabled=true;
-  document.getElementById('clockEl').classList.remove('running');
-  document.getElementById('clockEl').classList.add('stopped');
+  oppdaterKlokkeRing(klokkeGraderSist, false);
 }
 
 function updateClock() {
@@ -198,11 +223,13 @@ function updateClock() {
   const mins=Math.floor(ms/60000);
   const { pause, netto }=beregnNettoMinutter(mins);
   const t=h=>h.toString().padStart(2,'0');
-  document.getElementById('clockTime').textContent=`${t(Math.floor(netto/60))} t ${t(netto%60)} min`;
+  document.getElementById('clockT').textContent=t(Math.floor(netto/60));
+  document.getElementById('clockM').textContent=t(netto%60);
   const startStr=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
   const nowStr=new Date().toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('clockRange').textContent=`${startStr} – ${nowStr}`;
   document.getElementById('clockPause').textContent=pause>0?`(−${pause} min pause)`:'';
+  oppdaterKlokkeRing(Math.min(netto/(7.5*60),1)*360, true);
 }
 
 function lagreTimer() {
@@ -268,10 +295,11 @@ function lagreTimer() {
   renderTimerHistorikk();
   stoppTimer();
   timerStart=null;
-  document.getElementById('clockEl').classList.remove('stopped');
-  document.getElementById('clockTime').textContent='00 t 00 min';
+  document.getElementById('clockT').textContent='00';
+  document.getElementById('clockM').textContent='00';
   document.getElementById('clockRange').textContent='--:-- – --:--';
   document.getElementById('clockPause').textContent='';
+  oppdaterKlokkeRing(0, false);
 }
 
 function renderTimerHistorikk() {

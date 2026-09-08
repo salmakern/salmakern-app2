@@ -158,9 +158,7 @@ tr:first-child td{padding-top:8px}
 #lightbox-close{position:fixed;top:16px;right:20px;font-size:32px;color:#fff;cursor:pointer;background:none;border:none;line-height:1;z-index:1000}
 
 /* CLOCK */
-.clock{height:240px;width:240px;border-radius:50%;border:14px solid #27272a;background:#111;margin:auto;display:flex;align-items:center;justify-content:center;text-align:center;transition:border-color 0.4s}
-.clock.running{border-color:#16a34a;box-shadow:0 0 24px #16a34a40}
-.clock.stopped{border-color:#ef4444}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 26px rgba(34,197,94,.22)}50%{box-shadow:0 0 40px rgba(34,197,94,.38)}}
 
 /* CANVAS */
 canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:#0f0f12}
@@ -203,7 +201,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 ::-webkit-scrollbar-track{background:#09090b}
 ::-webkit-scrollbar-thumb{background:#27272a;border-radius:4px}
 
-@media(max-width:860px){.g2l,.g3,.g5{grid-template-columns:1fr}.g2{grid-template-columns:1fr 1fr}.clock{height:200px;width:200px}}
+@media(max-width:860px){.g2l,.g3,.g5{grid-template-columns:1fr}.g2{grid-template-columns:1fr 1fr}#clockEl{width:200px;height:200px}}
 @media(max-width:480px){.g2{grid-template-columns:1fr}.photo-grid{grid-template-columns:repeat(2,1fr)}}
 .update-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1c1c1e;border:1px solid #ef4444;color:#f4f4f5;padding:12px 20px;border-radius:12px;display:flex;gap:12px;align-items:center;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.5);font-size:14px;max-width:90vw}
 .update-toast button{background:#ef4444;border:none;color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap}
@@ -359,12 +357,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn" id="ttype_ferie" onclick="setTimerType('ferie')">Ferie</button>
           <button class="btn" id="ttype_permisjon" onclick="setTimerType('permisjon')">Permisjon</button>
         </div>
-        <div class="clock" id="clockEl">
-          <div>
-            <div class="muted small">Registrert tid</div>
-            <div class="title" id="clockTime">00 t 00 min</div>
-            <div class="muted small" id="clockRange">--:-- – --:--</div>
-            <div class="muted small" id="clockPause" style="margin-top:4px"></div>
+        <div id="clockEl" style="width:252px;height:252px;margin:auto;border-radius:999px;padding:9px;background:#27272a;transition:background .4s ease">
+          <div id="clockIndre" style="width:100%;height:100%;border-radius:999px;background:radial-gradient(circle at 50% 26%,#191920,#0f0f12 72%);display:flex;align-items:center;justify-content:center;text-align:center">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:7px">
+              <div id="clockTilstand" class="small" style="letter-spacing:1.6px;color:#71717a">IKKE STARTET</div>
+              <div style="display:flex;align-items:baseline;gap:5px">
+                <span id="clockT" style="font-size:46px;font-weight:800;letter-spacing:-2.5px;line-height:1">00</span><span style="font-size:15px;color:#a1a1aa">t</span>
+                <span id="clockM" style="font-size:46px;font-weight:800;letter-spacing:-2.5px;line-height:1">00</span><span style="font-size:15px;color:#a1a1aa">min</span>
+              </div>
+              <div class="muted small" id="clockRange" style="font-size:13px">--:-- – --:--</div>
+              <div class="muted small" id="clockPause" style="margin-top:2px"></div>
+            </div>
           </div>
         </div>
         <div style="margin-top:18px;display:flex;gap:10px;justify-content:center">
