@@ -588,7 +588,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div class="row">
             <div>
               <div class="h">Oppskrifter</div>
-              <div class="muted small">Hvilke deler som går med per modell og variant.</div>
+              <div class="muted small">Hvilke deler som går med per modell, for Ombygging og Ekstra utstyr.</div>
             </div>
             <button class="btn sm red" onclick="visOppskriftModeller()">Åpne oppskrifter</button>
           </div>
@@ -613,7 +613,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeLagerListe()">← Lager</button>
         <div class="card">
           <div class="h">Oppskrifter per modell</div>
-          <div class="muted small">Velg en modell for å se varianter og hvilke deler som brukes.</div>
+          <div class="muted small">Velg en modell for å se oppskriftene og hvilke deler som brukes.</div>
         </div>
         <div id="oppskriftModellerListe" style="margin-top:12px"></div>
       </div>
@@ -622,13 +622,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraOppskriftModell()">← Alle modeller</button>
         <div class="card">
           <div class="h" id="oppskriftModellTittel">–</div>
-          <div class="muted small" style="margin-top:4px">Generell oversikt – alle deler som brukes på tvers av varianter</div>
+          <div class="muted small" style="margin-top:4px">Generell oversikt – alle deler som brukes på tvers av oppskriftene</div>
           <div id="oppskriftModellGenerellOversikt" style="margin-top:8px"></div>
         </div>
         <div class="card" style="margin-top:12px">
           <div class="row">
-            <div class="h">Varianter</div>
-            <button class="btn sm red" onclick="apneNyOppskrift(oppskriftAktivModell)">+ Ny variant</button>
+            <div class="h">Oppskrifter</div>
+            <button class="btn sm red" onclick="apneNyOppskrift(oppskriftAktivModell)">+ Ny oppskrift</button>
           </div>
           <div id="oppskriftVariantListeKort" style="margin-top:10px"></div>
         </div>
