@@ -577,9 +577,13 @@ function renderVersjonForslag(typeInputId, versjonInputId, listeId) {
   el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(document.getElementById(typeInputId)?.value||''));
 }
 
-// Kjente modeller = biltype-feltet på utstyr-malene, siden de allerede er satt opp per modell
+// Kjente modeller = biltype-feltet på utstyr-malene, pluss modell-feltet på lagervarer
+// (siden en lagervare med Modell="EV9" også bør gjøre "EV9" valgbart som oppskrift-modell).
 function alleKjenteModeller() {
-  return [...new Set((S.utstyrMaler||[]).map(m=>m.biltype).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+  return [...new Set([
+    ...(S.utstyrMaler||[]).map(m=>m.biltype),
+    ...(S.lagervarer||[]).map(v=>v.modell)
+  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
 }
 function modellSelectOptions(gjeldende) {
   const modeller = alleKjenteModeller();

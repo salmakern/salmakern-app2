@@ -603,10 +603,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             </div>
           </div>
           <div style="margin-top:10px">
-            <input id="lagerSokInput" type="search" placeholder="Søk vare, kategori eller tegningsnummer..." oninput="renderLagerListe()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+            <input id="lagerSokInput" type="search" placeholder="Søk vare, modell, kategori eller tegningsnummer..." oninput="renderLagerListe()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
           </div>
         </div>
         <div id="lagerListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="modellDetaljView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraModellDetalj()">← Lager</button>
+        <div class="card">
+          <div class="h" id="modellDetaljTittel">–</div>
+          <div class="muted small" style="margin-top:4px">Underkategorier for denne modellen</div>
+        </div>
+        <div id="modellKategoriListe" style="margin-top:12px"></div>
       </div>
 
       <div id="oppskriftModellerView" style="display:none">
@@ -629,7 +638,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
 
       <div id="kategoriDetaljView" style="display:none">
-        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeLagerListe()">← Alle kategorier</button>
+        <button class="btn sm" style="margin-bottom:10px" id="kategoriDetaljTilbakeBtn" onclick="tilbakeFraKategoriDetalj()">← Alle kategorier</button>
         <div class="card">
           <div class="row" style="align-items:flex-start">
             <div>
@@ -1321,12 +1330,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div><label>Navn</label><input id="nyVareNavn" placeholder="f.eks. Gassdemper 450N"></div>
       <div class="grid g2" style="margin-top:8px">
         <div>
+          <label>Modell <span class="muted">(valgfritt)</span></label>
+          <input id="nyVareModell" list="lagerModellListe" placeholder="f.eks. EV9">
+          <datalist id="lagerModellListe"></datalist>
+        </div>
+        <div>
           <label>Kategori</label>
-          <input id="nyVareKategori" list="lagerKategoriListe" placeholder="Beslag og dempere">
+          <input id="nyVareKategori" list="lagerKategoriListe" placeholder="Beslag og dempere / Modul-system">
           <datalist id="lagerKategoriListe"></datalist>
         </div>
-        <div><label>Tegningsnummer <span class="muted">(valgfritt)</span></label><input id="nyVareTegningsnummer" placeholder="41-0982-B"></div>
       </div>
+      <div style="margin-top:8px"><label>Tegningsnummer <span class="muted">(valgfritt)</span></label><input id="nyVareTegningsnummer" placeholder="41-0982-B"></div>
+      <div class="small muted" style="margin-top:6px">Sett Modell for varer som hører til én bilmodell (f.eks. EV9) - da grupperes de under modellen i lageroversikten, med Kategori som underkategori (f.eks. Modul-system, Kasse). La Modell stå tom for generelle deler som ikke hører til én bestemt modell.</div>
     </div>
 
     <div class="box" style="margin-top:10px">

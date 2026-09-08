@@ -24,7 +24,7 @@ function sorterLagerVarer(a, b) {
 // en synlig endring uansett hvilken rekkefølge-verdi varene hadde fra før.
 function flyttVare(id, retning) {
   if (!aktivKategori) return;
-  const gruppevarer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori')===aktivKategori).sort(sorterLagerVarer);
+  const gruppevarer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori')===aktivKategori && (v.modell||'')===(aktivModell||'')).sort(sorterLagerVarer);
   const i = gruppevarer.findIndex(v=>v.id===id);
   const j = i + retning;
   if (i<0 || j<0 || j>=gruppevarer.length) return;
@@ -49,6 +49,38 @@ function oppdaterLagerVarselBadge() {
 }
 
 let aktivKategori = null;
+let aktivModell = null; // satt når man er inne i en modells underkategorier (f.eks. "EV9"), ellers null
+
+// Delt av renderLagerListe() (flate kategorier uten modell) og renderModellDetalj()
+// (underkategorier for én modell) - samme boks-utseende begge steder.
+function kategoriBoksHTML(kat, varerIKat, onclickAttr) {
+  const lavtIKat = varerIKat.filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
+  const sumEnheter = varerIKat.reduce((s,v)=>s+(Number(v.antall)||0),0);
+  const sumMin = varerIKat.reduce((s,v)=>s+(Number(v.minAntall)||0),0);
+  const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, sumEnheter/sumMin*100)) : 100;
+  return `<div class="box" style="cursor:pointer;border-color:${lavtIKat?'rgba(239,68,68,.3)':'#27272a'}" onclick="${onclickAttr}">
+    <div class="row">
+      <b>${esc(kat)}</b>
+      ${lavtIKat?`<span class="pill bad" style="margin:0;font-size:11px">${lavtIKat} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
+    </div>
+    <div class="small muted" style="margin-top:2px">${varerIKat.length} vare${varerIKat.length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter</div>
+    <div style="margin-top:9px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden">
+      <div style="height:100%;width:${fyllPct}%;background:${fyllPct<=100?'#ef4444':'#22c55e'};border-radius:999px"></div>
+    </div>
+    ${sumMin>0?`<div class="small muted" style="margin-top:4px;font-size:11px">${Math.round(fyllPct)}% av samlet minimum (${fmtAntall(sumMin)})</div>`:''}
+  </div>`;
+}
+function modellBoksHTML(modell, varerIModell) {
+  const antallKat = new Set(varerIModell.map(v=>v.kategori||'Uten kategori')).size;
+  const lavt = varerIModell.filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
+  return `<div class="box" style="cursor:pointer;border-color:${lavt?'rgba(239,68,68,.3)':'#3f3f46'}" onclick="visModellDetalj('${esc(modell).replace(/'/g,"\\'")}')">
+    <div class="row">
+      <b>🚐 ${esc(modell)}</b>
+      ${lavt?`<span class="pill bad" style="margin:0;font-size:11px">${lavt} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
+    </div>
+    <div class="small muted" style="margin-top:2px">${antallKat} underkategori${antallKat===1?'':'er'} · ${varerIModell.length} vare${varerIModell.length===1?'':'r'}</div>
+  </div>`;
+}
 
 function renderLagerListe() {
   oppdaterLagerVarselBadge();
@@ -56,15 +88,20 @@ function renderLagerListe() {
   const sok = (document.getElementById('lagerSokInput')?.value||'').toLowerCase().trim();
   let varer = (S.lagervarer||[]).slice().sort(sorterLagerVarer);
 
-  const dl = document.getElementById('lagerKategoriListe');
-  if (dl) {
+  const dlKat = document.getElementById('lagerKategoriListe');
+  if (dlKat) {
     const alleKat = [...new Set((S.lagervarer||[]).map(v=>v.kategori).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
-    dl.innerHTML = alleKat.map(k=>`<option value="${esc(k)}">`).join('');
+    dlKat.innerHTML = alleKat.map(k=>`<option value="${esc(k)}">`).join('');
+  }
+  const dlModell = document.getElementById('lagerModellListe');
+  if (dlModell) {
+    const alleModeller = [...new Set((S.lagervarer||[]).map(v=>v.modell).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+    dlModell.innerHTML = alleModeller.map(m=>`<option value="${esc(m)}">`).join('');
   }
 
   if (sok) {
-    // Ved søk: vis treffene direkte, uten å måtte inn i en kategori
-    varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
+    // Ved søk: vis treffene direkte, uten å måtte inn i en kategori/modell
+    varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.modell||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
     el.innerHTML = varer.length
       ? `<div class="small muted" style="margin-bottom:10px">${varer.length} treff på «${esc(sok)}»</div><div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>`
       : `<div class="box" style="text-align:center;padding:24px">
@@ -76,27 +113,25 @@ function renderLagerListe() {
 
   if (!varer.length) { el.innerHTML = '<div class="card"><div class="muted small">Ingen varer i lageret ennå</div></div>'; return; }
 
-  const grupper = {};
-  varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
-  const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
+  // To nivåer: varer MED modell (f.eks. "EV9") grupperes først på modell - trykker du inn
+  // på en modell, ser du KUN dens underkategorier (kategori-feltet). Varer UTEN modell
+  // (generelle deler som ikke hører til én bestemt bil) vises som før, direkte som flate
+  // kategori-bokser.
+  const medModell = varer.filter(v => v.modell);
+  const utenModell = varer.filter(v => !v.modell);
 
-  el.innerHTML = `<div class="grid g3">${kategorier.map(kat => {
-    const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
-    const sumEnheter = grupper[kat].reduce((s,v)=>s+(Number(v.antall)||0),0);
-    const sumMin = grupper[kat].reduce((s,v)=>s+(Number(v.minAntall)||0),0);
-    const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, sumEnheter/sumMin*100)) : 100;
-    return `<div class="box" style="cursor:pointer;border-color:${lavtIKat?'rgba(239,68,68,.3)':'#27272a'}" onclick="visKategoriDetalj('${esc(kat).replace(/'/g,"\\'")}')">
-      <div class="row">
-        <b>${esc(kat)}</b>
-        ${lavtIKat?`<span class="pill bad" style="margin:0;font-size:11px">${lavtIKat} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
-      </div>
-      <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter</div>
-      <div style="margin-top:9px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden">
-        <div style="height:100%;width:${fyllPct}%;background:${fyllPct<=100?'#ef4444':'#22c55e'};border-radius:999px"></div>
-      </div>
-      ${sumMin>0?`<div class="small muted" style="margin-top:4px;font-size:11px">${Math.round(fyllPct)}% av samlet minimum (${fmtAntall(sumMin)})</div>`:''}
-    </div>`;
-  }).join('')}</div>`;
+  const modellGrupper = {};
+  medModell.forEach(v => { (modellGrupper[v.modell] = modellGrupper[v.modell] || []).push(v); });
+  const modeller = Object.keys(modellGrupper).sort((a,b)=>a.localeCompare(b,'no'));
+
+  const katGrupper = {};
+  utenModell.forEach(v => { const k = v.kategori || 'Uten kategori'; (katGrupper[k] = katGrupper[k] || []).push(v); });
+  const kategorier = Object.keys(katGrupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
+
+  el.innerHTML = `
+    ${modeller.length ? `<div class="mer-seksjon-label" style="margin-top:0">MODELLER</div><div class="grid g3">${modeller.map(m=>modellBoksHTML(m, modellGrupper[m])).join('')}</div>` : ''}
+    ${kategorier.length ? `<div class="mer-seksjon-label" style="${modeller.length?'':'margin-top:0'}">KATEGORIER</div><div class="grid g3">${kategorier.map(kat=>kategoriBoksHTML(kat, katGrupper[kat], `visKategoriDetalj('','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>` : ''}
+  `;
 }
 
 function vareBoksHTML(v, kanFlytte) {
@@ -144,19 +179,73 @@ function vareBoksHTML(v, kanFlytte) {
   </div>`;
 }
 
-function visKategoriDetalj(kat) {
+// Modell-oversikt (underkategoriene til én modell, f.eks. "EV9") - selve
+// varelisten for hver underkategori vises fortsatt av renderKategoriDetalj().
+function visModellDetalj(modell) {
+  aktivModell = modell;
+  document.getElementById('lagerListeView').style.display = 'none';
+  document.getElementById('modellDetaljView').style.display = 'block';
+  document.getElementById('kategoriDetaljView').style.display = 'none';
+  document.getElementById('vareDetaljView').style.display = 'none';
+  renderModellDetalj();
+  window.scrollTo(0, 0);
+}
+
+function tilbakeFraModellDetalj() {
+  aktivModell = null;
+  document.getElementById('modellDetaljView').style.display = 'none';
+  tilbakeLagerListe();
+}
+
+function renderModellDetalj() {
+  if (!aktivModell) return;
+  document.getElementById('modellDetaljTittel').textContent = aktivModell;
+  const varer = (S.lagervarer||[]).filter(v => v.modell === aktivModell);
+  const el = document.getElementById('modellKategoriListe');
+  if (!varer.length) {
+    el.innerHTML = `<div class="box" style="text-align:center;padding:24px">
+      <div class="muted small">Ingen varer i denne modellen ennå</div>
+      <button class="btn sm red" style="margin-top:10px" onclick="apneNyVareIKategori()">+ Legg til første vare</button>
+    </div>`;
+    return;
+  }
+  const grupper = {};
+  varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
+  const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
+  const modellEsc = esc(aktivModell).replace(/'/g,"\\'");
+  el.innerHTML = `<div class="grid g3">${kategorier.map(kat=>kategoriBoksHTML(kat, grupper[kat], `visKategoriDetalj('${modellEsc}','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>`;
+}
+
+function visKategoriDetalj(modell, kat) {
+  aktivModell = modell || null;
   aktivKategori = kat;
   document.getElementById('lagerListeView').style.display = 'none';
+  document.getElementById('modellDetaljView').style.display = 'none';
   document.getElementById('kategoriDetaljView').style.display = 'block';
   document.getElementById('vareDetaljView').style.display = 'none';
+  const tilbakeBtn = document.getElementById('kategoriDetaljTilbakeBtn');
+  if (tilbakeBtn) tilbakeBtn.textContent = aktivModell ? '← ' + aktivModell : '← Alle kategorier';
   renderKategoriDetalj();
   window.scrollTo(0, 0);
 }
 
+// Går tilbake til modellens underkategori-liste hvis vi kom derfra, ellers rett til
+// hovedoversikten - se visKategoriDetalj() som setter aktivModell riktig i utgangspunktet.
+function tilbakeFraKategoriDetalj() {
+  aktivKategori = null;
+  document.getElementById('kategoriDetaljView').style.display = 'none';
+  if (aktivModell) {
+    document.getElementById('modellDetaljView').style.display = 'block';
+    renderModellDetalj();
+  } else {
+    tilbakeLagerListe();
+  }
+}
+
 function renderKategoriDetalj() {
   if (!aktivKategori) return;
-  document.getElementById('kategoriDetaljTittel').textContent = aktivKategori;
-  const varer = (S.lagervarer||[]).filter(v => (v.kategori || 'Uten kategori') === aktivKategori).sort(sorterLagerVarer);
+  document.getElementById('kategoriDetaljTittel').textContent = aktivModell ? `${aktivModell} – ${aktivKategori}` : aktivKategori;
+  const varer = (S.lagervarer||[]).filter(v => (v.kategori || 'Uten kategori') === aktivKategori && (v.modell||'') === (aktivModell||'')).sort(sorterLagerVarer);
   const lave = varer.filter(erLavBeholdning);
   const el = document.getElementById('kategoriVareListe');
 
@@ -175,7 +264,7 @@ function renderKategoriDetalj() {
         <div style="font-weight:700;color:#fca5a5;font-size:13.5px">${lave.length} vare${lave.length===1?'':'r'} under minimum</div>
         <div class="small muted">${lave.slice(0,3).map(v=>esc(v.navn)).join(', ')}${lave.length>3?` +${lave.length-3} til`:''}</div>
       </div>
-      <button class="btn sm" style="flex-shrink:0" onclick="settKategoriBestilt('${esc(aktivKategori).replace(/'/g,"\\'")}');renderKategoriDetalj()">✓ Merk bestilt</button>
+      <button class="btn sm" style="flex-shrink:0" onclick="settKategoriBestilt('${esc(aktivKategori).replace(/'/g,"\\'")}','${esc(aktivModell||'').replace(/'/g,"\\'")}');renderKategoriDetalj()">✓ Merk bestilt</button>
     </div>` : '';
 
   el.innerHTML = varsel + `<div class="grid g3">${varer.map(v => vareBoksHTML(v, true)).join('')}</div>`;
@@ -183,6 +272,7 @@ function renderKategoriDetalj() {
 
 function apneNyVareIKategori() {
   apneNyVare();
+  if (aktivModell) document.getElementById('nyVareModell').value = aktivModell;
   if (aktivKategori && aktivKategori !== 'Uten kategori') document.getElementById('nyVareKategori').value = aktivKategori;
 }
 
@@ -195,7 +285,7 @@ function redigerKategoriNavn() {
   if (nyttNavn === null) return;
   const trimmet = nyttNavn.trim();
   const gammelKategori = aktivKategori;
-  const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === gammelKategori);
+  const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === gammelKategori && (v.modell||'') === (aktivModell||''));
   varer.forEach(v => { v.kategori = trimmet; });
   // Ett samlet kall for alle varene i kategorien i stedet for ett update-kall per vare
   // (samme upålitelighets-mønster som flyttVare()/registrerLagerEndring() løste likt).
@@ -209,6 +299,7 @@ function apneNyVare() {
   document.getElementById('nyVareModalTittel').textContent = 'Ny vare';
   document.getElementById('redigerVareId').value = '';
   document.getElementById('nyVareNavn').value = '';
+  document.getElementById('nyVareModell').value = '';
   document.getElementById('nyVareKategori').value = '';
   document.getElementById('nyVareTegningsnummer').value = '';
   document.getElementById('nyVareForventet').value = '';
@@ -227,6 +318,7 @@ function apneRedigerVare() {
   document.getElementById('nyVareModalTittel').textContent = 'Rediger vare';
   document.getElementById('redigerVareId').value = v.id;
   document.getElementById('nyVareNavn').value = v.navn;
+  document.getElementById('nyVareModell').value = v.modell||'';
   document.getElementById('nyVareKategori').value = v.kategori||'';
   document.getElementById('nyVareTegningsnummer').value = v.tegningsnummer||'';
   document.getElementById('nyVareForventetWrap').style.display = 'none';
@@ -243,6 +335,7 @@ function lagreVare() {
   const navn = document.getElementById('nyVareNavn').value.trim();
   if (!navn) { alert('Skriv inn et navn på varen'); return; }
   const redigerId  = document.getElementById('redigerVareId').value;
+  const modell     = document.getElementById('nyVareModell').value.trim();
   const kategori   = document.getElementById('nyVareKategori').value.trim();
   const tegningsnummer = document.getElementById('nyVareTegningsnummer').value.trim();
   const enhet      = document.getElementById('nyVareEnhet').value.trim() || 'stk';
@@ -251,8 +344,8 @@ function lagreVare() {
 
   if (redigerId) {
     const v = (S.lagervarer||[]).find(x=>x.id===redigerId); if (!v) return;
-    v.navn = navn; v.kategori = kategori; v.tegningsnummer = tegningsnummer; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
-    if (db) db.from('lagervarer').update({navn, kategori, tegningsnummer, enhet, min_antall:minAntall, notat}).eq('id', v.id)
+    v.navn = navn; v.modell = modell; v.kategori = kategori; v.tegningsnummer = tegningsnummer; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
+    if (db) db.from('lagervarer').update({navn, modell, kategori, tegningsnummer, enhet, min_antall:minAntall, notat}).eq('id', v.id)
       .then(r=>{if(r.error) console.error('Lagervare-oppdatering feilet:', r.error.message);});
     closeModal('nyVareModal');
     renderVareDetalj();
@@ -266,10 +359,10 @@ function lagreVare() {
       notatMedAvvik = notat ? notat + ' — ' + manglerTekst : manglerTekst;
     }
     const id = 'vare_' + Date.now();
-    const vare = { id, navn, kategori, tegningsnummer, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
+    const vare = { id, navn, modell, kategori, tegningsnummer, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
     S.lagervarer = S.lagervarer || [];
     S.lagervarer.push(vare);
-    if (db) db.from('lagervarer').insert({id, navn, kategori, tegningsnummer, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
+    if (db) db.from('lagervarer').insert({id, navn, modell, kategori, tegningsnummer, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
       .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
     if (mangler > 0) varselMangelfullLevering({navn, enhet}, forventet, antall, mangler);
     closeModal('nyVareModal');
@@ -296,7 +389,7 @@ function visVareDetalj(id) {
   document.getElementById('lagerListeView').style.display = 'none';
   document.getElementById('kategoriDetaljView').style.display = 'none';
   document.getElementById('vareDetaljView').style.display = 'block';
-  document.getElementById('vareDetaljTilbakeBtn').textContent = aktivKategori ? '← ' + aktivKategori : '← Alle varer';
+  document.getElementById('vareDetaljTilbakeBtn').textContent = aktivKategori ? '← ' + (aktivModell ? aktivModell+' – '+aktivKategori : aktivKategori) : '← Alle varer';
   renderVareDetalj();
   window.scrollTo(0, 0);
 }
@@ -315,8 +408,10 @@ function tilbakeFraVareDetalj() {
 function tilbakeLagerListe() {
   aktivVareId = null;
   aktivKategori = null;
+  aktivModell = null;
   oppskriftAktivModell = null;
   document.getElementById('lagerListeView').style.display = 'block';
+  document.getElementById('modellDetaljView').style.display = 'none';
   document.getElementById('kategoriDetaljView').style.display = 'none';
   document.getElementById('vareDetaljView').style.display = 'none';
   document.getElementById('oppskriftModellerView').style.display = 'none';
@@ -506,14 +601,16 @@ function settVareBestilt(vareId, val) {
   if (document.getElementById('vareDetaljView')?.style.display === 'block') renderVareDetalj();
 }
 
-// Marker alle lave, ikke-bestilte varer i en kategori som bestilt samlet
-function settKategoriBestilt(kategori) {
-  const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === kategori && v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
+// Marker alle lave, ikke-bestilte varer i en kategori (innenfor en gitt modell, om satt)
+// som bestilt samlet - modell trengs for å ikke blande sammen samme kategorinavn brukt av
+// flere modeller (f.eks. "Modul-system" for både EV9 og en annen modell).
+function settKategoriBestilt(kategori, modell) {
+  const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === kategori && (v.modell||'') === (modell||'') && v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
   varer.forEach(v => settVareBestilt(v.id, true));
 }
 
 // ════════════════════════════════════════════════════
-// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per kategori
+// BESTILLINGSLISTE — samler alle lave varer i én liste, gruppert per modell+kategori
 // ════════════════════════════════════════════════════
 function laveVarerForBestilling() {
   return (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
@@ -522,8 +619,8 @@ function laveVarerForBestilling() {
 function bestillingslisteGruppert() {
   const grupper = {};
   laveVarerForBestilling().forEach(v => {
-    const kat = v.kategori || 'Uten kategori';
-    (grupper[kat] = grupper[kat] || []).push(v);
+    const nokkel = v.modell ? `${v.modell} – ${v.kategori||'Uten kategori'}` : (v.kategori || 'Uten kategori');
+    (grupper[nokkel] = grupper[nokkel] || []).push(v);
   });
   return grupper;
 }
@@ -547,7 +644,7 @@ function visBestillingsliste() {
           <div style="display:flex;gap:7px;align-items:center;flex-shrink:0">
             <span class="pill bad" style="margin:0;font-size:11px;padding:3px 10px">${varer.length}</span>
             <button class="btn sm" style="padding:4px 10px;font-size:11.5px"
-              onclick="settKategoriBestilt('${esc(kat).replace(/'/g,"\\'")}');visBestillingsliste()">✓ Bestilt</button>
+              onclick="settKategoriBestilt('${esc(varer[0].kategori||'Uten kategori').replace(/'/g,"\\'")}','${esc(varer[0].modell||'').replace(/'/g,"\\'")}');visBestillingsliste()">✓ Bestilt</button>
           </div>
         </div>
         ${varer.map(v=>`
@@ -848,14 +945,19 @@ function renderOppskriftModellDetalj() {
 
 let oppskriftVisAlleVarer = false;
 
+// Filtrerer på Modell (ikke Kategori) - matcher det som velges i "Modell"-feltet på
+// oppskriften mot lagervarer.modell. Grupperingen under (per v.kategori) viser dermed
+// automatisk ALLE underkategoriene for modellen (Modul-system, Kasse, Plater, osv.) som
+// egne bolker i velgeren, slik at man kan huke av deler fra flere underkategorier i én
+// og samme oppskrift - se lagervarer.modell/kategori i renderLagerListe()/renderModellDetalj().
 function fyllOppskriftVareListe(forhaandsvalgt) {
   forhaandsvalgt = forhaandsvalgt || {};
   const biltype = document.getElementById('oppskriftBiltype').value;
   const el = document.getElementById('oppskriftIngrediensListe');
   let varer = (S.lagervarer||[]).slice();
-  const iKategori = biltype ? varer.filter(v => (v.kategori||'').toLowerCase() === biltype.toLowerCase()) : [];
-  const brukAlle = oppskriftVisAlleVarer || !biltype || !iKategori.length;
-  varer = (brukAlle ? varer : iKategori).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
+  const iModell = biltype ? varer.filter(v => (v.modell||'').toLowerCase() === biltype.toLowerCase()) : [];
+  const brukAlle = oppskriftVisAlleVarer || !biltype || !iModell.length;
+  varer = (brukAlle ? varer : iModell).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
 
   if (!varer.length) {
     el.innerHTML = '<div class="muted small">Ingen varer i lageret ennå. Legg til varer under Lager først.</div>';
@@ -863,9 +965,9 @@ function fyllOppskriftVareListe(forhaandsvalgt) {
   }
 
   el.innerHTML = `
-    ${(!brukAlle || (biltype && iKategori.length)) ? `<div class="small" style="margin-bottom:6px">
+    ${(!brukAlle || (biltype && iModell.length)) ? `<div class="small" style="margin-bottom:6px">
       <a href="#" onclick="event.preventDefault();oppskriftVisAlleVarer=!oppskriftVisAlleVarer;fyllOppskriftVareListe(lesOppskriftIngredienser());" style="color:#f87171">
-        ${oppskriftVisAlleVarer ? '↩ Vis kun varer i "'+esc(biltype)+'"-kategorien' : '+ Vis alle varer i lageret (ikke bare "'+esc(biltype)+'")'}
+        ${oppskriftVisAlleVarer ? '↩ Vis kun varer i "'+esc(biltype)+'"-modellen' : '+ Vis alle varer i lageret (ikke bare "'+esc(biltype)+'")'}
       </a>
     </div>` : ''}
     ${(() => {
