@@ -277,10 +277,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
         <div id="weekCal"></div>
       </div>
-      <div class="grid g3" style="margin-bottom:12px">
-        <div class="card" style="margin-bottom:0"><div class="muted small">Biler denne måneden</div><div class="title" id="s1">0</div></div>
-        <div class="card" style="margin-bottom:0"><div class="muted small">Ferdigstilt</div><div class="title" id="s2">0</div></div>
-        <div class="card" style="margin-bottom:0"><div class="muted small">Aktive ordrer</div><div class="title" id="s3">0</div></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:12px">
+        <div class="card" style="margin-bottom:0"><div class="muted small">Ferdigstilt denne måneden</div><div class="title" id="s1" style="color:#86efac">0</div></div>
+        <div class="card" style="margin-bottom:0"><div class="muted small">Aktive ordrer</div><div class="title" id="s2">0</div></div>
+        <div class="card" style="margin-bottom:0"><div class="muted small">Ikke påbegynt</div><div class="title" id="s3" style="color:#fde68a">0</div></div>
+        <div class="card" style="margin-bottom:0"><div class="muted small">Venter på kalender</div><div class="title" id="s4" style="color:#fca5a5">0</div></div>
       </div>
       <div class="card">
         <div class="row">

@@ -84,6 +84,7 @@ function renderOrdreList() {
       <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</span>
       ${dokStatusKortHTML(o)}
       <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
+      <div class="box" style="margin-top:2px;padding:8px 9px">${tvangsflytBarHTML(o)}</div>
       <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
       <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
@@ -101,10 +102,15 @@ function renderOversikt(q) {
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
   const mnd = now.getMonth(), yr = now.getFullYear();
-  const denneMnd = S.ordrer.filter(o=>{const d=new Date(o.ankomstdato);return d.getMonth()===mnd&&d.getFullYear()===yr;});
-  document.getElementById('s1').textContent = denneMnd.length;
-  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['klar_henting','bestilt_frakt','hentet'].includes(o.ordreStatus)).length;
-  document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)).length;
+  // "Ferdigstilt denne måneden" bruker dato_klar_henting (når ordren faktisk ble klar), ikke
+  // ankomstdato - en ordre som ankom i fjor men ble klar nå skal telle med her.
+  document.getElementById('s1').textContent = S.ordrer.filter(o=>{
+    if (o.status!=='aktiv' || !['klar_henting','bestilt_frakt','hentet'].includes(o.ordreStatus) || !o.datoKlarHenting) return false;
+    const d = new Date(o.datoKlarHenting); return d.getMonth()===mnd && d.getFullYear()===yr;
+  }).length;
+  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)).length;
+  document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt').length;
+  document.getElementById('s4').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&!o.kalenderDato).length;
 
   const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
   const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)&&match(o)).sort(sorterOrdre);
@@ -393,6 +399,23 @@ function dokStatusPillHTML(label, verdi) {
 }
 function dokStatusKortHTML(o) {
   return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}</div>`;
+}
+// Kompakt fremdriftsindikator for tvangsflyt-kravene på ordrekortene - samme
+// krav som tvangsflyt(o) i ordre-detalj.js, bare vist som en rad segmenter i
+// stedet for en full ✔/✕-liste, siden kortene har begrenset plass.
+function tvangsflytBarHTML(o) {
+  const tf = tvangsflyt(o);
+  const oppfylt = tf.filter(t=>t.ok).length;
+  const si = statusInfo(o.ordreStatus);
+  const tallFarge = oppfylt===tf.length ? '#86efac' : oppfylt<Math.ceil(tf.length/2) ? '#fca5a5' : '#a1a1aa';
+  return `<div onclick="event.stopPropagation()">
+    <div class="small muted" style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10px;letter-spacing:.06em;text-transform:uppercase">
+      <span>Tvangsflyt</span><span style="font-weight:700;color:${tallFarge}">${oppfylt} av ${tf.length} krav</span>
+    </div>
+    <div style="display:flex;gap:4px;margin-top:4px">
+      ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:6px;border-radius:999px;background:${t.ok?si.border:'#27272a'}"></span>`).join('')}
+    </div>
+  </div>`;
 }
 function godkjentKortHTML(o) {
   return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
