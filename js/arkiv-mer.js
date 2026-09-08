@@ -160,7 +160,11 @@ function renderMer() {
           <button class="btn sm" onclick="apneUkobletAdminArkRad(${r.aar})">Åpne i Admin-ark</button>
         </div>`).join('')
       : '<div class="muted small">Ingen ukoblede rader funnet</div>';
-    document.getElementById('dagensPINVal').textContent = S.dagensPIN;
+    const pinEl = document.getElementById('dagensPINVal');
+    if (pinEl) {
+      const pin = (S.dagensPIN || '----').padEnd(4, '-').slice(0, 4);
+      pinEl.innerHTML = [...pin].map(s => `<span class="pin-siffer">${esc(s)}</span>`).join('');
+    }
     const gpsEl = document.getElementById('gpsStatus');
     const radEl = document.getElementById('gpsRadius');
     if (gpsEl) gpsEl.textContent = S.gps?.lat

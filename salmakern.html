@@ -203,6 +203,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 @media(max-width:860px){.g2l,.g3,.g5{grid-template-columns:1fr}.g2{grid-template-columns:1fr 1fr}#clockEl{width:200px;height:200px}}
 @media(max-width:480px){.g2{grid-template-columns:1fr}.photo-grid{grid-template-columns:repeat(2,1fr)}}
+/* Sjeldent brukte adminverktøy: samme kort, men visuelt tilbaketrukket */
+.card.dempet{border-color:#1f1f23;padding:16px}
+.card.dempet .h{font-size:15px}
+.kort-admin-merke{font-size:10px;letter-spacing:.6px;color:#fca5a5;background:rgba(239,68,68,.1);
+  border:1px solid rgba(239,68,68,.3);border-radius:999px;padding:2px 8px;margin-left:8px;white-space:nowrap}
+.pin-siffer{width:44px;height:56px;border-radius:12px;background:#18181b;border:1px solid #3f3f46;
+  display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800}
 .update-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1c1c1e;border:1px solid #ef4444;color:#f4f4f5;padding:12px 20px;border-radius:12px;display:flex;gap:12px;align-items:center;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.5);font-size:14px;max-width:90vw}
 .update-toast button{background:#ef4444;border:none;color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap}
 </style>
@@ -564,8 +571,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div id="kategoriDetaljView" style="display:none">
         <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeLagerListe()">← Alle kategorier</button>
         <div class="card">
-          <div class="row">
-            <div class="h" id="kategoriDetaljTittel">–</div>
+          <div class="row" style="align-items:flex-start">
+            <div>
+              <div class="h" id="kategoriDetaljTittel">–</div>
+              <div class="muted small" style="margin-top:4px">Lav beholdning øverst · ▲▼ endrer rekkefølgen i kategorien</div>
+            </div>
             <div style="display:flex;gap:6px">
               <button class="btn sm" onclick="redigerKategoriNavn()">✎ Rediger navn</button>
               <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
@@ -588,14 +598,21 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <button class="btn sm red" onclick="slettVare()">🗑 Slett</button>
             </div>
           </div>
-          <div style="display:flex;align-items:baseline;gap:8px;margin:10px 0">
-            <span class="title" id="vareDetaljAntall">0</span>
-            <span class="muted small" id="vareDetaljEnhet"></span>
+          <div class="box" id="vareAntallBoks" style="text-align:center;margin:12px 0">
+            <div class="muted small" style="letter-spacing:1.3px">PÅ LAGER</div>
+            <div style="display:flex;align-items:baseline;gap:9px;justify-content:center;margin:8px 0 4px">
+              <span id="vareDetaljAntall" style="font-size:56px;font-weight:800;line-height:1;letter-spacing:-2px">0</span>
+              <span class="muted" id="vareDetaljEnhet" style="font-size:17px"></span>
+            </div>
+            <div id="vareLavLagerVarsel" class="small"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:300px;margin:14px auto 0">
+              <button class="btn green" onclick="fyllPaLager()" style="padding:13px;font-size:15px">+ Fyll på</button>
+              <button class="btn" onclick="taUtFraLager()" style="padding:13px;font-size:15px">− Ta ut</button>
+            </div>
           </div>
-          <div id="vareLavLagerVarsel" class="small" style="margin-bottom:10px"></div>
-          <div style="display:flex;gap:8px">
-            <button class="btn sm" style="flex:1" onclick="fyllPaLager()">+ Fyll på</button>
-            <button class="btn sm" style="flex:1" onclick="taUtFraLager()">− Ta ut</button>
+          <div class="box" id="vareNotatBoks" style="display:none">
+            <div class="muted small" style="letter-spacing:.6px;margin-bottom:4px">NOTAT</div>
+            <div id="vareDetaljNotat"></div>
           </div>
         </div>
         <div class="card" style="margin-top:12px">
@@ -643,7 +660,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
 
       <div class="mer-seksjon-label">Tid og fravær</div>
-      <div class="card" id="merTimerOversikt" style="display:none">
+      <div class="grid g2">
+      <div class="card" id="merTimerOversikt" style="display:none;grid-column:1/-1">
         <div class="row" style="flex-wrap:wrap;gap:8px">
           <div class="h">Timer og overtid – alle ansatte</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -660,7 +678,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
       <div class="card">
         <div class="h">Fraværskalender</div>
+        <div class="muted small" style="margin-top:4px">Alles fravær denne måneden.</div>
         <div id="fravarKalender" style="margin-top:10px"></div>
+      </div>
       </div>
 
       <div class="mer-seksjon-label mer-har-badge" id="merSeksjonAnsatte" style="display:none">Ansatte og tilgang <span class="mer-kun-admin">Kun admin</span></div>
@@ -672,11 +692,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
         </div>
         <div class="card" id="merPINKort" style="display:none">
-          <div class="h">Dagens PIN</div>
-          <div class="title" id="dagensPINVal" style="margin:8px 0">----</div>
-          <div class="muted small" style="margin-bottom:8px">Brukes som overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
-          <button class="btn sm" onclick="genPIN()">Generer ny PIN</button>
-          <div style="margin-top:14px;border-top:1px solid #27272a;padding-top:12px">
+          <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
+          <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">
+            <div class="muted small" style="letter-spacing:1.3px;margin-bottom:8px">DAGENS PIN</div>
+            <div id="dagensPINVal" style="display:flex;gap:10px;justify-content:center"></div>
+            <div class="muted small" style="margin:10px auto 0;max-width:260px">Overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
+            <button class="btn sm" onclick="genPIN()" style="margin-top:10px">Generer ny PIN</button>
+          </div>
+          <div class="box" style="margin-top:12px">
             <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
             <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
@@ -690,17 +713,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
 
       <div class="mer-seksjon-label">Drift og avvik</div>
-      <div>
+      <div class="grid g3">
         <div class="card">
           <div class="row">
             <div class="h">HMS-logg</div>
             <button class="btn sm red" onclick="openModal('nyHMS')">+ Registrer</button>
           </div>
+          <div class="muted small" style="margin-top:4px">Registrerte avvik og tiltak.</div>
           <div id="hmsListe" style="margin-top:10px"></div>
         </div>
         <div class="card" id="merOrdreRapport" style="display:none">
           <div class="row" style="flex-wrap:wrap;gap:8px">
-            <div class="h">Ordrerapport</div>
+            <div class="h">Ordrerapport <span class="kort-admin-merke">ADMIN</span></div>
             <div style="display:flex;gap:8px;align-items:center">
               <button class="btn sm" onclick="rapportNaviger(-1)">◀</button>
               <span id="rapportLbl" style="min-width:130px;text-align:center;font-weight:700"></span>
@@ -711,15 +735,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
         </div>
         <div class="card" id="merHelsesjekkKort" style="display:none">
-          <div class="h">Helsesjekk</div>
+          <div class="h">Helsesjekk <span class="kort-admin-merke">ADMIN</span></div>
           <div class="muted small" style="margin-top:6px">Admin-ark-rader med et chassis-nr som ikke matcher noen ordre - typisk en skrivefeil ved inntasting.</div>
           <div id="helsesjekkUkoblet" style="margin-top:8px"></div>
         </div>
       </div>
 
       <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none">Oppsett og verktøy <span class="mer-kun-admin">Kun admin</span></div>
-      <div id="merGruppeOppsett" style="display:none">
-        <div class="card" id="merDrivstoffSatser" style="display:none">
+      <div id="merGruppeOppsett" class="grid g3" style="display:none">
+        <div class="card dempet" id="merDrivstoffSatser" style="display:none">
           <div class="row">
             <div class="h">Drivstoff-satser</div>
             <button class="btn sm red" onclick="openModal('nyDrivstoffSats')">+ Ny sats</button>
@@ -727,7 +751,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div class="muted small" style="margin-bottom:8px">Satser trekkes fra pumpepris – f.eks. 2 kr/L rabatt eller uten MVA.</div>
           <div id="drivstoffSatsListe" style="margin-top:10px"></div>
         </div>
-        <div class="card" id="merUtstyrMaler" style="display:none">
+        <div class="card dempet" id="merUtstyrMaler" style="display:none">
           <div class="row">
             <div class="h">Utstyr-maler (ankomst)</div>
             <button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Ny mal</button>
@@ -735,7 +759,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div class="muted small" style="margin-bottom:8px">Maler for hva som skal sjekkes ved ankomst av bil. Knyttes til biltype.</div>
           <div id="utstyrMalListe" style="margin-top:10px"></div>
         </div>
-        <div class="card" id="merMigreringKort" style="display:none">
+        <div class="card dempet" id="merMigreringKort" style="display:none">
           <div class="h">📤 Last opp til Supabase</div>
           <div class="muted small" style="margin-bottom:10px">Last opp all lokal data fra denne enheten til Supabase, slik at alle enheter kan synkronisere.</div>
           <div id="supabaseKoblingStatus" style="margin-bottom:12px;font-size:13px"></div>

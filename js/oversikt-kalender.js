@@ -75,20 +75,38 @@ function renderOrdreList() {
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
     const si = statusInfo(o.ordreStatus);
-    return `<div style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:14px;padding:9px 10px;display:flex;flex-direction:column;gap:3px;min-width:0">
-      ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-        <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
-        ${statusDropdown(o.id, o.ordreStatus)}
+    return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':si.border};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
+      ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
+
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1">
+          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;word-break:break-all">${ordreLabelFull(o)}</b>
+          ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
+        </div>
+        ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:7px 11px;max-width:132px')}
       </div>
-      <span class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</span>
-      ${dokStatusKortHTML(o)}
-      <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
-      <div class="box" style="margin-top:2px;padding:8px 9px">${tvangsflytBarHTML(o)}</div>
-      <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
-      <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-        <span class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
+
+      <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+        ${dokStatusKortHTML(o)}
+        ${o.utstyr?.hengerfeste==='hengerfeste'?`<div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>`:''}
+        <div style="padding-bottom:9px;border-bottom:1px solid #27272a">${tvangsflytBarHTML(o)}</div>
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px">
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
+            <span class="muted" style="min-width:54px">Ankomst</span>
+            <span>${o.ankomstdato||'—'}</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
+            <span class="muted" style="min-width:54px">Tilvalg</span>
+            <span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <span onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0">
+          <span style="width:7px;height:7px;border-radius:999px;background:${o.kalenderDato?'#3f3f46':'#ef4444'};flex-shrink:0"></span>
+          <span class="small" style="color:${o.kalenderDato?'#f4f4f5':'#fca5a5'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
+        </span>
         ${godkjentKortHTML(o)}
       </div>
     </div>`;
@@ -121,8 +139,8 @@ function renderOversikt(q) {
   if (!activeElHarFokusertValg) activeEl.innerHTML = aktive.length
     ? aktive.map(o => {
         const si = statusInfo(o.ordreStatus);
-        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
-          ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
+        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':si.border};border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
+          ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
@@ -130,7 +148,7 @@ function renderOversikt(q) {
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
-          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?o.utstyr.skalHa.replace(/\n/g,', '):'—'}</div>
+          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
         </div>`;
       }).join('')
@@ -141,8 +159,8 @@ function renderOversikt(q) {
   if (!pendElHarFokusertValg) pendEl.innerHTML = pending.length
     ? pending.map(o => {
         const si = statusInfo(o.ordreStatus);
-        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#111114;border:2px solid ${o.prioritert?'#facc15':si.border};border-radius:16px;padding:12px;min-width:0">
-          ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#111114;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
+        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':si.border};border-radius:18px;padding:12px;min-width:0">
+          ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
@@ -150,7 +168,7 @@ function renderOversikt(q) {
           <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
-          ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${o.utstyr.skalHa.replace(/\n/g,', ')}</div>`:''}
+          ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
             <button class="btn sm" onclick="openOrdre('${o.id}')">Åpne</button>
             <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>

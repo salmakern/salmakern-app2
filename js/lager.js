@@ -93,15 +93,16 @@ function renderLagerListe() {
 
 function vareBoksHTML(v, kanFlytte) {
   const lavt = erLavBeholdning(v);
-  return `<div class="box" style="cursor:pointer;position:relative;${lavt && !v.bestilt?'border-color:#ef4444':''}" onclick="visVareDetalj('${v.id}')">
+  return `<div class="box" style="cursor:pointer;position:relative;border-color:${lavt && !v.bestilt?'rgba(239,68,68,.35)':'#27272a'}" onclick="visVareDetalj('${v.id}')">
     ${kanFlytte?`<div style="position:absolute;top:6px;right:6px;display:flex;flex-direction:column;gap:1px;z-index:1">
       <button onclick="event.stopPropagation();flyttVare('${v.id}',-1)" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:11px;line-height:1;padding:2px" title="Flytt opp">▲</button>
       <button onclick="event.stopPropagation();flyttVare('${v.id}',1)" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:11px;line-height:1;padding:2px" title="Flytt ned">▼</button>
     </div>`:''}
     <div class="row" style="${kanFlytte?'padding-right:16px':''}">
       <b>${esc(v.navn)}</b>
-      <span style="font-weight:700;${lavt && !v.bestilt?'color:#f87171':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
+      <span style="font-weight:700;${lavt && !v.bestilt?'color:#fca5a5':''}">${fmtAntall(v.antall)} ${esc(v.enhet)}</span>
     </div>
+    ${lavt && !v.bestilt?`<span class="pill bad" style="font-size:11px;padding:3px 9px">LAVT · min ${fmtAntall(v.minAntall)}</span>`:''}
     ${v.tegningsnummer?`<div class="small muted" style="margin-top:2px">${esc(v.tegningsnummer)}</div>`:''}
     ${lavt?`<div class="small" style="color:${v.bestilt?'#4ade80':'#f87171'};margin-top:4px">${v.bestilt?'✓ Bestilt':'⚠ Lav beholdning'}</div>`:''}
   </div>`;
@@ -269,11 +270,21 @@ function renderVareDetalj() {
   document.getElementById('vareDetaljUndertekst').textContent = [v.kategori, v.tegningsnummer].filter(Boolean).join(' · ');
   document.getElementById('vareDetaljAntall').textContent = fmtAntall(v.antall);
   document.getElementById('vareDetaljEnhet').textContent = v.enhet;
-  const lavt = v.minAntall > 0 && v.antall <= v.minAntall;
-  document.getElementById('vareLavLagerVarsel').innerHTML = lavt
+  const lavtLager = v.minAntall > 0 && v.antall <= v.minAntall;
+  document.getElementById('vareLavLagerVarsel').innerHTML = lavtLager
     ? `<span style="color:${v.bestilt?'#4ade80':'#f87171'}">${v.bestilt?'✓ Bestilt':'⚠ Lav beholdning'} (varsler ved ${fmtAntall(v.minAntall)} ${esc(v.enhet)})</span>
        <button class="btn sm" style="margin-left:8px;padding:2px 8px;font-size:11px" onclick="settVareBestilt('${v.id}',${!v.bestilt})">${v.bestilt?'Fjern bestilt-merking':'✓ Merk som bestilt'}</button>`
-    : (v.notat ? `<span class="muted">${esc(v.notat)}</span>` : '');
+    : '';
+  const boks = document.getElementById('vareAntallBoks');
+  const antEl = document.getElementById('vareDetaljAntall');
+  if (boks) boks.style.borderColor = lavtLager ? 'rgba(239,68,68,.35)' : '#27272a';
+  if (antEl) antEl.style.color = lavtLager ? '#fca5a5' : '#f4f4f5';
+  const notatBoks = document.getElementById('vareNotatBoks');
+  const notatEl = document.getElementById('vareDetaljNotat');
+  if (notatBoks && notatEl) {
+    notatBoks.style.display = v.notat ? 'block' : 'none';
+    notatEl.textContent = v.notat || '';
+  }
 
   const historikk = (S.lagerhistorikk||[]).filter(h=>h.vareId===v.id).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const el = document.getElementById('vareHistorikkListe');
@@ -487,6 +498,7 @@ function kopierBestillingsliste() {
 // ingen PDF-nedlasting nødvendig, bruker skriver rett fra nettleseren.
 function skrivUtBestillingsliste() {
   const grupper = bestillingslisteGruppert();
+  const antallVarer = Object.values(grupper).reduce((s,v)=>s+v.length,0);
   const dato = new Date().toLocaleDateString('no');
   const innhold = Object.entries(grupper).map(([kat, varer]) => `
     <h2>${esc(kat)}</h2>
@@ -500,22 +512,38 @@ function skrivUtBestillingsliste() {
     </table>`).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bestillingsliste ${dato}</title>
     <style>
-      body{font-family:Arial,sans-serif;color:#000;padding:24px;max-width:700px;margin:0 auto}
-      h1{font-size:20px;margin-bottom:2px}
-      .dato{color:#555;margin-bottom:20px}
-      h2{font-size:16px;border-bottom:2px solid #000;padding-bottom:4px;margin-top:24px}
+      body{font-family:Arial,sans-serif;color:#18181b;background:#fff;padding:24px;max-width:700px;margin:0 auto}
+      .topp{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #18181b;padding-bottom:10px}
+      h1{font-size:20px}
+      .topp-h{text-align:right}
+      .dato{color:#555}
+      .antall-varsel{font-weight:700;margin-top:2px}
+      h2{font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:#52525b;border-bottom:1px solid #d4d4d8;padding-bottom:4px;margin-top:24px}
       table{width:100%;border-collapse:collapse}
-      td{padding:5px 4px;border-bottom:1px solid #ddd;font-size:13px}
-      td.boks{width:18px}
-      td.boks::before{content:'';display:block;width:14px;height:14px;border:1.5px solid #000}
+      td{padding:6px 4px;border-bottom:1px dotted #d4d4d8;font-size:14.5px}
+      td.boks{width:22px}
+      td.boks::before{content:'';display:block;width:15px;height:15px;border:1.5px solid #18181b;border-radius:3px}
       td.antall{text-align:right;color:#555;white-space:nowrap}
-      .tegn{color:#666;font-size:12px}
+      .tegn{color:#71717a;font-size:12px}
+      .signaturer{display:flex;gap:24px;margin-top:40px}
+      .sign{flex:1}
+      .sign-linje{height:34px;border-bottom:1px solid #18181b}
+      .sign-lbl{font-size:12.5px;color:#52525b;margin-top:6px}
       @media print{ body{padding:0} }
     </style></head>
     <body>
-      <h1>Bestillingsliste</h1>
-      <div class="dato">${dato}</div>
+      <div class="topp">
+        <h1>Bestillingsliste<div class="small" style="font-size:12px;color:#71717a;font-weight:400">Salmaker'n · varelager</div></h1>
+        <div class="topp-h">
+          <div class="dato">${dato}</div>
+          <div class="antall-varsel">${antallVarer} vare${antallVarer===1?'':'r'} under minimum</div>
+        </div>
+      </div>
       ${innhold || '<p>Ingen varer er under lav-grensen akkurat nå.</p>'}
+      <div class="signaturer">
+        <div class="sign"><div class="sign-linje"></div><div class="sign-lbl">Bestilt av</div></div>
+        <div class="sign"><div class="sign-linje"></div><div class="sign-lbl">Dato</div></div>
+      </div>
     </body></html>`;
   const vindu = window.open('', '_blank');
   if (!vindu) { visToast('Nettleseren blokkerte utskriftsvinduet – tillat popup og prøv igjen'); return; }
@@ -633,7 +661,8 @@ function renderOppskriftModellDetalj() {
     <div class="box" style="margin-bottom:6px;padding:10px">
       <div class="row">
         <b>${o.variant ? esc(o.variant) : 'Generelt (alle varianter)'}</b>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="pill" style="font-size:11px;padding:3px 10px">${(o.ingredienser||[]).length} deler</span>
           <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎ Rediger</button>
           <button class="btn sm red" onclick="slettOppskrift('${o.id}')">🗑</button>
         </div>
