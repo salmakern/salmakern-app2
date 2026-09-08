@@ -955,7 +955,9 @@ function fyllOppskriftVareListe(forhaandsvalgt) {
   const biltype = document.getElementById('oppskriftBiltype').value;
   const el = document.getElementById('oppskriftIngrediensListe');
   let varer = (S.lagervarer||[]).slice();
-  const iModell = biltype ? varer.filter(v => (v.modell||'').toLowerCase() === biltype.toLowerCase()) : [];
+  // Varer UTEN modell satt regnes som felles for alle modeller (f.eks. en "Skruer"-
+  // kategori som brukes på tvers) - tas alltid med i tillegg til den valgte modellens egne.
+  const iModell = biltype ? varer.filter(v => !v.modell || v.modell.toLowerCase() === biltype.toLowerCase()) : [];
   const brukAlle = oppskriftVisAlleVarer || !biltype || !iModell.length;
   varer = (brukAlle ? varer : iModell).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
 
