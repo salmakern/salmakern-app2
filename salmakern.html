@@ -873,20 +873,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div><label>Merke</label><input id="n_merke" placeholder="Mercedes"></div>
         <div>
           <label>Type</label>
-          <input id="n_type" list="n_type_liste" placeholder="Sprinter" oninput="oppdaterTypeForslag('nyOrdre',this.value)">
-          <datalist id="n_type_liste"></datalist>
+          <input id="n_type" placeholder="Sprinter" oninput="renderVariantForslag('n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_type','n_versjon','n_versjon_forslag')">
+          <div id="n_type_forslag" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
         </div>
         <div><label>Modell</label><input id="n_modell" placeholder="L2H2"></div>
         <div>
           <label>Variant</label>
-          <input id="n_variant" list="variantListe_nyOrdre" placeholder="Med takluke">
-          <datalist id="variantListe_nyOrdre"></datalist>
+          <input id="n_variant" placeholder="Med takluke">
+          <div id="n_variant_forslag" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
         </div>
         <div><label>Farge</label><input id="n_farge" placeholder="Arctic hvit"></div>
         <div>
           <label>Versjon</label>
-          <input id="n_versjon" list="versjonListe_nyOrdre" placeholder="2019→">
-          <datalist id="versjonListe_nyOrdre"></datalist>
+          <input id="n_versjon" placeholder="2019→">
+          <div id="n_versjon_forslag" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
         </div>
       </div>
     </div>

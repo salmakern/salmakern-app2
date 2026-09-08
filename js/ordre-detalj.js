@@ -163,20 +163,22 @@ function buildOrdreDetail() {
           <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
           <div>
             <label>Type</label>
-            <input value="${esc(o.type||'')}" list="typeListe_${o.id}" oninput="oppdaterTypeForslag('${o.id}',this.value)" onchange="sf('${o.id}','type',this.value)">
-            <datalist id="typeListe_${o.id}">${datalistOptions(typeForslag())}</datalist>
+            <input id="typeInput_${o.id}" value="${esc(o.type||'')}"
+              oninput="renderVariantForslag('typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              onchange="sf('${o.id}','type',this.value)">
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${feltForslagHTML('typeInput_'+o.id, typeForslag())}</div>
           </div>
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
           <div>
             <label>Variant</label>
-            <input value="${esc(o.variant||'')}" list="variantListe_${o.id}" onchange="sf('${o.id}','variant',this.value)">
-            <datalist id="variantListe_${o.id}">${datalistOptions(variantForslag(o.type))}</datalist>
+            <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)">
+            <div id="typeForslag_var_${o.id}" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.type))}</div>
           </div>
           <div><label>Farge</label><input value="${esc(o.farge||'')}" onchange="sf('${o.id}','farge',this.value)"></div>
           <div>
             <label>Versjon</label>
-            <input value="${esc(o.versjon||'')}" list="versjonListe_${o.id}" onchange="sf('${o.id}','versjon',this.value)">
-            <datalist id="versjonListe_${o.id}">${datalistOptions(versjonForslag(o.type))}</datalist>
+            <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)">
+            <div id="typeForslag_ver_${o.id}" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.type))}</div>
           </div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
@@ -516,8 +518,12 @@ function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · Ch
 // Foreslår Type/Variant/Versjon basert på hva som faktisk er brukt på tidligere ordre,
 // sortert etter hvor ofte de forekommer (mest brukt først). Variant og Versjon
 // filtreres til det som er brukt sammen med valgt Type - de henger som regel sammen
-// (f.eks. har "Sprinter" andre varianter enn "Crafter"). <datalist> gir dette som
-// forslag i et vanlig tekstfelt, uten å låse feltet til bare disse verdiene.
+// (f.eks. har "Sprinter" andre varianter enn "Crafter").
+//
+// Vises som klikkbare forslags-knapper (chips) under feltet, IKKE nettleserens
+// innebygde <datalist> - datalist har vist seg upålitelig på tvers av nettlesere/mobil
+// (spesielt iPhone, der forslagene ofte ikke vises i det hele tatt), se samme
+// begrunnelse ved kalStedForslagListe()/renderKalStedForslag() i oversikt-kalender.js.
 function frekvenssortert(verdier) {
   const tell = {};
   verdier.forEach(v => { if (v) tell[v] = (tell[v]||0) + 1; });
@@ -534,8 +540,27 @@ function versjonForslag(type) {
   const kilde = type ? S.ordrer.filter(o=>(o.type||'').toLowerCase()===type.toLowerCase()) : S.ordrer;
   return frekvenssortert(kilde.map(o=>o.versjon));
 }
-function datalistOptions(verdier) {
-  return verdier.map(v=>`<option value="${esc(v)}">`).join('');
+function feltForslagHTML(inputId, verdier) {
+  return verdier.slice(0,12).map(v =>
+    `<button type="button" class="btn sm" style="padding:4px 10px;font-size:12px" data-input="${inputId}" data-verdi="${esc(v)}" onclick="velgFeltForslag(this)">${esc(v)}</button>`
+  ).join('');
+}
+function velgFeltForslag(btn) {
+  const input = document.getElementById(btn.dataset.input);
+  if (!input) return;
+  input.value = btn.dataset.verdi;
+  input.dispatchEvent(new Event('input', {bubbles:true}));
+  input.dispatchEvent(new Event('change', {bubbles:true}));
+}
+// Oppdaterer Variant/Versjon-forslagene til det som faktisk er brukt sammen med
+// innholdet i Type-feltet akkurat nå - kalt fra Type-feltets oninput.
+function renderVariantForslag(typeInputId, variantInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(variantInputId, variantForslag(document.getElementById(typeInputId)?.value||''));
+}
+function renderVersjonForslag(typeInputId, versjonInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(document.getElementById(typeInputId)?.value||''));
 }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, siden de allerede er satt opp per modell
@@ -573,13 +598,6 @@ function ombyggingVariantSelectOptions(o) {
 }
 // Oppdaterer Variant/Versjon-forslagene fortløpende mens man skriver i Type-feltet,
 // slik at forslagene alltid gjelder den typen som faktisk står der nå.
-function oppdaterTypeForslag(ordreId, type) {
-  const variantListe = document.getElementById('variantListe_' + ordreId);
-  const versjonListe = document.getElementById('versjonListe_' + ordreId);
-  if (variantListe) variantListe.innerHTML = datalistOptions(variantForslag(type));
-  if (versjonListe) versjonListe.innerHTML = datalistOptions(versjonForslag(type));
-}
-
 function oppdaterOmbyggingVariant(ordreId) {
   const sel = document.getElementById('ombyggingVariantSelect_' + ordreId);
   if (!sel) return;

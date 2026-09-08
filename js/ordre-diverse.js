@@ -208,8 +208,9 @@ function apneNyOrdreModal() {
   const statusFelt = document.getElementById('n_status');
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
   oppdaterNyOrdreStatusFelt();
-  document.getElementById('n_type_liste').innerHTML = datalistOptions(typeForslag());
-  oppdaterTypeForslag('nyOrdre', '');
+  document.getElementById('n_type_forslag').innerHTML = feltForslagHTML('n_type', typeForslag());
+  renderVariantForslag('n_type','n_variant','n_variant_forslag');
+  renderVersjonForslag('n_type','n_versjon','n_versjon_forslag');
   openModal('nyOrdre');
 }
 
