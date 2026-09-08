@@ -851,7 +851,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="card">
           <div class="row">
             <div class="h">Utstyr-maler (ankomst)</div>
-            <button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Ny mal</button>
+            <button class="btn sm red" onclick="apneNyUtstyrMal()">+ Ny mal</button>
           </div>
           <div class="muted small" style="margin-bottom:8px">Maler for hva som skal sjekkes ved ankomst av bil. Knyttes til biltype.</div>
           <div id="utstyrMalListe" style="margin-top:10px"></div>
@@ -1174,6 +1174,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <input id="uMalBiltype">
     <label>Utstyrspunkter (ett per linje) *</label>
     <textarea id="uMalPunkter" rows="8"></textarea>
+    <label style="margin-top:12px">Ekstra utstyr – lagervarer som skal trekkes fra lager når denne malen velges på en ordre (valgfritt)</label>
+    <div id="uMalIngrediensListe" style="margin-top:4px;max-height:280px;overflow-y:auto"></div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreUtstyrMal()">Lagre mal</button>
       <button class="btn" onclick="closeModal('nyUtstyrMal')">Avbryt</button>

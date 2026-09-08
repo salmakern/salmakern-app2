@@ -271,6 +271,20 @@ function saveGPS() {
 // ════════════════════════════════════════════════════
 // UTSTYR-MALER
 // ════════════════════════════════════════════════════
+// Åpner modalen for en helt ny mal - egen funksjon (i stedet for at "+ Ny mal"-knappen
+// kaller openModal() direkte) fordi vare-plukkeren for Ekstra utstyr-ingrediensene må
+// nullstilles eksplisitt, ellers henger den forrige redigerte malens utvalg igjen.
+function apneNyUtstyrMal() {
+  document.getElementById('uMalEditId').value = '';
+  document.getElementById('uMalNavn').value = '';
+  document.getElementById('uMalBiltype').value = '';
+  document.getElementById('uMalPunkter').value = '';
+  document.getElementById('uMalTittel').textContent = 'Ny utstyr-mal (ankomst)';
+  oppskriftVisAlleVarer = false;
+  fyllOppskriftVareListe(null, 'uMalBiltype', 'uMalIngrediensListe');
+  openModal('nyUtstyrMal');
+}
+
 function lagreUtstyrMal() {
   const navn = document.getElementById('uMalNavn').value.trim();
   const biltype = document.getElementById('uMalBiltype').value.trim();
@@ -279,11 +293,13 @@ function lagreUtstyrMal() {
   if (!navn) { alert('Navn er påkrevd'); return; }
   const punkter = punkterRaw.split('\n').map(p=>p.trim()).filter(Boolean);
   if (!punkter.length) { alert('Legg til minst ett punkt'); return; }
+  const valgt = lesOppskriftIngredienser('uMalIngrediensListe');
+  const ingredienser = Object.entries(valgt).map(([vareId, antall]) => ({vareId, antall})).filter(i => i.antall > 0);
   if (editId) {
     const idx = S.utstyrMaler.findIndex(m=>String(m.id)===String(editId));
-    if (idx>=0) S.utstyrMaler[idx] = {...S.utstyrMaler[idx], navn, biltype, punkter};
+    if (idx>=0) S.utstyrMaler[idx] = {...S.utstyrMaler[idx], navn, biltype, punkter, ingredienser};
   } else {
-    S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter});
+    S.utstyrMaler.push({id:'u'+(++S.nextId), navn, biltype, punkter, ingredienser});
   }
   saveInnstillinger();
   closeModal('nyUtstyrMal');
@@ -299,6 +315,10 @@ function redigerUtstyrMal(id) {
   document.getElementById('uMalBiltype').value = m.biltype||'';
   document.getElementById('uMalPunkter').value = m.punkter.join('\n');
   document.getElementById('uMalTittel').textContent = 'Rediger utstyr-mal';
+  oppskriftVisAlleVarer = false;
+  const forhaandsvalgt = {};
+  (m.ingredienser||[]).forEach(i => forhaandsvalgt[i.vareId] = i.antall);
+  fyllOppskriftVareListe(forhaandsvalgt, 'uMalBiltype', 'uMalIngrediensListe');
   openModal('nyUtstyrMal');
 }
 
@@ -317,6 +337,7 @@ function renderUtstyrMaler() {
         <div>
           <b>${m.navn}</b>
           ${m.biltype?`<span class="pill" style="font-size:11px;margin-left:4px">${m.biltype}</span>`:'<span class="pill" style="font-size:11px;margin-left:4px">Alle biler</span>'}
+          ${m.ingredienser?.length?`<span class="pill" style="font-size:11px;margin-left:4px">${m.ingredienser.length} del${m.ingredienser.length===1?'':'er'} fra lager</span>`:''}
           <div class="small muted" style="margin-top:4px">${m.punkter.length} punkter: ${m.punkter.slice(0,4).join(', ')}${m.punkter.length>4?'...':''}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
@@ -334,6 +355,10 @@ function redigerUtstyrMalIdx(i) {
   document.getElementById('uMalBiltype').value = m.biltype||'';
   document.getElementById('uMalPunkter').value = m.punkter.join('\n');
   document.getElementById('uMalTittel').textContent = 'Rediger utstyr-mal';
+  oppskriftVisAlleVarer = false;
+  const forhaandsvalgt = {};
+  (m.ingredienser||[]).forEach(ing => forhaandsvalgt[ing.vareId] = ing.antall);
+  fyllOppskriftVareListe(forhaandsvalgt, 'uMalBiltype', 'uMalIngrediensListe');
   openModal('nyUtstyrMal');
 }
 
@@ -345,15 +370,31 @@ function slettUtstyrMalIdx(i) {
   renderUtstyrMaler();
 }
 
-function applyUtstyrMal(ordreId, malIdx) {
+// Delt av begge steder en utstyr-mal kan velges på en ordre: knappen under "Utstyr – Har
+// ved ankomst" (applyUtstyrMal, som velger via listeindeks) og "Ekstra utstyr"-feltet ved
+// siden av Ombygging oppe ved bilinfo (applyUtstyrMalById, som velger via mal-id siden den
+// filtrerte listen der ikke har samme indeksering som hele S.utstyrMaler). Trekker også
+// fra lager for malens ingredienser (om noen), helt likt hvordan Ombygging-oppskrifter
+// trekkes fra lager - se trekkUtstyrMalFraLager() i lager.js.
+function applyUtstyrMalObjekt(ordreId, mal) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  const mal = S.utstyrMaler[parseInt(malIdx)];
-  if(!mal) return;
   if(o.utstyrSjekkliste?.length && !confirm(`Erstatte eksisterende liste (${o.utstyrSjekkliste.length} punkter) med "${mal.navn}"?`)) return;
   o.utstyrSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
   o.utstyrMalNavn = mal.navn;
-  logChange(o, 'Utstyr-mal (ankomst) valgt: '+mal.navn);
-  save(ordreId); buildOrdreDetail();
+  logChange(o, 'Utstyr-mal valgt: '+mal.navn);
+  save(ordreId);
+  trekkUtstyrMalFraLager(ordreId, mal);
+  buildOrdreDetail();
+}
+function applyUtstyrMal(ordreId, malIdx) {
+  const mal = S.utstyrMaler[parseInt(malIdx)];
+  if(!mal) return;
+  applyUtstyrMalObjekt(ordreId, mal);
+}
+function applyUtstyrMalById(ordreId, malId) {
+  const mal = (S.utstyrMaler||[]).find(m=>String(m.id)===String(malId));
+  if(!mal) return;
+  applyUtstyrMalObjekt(ordreId, mal);
 }
 
 function toggleUtstyrPunkt(ordreId, idx) {
