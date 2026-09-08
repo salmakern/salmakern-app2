@@ -235,6 +235,7 @@ function renderMer() {
   renderFravarKalender();
   renderHMS();
   renderMoterListe();
+  renderGodkjennerChat();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
   if (erAdmin) {
     renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler();
@@ -365,6 +366,55 @@ async function opprettMote() {
   document.getElementById('mote_tid').value = '09:00';
   renderMoterListe();
   renderOversikt();
+}
+
+// ════════════════════════════════════════════════════
+// CHAT MELLOM ADMIN/GODKJENNERE
+// ════════════════════════════════════════════════════
+function renderGodkjennerChat() {
+  const kortEl = document.getElementById('merGodkjennerChat');
+  const erGodkjenner = me && (me.rolle==='admin' || me.rolle==='godkjenner');
+  if (kortEl) kortEl.style.display = erGodkjenner ? 'block' : 'none';
+  if (!erGodkjenner) return;
+  const el = document.getElementById('godkjennerChatMeldinger');
+  if (!el) return;
+  const meldinger = S.godkjennerMeldinger || [];
+  el.innerHTML = meldinger.length ? meldinger.map(m => {
+    const egen = m.avsenderId === me.id;
+    const tid = m.createdAt ? new Date(m.createdAt).toLocaleString('no-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    return `<div style="align-self:${egen?'flex-end':'flex-start'};max-width:80%;background:${egen?'rgba(239,68,68,.14)':'#0f0f12'};border:1px solid ${egen?'rgba(239,68,68,.35)':'#27272a'};border-radius:14px;padding:8px 12px">
+      ${!egen?`<div class="small" style="font-weight:700;margin-bottom:2px">${esc(m.avsenderNavn)}</div>`:''}
+      <div style="font-size:13.5px;white-space:pre-wrap;word-break:break-word">${esc(m.tekst)}</div>
+      <div class="small muted" style="margin-top:3px;font-size:10.5px;text-align:${egen?'right':'left'}">${tid}</div>
+    </div>`;
+  }).join('') : '<div class="muted small">Ingen meldinger ennå</div>';
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendGodkjennerMelding() {
+  const input = document.getElementById('godkjennerChatInput');
+  const tekst = input?.value.trim();
+  if (!tekst || !me) return;
+  input.value = '';
+  input.disabled = true;
+  const rad = { avsender_id: me.id, avsender_navn: me.navn, tekst };
+  let feil = null;
+  if (db) {
+    const { data, error } = await db.from('godkjenner_meldinger').insert(rad).select().single();
+    feil = error;
+    if (!error && data) {
+      if (!S.godkjennerMeldinger.find(m=>m.id===data.id)) S.godkjennerMeldinger.push(dbToGodkjennerMelding(data));
+      renderGodkjennerChat();
+      fetch(SUPA_URL + '/functions/v1/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+        body: JSON.stringify({ type: 'godkjenner_melding', avsenderId: me.id, avsenderNavn: me.navn, tekst })
+      }).catch(e => console.warn('Chat-varsel feilet:', e));
+    }
+  }
+  input.disabled = false;
+  input.focus();
+  if (feil) { visToast('Kunne ikke sende meldingen: ' + feil.message); input.value = tekst; }
 }
 
 async function slettMote(id) {

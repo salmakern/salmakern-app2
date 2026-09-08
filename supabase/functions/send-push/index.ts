@@ -108,6 +108,26 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // Sendes fra klienten idet en ny melding postes i chatten mellom admin/godkjennere -
+    // varsler alle ANDRE med den rollen (aldri avsenderen selv om sin egen melding).
+    if (payload.type === 'godkjenner_melding') {
+      const { data: mottakere } = await supabase
+        .from('ansatte')
+        .select('id')
+        .in('rolle', ['admin', 'godkjenner'])
+        .eq('aktiv', true)
+        .neq('id', payload.avsenderId)
+      const mottakerIder = (mottakere ?? []).map((a: any) => a.id)
+      if (mottakerIder.length) {
+        await sendTilAbonnenter(supabase, [{
+          title: `Ny melding fra ${payload.avsenderNavn}`,
+          body: payload.tekst,
+          deltakerIder: mottakerIder
+        }])
+      }
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
+
     // Sendes fra klienten idet et møte opprettes - umiddelbart varsel, kun til de
     // eventuelt utvalgte deltakerne (tom liste = alle).
     if (payload.type === 'nytt_mote') {
@@ -124,7 +144,7 @@ Deno.serve(async (req) => {
     // til å skje, istedenfor å få beskjed om det. Kan sende flere ulike varsler i ett kall.
     if (payload.type === 'paaminnelser_sjekk') {
       const naa = osloNaa()
-      const meldinger: { title: string, body: string, deltakerIder?: number[] }[] = []
+      const meldinger: { title: string, body: string, deltakerIder?: number[], ordreId?: string }[] = []
 
       // --- Time på biltilsynet, sendes når det er 30 minutter eller mindre igjen ---
       const { data: ordre, error: ordreErr } = await supabase

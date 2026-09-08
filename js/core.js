@@ -105,7 +105,7 @@ const FOTO_SIDER = {
 };
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[], moter:[]};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[], moter:[], godkjennerMeldinger:[]};
 let me = null;
 // Satt av et klikk på et push-varsel om en bestemt ordre (postMessage fra sw.js) - kan
 // komme inn før innlogging/datahenting er ferdig, derfor mellomlagres den her og
@@ -163,6 +163,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.adminArk         = S.adminArk         || [];
     S.moter            = S.moter            || [];
+    S.godkjennerMeldinger = S.godkjennerMeldinger || [];
     S.ordrer = (S.ordrer||[]).map(o => ({
       ...o,
       utstyrSjekkliste:   o.utstyrSjekkliste   || [],
@@ -334,6 +335,12 @@ async function loadFromSupabase() {
     const mR = await db.from('moter').select('*').order('dato').order('tid');
     if (!mR.error) S.moter = (mR.data||[]).map(dbToMote);
   } catch(_) {}
+  // Chat mellom admin/godkjennere - RLS skjuler raden helt for andre roller, så et
+  // avslag her er normalt (ikke logges som feil) hvis innlogget ansatt er vanlig ansatt.
+  try {
+    const gR = await db.from('godkjenner_meldinger').select('*').order('created_at');
+    if (!gR.error) S.godkjennerMeldinger = (gR.data||[]).map(dbToGodkjennerMelding);
+  } catch(_) {}
 }
 
 function dbToOrdre(r) {
@@ -408,6 +415,9 @@ function dbToAdminArkRad(r) {
 }
 function dbToMote(r) {
   return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet, deltakerIder:r.deltaker_ider||[] };
+}
+function dbToGodkjennerMelding(r) {
+  return { id:r.id, avsenderId:r.avsender_id, avsenderNavn:r.avsender_navn||'', tekst:r.tekst||'', createdAt:r.created_at||'' };
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
@@ -536,6 +546,15 @@ function subscribeRealtime() {
         S.moter = S.moter.filter(m=>m.id!==p.old.id);
       }
       if (me) renderAll();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'godkjenner_meldinger'}, p => {
+      S.godkjennerMeldinger = S.godkjennerMeldinger || [];
+      if (p.eventType==='INSERT') {
+        if (!S.godkjennerMeldinger.find(m=>m.id===p.new.id)) S.godkjennerMeldinger.push(dbToGodkjennerMelding(p.new));
+      } else if (p.eventType==='DELETE') {
+        S.godkjennerMeldinger = S.godkjennerMeldinger.filter(m=>m.id!==p.old.id);
+      }
+      if (me && (me.rolle==='admin'||me.rolle==='godkjenner')) renderGodkjennerChat();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'innstillinger'}, p => {
       if (ignorerRealtimeInnstillinger || !p.new) return;
