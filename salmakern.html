@@ -102,9 +102,12 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 .box{background:#0f0f12;border:1px solid #27272a;border-radius:16px;padding:12px}
 
 /* MER-SIDEN: seksjonsoverskrifter som grupperer kortene tematisk */
-.mer-seksjon-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+.mer-seksjon-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;margin:22px 0 10px;display:flex;align-items:center;gap:11px}
 .mer-seksjon-label:first-child{margin-top:0}
-.mer-kun-admin{font-size:10px;font-weight:700;text-transform:none;letter-spacing:normal;color:#fca5a5;background:#ef444420;border:1px solid #ef444460;border-radius:999px;padding:2px 8px}
+.mer-seksjon-label::after{content:'';flex:1;height:1px;background:#27272a}
+.mer-seksjon-label.mer-har-badge::after{order:1}
+.mer-seksjon-label.mer-har-badge .mer-kun-admin{order:2}
+.mer-kun-admin{font-size:10.5px;font-weight:400;text-transform:none;letter-spacing:.6px;color:#fca5a5;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:999px;padding:3px 9px;white-space:nowrap}
 
 /* TYPE */
 .title{font-size:22px;font-weight:800}
@@ -601,7 +604,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div id="fravarKalender" style="margin-top:10px"></div>
       </div>
 
-      <div class="mer-seksjon-label" id="merSeksjonAnsatte" style="display:none">Ansatte og tilgang <span class="mer-kun-admin">Kun admin</span></div>
+      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonAnsatte" style="display:none">Ansatte og tilgang <span class="mer-kun-admin">Kun admin</span></div>
       <div class="grid g2" id="merGruppeAnsatte" style="display:none">
         <div class="card" id="merAnsatteKort" style="display:none">
           <div class="h">Ansatte</div>
@@ -655,7 +658,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
       </div>
 
-      <div class="mer-seksjon-label" id="merSeksjonOppsett" style="display:none">Oppsett og verktøy <span class="mer-kun-admin">Kun admin</span></div>
+      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none">Oppsett og verktøy <span class="mer-kun-admin">Kun admin</span></div>
       <div id="merGruppeOppsett" style="display:none">
         <div class="card" id="merDrivstoffSatser" style="display:none">
           <div class="row">
