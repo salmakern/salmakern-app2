@@ -77,12 +77,13 @@ function renderLagerListe() {
 
   el.innerHTML = `<div class="grid g3">${kategorier.map(kat => {
     const lavtIKat = grupper[kat].filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
+    const sumEnheter = grupper[kat].reduce((s,v)=>s+(Number(v.antall)||0),0);
     return `<div class="box" style="cursor:pointer" onclick="visKategoriDetalj('${esc(kat).replace(/'/g,"\\'")}')">
       <div class="row">
         <b>${esc(kat)}</b>
-        <span style="color:#a1a1aa">›</span>
+        ${lavtIKat?`<span class="pill bad" style="margin:0;font-size:11px">${lavtIKat} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
       </div>
-      <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'}${lavtIKat?` · <span style="color:#f87171">⚠ ${lavtIKat} lav</span>`:''}</div>
+      <div class="small muted" style="margin-top:2px">${grupper[kat].length} vare${grupper[kat].length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter på lager</div>
     </div>`;
   }).join('')}</div>`;
 }
@@ -538,9 +539,14 @@ function renderGlobalLavLagerVarsel() {
   const lave = (S.lagervarer||[]).filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
   if (!lave.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'block';
-  el.innerHTML = `<div style="background:#450a0a;border:1px solid #ef4444cc;border-radius:10px;padding:8px 10px;margin-top:8px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-    <span>⚠ ${lave.length} vare${lave.length===1?'':'r'} med lav beholdning</span>
-    <button onclick="visBestillingsliste()" class="btn sm" style="padding:2px 8px;font-size:10px">Se bestillingsliste</button>
+  const navn = lave.slice(0,3).map(v=>esc(v.navn)).join(', ') + (lave.length>3?` +${lave.length-3} til`:'');
+  el.innerHTML = `<div onclick="visBestillingsliste()" style="cursor:pointer;background:#450a0a;border:1px solid #ef4444cc;border-radius:16px;padding:12px 14px;margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="flex-shrink:0;width:32px;height:32px;border-radius:999px;background:#7f1d1d;color:#fca5a5;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px">!</span>
+    <div style="flex:1;min-width:0">
+      <div style="color:#fca5a5;font-weight:700;font-size:13px">${lave.length} vare${lave.length===1?'':'r'} under minimum</div>
+      <div class="small muted" style="margin-top:1px">${navn}</div>
+    </div>
+    <span class="small" style="color:#fca5a5;flex-shrink:0;white-space:nowrap">Åpne bestillingsliste →</span>
   </div>`;
 }
 
