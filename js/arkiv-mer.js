@@ -149,7 +149,7 @@ function renderMer() {
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
   document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
   document.getElementById('merHelsesjekkKort').style.display = erAdmin ? 'block' : 'none';
-  // Seksjonsoverskrift+gruppe for "Ansatte og tilgang" og "Oppsett og verktøy" vises kun
+  // Seksjonsoverskrift+gruppe for "Rapporter" og "Oppsett og verktøy" vises kun
   // hvis minst ett kort inni faktisk er synlig - begge grupperingene er 100% admin-only.
   document.getElementById('merSeksjonAnsatte').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merGruppeAnsatte').style.display  = erAdmin ? 'grid'  : 'none';
@@ -232,12 +232,38 @@ function renderMer() {
   }
 
   renderBeskjeder();
-  renderKontakter();
   renderFravarKalender();
   renderHMS();
   renderMoterListe();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
-  if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
+  if (erAdmin) {
+    renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler();
+    const dsEl = document.getElementById('drivstoffSatsAntall');
+    if (dsEl) { const n = (S.drivstoffSatser||[]).length; dsEl.textContent = `${n} sats${n===1?'':'er'}`; }
+    const umEl = document.getElementById('utstyrMalAntall');
+    if (umEl) { const n = (S.utstyrMaler||[]).length; umEl.textContent = `${n} mal${n===1?'':'er'}`; }
+  }
+}
+
+// Drivstoff-satser og Utstyr-maler var før inline lister direkte på Mer-siden - flyttet
+// til egne visninger (samme "klikk inn i detalj"-mønster som Lager) siden Mer-siden ble
+// for full av innhold man sjelden trenger å se med det samme.
+function visMerDrivstoffSatser() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merDrivstoffSatserView').style.display = 'block';
+  renderDrivstoffSatser();
+  window.scrollTo(0, 0);
+}
+function visMerUtstyrMaler() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merUtstyrMalerView').style.display = 'block';
+  renderUtstyrMaler();
+  window.scrollTo(0, 0);
+}
+function tilbakeFraMerDetalj() {
+  document.getElementById('merDrivstoffSatserView').style.display = 'none';
+  document.getElementById('merUtstyrMalerView').style.display = 'none';
+  document.getElementById('merHovedView').style.display = 'block';
 }
 
 // Admin-ark-rader med et chassis-nr som er skrevet inn, men som ikke matcher NOEN ordre

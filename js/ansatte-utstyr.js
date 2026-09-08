@@ -174,23 +174,23 @@ function rapportNaviger(dir) {
   renderOrdreRapport();
 }
 
+// Kjøres per hele kalenderår (rapportOffset er antall år tilbake fra i år), med de 12
+// månedene som stolper og en sammenligning mot forrige år (antall + vekst i %).
 function renderOrdreRapport() {
   const el = document.getElementById('ordreRapportInnhold'); if(!el) return;
   const elAar = document.getElementById('ordreRapportAarTotal');
   const lbl = document.getElementById('rapportLbl');
-  const maanedNavn=['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
-  const now = new Date();
-  // Vis 6 måneder sentrert rundt rapportOffset (0=nå, -1=forrige halvår osv)
-  const sentrerMaaned = new Date(now.getFullYear(), now.getMonth() + rapportOffset*6, 1);
+  const maanedNavn=['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+  const visAar = new Date().getFullYear() + rapportOffset;
+  if (lbl) lbl.textContent = String(visAar);
+
   const rapporter = [];
-  for (let i=5; i>=0; i--) {
-    const d = new Date(sentrerMaaned.getFullYear(), sentrerMaaned.getMonth()-i, 1);
-    const prefix = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  for (let m=0; m<12; m++) {
+    const prefix = `${visAar}-${String(m+1).padStart(2,'0')}`;
     const ordrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(prefix));
     const ferdig = ordrer.filter(o=>o.godkjent).length;
-    rapporter.push({lbl:`${maanedNavn[d.getMonth()]} ${d.getFullYear()}`,tot:ordrer.length,ferdig,aar:d.getFullYear()});
+    rapporter.push({lbl:maanedNavn[m], tot:ordrer.length, ferdig});
   }
-  if (lbl) lbl.textContent = `${maanedNavn[sentrerMaaned.getMonth()-5<0?0:sentrerMaaned.getMonth()-5]} – ${maanedNavn[sentrerMaaned.getMonth()]} ${sentrerMaaned.getFullYear()}`;
   const maxTot = Math.max(1, ...rapporter.map(r=>r.tot));
   el.innerHTML = rapporter.map(r=>`
     <div style="margin-bottom:10px">
@@ -202,16 +202,23 @@ function renderOrdreRapport() {
         <div style="height:100%;background:#ef4444;width:${Math.round(r.tot/maxTot*100)}%;border-radius:6px;transition:width 0.3s"></div>
       </div>
     </div>`).join('');
-  // Årstotal for siste år i visningen
-  const visAar = sentrerMaaned.getFullYear();
+
   const aarOrdrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(`${visAar}-`));
   const aarFerdig = aarOrdrer.filter(o=>o.godkjent).length;
+  const forrigeAntall = S.ordrer.filter(o=>o.ankomstdato?.startsWith(`${visAar-1}-`)).length;
+  let veksttekst = '<div class="small muted" style="margin-top:8px">Ingen data for ' + (visAar-1) + ' å sammenligne med</div>';
+  if (forrigeAntall > 0) {
+    const veksProsent = Math.round((aarOrdrer.length - forrigeAntall) / forrigeAntall * 100);
+    const positiv = veksProsent >= 0;
+    veksttekst = `<div class="small" style="margin-top:8px;color:${positiv?'#4ade80':'#fca5a5'}">${positiv?'▲':'▼'} ${Math.abs(veksProsent)}% ${positiv?'mer':'mindre'} enn ${visAar-1} (${forrigeAntall} biler)</div>`;
+  }
   if (elAar) elAar.innerHTML = `<div class="small muted" style="margin-bottom:4px">Årstotal ${visAar}</div>
-    <div style="display:flex;gap:16px">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
       <div><span style="font-size:20px;font-weight:700;color:#f4f4f5">${aarOrdrer.length}</span><div class="small muted">biler totalt</div></div>
       <div><span style="font-size:20px;font-weight:700;color:#22c55e">${aarFerdig}</span><div class="small muted">ferdigstilt</div></div>
       <div><span style="font-size:20px;font-weight:700;color:#a1a1aa">${aarOrdrer.length-aarFerdig}</span><div class="small muted">pågår</div></div>
-    </div>`;
+    </div>
+    ${veksttekst}`;
 }
 
 // ════════════════════════════════════════════════════

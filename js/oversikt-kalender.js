@@ -117,6 +117,7 @@ function renderOrdreList() {
 // OVERSIKT
 // ════════════════════════════════════════════════════
 function renderOversikt(q) {
+  renderMoterListe();
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
   const mnd = now.getMonth(), yr = now.getFullYear();
