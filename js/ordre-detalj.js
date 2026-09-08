@@ -291,11 +291,16 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
     <!-- SIDEBAR -->
     <div>
       <div class="card">
-        <div class="h">Tvangsflyt</div>
-        <div style="margin-top:6px">${tf.map(t=>`<span class="pill ${t.ok?'ok':'bad'}">${t.lbl}</span>`).join('')}</div>
+        <div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:7px">
+          ${tf.map(t=>`<div style="display:flex;align-items:center;gap:10px${t.ok?'':';background:#450a0a20;border-radius:12px;padding:5px 8px'}">
+            <span style="flex-shrink:0;width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;background:${t.ok?'#052e16':'#450a0a'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
+            <span class="small" style="font-size:13.5px">${esc(t.lbl)}</span>
+          </div>`).join('')}
+        </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
-            ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:6px">${erAdmin?'Tvangsflyt ikke fullført (du kan overstyre som admin):':'Fullfør tvangsflyt først:'}</div>${tf.filter(t=>!t.ok).map(t=>`<div class="small err-text">✗ ${t.lbl}</div>`).join('')}<br>`:''}
+            ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:8px">${erAdmin?'Tvangsflyt ikke fullført - du kan overstyre som admin.':'Fullfør tvangsflyt først.'}</div>`:''}
             <button class="btn red" style="width:100%" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
         </div>
       </div>
