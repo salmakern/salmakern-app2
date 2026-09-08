@@ -371,10 +371,15 @@ async function opprettMote() {
 // ════════════════════════════════════════════════════
 // CHAT MELLOM ADMIN/GODKJENNERE
 // ════════════════════════════════════════════════════
+function apneGodkjennerChat() {
+  renderGodkjennerChat();
+  openModal('godkjennerChatModal');
+  document.getElementById('godkjennerChatInput')?.focus();
+}
 function renderGodkjennerChat() {
-  const kortEl = document.getElementById('merGodkjennerChat');
+  const btnEl = document.getElementById('godkjennerChatBtn');
   const erGodkjenner = me && (me.rolle==='admin' || me.rolle==='godkjenner');
-  if (kortEl) kortEl.style.display = erGodkjenner ? 'block' : 'none';
+  if (btnEl) btnEl.style.display = erGodkjenner ? '' : 'none';
   if (!erGodkjenner) return;
   const el = document.getElementById('godkjennerChatMeldinger');
   if (!el) return;

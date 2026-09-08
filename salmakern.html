@@ -317,6 +317,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="muted small" id="headerUser"></div>
         <div class="row" style="gap:8px">
           <span class="ok-text small" id="lagreStatusBadge">✔ Lagret</span>
+          <button class="btn sm" id="godkjennerChatBtn" style="display:none;font-size:16px;padding:9px 12px" onclick="apneGodkjennerChat()" title="Chat med godkjennere">💬</button>
           <button class="btn sm" onclick="doLogout()">Logg ut</button>
         </div>
       </div>
@@ -733,14 +734,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
         </div>
         <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
-        <div class="card" id="merGodkjennerChat" style="display:none;grid-column:1/-1">
-          <div class="h">Chat med godkjennere <span class="kort-admin-merke">ADMIN</span></div>
-          <div id="godkjennerChatMeldinger" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin:10px 0"></div>
-          <div style="display:flex;gap:8px">
-            <input id="godkjennerChatInput" placeholder="Skriv en melding..." style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();sendGodkjennerMelding()}">
-            <button class="btn sm red" onclick="sendGodkjennerMelding()">Send</button>
-          </div>
-        </div>
       </div>
 
       <div class="mer-seksjon-label">Tid og fravær</div>
@@ -904,6 +897,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 </div>
 
 <!-- ═══════════════ MODALS ═══════════════ -->
+
+<div class="modal" id="godkjennerChatModal">
+  <div class="modal-box">
+    <div class="row">
+      <div class="h">Chat med godkjennere</div>
+      <button class="btn sm" onclick="closeModal('godkjennerChatModal')">✕</button>
+    </div>
+    <div id="godkjennerChatMeldinger" style="max-height:50vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin:12px 0"></div>
+    <div style="display:flex;gap:8px">
+      <input id="godkjennerChatInput" placeholder="Skriv en melding..." style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();sendGodkjennerMelding()}">
+      <button class="btn sm red" onclick="sendGodkjennerMelding()">Send</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal" id="kundeHistorikk">
   <div class="modal-box">
