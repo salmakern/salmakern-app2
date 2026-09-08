@@ -80,7 +80,7 @@ function renderOrdreList() {
 
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1">
-          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;word-break:break-all">${ordreLabelFull(o)}</b>
+          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;overflow-wrap:break-word">${ordreLabelFull(o)}</b>
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:7px 11px;max-width:132px')}
