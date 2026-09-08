@@ -287,6 +287,8 @@ function apneUkobletAdminArkRad(aar) {
 // MØTER
 // ════════════════════════════════════════════════════
 function renderMoterListe() {
+  const kortEl = document.getElementById('merMoterKort');
+  if (kortEl) kortEl.style.display = (me && me.rolle === 'admin') ? 'block' : 'none';
   const el = document.getElementById('moterListe');
   if (!el) return;
   const idag = new Date().toISOString().split('T')[0];
