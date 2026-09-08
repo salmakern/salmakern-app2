@@ -982,11 +982,33 @@ function oppskriftMatcherOrdre(r, o) {
   return biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst);
 }
 
+// Ombygging/Ekstra utstyr-oppskriftene vises som nedtrekkbare avkrysningslister (én per
+// type) i stedet for alltid-synlige bokser - noen modeller har opptil 10+ oppskrifter, og
+// da blir siden fort veldig lang. Trigger-raden viser bare "X av Y valgt", selve listen
+// åpnes/lukkes ved klikk (holder seg åpen mens man haker av flere, lukkes ved klikk
+// utenfor) - se toggleOppskriftDropdown()/lukkAlleOppskriftDropdowns() lenger ned.
+let apneOppskriftDropdowns = new Set();
+function toggleOppskriftDropdown(e, ddId) {
+  e.stopPropagation();
+  const el = document.getElementById(ddId); if (!el) return;
+  const varAllerdeApen = el.style.display === 'block';
+  lukkAlleOppskriftDropdowns();
+  if (!varAllerdeApen) { el.style.display = 'block'; apneOppskriftDropdowns.add(ddId); }
+}
+function lukkAlleOppskriftDropdowns() {
+  apneOppskriftDropdowns.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  apneOppskriftDropdowns.clear();
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.oppskrift-dd-wrap')) lukkAlleOppskriftDropdowns();
+});
+
 // Viser Ombygging- og Ekstra utstyr-oppskrifter som matcher ordrens modell som to
-// avkrysningslister. Å hake av trekker oppskriftens deler fra lager med en gang; å fjerne
-// haken angrer trekket (samme som "↩ Angre" gjorde før) - se toggleOppskriftPaaOrdre().
-// Avkrysset-tilstanden er ikke lagret for seg selv, den er avledet fra om det finnes en
-// lagerhistorikk-batch for denne ordren med kommentar=oppskriftens navn.
+// nedtrekkbare avkrysningslister. Å hake av trekker oppskriftens deler fra lager med en
+// gang; å fjerne haken angrer trekket (samme som "↩ Angre" gjorde før) - se
+// toggleOppskriftPaaOrdre(). Avkrysset-tilstanden er ikke lagret for seg selv, den er
+// avledet fra om det finnes en lagerhistorikk-batch for denne ordren med
+// kommentar=oppskriftens navn.
 function renderOrdreLagerbruk() {
   const el = document.getElementById('ordreLagerbruk_' + activeOrdreId);
   if (!el) return;
@@ -997,29 +1019,39 @@ function renderOrdreLagerbruk() {
   const seksjonHTML = (type, tittel) => {
     const treff = (S.lagerOppskrifter||[]).filter(r => (r.type||'ombygging')===type && oppskriftMatcherOrdre(r, o));
     if (!treff.length) return '';
+    const valgt = treff.filter(r => brukteNavn.has(r.navn));
     const rader = treff.map(r => {
       const huket = brukteNavn.has(r.navn);
       const delerTekst = (r.ingredienser||[]).map(i => {
         const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
         return v ? `${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}` : null;
       }).filter(Boolean).join(', ');
-      return `<label style="display:flex;align-items:flex-start;gap:10px;background:#18181b;border:2px solid ${huket?'#ef4444':'#27272a'};border-radius:12px;padding:12px;cursor:pointer;margin-bottom:6px">
-        <input type="checkbox" ${huket?'checked':''} onchange="toggleOppskriftPaaOrdre('${r.id}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0;margin-top:1px">
+      return `<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #27272a">
+        <input type="checkbox" ${huket?'checked':''} onchange="toggleOppskriftPaaOrdre('${r.id}',this.checked)" style="width:17px;height:17px;accent-color:#ef4444;flex-shrink:0;margin-top:2px">
         <div style="flex:1;min-width:0">
-          <b>${esc(r.navn)}</b>
+          <div style="font-size:13.5px;font-weight:600">${esc(r.navn)}</div>
           ${delerTekst?`<div class="small muted" style="margin-top:2px">${delerTekst}</div>`:''}
         </div>
       </label>`;
     }).join('');
-    return `<div style="margin-bottom:14px">
-      <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10px">${tittel}</div>
-      ${rader}
+    const ddId = 'oppskriftDD_' + type;
+    return `<div class="felt-wrap oppskrift-dd-wrap" style="margin-bottom:12px">
+      <label>${tittel}</label>
+      <div onclick="toggleOppskriftDropdown(event,'${ddId}')" style="width:100%;padding:9px 12px;border-radius:12px;background:#27272a;color:#f4f4f5;border:1px solid ${valgt.length?'#ef4444':'#3f3f46'};font-size:13px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span>${valgt.length} av ${treff.length} valgt</span>
+        <span style="flex-shrink:0;color:#a1a1aa">▾</span>
+      </div>
+      <div class="felt-dropdown" id="${ddId}">${rader}</div>
     </div>`;
   };
 
   const modellTekst = merkeModell(o);
   const html = seksjonHTML('ombygging', 'Ombygging') + seksjonHTML('ekstra_utstyr', 'Ekstra utstyr');
   el.innerHTML = html || `<div class="muted small">${modellTekst ? `Ingen oppskrift funnet for "${esc(modellTekst)}". Lag en under Lager-fanen.` : 'Fyll inn Merke og Modell på ordren for å se aktuelle oppskrifter.'}</div>`;
+  // Gjenopprett åpen/lukket-tilstand - innerHTML over lager helt nye DOM-elementer, så
+  // .felt-dropdown sin CSS-default (display:none) ville ellers lukket en åpen liste hver
+  // gang man haker av ÉN vare (toggleOppskriftPaaOrdre kaller denne funksjonen på nytt).
+  apneOppskriftDropdowns.forEach(id => { const dd = document.getElementById(id); if (dd) dd.style.display = 'block'; });
 }
 
 function trekkOppskriftForOrdre(oppskriftId) {

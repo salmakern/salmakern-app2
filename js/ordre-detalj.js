@@ -7,6 +7,7 @@ function openOrdre(id, fraArkiv=false) {
   ordreListScrollY = window.scrollY;
   activeOrdreId = id;
   openedFromArkiv = fraArkiv;
+  apneOppskriftDropdowns.clear(); // ikke arv en åpen Ombygging/Ekstra utstyr-liste fra forrige ordre
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('ordre').classList.add('active');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
