@@ -802,15 +802,14 @@ function renderOppskriftModellDetalj() {
     </div>`).join('') : '<div class="muted small">Ingen deler lagt til på noen oppskrift ennå</div>';
 
   const TYPE_LABEL = {ombygging:'Ombygging', ekstra_utstyr:'Ekstra utstyr'};
-  const variantEl = document.getElementById('oppskriftVariantListeKort');
-  variantEl.innerHTML = oppskrifter.length ? oppskrifter.map(o => {
+  const oppskriftBoksHTML = o => {
     const deler = (o.ingredienser||[]).map(i => {
       const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
       return v ? `<span class="pill" style="margin:0;font-size:11.5px;padding:3px 10px">${fmtAntall(i.antall)} ${esc(v.enhet)} · ${esc(v.navn)}</span>` : null;
     }).filter(Boolean);
     return `<div class="box" style="margin-bottom:7px;padding:13px 14px">
       <div class="row">
-        <div><b>${esc(o.navn)}</b> <span class="pill" style="margin-left:4px;font-size:11px;padding:3px 10px">${TYPE_LABEL[o.type||'ombygging']}</span></div>
+        <b>${esc(o.navn)}</b>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
           <span class="pill" style="margin:0;font-size:11px;padding:3px 10px">${(o.ingredienser||[]).length} deler</span>
           <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎</button>
@@ -821,10 +820,25 @@ function renderOppskriftModellDetalj() {
         ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">${deler.join('')}</div>`
         : '<div class="small muted" style="margin-top:6px">Ingen deler lagt til</div>'}
     </div>`;
-  }).join('') : `<div class="box" style="text-align:center;padding:22px">
-      <div class="muted small">Ingen oppskrifter opprettet ennå for denne modellen</div>
-      <button class="btn sm red" style="margin-top:10px" onclick="apneNyOppskrift('${esc(modell).replace(/'/g,"\\'")}')">+ Ny oppskrift</button>
+  };
+  // To egne seksjoner (Ombygging/Ekstra utstyr) - samme inndeling som avkrysningslistene
+  // på selve ordren, se renderOrdreLagerbruk() i lager.js, slik at det er tydelig hvilken
+  // liste en ny oppskrift havner i.
+  const seksjonHTML = (type, modellEsc) => {
+    const treff = oppskrifter.filter(o => (o.type||'ombygging')===type);
+    return `<div class="card" style="margin-top:12px">
+      <div class="row">
+        <div class="h">${TYPE_LABEL[type]}</div>
+        <button class="btn sm red" onclick="apneNyOppskrift('${modellEsc}','${type}')">+ Ny oppskrift</button>
+      </div>
+      ${treff.length
+        ? treff.map(oppskriftBoksHTML).join('')
+        : `<div class="muted small" style="margin-top:8px">Ingen ${TYPE_LABEL[type].toLowerCase()}-oppskrifter for denne modellen ennå</div>`}
     </div>`;
+  };
+  const modellEsc = esc(modell).replace(/'/g,"\\'");
+  document.getElementById('oppskriftVariantListeKort').innerHTML =
+    seksjonHTML('ombygging', modellEsc) + seksjonHTML('ekstra_utstyr', modellEsc);
 }
 
 let oppskriftVisAlleVarer = false;
@@ -884,13 +898,13 @@ function lesOppskriftIngredienser() {
   return valgt;
 }
 
-function apneNyOppskrift(forhaandsvalgtModell) {
+function apneNyOppskrift(forhaandsvalgtModell, forhaandsvalgtType) {
   if (!(S.lagervarer||[]).length) { alert('Legg til minst én vare i lageret først'); return; }
   document.getElementById('oppskriftModalTittel').textContent = 'Ny oppskrift';
   document.getElementById('redigerOppskriftId').value = '';
   document.getElementById('oppskriftNavn').value = '';
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(forhaandsvalgtModell||'');
-  document.getElementById('oppskriftType').value = 'ombygging';
+  document.getElementById('oppskriftType').value = forhaandsvalgtType || 'ombygging';
   oppskriftVisAlleVarer = false;
   fyllOppskriftVareListe();
   openModal('nyOppskriftModal');
