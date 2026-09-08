@@ -41,6 +41,13 @@ if ('serviceWorker' in navigator) {
   });
   navigator.serviceWorker.addEventListener('message', e => {
     if (e.data?.type === 'NY_VERSJON') visOppdateringsToast();
+    // Klikk på et push-varsel om en bestemt ordre mens appen allerede står åpen -
+    // fokus alene endrer ikke innholdet, appen må selv hoppe til ordren. Se
+    // apneOrdreFraVarselHvisKlar() i core.js.
+    if (e.data?.type === 'navigate-ordre' && e.data.ordreId) {
+      pendingDeepLinkOrdreId = e.data.ordreId;
+      apneOrdreFraVarselHvisKlar();
+    }
   });
 }
 </script>

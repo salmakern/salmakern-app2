@@ -107,6 +107,16 @@ const FOTO_SIDER = {
 let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[], moter:[]};
 let me = null;
+// Satt av et klikk på et push-varsel om en bestemt ordre (postMessage fra sw.js) - kan
+// komme inn før innlogging/datahenting er ferdig, derfor mellomlagres den her og
+// hentes ut av apneOrdreFraVarselHvisKlar() når S.ordrer faktisk er klar.
+let pendingDeepLinkOrdreId = null;
+function apneOrdreFraVarselHvisKlar() {
+  if (!pendingDeepLinkOrdreId || !me || !S.ordrer.length) return;
+  const id = pendingDeepLinkOrdreId;
+  pendingDeepLinkOrdreId = null;
+  if (S.ordrer.find(o => o.id === id)) openOrdre(id);
+}
 let activeOrdreId = null;
 let openedFromArkiv = false;
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
@@ -923,6 +933,15 @@ async function tryLogin() {
       subscribeRealtime();
       renderAll();
       prosesserOfflineKo(); // send inn evt. lagringer som ble liggende i køen forrige økt
+      // Åpnet via ?ordre=<id> i url-en (et push-varsel som måtte åpne et helt nytt
+      // vindu/fane, se notificationclick i sw.js) - hopp rett til den ordren, og
+      // fjern parameteret så en vanlig omlasting ikke havner der på nytt.
+      const varselOrdreId = new URLSearchParams(location.search).get('ordre');
+      if (varselOrdreId) {
+        pendingDeepLinkOrdreId = varselOrdreId;
+        history.replaceState(null, '', location.pathname);
+      }
+      apneOrdreFraVarselHvisKlar();
     } catch(e) {
       console.warn('Datahenting etter innlogging feilet:', e);
       visToast('Klarte ikke å hente data. Trykk 🔄 øverst for å prøve igjen.');

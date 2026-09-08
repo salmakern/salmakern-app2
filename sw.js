@@ -117,10 +117,17 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = e.notification.data?.url || '/salmakern.html';
+  // Varsler om en bestemt ordre har ?ordre=<id> i url-en (satt av send-push).
+  const ordreId = new URL(url, self.location.origin).searchParams.get('ordre');
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(all => {
       const existing = all.find(c => c.url.includes('salmakern'));
-      if (existing) return existing.focus();
+      if (existing) {
+        // App-en kjører allerede - bare å fokusere gjør ingenting med selve
+        // innholdet, appen må få beskjed om å hoppe til riktig ordre selv.
+        if (ordreId) existing.postMessage({ type: 'navigate-ordre', ordreId });
+        return existing.focus();
+      }
       return clients.openWindow(url);
     })
   );

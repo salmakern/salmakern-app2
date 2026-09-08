@@ -43,9 +43,12 @@ function imorgenDato(dagensDato: string): string {
 
 // Sender hver melding kun til abonnentene som hører til deltakerIder - tom/manglende
 // deltakerIder betyr "alle" (bevarer eksisterende oppførsel for biltilsyn-varsler m.m.).
+// ordreId (når meldingen faktisk gjelder én bestemt ordre) legges på url-en som
+// ?ordre=<id>, slik at et klikk på selve varselet kan hoppe rett til den ordren
+// i stedet for bare å åpne appen på forsiden - se notificationclick i sw.js.
 async function sendTilAbonnenter(
   supabase: ReturnType<typeof createClient>,
-  meldinger: { title: string, body: string, deltakerIder?: number[] }[]
+  meldinger: { title: string, body: string, deltakerIder?: number[], ordreId?: string }[]
 ) {
   if (!meldinger.length) return
   const { data: subs } = await supabase.from('push_abonnement').select('*')
@@ -55,7 +58,8 @@ async function sendTilAbonnenter(
       ? subs.filter((s: any) => msg.deltakerIder!.includes(s.ansatt_id))
       : subs
     if (!mottakere.length) continue
-    const melding = JSON.stringify({ title: msg.title, body: msg.body, url: '/salmakern-app2/salmakern.html' })
+    const url = '/salmakern-app2/salmakern.html' + (msg.ordreId ? `?ordre=${msg.ordreId}` : '')
+    const melding = JSON.stringify({ title: msg.title, body: msg.body, url })
     await Promise.allSettled(mottakere.map(async (sub: any) => {
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, melding)
@@ -140,7 +144,7 @@ Deno.serve(async (req) => {
         if (diff >= 0 && diff <= 30) {
           const bil = o.chassis || o.regnr || o.kunde || 'Bil'
           const stedTekst = o.tid_biltilsynet_sted ? ` (${o.tid_biltilsynet_sted})` : ''
-          meldinger.push({ title: 'Time på biltilsynet snart', body: `${bil} skal på biltilsynet kl. ${o.tid_biltilsynet_tid}${stedTekst}` })
+          meldinger.push({ title: 'Time på biltilsynet snart', body: `${bil} skal på biltilsynet kl. ${o.tid_biltilsynet_tid}${stedTekst}`, ordreId: o.id })
           varsletOrdreIder.push(o.id)
         }
       }
@@ -174,6 +178,7 @@ Deno.serve(async (req) => {
 
     let title = "Salmaker'n"
     let body  = ''
+    let ordreId: string | undefined
 
     if (payload.type === 'daglig') {
       title = 'Påminnelse'
@@ -181,6 +186,7 @@ Deno.serve(async (req) => {
 
     } else if (payload.type === 'UPDATE') {
       const { record, old_record } = payload
+      ordreId = record.id
       const bil = record.chassis || record.regnr || record.kunde || 'Bil'
       const statusEndret = record.ordre_status !== old_record?.ordre_status
       const vektNy  = record.vekter?.totalvekt?.v
@@ -222,7 +228,8 @@ Deno.serve(async (req) => {
     console.log('Abonnenter:', subs?.length ?? 0, subErr?.message ?? '')
     if (!subs?.length) return new Response('ingen abonnenter', { status: 200, headers: CORS_HEADERS })
 
-    const melding = JSON.stringify({ title, body, url: '/salmakern-app2/salmakern.html' })
+    const url = '/salmakern-app2/salmakern.html' + (ordreId ? `?ordre=${ordreId}` : '')
+    const melding = JSON.stringify({ title, body, url })
     console.log('Sender:', melding)
 
     await Promise.allSettled(subs.map(async sub => {
