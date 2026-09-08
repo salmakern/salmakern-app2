@@ -873,9 +873,9 @@ function pinPress(d) {
 function pinBack() { pinBuf = pinBuf.slice(0,-1); refreshPinDots(); }
 function pinClear() { pinBuf = ''; refreshPinDots(); document.getElementById('pinErr').textContent=''; }
 function refreshPinDots() {
-  const filled = '●'.repeat(pinBuf.length);
-  const empty  = '·'.repeat(4-pinBuf.length);
-  document.getElementById('pinDots').textContent = (filled+empty).split('').join(' ');
+  document.querySelectorAll('.pin-dot').forEach((dot,i) => {
+    dot.style.background = i < pinBuf.length ? '#ef4444' : '#27272a';
+  });
 }
 async function tryLogin() {
   // PIN-sjekken skjer i databasen (logg_inn_med_pin), ikke lokalt mot

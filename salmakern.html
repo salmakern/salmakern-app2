@@ -62,10 +62,10 @@ body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:10
 
 /* LOGIN */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:20px;padding:16px}
-.pin-dots{font-size:36px;letter-spacing:12px;min-height:52px;text-align:center;font-weight:800}
 .pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:260px;width:100%}
-.pin-btn{background:#18181b;border:1px solid #27272a;color:#f4f4f5;border-radius:16px;padding:18px;font-size:22px;cursor:pointer;transition:background 0.1s;font-family:Arial,sans-serif}
+.pin-btn{background:#18181b;border:1px solid #27272a;color:#f4f4f5;border-radius:22px;padding:20px 0;font-size:22px;cursor:pointer;transition:background 0.1s;font-family:Arial,sans-serif}
 .pin-btn:active,.pin-btn:hover{background:#27272a}
+.pin-btn.pin-btn-mute{background:#0f0f12}
 
 /* LAYOUT */
 #appScreen{display:none}
@@ -221,7 +221,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div id="loginScreen">
   <img src="logoer/logo-transparent.png" alt="Salmaker'n" style="height:70px;object-fit:contain">
   <div class="muted small">Tast inn din PIN-kode</div>
-  <div class="pin-dots" id="pinDots">· · · ·</div>
+  <div id="pinDots" style="display:flex;gap:14px;min-height:52px;align-items:center;justify-content:center">
+    <span class="pin-dot" data-i="0" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
+    <span class="pin-dot" data-i="1" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
+    <span class="pin-dot" data-i="2" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
+    <span class="pin-dot" data-i="3" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
+  </div>
   <div class="pin-grid">
     <button class="pin-btn" onclick="pinPress(1)">1</button>
     <button class="pin-btn" onclick="pinPress(2)">2</button>
@@ -232,9 +237,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <button class="pin-btn" onclick="pinPress(7)">7</button>
     <button class="pin-btn" onclick="pinPress(8)">8</button>
     <button class="pin-btn" onclick="pinPress(9)">9</button>
-    <button class="pin-btn" onclick="pinClear()" style="font-size:13px">Slett alt</button>
+    <button class="pin-btn pin-btn-mute" onclick="pinClear()" style="font-size:13px;color:#fca5a5">Slett alt</button>
     <button class="pin-btn" onclick="pinPress(0)">0</button>
-    <button class="pin-btn" onclick="pinBack()" style="font-size:18px">⌫</button>
+    <button class="pin-btn pin-btn-mute" onclick="pinBack()" style="font-size:18px">⌫</button>
   </div>
   <div id="pinErr" class="err-text small" style="min-height:18px;text-align:center"></div>
 </div>
