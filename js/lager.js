@@ -827,13 +827,10 @@ function renderOppskriftModellDetalj() {
 
 let oppskriftVisAlleVarer = false;
 
-// biltypeId/listeId lar samme vare-plukker gjenbrukes andre steder enn lager-oppskrifter
-// (se f.eks. utstyr-mal-modalen i ansatte-utstyr.js, som trenger nøyaktig samme UI for å
-// knytte lagervarer til en utstyr-mal).
-function fyllOppskriftVareListe(forhaandsvalgt, biltypeId='oppskriftBiltype', listeId='oppskriftIngrediensListe') {
+function fyllOppskriftVareListe(forhaandsvalgt) {
   forhaandsvalgt = forhaandsvalgt || {};
-  const biltype = document.getElementById(biltypeId).value;
-  const el = document.getElementById(listeId);
+  const biltype = document.getElementById('oppskriftBiltype').value;
+  const el = document.getElementById('oppskriftIngrediensListe');
   let varer = (S.lagervarer||[]).slice();
   const iKategori = biltype ? varer.filter(v => (v.kategori||'').toLowerCase() === biltype.toLowerCase()) : [];
   const brukAlle = oppskriftVisAlleVarer || !biltype || !iKategori.length;
@@ -877,9 +874,9 @@ function fyllOppskriftVareListe(forhaandsvalgt, biltypeId='oppskriftBiltype', li
   `;
 }
 
-function lesOppskriftIngredienser(listeId='oppskriftIngrediensListe') {
+function lesOppskriftIngredienser() {
   const valgt = {};
-  document.querySelectorAll('#'+listeId+' .oppskrift-vare-chk').forEach(chk => {
+  document.querySelectorAll('#oppskriftIngrediensListe .oppskrift-vare-chk').forEach(chk => {
     if (chk.checked) valgt[chk.dataset.vareId] = Number(chk.nextElementSibling.value) || 1;
   });
   return valgt;
@@ -1062,29 +1059,6 @@ function autoTrekkOppskrift(ordreId) {
   });
   lagerBatchFlush(lagerBatch);
   if (activeOrdreId === ordreId) renderOrdreLagerbruk();
-}
-
-// Trekker fra lager for en utstyr-mal sine ingredienser - samme mønster/oppførsel som
-// autoTrekkOppskrift() over (stille, ingen bekreftelsesdialog, varsler med toast selv om
-// noe går i minus), kalt fra applyUtstyrMalObjekt() i ansatte-utstyr.js når "Ekstra
-// utstyr"/utstyr-mal velges på en ordre. Dedup på kommentar=mal.navn per ordre, samme
-// prinsipp som brukteNavn over, så å velge samme mal på nytt ikke trekker dobbelt.
-function trekkUtstyrMalFraLager(ordreId, mal) {
-  if (!mal.ingredienser?.length) return;
-  const alleredeTrukket = (S.lagerhistorikk||[]).some(h => h.ordreId===ordreId && h.batchId && h.kommentar===mal.navn);
-  if (alleredeTrukket) return;
-
-  const batchId = 'batch_' + Date.now();
-  const lagerBatch = lagerBatchNy();
-  let underMinimum = false;
-  mal.ingredienser.forEach(i => {
-    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
-    if (v.antall < i.antall) underMinimum = true;
-    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', ordreId, mal.navn, batchId, lagerBatch);
-  });
-  lagerBatchFlush(lagerBatch);
-  if (activeOrdreId === ordreId) renderOrdreLagerbruk();
-  visToast(`Trukket fra lager: ${mal.navn}${underMinimum ? ' (noen varer gikk i minus)' : ''}`, underMinimum ? 'feil' : 'ok');
 }
 
 async function angreLagerBatch(batchId) {

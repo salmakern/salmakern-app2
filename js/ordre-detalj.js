@@ -160,7 +160,7 @@ function buildOrdreDetail() {
             </div>
           </div>
           <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
-          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOmbyggingVariant('${o.id}');oppdaterEkstraUtstyrValg('${o.id}')"></div>
+          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
           <div class="felt-wrap">
             <label>Type</label>
             <input id="typeInput_${o.id}" value="${esc(o.type||'')}" autocomplete="off"
@@ -169,7 +169,7 @@ function buildOrdreDetail() {
               onfocus="visFeltDropdown('typeForslag_type_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_type_${o.id}'))">
             <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag())}</div>
           </div>
-          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}');oppdaterEkstraUtstyrValg('${o.id}')"></div>
+          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
           <div class="felt-wrap">
             <label>Variant</label>
             <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" autocomplete="off" onchange="sf('${o.id}','variant',this.value)"
@@ -189,10 +189,6 @@ function buildOrdreDetail() {
           <div>
             <label>Ombygging (for lager-oppskrift)</label>
             <select id="ombyggingVariantSelect_${o.id}" onchange="sfOmbyggingVariant('${o.id}',this.value)">${ombyggingVariantSelectOptions(o)}</select>
-          </div>
-          <div>
-            <label>Ekstra utstyr (for lager-oppskrift)</label>
-            <select id="ekstraUtstyrSelect_${o.id}" onchange="sfEkstraUtstyr('${o.id}',this.value)">${ekstraUtstyrSelectOptions(o)}</select>
           </div>
         </div>
 
@@ -639,61 +635,6 @@ function sfOmbyggingVariant(id, val) {
   save(id);
   autoTrekkOppskrift(id);
 }
-
-// "Ekstra utstyr" - samme idé som Ombygging over, bare koblet til utstyr-malene (S.utstyrMaler)
-// i stedet for lager-oppskriftene. Valget lagres i o.utstyrMalNavn - SAMME felt som brukes av
-// utstyr-mal-velgeren under "Utstyr – Har ved ankomst" lenger ned på siden (se applyUtstyrMal*
-// i ansatte-utstyr.js) - de to feltene representerer samme valg, bare med to innganger.
-// Filtrert på modell akkurat som ombyggingVariantSelectOptions, men den nåværende malen
-// vises alltid selv om den ikke lenger matcher (unngår at et gyldig valg "forsvinner" fra
-// lista bare fordi noen endret Merke/Modell etterpå).
-function ekstraUtstyrMalerForOrdre(o) {
-  const modellTekst = merkeModell(o).toLowerCase();
-  return (S.utstyrMaler||[]).filter(m => {
-    if (!m.biltype) return true; // gjelder alle biler
-    if (!modellTekst) return false;
-    const b = m.biltype.toLowerCase();
-    return modellTekst.includes(b) || b.includes(modellTekst);
-  });
-}
-const EKSTRA_UTSTYR_INGEN_VALGT = '__ingen_ekstra_utstyr__';
-function ekstraUtstyrSelectOptions(o) {
-  let maler = ekstraUtstyrMalerForOrdre(o);
-  if (o.utstyrMalNavn && !maler.find(m=>m.navn===o.utstyrMalNavn)) {
-    const gjeldendeMal = (S.utstyrMaler||[]).find(m=>m.navn===o.utstyrMalNavn);
-    if (gjeldendeMal) maler = [...maler, gjeldendeMal];
-  }
-  if (!maler.length) return `<option value="${EKSTRA_UTSTYR_INGEN_VALGT}">Ingen utstyr-mal for "${esc(merkeModell(o))}" ennå</option>`;
-  maler = [...maler].sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
-  const gjeldende = o.utstyrMalNavn || '';
-  const placeholder = `<option value="${EKSTRA_UTSTYR_INGEN_VALGT}" ${!gjeldende?'selected':''}>– Ingen valgt –</option>`;
-  const valgOpts = maler.map(m=>`<option value="${esc(m.id)}" ${m.navn===gjeldende?'selected':''}>${esc(m.navn)}</option>`).join('');
-  return placeholder + valgOpts;
-}
-function oppdaterEkstraUtstyrValg(ordreId) {
-  const sel = document.getElementById('ekstraUtstyrSelect_' + ordreId);
-  if (!sel) return;
-  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
-  sel.innerHTML = ekstraUtstyrSelectOptions(o);
-}
-function sfEkstraUtstyr(ordreId, val) {
-  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
-  if (val === EKSTRA_UTSTYR_INGEN_VALGT) {
-    if (!o.utstyrMalNavn) return;
-    if (o.utstyrSjekkliste?.length && !confirm(`Fjerne valgt utstyr ("${o.utstyrMalNavn}") og tømme sjekklisten under "Utstyr – Har ved ankomst"?`)) {
-      oppdaterEkstraUtstyrValg(ordreId);
-      return;
-    }
-    o.utstyrSjekkliste = [];
-    o.utstyrMalNavn = '';
-    logChange(o, 'Ekstra utstyr fjernet');
-    save(ordreId);
-    buildOrdreDetail();
-    return;
-  }
-  applyUtstyrMalById(ordreId, val);
-}
-
 function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
 
 function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
