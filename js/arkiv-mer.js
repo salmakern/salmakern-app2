@@ -145,6 +145,12 @@ function renderMer() {
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
   document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
   document.getElementById('merHelsesjekkKort').style.display = erAdmin ? 'block' : 'none';
+  // Seksjonsoverskrift+gruppe for "Ansatte og tilgang" og "Oppsett og verktøy" vises kun
+  // hvis minst ett kort inni faktisk er synlig - begge grupperingene er 100% admin-only.
+  document.getElementById('merSeksjonAnsatte').style.display = erAdmin ? 'block' : 'none';
+  document.getElementById('merGruppeAnsatte').style.display  = erAdmin ? 'grid'  : 'none';
+  document.getElementById('merSeksjonOppsett').style.display = erAdmin ? 'block' : 'none';
+  document.getElementById('merGruppeOppsett').style.display  = erAdmin ? 'block' : 'none';
 
   if (erAdmin) {
     const ukoblet = finnUkobledeAdminArkRader();
