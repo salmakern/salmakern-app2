@@ -348,9 +348,15 @@ function closeLightbox() {
 }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeLightbox(); });
 
-// Zoom/pan i lightbox — dobbeltklikk/dobbelttrykk, scroll og knip-til-zoom
+// Zoom/pan i lightbox — dobbeltklikk/dobbelttrykk, scroll og knip-til-zoom.
+// Bruker KUN Pointer Events (dekker mus, touch og penn i ett og samme API) - separate
+// touch-handlere ved siden av gjorde at et to-fingers knip også trigget pointerdown/move
+// for hver finger, og de to logikkene kjempet om samme lbX/lbY/lbScale samtidig. Det ga
+// synlig hakking/rykking under knip på mobil (bekreftet ved å fjerne touch-handlerne).
 let lbScale = 1, lbX = 0, lbY = 0;
-let lbDrag = null, lbPinch = null;
+let lbDrag = null;                 // { startX, startY } - aktiv panning med én peker
+let lbPinchStart = null;           // { dist, scale } - aktiv knip med to pekere
+const lbPointers = new Map();      // pointerId -> { x, y }, alle pekere som er nede nå
 
 function lbApplyTransform() {
   const img = document.getElementById('lightbox-img');
@@ -358,7 +364,7 @@ function lbApplyTransform() {
   img.style.cursor = lbScale > 1 ? 'grab' : 'zoom-in';
 }
 function lbResetZoom() {
-  lbScale = 1; lbX = 0; lbY = 0; lbDrag = null; lbPinch = null;
+  lbScale = 1; lbX = 0; lbY = 0; lbDrag = null; lbPinchStart = null; lbPointers.clear();
   lbApplyTransform();
 }
 function lbToggleZoom() {
@@ -373,35 +379,45 @@ function lbWheel(e) {
   if (lbScale === 1) { lbX = 0; lbY = 0; }
   lbApplyTransform();
 }
+function lbPinchDist() {
+  const [p1, p2] = [...lbPointers.values()];
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y);
+}
 function lbPointerDown(e) {
-  if (lbScale <= 1) return;
-  lbDrag = { startX: e.clientX - lbX, startY: e.clientY - lbY };
   e.target.setPointerCapture(e.pointerId);
-}
-function lbPointerMove(e) {
-  if (!lbDrag) return;
-  lbX = e.clientX - lbDrag.startX;
-  lbY = e.clientY - lbDrag.startY;
-  lbApplyTransform();
-}
-function lbPointerUp() { lbDrag = null; }
-function lbTouchStart(e) {
-  if (e.touches.length === 2) {
-    const [t1,t2] = e.touches;
-    lbPinch = { dist: Math.hypot(t2.clientX-t1.clientX, t2.clientY-t1.clientY), scale: lbScale };
+  lbPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (lbPointers.size === 2) {
+    lbDrag = null; // andre finger ned - knip tar over for en ev. pågående panning
+    lbPinchStart = { dist: lbPinchDist(), scale: lbScale };
+  } else if (lbPointers.size === 1 && lbScale > 1) {
+    lbDrag = { startX: e.clientX - lbX, startY: e.clientY - lbY };
   }
 }
-function lbTouchMove(e) {
-  if (e.touches.length === 2 && lbPinch) {
+function lbPointerMove(e) {
+  if (!lbPointers.has(e.pointerId)) return;
+  lbPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (lbPointers.size === 2 && lbPinchStart) {
     e.preventDefault();
-    const [t1,t2] = e.touches;
-    const dist = Math.hypot(t2.clientX-t1.clientX, t2.clientY-t1.clientY);
-    lbScale = Math.min(6, Math.max(1, lbPinch.scale * (dist / lbPinch.dist)));
+    lbScale = Math.min(6, Math.max(1, lbPinchStart.scale * (lbPinchDist() / lbPinchStart.dist)));
     if (lbScale === 1) { lbX = 0; lbY = 0; }
+    lbApplyTransform();
+  } else if (lbDrag) {
+    lbX = e.clientX - lbDrag.startX;
+    lbY = e.clientY - lbDrag.startY;
     lbApplyTransform();
   }
 }
-function lbTouchEnd(e) { if (e.touches.length < 2) lbPinch = null; }
+function lbPointerUp(e) {
+  lbPointers.delete(e.pointerId);
+  lbPinchStart = null;
+  lbDrag = null;
+  // Én finger ble liggende igjen etter at den andre slapp under et knip - fortsett som
+  // panning fra der den fingeren faktisk er nå, i stedet for å bare stoppe brått.
+  if (lbPointers.size === 1 && lbScale > 1) {
+    const [[, p]] = lbPointers;
+    lbDrag = { startX: p.x - lbX, startY: p.y - lbY };
+  }
+}
 
 async function slaOppRegnr(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;

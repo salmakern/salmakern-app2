@@ -56,7 +56,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:100vh}
+body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:100vh;touch-action:manipulation}
 
 /* ADMIN-ARK - kompakte rader for å få flest mulig rader synlig uten scroll */
 #adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px}
@@ -176,7 +176,7 @@ tr:first-child td{padding-top:8px}
 /* LIGHTBOX */
 #lightbox{position:fixed;inset:0;background:#000d;z-index:999;display:none;align-items:center;justify-content:center;padding:16px;overflow:hidden}
 #lightbox.show{display:flex}
-#lightbox img{max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 40px #000;touch-action:none;cursor:zoom-in;user-select:none}
+#lightbox img{max-width:100%;max-height:90vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 40px #000;touch-action:none;cursor:zoom-in;user-select:none;-webkit-user-drag:none}
 #lightbox-close{position:fixed;top:16px;right:20px;font-size:32px;color:#fff;cursor:pointer;background:none;border:none;line-height:1;z-index:1000}
 
 /* CLOCK */
@@ -883,17 +883,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <!-- LIGHTBOX -->
 <div id="lightbox" onclick="closeLightbox()">
   <button id="lightbox-close" onclick="closeLightbox()">✕</button>
-  <img id="lightbox-img" src=""
+  <img id="lightbox-img" src="" draggable="false" ondragstart="return false"
     onclick="event.stopPropagation()"
     ondblclick="event.stopPropagation();lbToggleZoom()"
     onwheel="lbWheel(event)"
     onpointerdown="lbPointerDown(event)"
     onpointermove="lbPointerMove(event)"
     onpointerup="lbPointerUp(event)"
-    onpointercancel="lbPointerUp(event)"
-    ontouchstart="lbTouchStart(event)"
-    ontouchmove="lbTouchMove(event)"
-    ontouchend="lbTouchEnd(event)">
+    onpointercancel="lbPointerUp(event)">
 </div>
 
 <!-- ═══════════════ MODALS ═══════════════ -->
