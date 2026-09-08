@@ -183,6 +183,44 @@ function renderOversikt(q) {
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }
 function calIdag()       { calWeekOffset = 0;    renderWeek(); }
 
+// Deler overlappende kalenderhendelser (ordre/møter som ligger for tett i tid til å
+// vises fullt i egen bredde) side om side i stedet for å la dem legge seg oppå
+// hverandre. Grupperer først i klynger av transitivt overlappende hendelser, tildeler
+// deretter hver hendelse en kolonne innad i klyngen med en enkel grådig algoritme
+// (samme mønster som Google Kalender m.fl. bruker), og returnerer ferdig HTML.
+function plasserKalenderHendelser(items) {
+  const sortert = items.slice().sort((a,b) => a.top - b.top || a.height - b.height);
+  const klynger = [];
+  let gjeldende = [], klyngeSlutt = -Infinity;
+  sortert.forEach(it => {
+    it._bunn = it.top + it.height;
+    if (it.top >= klyngeSlutt) {
+      if (gjeldende.length) klynger.push(gjeldende);
+      gjeldende = [it]; klyngeSlutt = it._bunn;
+    } else {
+      gjeldende.push(it); klyngeSlutt = Math.max(klyngeSlutt, it._bunn);
+    }
+  });
+  if (gjeldende.length) klynger.push(gjeldende);
+
+  klynger.forEach(klynge => {
+    const kolonner = []; // siste _bunn i hver kolonne
+    klynge.forEach(it => {
+      let plassert = false;
+      for (let i=0;i<kolonner.length;i++) {
+        if (kolonner[i] <= it.top) { it._kol = i; kolonner[i] = it._bunn; plassert = true; break; }
+      }
+      if (!plassert) { it._kol = kolonner.length; kolonner.push(it._bunn); }
+    });
+    klynge.forEach(it => { it._antallKol = kolonner.length; });
+  });
+
+  return sortert.map(it => {
+    const widthPct = 100 / it._antallKol;
+    return it.html(widthPct * it._kol, widthPct);
+  });
+}
+
 function renderWeek() {
   const el = document.getElementById('weekCal');
   const DAY_NAMES = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
@@ -238,43 +276,49 @@ function renderWeek() {
     const nowLine = (isToday && nowFrac >= START_H && nowFrac <= END_H)
       ? `<div class="cal-now" style="top:${nowTop}px"></div>` : '';
 
-    const events = orders.map(o => {
-      const si = statusInfo(o.ordreStatus);
-      const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
-      const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
-      const height = (o.regnr && !o.chassis) ? Math.max(36, SLOT_PX) : Math.max(42, SLOT_PX); // nok plass til lengre tekst (regnr + chassis) på 2 linjer, uten tomrom
-      return `<div class="cal-event" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
-          <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
-            <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
-            <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${o.tidBiltilsynetSted?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
-          </div>
-          <div style="position:relative;flex-shrink:0">
-            <button onclick="event.stopPropagation();toggleCalMenu('${o.id}')" style="background:none;border:none;color:${si.txt};font-size:18px;line-height:1;padding:0 2px;cursor:pointer" title="Valg">⋯</button>
-            <div id="calMenu_${o.id}" style="display:none;position:absolute;top:22px;right:0;background:#18181b;border:1px solid #3f3f46;border-radius:12px;padding:6px;z-index:200;min-width:150px;box-shadow:0 4px 20px #000a">
-              <button onclick="event.stopPropagation();closeCalMenu();openFlyttKalender('${o.id}')" style="display:block;width:100%;text-align:left;background:none;border:none;color:#f4f4f5;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='none'">✎ Flytt</button>
-              <button onclick="event.stopPropagation();closeCalMenu();fjernFraKalender('${o.id}')" style="display:block;width:100%;text-align:left;background:none;border:none;color:#fca5a5;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='none'">✕ Fjern fra kalender</button>
+    // Slår ordre og møter sammen til én liste med tid/høyde før posisjonering,
+    // slik at overlappende hendelser kan deles side om side i stedet for å
+    // legges rett oppå hverandre (som ga uleselig overlapp ved tette timer).
+    const items = [
+      ...orders.map(o => {
+        const si = statusInfo(o.ordreStatus);
+        const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
+        const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
+        const height = (o.regnr && !o.chassis) ? Math.max(36, SLOT_PX) : Math.max(42, SLOT_PX); // nok plass til lengre tekst (regnr + chassis) på 2 linjer, uten tomrom
+        return { top, height, html: (leftPct, widthPct) => `<div class="cal-event" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 3px);width:calc(${widthPct}% - 6px);background:${si.bg};border-color:${si.border}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
+            <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
+              <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
+              <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${o.tidBiltilsynetSted?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
+            </div>
+            <div style="position:relative;flex-shrink:0">
+              <button onclick="event.stopPropagation();toggleCalMenu('${o.id}')" style="background:none;border:none;color:${si.txt};font-size:18px;line-height:1;padding:0 2px;cursor:pointer" title="Valg">⋯</button>
+              <div id="calMenu_${o.id}" style="display:none;position:absolute;top:22px;right:0;background:#18181b;border:1px solid #3f3f46;border-radius:12px;padding:6px;z-index:200;min-width:150px;box-shadow:0 4px 20px #000a">
+                <button onclick="event.stopPropagation();closeCalMenu();openFlyttKalender('${o.id}')" style="display:block;width:100%;text-align:left;background:none;border:none;color:#f4f4f5;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='none'">✎ Flytt</button>
+                <button onclick="event.stopPropagation();closeCalMenu();fjernFraKalender('${o.id}')" style="display:block;width:100%;text-align:left;background:none;border:none;color:#fca5a5;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px" onmouseover="this.style.background='#27272a'" onmouseout="this.style.background='none'">✕ Fjern fra kalender</button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>`;
-    }).join('');
-
-    const moteEvents = moter.map(m => {
-      const [mh, mm] = (m.tid || '09:00').split(':').map(Number);
-      const top = Math.max(0, (mh + mm / 60 - (START_H + 0.5)) * HOUR_PX);
-      return `<div class="cal-event" style="top:${top}px;height:${Math.max(42,SLOT_PX)}px;background:#2e1065cc;border-color:#a78bfa">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
-          <div style="flex:1;min-width:0">
-            <div class="cal-event-regnr" style="color:#ddd6fe">📅 ${m.tittel}</div>
-            <div class="cal-event-info" style="color:#ddd6fe;opacity:0.8">${m.tid} · Møte</div>
+        </div>` };
+      }),
+      ...moter.map(m => {
+        const [mh, mm] = (m.tid || '09:00').split(':').map(Number);
+        const top = Math.max(0, (mh + mm / 60 - (START_H + 0.5)) * HOUR_PX);
+        const height = Math.max(42, SLOT_PX);
+        return { top, height, html: (leftPct, widthPct) => `<div class="cal-event" style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 3px);width:calc(${widthPct}% - 6px);background:#2e1065cc;border-color:#a78bfa">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
+            <div style="flex:1;min-width:0">
+              <div class="cal-event-regnr" style="color:#ddd6fe">📅 ${m.tittel}</div>
+              <div class="cal-event-info" style="color:#ddd6fe;opacity:0.8">${m.tid} · Møte</div>
+            </div>
+            <button onclick="event.stopPropagation();slettMote('${m.id}')" style="background:none;border:none;color:#ddd6fe;font-size:16px;line-height:1;padding:0 2px;cursor:pointer" title="Slett møte">✕</button>
           </div>
-          <button onclick="event.stopPropagation();slettMote('${m.id}')" style="background:none;border:none;color:#ddd6fe;font-size:16px;line-height:1;padding:0 2px;cursor:pointer" title="Slett møte">✕</button>
-        </div>
-      </div>`;
-    }).join('');
+        </div>` };
+      })
+    ];
+    const events = plasserKalenderHendelser(items).join('');
 
-    return `<div class="cal-day-col${isToday?' cal-today-col':''}">${slotEls}${nowLine}${events}${moteEvents}</div>`;
+    return `<div class="cal-day-col${isToday?' cal-today-col':''}">${slotEls}${nowLine}${events}</div>`;
   }).join('');
 
   const headCols = dates.map((dt, i) => {

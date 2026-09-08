@@ -165,8 +165,8 @@ function buildOrdreDetail() {
           <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
           <div><label>Variant</label><input value="${esc(o.variant||'')}" onchange="sf('${o.id}','variant',this.value)"></div>
           <div><label>Farge</label><input value="${esc(o.farge||'')}" onchange="sf('${o.id}','farge',this.value)"></div>
-          <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div><label>Versjon</label><input value="${esc(o.versjon||'')}" onchange="sf('${o.id}','versjon',this.value)"></div>
+          <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
           <div><label>Fullmakt</label>${dokStatusDropdown(o.id,'fullmakt',o.fullmakt)}</div>
           <div>
