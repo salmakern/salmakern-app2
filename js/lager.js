@@ -755,13 +755,13 @@ function renderOppskriftModellerListe() {
   const modeller = [...new Set([...alleKjenteModeller(), ...(S.lagerOppskrifter||[]).map(o=>o.biltype).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'no'));
   if (!modeller.length) { el.innerHTML = '<div class="card"><div class="muted small">Ingen modeller ennå. Lag en utstyr-mal med en biltype under Mer først.</div></div>'; return; }
   el.innerHTML = `<div class="grid g3">${modeller.map(m => {
-    const varianter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===m);
-    const antallDeler = new Set(varianter.flatMap(o => (o.ingredienser||[]).map(i=>i.vareId))).size;
+    const oppskrifter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===m);
+    const antallDeler = new Set(oppskrifter.flatMap(o => (o.ingredienser||[]).map(i=>i.vareId))).size;
     return `<div class="box" style="cursor:pointer" onclick="visOppskriftModell('${esc(m).replace(/'/g,"\\'")}')">
       <div class="row"><b>${esc(m)}</b><span style="color:#a1a1aa">›</span></div>
       <div class="small muted" style="margin-top:2px">${
-        varianter.length
-          ? `${varianter.length} variant${varianter.length===1?'':'er'} · ${antallDeler} deler totalt`
+        oppskrifter.length
+          ? `${oppskrifter.length} oppskrift${oppskrifter.length===1?'':'er'} · ${antallDeler} deler totalt`
           : 'Ingen oppskrift ennå'
       }</div>
     </div>`;
@@ -784,31 +784,33 @@ function tilbakeFraOppskriftModell() {
 function renderOppskriftModellDetalj() {
   const modell = oppskriftAktivModell; if (!modell) return;
   document.getElementById('oppskriftModellTittel').textContent = modell;
-  const varianter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===modell).sort((a,b)=>(a.variant||'').localeCompare(b.variant||'','no'));
+  const oppskrifter = (S.lagerOppskrifter||[]).filter(o=>o.biltype===modell)
+    .sort((a,b)=> (a.type||'ombygging').localeCompare(b.type||'ombygging') || a.navn.localeCompare(b.navn,'no'));
 
-  // Generell oversikt: alle deler brukt i minst én variant av modellen, uavhengig av hvilken
+  // Generell oversikt: alle deler brukt i minst én oppskrift for modellen, uavhengig av hvilken
   const delerMap = {};
-  varianter.forEach(o => (o.ingredienser||[]).forEach(i => {
+  oppskrifter.forEach(o => (o.ingredienser||[]).forEach(i => {
     const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
-    (delerMap[i.vareId] = delerMap[i.vareId] || {navn:v.navn, enhet:v.enhet, bruk:[]}).bruk.push({variant:o.variant||'Generelt', antall:i.antall});
+    (delerMap[i.vareId] = delerMap[i.vareId] || {navn:v.navn, enhet:v.enhet, bruk:[]}).bruk.push({navn:o.navn, antall:i.antall});
   }));
   const generellEl = document.getElementById('oppskriftModellGenerellOversikt');
   const delerListe = Object.values(delerMap).sort((a,b)=>a.navn.localeCompare(b.navn,'no'));
   generellEl.innerHTML = delerListe.length ? delerListe.map(d => `
     <div class="box" style="margin-bottom:5px;padding:8px 10px">
       <b>${esc(d.navn)}</b>
-      <div class="small muted" style="margin-top:2px">${d.bruk.map(b=>`${fmtAntall(b.antall)} ${esc(d.enhet)} – ${esc(b.variant)}`).join(', ')}</div>
-    </div>`).join('') : '<div class="muted small">Ingen deler lagt til på noen variant ennå</div>';
+      <div class="small muted" style="margin-top:2px">${d.bruk.map(b=>`${fmtAntall(b.antall)} ${esc(d.enhet)} – ${esc(b.navn)}`).join(', ')}</div>
+    </div>`).join('') : '<div class="muted small">Ingen deler lagt til på noen oppskrift ennå</div>';
 
+  const TYPE_LABEL = {ombygging:'Ombygging', ekstra_utstyr:'Ekstra utstyr'};
   const variantEl = document.getElementById('oppskriftVariantListeKort');
-  variantEl.innerHTML = varianter.length ? varianter.map(o => {
+  variantEl.innerHTML = oppskrifter.length ? oppskrifter.map(o => {
     const deler = (o.ingredienser||[]).map(i => {
       const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
       return v ? `<span class="pill" style="margin:0;font-size:11.5px;padding:3px 10px">${fmtAntall(i.antall)} ${esc(v.enhet)} · ${esc(v.navn)}</span>` : null;
     }).filter(Boolean);
     return `<div class="box" style="margin-bottom:7px;padding:13px 14px">
       <div class="row">
-        <b>${o.variant ? esc(o.variant) : 'Generelt (alle varianter)'}</b>
+        <div><b>${esc(o.navn)}</b> <span class="pill" style="margin-left:4px;font-size:11px;padding:3px 10px">${TYPE_LABEL[o.type||'ombygging']}</span></div>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
           <span class="pill" style="margin:0;font-size:11px;padding:3px 10px">${(o.ingredienser||[]).length} deler</span>
           <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎</button>
@@ -820,8 +822,8 @@ function renderOppskriftModellDetalj() {
         : '<div class="small muted" style="margin-top:6px">Ingen deler lagt til</div>'}
     </div>`;
   }).join('') : `<div class="box" style="text-align:center;padding:22px">
-      <div class="muted small">Ingen varianter opprettet ennå for denne modellen</div>
-      <button class="btn sm red" style="margin-top:10px" onclick="apneNyOppskrift('${esc(modell).replace(/'/g,"\\'")}')">+ Ny variant</button>
+      <div class="muted small">Ingen oppskrifter opprettet ennå for denne modellen</div>
+      <button class="btn sm red" style="margin-top:10px" onclick="apneNyOppskrift('${esc(modell).replace(/'/g,"\\'")}')">+ Ny oppskrift</button>
     </div>`;
 }
 
@@ -882,23 +884,13 @@ function lesOppskriftIngredienser() {
   return valgt;
 }
 
-function fyllVariantForslag() {
-  const dl = document.getElementById('oppskriftVariantListe');
-  if (!dl) return;
-  const fraOppskrifter = (S.lagerOppskrifter||[]).map(o=>o.variant).filter(Boolean);
-  const fraOrdrer = (S.ordrer||[]).map(o=>o.variant).filter(Boolean);
-  const alle = [...new Set([...fraOppskrifter, ...fraOrdrer])].sort((a,b)=>a.localeCompare(b,'no'));
-  dl.innerHTML = alle.map(v=>`<option value="${esc(v)}">`).join('');
-}
-
 function apneNyOppskrift(forhaandsvalgtModell) {
   if (!(S.lagervarer||[]).length) { alert('Legg til minst én vare i lageret først'); return; }
   document.getElementById('oppskriftModalTittel').textContent = 'Ny oppskrift';
   document.getElementById('redigerOppskriftId').value = '';
   document.getElementById('oppskriftNavn').value = '';
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(forhaandsvalgtModell||'');
-  document.getElementById('oppskriftVariant').value = '';
-  fyllVariantForslag();
+  document.getElementById('oppskriftType').value = 'ombygging';
   oppskriftVisAlleVarer = false;
   fyllOppskriftVareListe();
   openModal('nyOppskriftModal');
@@ -910,8 +902,7 @@ function apneRedigerOppskrift(id) {
   document.getElementById('redigerOppskriftId').value = o.id;
   document.getElementById('oppskriftNavn').value = o.navn;
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(o.biltype||'');
-  document.getElementById('oppskriftVariant').value = o.variant||'';
-  fyllVariantForslag();
+  document.getElementById('oppskriftType').value = o.type||'ombygging';
   oppskriftVisAlleVarer = false;
   const forhaandsvalgt = {};
   (o.ingredienser||[]).forEach(i => forhaandsvalgt[i.vareId] = i.antall);
@@ -923,7 +914,7 @@ function lagreOppskrift() {
   const navn = document.getElementById('oppskriftNavn').value.trim();
   if (!navn) { alert('Skriv inn et navn på oppskriften'); return; }
   const biltype = document.getElementById('oppskriftBiltype').value.trim();
-  const variant = document.getElementById('oppskriftVariant').value.trim();
+  const type = document.getElementById('oppskriftType').value;
   const editId = document.getElementById('redigerOppskriftId').value;
   const valgt = lesOppskriftIngredienser();
   const ingredienser = Object.entries(valgt).map(([vareId, antall]) => ({vareId, antall})).filter(i => i.antall > 0);
@@ -931,15 +922,15 @@ function lagreOppskrift() {
 
   if (editId) {
     const o = (S.lagerOppskrifter||[]).find(x=>x.id===editId); if (!o) return;
-    o.navn = navn; o.biltype = biltype; o.variant = variant; o.ingredienser = ingredienser;
-    if (db) db.from('lager_oppskrifter').update({navn, biltype, variant, ingredienser}).eq('id', o.id)
+    o.navn = navn; o.biltype = biltype; o.type = type; o.ingredienser = ingredienser;
+    if (db) db.from('lager_oppskrifter').update({navn, biltype, type, ingredienser}).eq('id', o.id)
       .then(r=>{if(r.error) console.error('Oppskrift-oppdatering feilet:', r.error.message);});
   } else {
     const id = 'oppskrift_' + Date.now();
-    const oppskrift = { id, navn, biltype, variant, ingredienser, createdAt:new Date().toISOString() };
+    const oppskrift = { id, navn, biltype, type, ingredienser, createdAt:new Date().toISOString() };
     S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.lagerOppskrifter.push(oppskrift);
-    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, variant, ingredienser})
+    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, type, ingredienser})
       .then(r=>{if(r.error) console.error('Oppskrift-lagring feilet:', r.error.message);});
   }
   closeModal('nyOppskriftModal');
@@ -960,59 +951,56 @@ function slettOppskrift(id) {
 // ════════════════════════════════════════════════════
 // VARER FRA LAGER PÅ ORDRE
 // ════════════════════════════════════════════════════
-// En oppskrift matcher en ordre på modell (Merke + Modell), og eksakt på
-// ombygging-varianten valgt i dropdownen (blank/Standard = gjelder alle varianter).
+// En oppskrift matcher en ordre kun på modell (Merke + Modell) - IKKE lenger på variant.
+// Ombygging kan bestå av flere uavhengige oppskrifter som gjelder samtidig (f.eks. både
+// "Takluke" og "Annet feste i gulvet"), så matching er bevisst bredere enn før - hvilke
+// som faktisk gjelder denne bilen hakes av manuelt på ordren, se renderOrdreLagerbruk().
 function oppskriftMatcherOrdre(r, o) {
   if (!r.biltype) return false;
   const biltypeTekst = merkeModell(o).toLowerCase();
   if (!biltypeTekst) return false;
   const biltypeR = r.biltype.toLowerCase();
-  if (!(biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst))) return false;
-  if (!r.variant) return true; // Standard-oppskrift uten variant gjelder uansett hvilken variant ordren har
-  return o.ombygging?.variant === r.variant;
+  return biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst);
 }
 
+// Viser Ombygging- og Ekstra utstyr-oppskrifter som matcher ordrens modell som to
+// avkrysningslister. Å hake av trekker oppskriftens deler fra lager med en gang; å fjerne
+// haken angrer trekket (samme som "↩ Angre" gjorde før) - se toggleOppskriftPaaOrdre().
+// Avkrysset-tilstanden er ikke lagret for seg selv, den er avledet fra om det finnes en
+// lagerhistorikk-batch for denne ordren med kommentar=oppskriftens navn.
 function renderOrdreLagerbruk() {
   const el = document.getElementById('ordreLagerbruk_' + activeOrdreId);
   if (!el) return;
   const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
 
-  const treff = (S.lagerOppskrifter||[]).filter(r => oppskriftMatcherOrdre(r, o));
+  const brukteNavn = new Set((S.lagerhistorikk||[]).filter(h=>h.ordreId===o.id && h.batchId).map(h=>h.kommentar));
 
-  const brukteBatcher = {};
-  (S.lagerhistorikk||[]).filter(h => h.ordreId===o.id && h.batchId).forEach(h => {
-    (brukteBatcher[h.batchId] = brukteBatcher[h.batchId] || []).push(h);
-  });
-  const brukteNavn = new Set(Object.values(brukteBatcher).map(rader=>rader[0].kommentar));
-  const batchHTML = Object.entries(brukteBatcher).map(([batchId, rader]) => {
-    const navn = rader[0].kommentar || 'Oppskrift';
-    return `<div class="box" style="margin-bottom:6px;padding:10px">
-      <div class="row">
-        <b>${esc(navn)}</b>
-        <button class="btn sm" onclick="angreLagerBatch('${batchId}')">↩ Angre</button>
-      </div>
-      <div class="small muted" style="margin-top:4px">${rader.map(r=>`${fmtAntall(Math.abs(r.endring))} ${esc(r.vareNavn)}`).join(', ')}</div>
+  const seksjonHTML = (type, tittel) => {
+    const treff = (S.lagerOppskrifter||[]).filter(r => (r.type||'ombygging')===type && oppskriftMatcherOrdre(r, o));
+    if (!treff.length) return '';
+    const rader = treff.map(r => {
+      const huket = brukteNavn.has(r.navn);
+      const delerTekst = (r.ingredienser||[]).map(i => {
+        const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
+        return v ? `${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}` : null;
+      }).filter(Boolean).join(', ');
+      return `<label style="display:flex;align-items:flex-start;gap:10px;background:#18181b;border:2px solid ${huket?'#ef4444':'#27272a'};border-radius:12px;padding:12px;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" ${huket?'checked':''} onchange="toggleOppskriftPaaOrdre('${r.id}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0;margin-top:1px">
+        <div style="flex:1;min-width:0">
+          <b>${esc(r.navn)}</b>
+          ${delerTekst?`<div class="small muted" style="margin-top:2px">${delerTekst}</div>`:''}
+        </div>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:14px">
+      <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10px">${tittel}</div>
+      ${rader}
     </div>`;
-  }).join('');
-
-  const ubrukteTreff = treff.filter(r => !brukteNavn.has(r.navn));
-  const forslagHTML = ubrukteTreff.length ? ubrukteTreff.map(r => `
-    <div class="box" style="margin-bottom:6px;padding:10px">
-      <div class="row">
-        <div><b>${esc(r.navn)}</b> <span class="small muted">– ${esc(r.biltype)}</span></div>
-        <button class="btn sm red" onclick="trekkOppskriftForOrdre('${r.id}')">Trekk fra lager</button>
-      </div>
-      <div class="small muted" style="margin-top:4px">${(r.ingredienser||[]).map(i=>{
-        const v=(S.lagervarer||[]).find(x=>x.id===i.vareId); return v?`${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}`:null;
-      }).filter(Boolean).join(', ')}</div>
-    </div>`).join('') : '';
+  };
 
   const modellTekst = merkeModell(o);
-  el.innerHTML = `
-    ${batchHTML ? `<div class="small muted" style="margin-bottom:6px">Trukket fra lager på denne ordren</div>${batchHTML}` : ''}
-    ${forslagHTML ? `<div class="small muted" style="margin:${batchHTML?'10px':'0'} 0 6px">${batchHTML?'Andre':'Tilgjengelige'} oppskrifter for "${esc(modellTekst)}"</div>${forslagHTML}` : ''}
-    ${!batchHTML && !forslagHTML ? `<div class="muted small">${modellTekst ? `Ingen oppskrift funnet for "${esc(modellTekst)}". Lag en under Lager-fanen.` : 'Fyll inn Merke og Modell på ordren for å se aktuelle oppskrifter.'}</div>` : ''}
-  `;
+  const html = seksjonHTML('ombygging', 'Ombygging') + seksjonHTML('ekstra_utstyr', 'Ekstra utstyr');
+  el.innerHTML = html || `<div class="muted small">${modellTekst ? `Ingen oppskrift funnet for "${esc(modellTekst)}". Lag en under Lager-fanen.` : 'Fyll inn Merke og Modell på ordren for å se aktuelle oppskrifter.'}</div>`;
 }
 
 function trekkOppskriftForOrdre(oppskriftId) {
@@ -1034,31 +1022,20 @@ function trekkOppskriftForOrdre(oppskriftId) {
   renderOrdreLagerbruk();
 }
 
-// Kalles automatisk når type/modell settes på en ordre (sf() og opprettOrdre()).
-// Trekker fra lager for alle matchende oppskrifter som ikke allerede er brukt på denne ordren.
-// Kjører stille (ingen bekreftelsesdialog) siden den trigges i bakgrunnen - varsler heller med en toast.
-function autoTrekkOppskrift(ordreId) {
-  const o = S.ordrer.find(x=>x.id===ordreId); if (!o || !merkeModell(o)) return;
-  const treff = (S.lagerOppskrifter||[]).filter(r => oppskriftMatcherOrdre(r, o));
-  if (!treff.length) return;
-
-  const brukteNavn = new Set((S.lagerhistorikk||[]).filter(h=>h.ordreId===ordreId && h.batchId).map(h=>h.kommentar));
-  const nye = treff.filter(r => !brukteNavn.has(r.navn));
-  if (!nye.length) return;
-
-  const lagerBatch = lagerBatchNy();
-  nye.forEach(r => {
-    const batchId = 'batch_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-    let underMinimum = false;
-    (r.ingredienser||[]).forEach(i => {
-      const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
-      if (v.antall < i.antall) underMinimum = true;
-      registrerLagerEndring(v, -Math.abs(i.antall), 'ut', ordreId, r.navn, batchId, lagerBatch);
-    });
-    visToast(`Trukket fra lager: ${r.navn}${underMinimum ? ' (noen varer gikk i minus)' : ''}`, underMinimum ? 'feil' : 'ok');
-  });
-  lagerBatchFlush(lagerBatch);
-  if (activeOrdreId === ordreId) renderOrdreLagerbruk();
+// Onchange-handler for avkrysningsboksene i renderOrdreLagerbruk(). Kaller alltid
+// renderOrdreLagerbruk() til slutt uansett utfall - både trekkOppskriftForOrdre() og
+// angreLagerBatch() kan returnere tidlig via en confirm()-dialog brukeren avbryter, og da
+// må boksen tilbakestilles til riktig (fortsatt uendret) tilstand med en gang, ikke bare
+// stå igjen visuelt feil til noe annet tilfeldigvis rendrer siden på nytt.
+function toggleOppskriftPaaOrdre(oppskriftId, huket) {
+  if (huket) {
+    trekkOppskriftForOrdre(oppskriftId);
+  } else {
+    const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId);
+    const rad = r && (S.lagerhistorikk||[]).find(h=>h.ordreId===activeOrdreId && h.batchId && h.kommentar===r.navn);
+    if (rad) angreLagerBatch(rad.batchId);
+  }
+  renderOrdreLagerbruk();
 }
 
 async function angreLagerBatch(batchId) {

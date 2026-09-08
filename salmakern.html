@@ -1413,14 +1413,16 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <input type="hidden" id="redigerOppskriftId">
     <label>Navn</label>
     <input id="oppskriftNavn" placeholder="F.eks. KIA EV9 standard ombygging">
+    <label>Type</label>
+    <div class="muted small" style="margin-bottom:6px">Ombygging kan bestå av flere oppskrifter som gjelder samtidig (f.eks. både "Takluke" og "Annet feste i gulvet") - lag én oppskrift per del/tillegg. Ekstra utstyr er valgfrie tillegg som tilhengerfeste, takstige o.l.</div>
+    <select id="oppskriftType">
+      <option value="ombygging">Ombygging</option>
+      <option value="ekstra_utstyr">Ekstra utstyr</option>
+    </select>
     <label>Modell</label>
     <div class="muted small" style="margin-bottom:6px">Matches mot Merke + Modell på ordren. Samme liste som biltype på utstyr-maler.</div>
     <select id="oppskriftBiltype" onchange="oppskriftVisAlleVarer=false;fyllOppskriftVareListe(lesOppskriftIngredienser())"></select>
-    <label>Variant (valgfritt)</label>
-    <div class="muted small" style="margin-bottom:6px">La stå tom for at oppskriften gjelder alle varianter av modellen. Fyll ut for varianter som bruker andre deler, f.eks. "Med takluke".</div>
-    <input id="oppskriftVariant" placeholder="F.eks. Med takluke" list="oppskriftVariantListe">
-    <datalist id="oppskriftVariantListe"></datalist>
-    <label>Huk av delene som brukes på denne varianten</label>
+    <label>Huk av delene som brukes på denne oppskriften</label>
     <div id="oppskriftIngrediensListe" style="margin-top:4px;max-height:320px;overflow-y:auto"></div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreOppskrift()">Lagre</button>

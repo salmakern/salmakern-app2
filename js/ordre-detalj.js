@@ -160,7 +160,7 @@ function buildOrdreDetail() {
             </div>
           </div>
           <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
-          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
+          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk()"></div>
           <div class="felt-wrap">
             <label>Type</label>
             <input id="typeInput_${o.id}" value="${esc(o.type||'')}" autocomplete="off"
@@ -169,7 +169,7 @@ function buildOrdreDetail() {
               onfocus="visFeltDropdown('typeForslag_type_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_type_${o.id}'))">
             <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag())}</div>
           </div>
-          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);oppdaterOmbyggingVariant('${o.id}')"></div>
+          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk()"></div>
           <div class="felt-wrap">
             <label>Variant</label>
             <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" autocomplete="off" onchange="sf('${o.id}','variant',this.value)"
@@ -186,10 +186,6 @@ function buildOrdreDetail() {
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
           <div><label>Fullmakt</label>${dokStatusDropdown(o.id,'fullmakt',o.fullmakt)}</div>
-          <div>
-            <label>Ombygging (for lager-oppskrift)</label>
-            <select id="ombyggingVariantSelect_${o.id}" onchange="sfOmbyggingVariant('${o.id}',this.value)">${ombyggingVariantSelectOptions(o)}</select>
-          </div>
         </div>
 
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
@@ -594,47 +590,6 @@ function modellSelectOptions(gjeldende) {
 // som modell-nøkkelen for å matche oppskrifter - ikke det separate Type-feltet.
 function merkeModell(o) { return `${o.merke||''} ${o.modell||''}`.trim(); }
 
-// Hvilke ombyggings-varianter (oppskrifter) som finnes for modellen på denne ordren.
-// Lagres i o.ombygging.variant - samme JSONB-objekt som de andre ombyggings-valgene,
-// så det trengs ingen ny databasekolonne.
-// Ingenting velges automatisk - feltet står på "Ingen valgt" til noen faktisk velger
-// en variant selv, og ingenting trekkes fra lager før det skjer.
-const OMBYGGING_INGEN_VALGT = '__ingen_valgt__';
-function ombyggingVariantSelectOptions(o) {
-  const modellTekst = merkeModell(o).toLowerCase();
-  if (!modellTekst) return `<option value="${OMBYGGING_INGEN_VALGT}">– Fyll inn Merke/Modell først –</option>`;
-  const varianter = [...new Set((S.lagerOppskrifter||[])
-    .filter(r => r.biltype && (modellTekst.includes(r.biltype.toLowerCase()) || r.biltype.toLowerCase().includes(modellTekst)))
-    .map(r => r.variant || ''))];
-  if (!varianter.length) return `<option value="${OMBYGGING_INGEN_VALGT}">Ingen oppskrift for "${esc(merkeModell(o))}" ennå</option>`;
-  const gjeldende = o.ombygging?.variant; // undefined = ingenting valgt ennå
-  varianter.sort((a,b)=> a===''?-1 : b===''?1 : a.localeCompare(b,'no'));
-  const placeholder = `<option value="${OMBYGGING_INGEN_VALGT}" ${gjeldende===undefined?'selected':''}>– Ingen valgt –</option>`;
-  const valgOpts = varianter.map(v => `<option value="${esc(v)}" ${gjeldende===v?'selected':''}>${v ? esc(v) : 'Standard (alle varianter)'}</option>`).join('');
-  return placeholder + valgOpts;
-}
-// Oppdaterer Variant/Versjon-forslagene fortløpende mens man skriver i Type-feltet,
-// slik at forslagene alltid gjelder den typen som faktisk står der nå.
-function oppdaterOmbyggingVariant(ordreId) {
-  const sel = document.getElementById('ombyggingVariantSelect_' + ordreId);
-  if (!sel) return;
-  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
-  sel.innerHTML = ombyggingVariantSelectOptions(o);
-}
-function sfOmbyggingVariant(id, val) {
-  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
-  o.ombygging = o.ombygging || {};
-  if (val === OMBYGGING_INGEN_VALGT) {
-    delete o.ombygging.variant;
-    logChange(o, 'Ombygging-variant tilbakestilt til ingen valgt');
-    save(id);
-    return;
-  }
-  o.ombygging.variant = val;
-  logChange(o, 'Ombygging-variant satt til: ' + (val || 'Standard'));
-  save(id);
-  autoTrekkOppskrift(id);
-}
 function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
 
 function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
