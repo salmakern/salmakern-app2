@@ -183,41 +183,19 @@ function renderOversikt(q) {
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }
 function calIdag()       { calWeekOffset = 0;    renderWeek(); }
 
-// Deler overlappende kalenderhendelser (ordre/møter som ligger for tett i tid til å
-// vises fullt i egen bredde) side om side i stedet for å la dem legge seg oppå
-// hverandre. Grupperer først i klynger av transitivt overlappende hendelser, tildeler
-// deretter hver hendelse en kolonne innad i klyngen med en enkel grådig algoritme
-// (samme mønster som Google Kalender m.fl. bruker), og returnerer ferdig HTML.
+// Kalenderkolonnene er for smale til at overlappende hendelser (ordre tett i tid) kan
+// deles side om side og fortsatt være lesbare - et halvbredt kort klarer ikke vise et
+// chassisnummer uten at teksten renner ut over kanten. Kaskaderer i stedet: en hendelse
+// som ville kollidert med den forrige skyves rett ned til der den forrige slutter, og
+// beholder full bredde. Tidspunktet i selve kortteksten er fortsatt det virkelige -
+// bare den vertikale plasseringen justeres ved kollisjon.
 function plasserKalenderHendelser(items) {
   const sortert = items.slice().sort((a,b) => a.top - b.top || a.height - b.height);
-  const klynger = [];
-  let gjeldende = [], klyngeSlutt = -Infinity;
-  sortert.forEach(it => {
-    it._bunn = it.top + it.height;
-    if (it.top >= klyngeSlutt) {
-      if (gjeldende.length) klynger.push(gjeldende);
-      gjeldende = [it]; klyngeSlutt = it._bunn;
-    } else {
-      gjeldende.push(it); klyngeSlutt = Math.max(klyngeSlutt, it._bunn);
-    }
-  });
-  if (gjeldende.length) klynger.push(gjeldende);
-
-  klynger.forEach(klynge => {
-    const kolonner = []; // siste _bunn i hver kolonne
-    klynge.forEach(it => {
-      let plassert = false;
-      for (let i=0;i<kolonner.length;i++) {
-        if (kolonner[i] <= it.top) { it._kol = i; kolonner[i] = it._bunn; plassert = true; break; }
-      }
-      if (!plassert) { it._kol = kolonner.length; kolonner.push(it._bunn); }
-    });
-    klynge.forEach(it => { it._antallKol = kolonner.length; });
-  });
-
+  let nesteLedigTop = -Infinity;
   return sortert.map(it => {
-    const widthPct = 100 / it._antallKol;
-    return it.html(widthPct * it._kol, widthPct);
+    const top = Math.max(it.top, nesteLedigTop);
+    nesteLedigTop = top + it.height + 3;
+    return it.html(top);
   });
 }
 
@@ -276,18 +254,18 @@ function renderWeek() {
     const nowLine = (isToday && nowFrac >= START_H && nowFrac <= END_H)
       ? `<div class="cal-now" style="top:${nowTop}px"></div>` : '';
 
-    // Slår ordre og møter sammen til én liste med tid/høyde før posisjonering,
-    // slik at overlappende hendelser kan deles side om side i stedet for å
-    // legges rett oppå hverandre (som ga uleselig overlapp ved tette timer).
+    // Slår ordre og møter sammen til én liste med tid/høyde før posisjonering, slik at
+    // overlappende hendelser kan kaskaderes under hverandre i stedet for å legges rett
+    // oppå hverandre (som ga uleselig overlapp ved tette timer) - se plasserKalenderHendelser().
     const items = [
       ...orders.map(o => {
         const si = statusInfo(o.ordreStatus);
         const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
-        const top    = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
-        const height = (o.regnr && !o.chassis) ? Math.max(36, SLOT_PX) : Math.max(42, SLOT_PX); // nok plass til lengre tekst (regnr + chassis) på 2 linjer, uten tomrom
-        return { top, height, html: (leftPct, widthPct) => `<div class="cal-event" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 3px);width:calc(${widthPct}% - 6px);background:${si.bg};border-color:${si.border}">
+        const beregnetTop = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
+        const height = (o.regnr && !o.chassis) ? Math.max(38, SLOT_PX) : Math.max(54, SLOT_PX); // romslig nok til at chassisnummer kan brytes over 2 linjer i en smal dagskolonne uten å flyte utover
+        return { top: beregnetTop, height, html: (top) => `<div class="cal-event" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
-            <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
+            <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0;overflow:hidden;height:100%">
               <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
               <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${o.tidBiltilsynetSted?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
             </div>
@@ -303,9 +281,9 @@ function renderWeek() {
       }),
       ...moter.map(m => {
         const [mh, mm] = (m.tid || '09:00').split(':').map(Number);
-        const top = Math.max(0, (mh + mm / 60 - (START_H + 0.5)) * HOUR_PX);
+        const beregnetTop = Math.max(0, (mh + mm / 60 - (START_H + 0.5)) * HOUR_PX);
         const height = Math.max(42, SLOT_PX);
-        return { top, height, html: (leftPct, widthPct) => `<div class="cal-event" style="top:${top}px;height:${height}px;left:calc(${leftPct}% + 3px);width:calc(${widthPct}% - 6px);background:#2e1065cc;border-color:#a78bfa">
+        return { top: beregnetTop, height, html: (top) => `<div class="cal-event" style="top:${top}px;height:${height}px;background:#2e1065cc;border-color:#a78bfa">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
             <div style="flex:1;min-width:0">
               <div class="cal-event-regnr" style="color:#ddd6fe">📅 ${m.tittel}</div>
