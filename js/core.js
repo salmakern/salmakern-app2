@@ -421,7 +421,8 @@ function dbToGodkjennerMelding(r) {
 }
 function dbToTimer(r) {
   return {id:r.id,ansattId:r.ansatt_id,ansatt:r.ansatt,dato:r.dato,
-    type:r.type,start:r.start||r.start_tid||'',stopp:r.stopp||r.stopp_tid||'',mins:r.mins||r.minutter||0};
+    type:r.type,start:r.start||r.start_tid||'',stopp:r.stopp||r.stopp_tid||'',mins:r.mins||r.minutter||0,
+    betalt:r.betalt!==false};
 }
 
 let realtimeChannel = null;

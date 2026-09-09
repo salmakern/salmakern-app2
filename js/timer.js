@@ -67,16 +67,21 @@ function setTimerType(t) {
   const vis=(id,paa)=>{const el=document.getElementById(id); if(el) el.style.display=paa?'block':'none';};
   vis('normalFelt', t==='normal');
   vis('manuellFelt', t==='manuell');
-  vis('ferieFelt', t==='ferie'||t==='permisjon');
-  vis('sykFelt', t==='syk'||t==='egenmelding');
+  // Syk (sykemelding) bruker samme fra/til-periodefelt som Ferie/Permisjon - en
+  // sykemelding gjelder som regel en hel periode fra legen, ikke én og én dag, og en
+  // forlengelse (ny sykemelding som utsetter friskmeldingen) legges da bare inn som en
+  // ny periode med oppdatert til-dato, i stedet for å måtte registrere dag for dag.
+  // Egenmelding beholder enkeltdag-feltet, siden det normalt gjelder kortere perioder.
+  vis('ferieFelt', t==='ferie'||t==='permisjon'||t==='syk');
+  vis('sykFelt', t==='egenmelding');
   const today=new Date().toISOString().split('T')[0];
   if(t==='manuell'){
     const mDato=document.getElementById('mDato'); if(mDato&&!mDato.value) mDato.value=today;
   }
-  if(t==='syk'||t==='egenmelding'){
+  if(t==='egenmelding'){
     const sDato=document.getElementById('sDato'); if(sDato&&!sDato.value) sDato.value=today;
   }
-  if(t==='ferie'||t==='permisjon'){
+  if(t==='ferie'||t==='permisjon'||t==='syk'){
     document.getElementById('fFra').value=today;
     document.getElementById('fTil').value=today;
   }
@@ -266,7 +271,7 @@ function lagreTimer() {
     mins=beregnNettoMinutter(Math.floor(ms/60000)).netto;
     start=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
     stopp=new Date().toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
-  } else if (['ferie','permisjon'].includes(timerType)) {
+  } else if (['ferie','permisjon','syk'].includes(timerType)) {
     // Date range — create one entry per weekday
     const fra=document.getElementById('fFra').value;
     const til=document.getElementById('fTil').value;
@@ -295,7 +300,7 @@ function lagreTimer() {
     try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
     renderTimerHistorikk(); renderTimerMaaned();
     return;
-  } else if (['syk','egenmelding'].includes(timerType)) {
+  } else if (timerType==='egenmelding') {
     mins=0; start='–'; stopp='–';
   } else { alert('Start timer først'); return; }
   const timerEntry={
