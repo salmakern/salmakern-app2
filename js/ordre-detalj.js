@@ -185,8 +185,14 @@ function buildOrdreDetail() {
             <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.type))}</div>
           </div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
-          <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
-          <div><label>Fullmakt</label>${dokStatusDropdown(o.id,'fullmakt',o.fullmakt)}</div>
+        </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Dokumenter</div>
+          <div class="grid g2" style="gap:8px">
+            <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
+            <div><label>Fullmakt</label>${dokStatusDropdown(o.id,'fullmakt',o.fullmakt)}</div>
+          </div>
         </div>
 
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
@@ -388,7 +394,11 @@ function toggleFakturert(id) {
   o.fakturertAv = o.fakturert ? me.navn : '';
   logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
   save(id);
+  // Kan nå trykkes fra tre steder: Fakturering-kortet på selve ordresiden, Arkiv-kortet,
+  // og avkrysningen på ordrekortet i Ordreliste - oppdater den visningen man faktisk står
+  // i, ikke bare anta at det er ordresiden (samme mønster som brukt for lager tidligere).
   if (o.status === 'arkivert') renderArkiv();
+  else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
   else buildOrdreDetail();
 }
 

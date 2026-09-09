@@ -75,6 +75,7 @@ function renderOrdreList() {
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
     const si = statusInfo(o.ordreStatus);
+    const drivstoffTekst = o.drivstoff?.totalpris ? esc(String(o.drivstoff.totalpris)) + ' kr' : '';
     return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':si.border};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
       ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
 
@@ -99,6 +100,10 @@ function renderOrdreList() {
             <span class="muted" style="min-width:54px">Tilvalg</span>
             <span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span>
           </div>
+          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
+            <span class="muted" style="min-width:54px">Drivstoff</span>
+            <span style="color:${drivstoffTekst?'#f4f4f5':'#71717a'}">${drivstoffTekst||'—'}</span>
+          </div>
         </div>
       </div>
 
@@ -107,7 +112,10 @@ function renderOrdreList() {
           <span style="width:7px;height:7px;border-radius:999px;background:${o.kalenderDato?'#3f3f46':'#ef4444'};flex-shrink:0"></span>
           <span class="small" style="color:${o.kalenderDato?'#f4f4f5':'#fca5a5'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
         </span>
-        ${godkjentKortHTML(o)}
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          ${godkjentKortHTML(o)}
+          ${fakturertKortHTML(o)}
+        </div>
       </div>
     </div>`;
   }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`;
@@ -464,6 +472,15 @@ function godkjentKortHTML(o) {
   return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
     Vedtak
     <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
+  </label>`;
+}
+// Fakturering er en admin-oppgave (samme sperre som Fakturering-kortet på selve ordresiden),
+// så denne haken vises kun for admin - andre ansatte ser ingenting her.
+function fakturertKortHTML(o) {
+  if (!me || me.rolle !== 'admin') return '';
+  return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.fakturert?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
+    Fakturert
+    <input type="checkbox" ${o.fakturert?'checked':''} onchange="toggleFakturert('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
   </label>`;
 }
 
