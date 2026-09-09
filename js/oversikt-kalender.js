@@ -669,11 +669,27 @@ function closeCalMenu() {
 }
 document.addEventListener('click', closeCalMenu);
 
-function fjernFraKalender(id) {
+// Må også tømme "Time på biltilsynet"-feltene på selve ordren (og Admin-arkets Time
+// bekreftet, om ordren har chassis) - ikke bare kalenderDato/kalenderTid. Disse speiler
+// hverandre begge veier (se adminArkLagreFelter() i admin-ark.js og bekreftKalenderSted()
+// over), så å bare tømme kalender-feltene her lot den gamle datoen bli stående igjen i
+// Admin-arket/på ordren, som kunne speile den tilbake til kalenderen senere (rapportert av
+// Henrik: datoen "ble liggende" etter fjerning).
+async function fjernFraKalender(id) {
   const o = S.ordrer.find(x => x.id === id); if (!o) return;
-  o.kalenderDato = ''; o.kalenderTid = '';
   logChange(o, 'Fjernet fra kalender');
-  save(id); renderOversikt();
+  if (o.chassis) {
+    await adminArkLagreFelter({chassisNr: o.chassis, _erOrdre: true}, {
+      timeBekreftet: '', timeBekreftetTid: '', timeBekreftetSted: ''
+    });
+  } else {
+    o.kalenderDato = ''; o.kalenderTid = '';
+    o.tidBiltilsynet = ''; o.tidBiltilsynetTid = ''; o.tidBiltilsynetSted = '';
+    save(id);
+  }
+  renderOversikt();
+  if (activeOrdreId === id) buildOrdreDetail();
+  if (document.getElementById('admin')?.classList.contains('active')) renderAdminArk();
   visToast(`${ordreLabel(o)} tatt ut av kalenderen`);
 }
 
