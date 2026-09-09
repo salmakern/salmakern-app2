@@ -1147,15 +1147,6 @@ function oppskriftMatcherOrdre(r, o) {
   return biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst);
 }
 
-// Hvilke Ekstra utstyr-oppskrifter som faktisk er valgt (trukket fra lager) på denne
-// ordren akkurat nå - brukes til å vise en oversikt ved siden av fritekstfeltet "Utstyr –
-// Skal ha etter visning" på ordresiden og i PDF-rapporten (ordreseddelen), se su()-kortet
-// i ordre-detalj.js og genPDF() i eksport-varsler.js.
-function ekstraUtstyrValgtForOrdre(o) {
-  const brukteNavn = new Set((S.lagerhistorikk||[]).filter(h=>h.ordreId===o.id && h.batchId).map(h=>h.kommentar));
-  return (S.lagerOppskrifter||[]).filter(r => (r.type||'ombygging')==='ekstra_utstyr' && oppskriftMatcherOrdre(r, o) && brukteNavn.has(r.navn));
-}
-
 // Ombygging/Ekstra utstyr-oppskriftene vises som nedtrekkbare avkrysningslister (én per
 // type) i stedet for alltid-synlige bokser - noen modeller har opptil 10+ oppskrifter, og
 // da blir siden fort veldig lang. Trigger-raden viser bare "X av Y valgt", selve listen
@@ -1253,15 +1244,37 @@ function trekkOppskriftForOrdre(oppskriftId) {
 // må boksen tilbakestilles til riktig (fortsatt uendret) tilstand med en gang, ikke bare
 // stå igjen visuelt feil til noe annet tilfeldigvis rendrer siden på nytt.
 function toggleOppskriftPaaOrdre(oppskriftId, huket) {
+  const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId);
   if (huket) {
     trekkOppskriftForOrdre(oppskriftId);
   } else {
-    const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId);
     const rad = r && (S.lagerhistorikk||[]).find(h=>h.ordreId===activeOrdreId && h.batchId && h.kommentar===r.navn);
     if (rad) angreLagerBatch(rad.batchId);
   }
+  // Kun Ekstra utstyr (ikke Ombygging) legges automatisk inn i "Utstyr – Skal ha etter
+  // visning" - sjekker den FAKTISKE tilstanden i lagerhistorikk etterpå (ikke bare
+  // "huket"-parameteren), siden trekkOppskriftForOrdre()/angreLagerBatch() kan returnere
+  // uten å gjøre noe hvis brukeren avbryter en confirm()-dialog underveis.
+  if (r && (r.type||'ombygging')==='ekstra_utstyr') {
+    const faktiskHuket = (S.lagerhistorikk||[]).some(h=>h.ordreId===activeOrdreId && h.batchId && h.kommentar===r.navn);
+    oppdaterSkalHaForOppskrift(r.navn, faktiskHuket);
+  }
   renderOrdreLagerbruk();
-  renderEkstraUtstyrValgtVisning();
+}
+
+// Se toggleOppskriftPaaOrdre() - legger til/fjerner oppskriftens navn som egen linje i
+// o.utstyr.skalHa, uten å røre annen tekst som er skrevet inn for hånd. Siden dette er det
+// SAMME feltet som allerede vises på ordrekort, i kalenderen og i PDF-rapporten, trengs
+// ingen egen kode noe annet sted for at valgt Ekstra utstyr skal synes der også.
+function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa) {
+  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+  const linjer = (o.utstyr?.skalHa||'').split('\n').map(l=>l.trim()).filter(Boolean);
+  const finnes = linjer.includes(oppskriftNavn);
+  if (skalStaa === finnes) return;
+  const ny = (skalStaa ? [...linjer, oppskriftNavn] : linjer.filter(l=>l!==oppskriftNavn)).join('\n');
+  su(o.id, 'skalHa', ny);
+  const textareaEl = document.getElementById('skalHaInput_' + o.id);
+  if (textareaEl) textareaEl.value = ny;
 }
 
 async function angreLagerBatch(batchId) {
