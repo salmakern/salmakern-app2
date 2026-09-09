@@ -102,7 +102,10 @@ function genPDF(id) {
   </div>
   <div>
     <h2>Utstyr - skal ha</h2>
-    <div style="font-size:13px;white-space:pre-wrap">${esc(o.utstyr.skalHa)||'--'}</div>
+    <div style="font-size:13px">
+      ${ekstraUtstyrValgtForOrdre(o).map(r=>`<div>✓ ${esc(r.navn)}</div>`).join('')}
+      <div style="white-space:pre-wrap">${esc(o.utstyr.skalHa)||(ekstraUtstyrValgtForOrdre(o).length?'':'--')}</div>
+    </div>
   </div>
 </div>
 <h2>Vekter (kg)</h2>

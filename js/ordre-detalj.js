@@ -272,7 +272,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Utstyr – Skal ha etter visning</div>
-        <textarea rows="4" style="margin-top:8px" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+        <div id="ekstraUtstyrValgtVisning_${o.id}">${ekstraUtstyrValgtVisningHTML(o)}</div>
+        <textarea rows="4" style="margin-top:8px" placeholder="Annet utstyr som ikke er en fast oppskrift..." onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
       </div>
 
       <div class="card">
@@ -594,6 +595,23 @@ function modellSelectOptions(gjeldende) {
 // Merke + Modell er det som faktisk fylles ut på ordrer i praksis, og brukes derfor
 // som modell-nøkkelen for å matche oppskrifter - ikke det separate Type-feltet.
 function merkeModell(o) { return `${o.merke||''} ${o.modell||''}`.trim(); }
+
+// Viser hvilke Ekstra utstyr-oppskrifter som er valgt (trukket fra lager) på ordren, som en
+// liten oversikt over fritekstfeltet "Utstyr – Skal ha etter visning" - de to skal vises
+// sammen, ikke erstatte hverandre. Egen container (ekstraUtstyrValgtVisning_<id>) slik at
+// toggleOppskriftPaaOrdre() i lager.js kan oppdatere kun denne biten når man haker av/på,
+// uten å bygge om hele ordresiden.
+function ekstraUtstyrValgtVisningHTML(o) {
+  const valgt = ekstraUtstyrValgtForOrdre(o);
+  if (!valgt.length) return '';
+  return `<div class="small muted" style="margin-top:8px;margin-bottom:2px">Valgt Ekstra utstyr (hakes av under "Varer fra lager")</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">${valgt.map(r=>`<span class="pill" style="margin:0;font-size:12px">✓ ${esc(r.navn)}</span>`).join('')}</div>`;
+}
+function renderEkstraUtstyrValgtVisning() {
+  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+  const el = document.getElementById('ekstraUtstyrValgtVisning_' + o.id);
+  if (el) el.innerHTML = ekstraUtstyrValgtVisningHTML(o);
+}
 
 function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
 

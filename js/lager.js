@@ -1147,6 +1147,15 @@ function oppskriftMatcherOrdre(r, o) {
   return biltypeTekst.includes(biltypeR) || biltypeR.includes(biltypeTekst);
 }
 
+// Hvilke Ekstra utstyr-oppskrifter som faktisk er valgt (trukket fra lager) på denne
+// ordren akkurat nå - brukes til å vise en oversikt ved siden av fritekstfeltet "Utstyr –
+// Skal ha etter visning" på ordresiden og i PDF-rapporten (ordreseddelen), se su()-kortet
+// i ordre-detalj.js og genPDF() i eksport-varsler.js.
+function ekstraUtstyrValgtForOrdre(o) {
+  const brukteNavn = new Set((S.lagerhistorikk||[]).filter(h=>h.ordreId===o.id && h.batchId).map(h=>h.kommentar));
+  return (S.lagerOppskrifter||[]).filter(r => (r.type||'ombygging')==='ekstra_utstyr' && oppskriftMatcherOrdre(r, o) && brukteNavn.has(r.navn));
+}
+
 // Ombygging/Ekstra utstyr-oppskriftene vises som nedtrekkbare avkrysningslister (én per
 // type) i stedet for alltid-synlige bokser - noen modeller har opptil 10+ oppskrifter, og
 // da blir siden fort veldig lang. Trigger-raden viser bare "X av Y valgt", selve listen
@@ -1252,6 +1261,7 @@ function toggleOppskriftPaaOrdre(oppskriftId, huket) {
     if (rad) angreLagerBatch(rad.batchId);
   }
   renderOrdreLagerbruk();
+  renderEkstraUtstyrValgtVisning();
 }
 
 async function angreLagerBatch(batchId) {
