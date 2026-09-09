@@ -58,7 +58,7 @@ async function sendTilAbonnenter(
       ? subs.filter((s: any) => msg.deltakerIder!.includes(s.ansatt_id))
       : subs
     if (!mottakere.length) continue
-    const url = '/salmakern-app2/salmakern.html' + (msg.ordreId ? `?ordre=${msg.ordreId}` : '')
+    const url = '/salmakern.html' + (msg.ordreId ? `?ordre=${msg.ordreId}` : '')
     const melding = JSON.stringify({ title: msg.title, body: msg.body, url })
     await Promise.allSettled(mottakere.map(async (sub: any) => {
       try {
@@ -253,7 +253,7 @@ Deno.serve(async (req) => {
     console.log('Abonnenter:', subs?.length ?? 0, subErr?.message ?? '')
     if (!subs?.length) return new Response('ingen abonnenter', { status: 200, headers: CORS_HEADERS })
 
-    const url = '/salmakern-app2/salmakern.html' + (ordreId ? `?ordre=${ordreId}` : '')
+    const url = '/salmakern.html' + (ordreId ? `?ordre=${ordreId}` : '')
     const melding = JSON.stringify({ title, body, url })
     console.log('Sender:', melding)
 
