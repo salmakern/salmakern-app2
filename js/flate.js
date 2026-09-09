@@ -24,12 +24,12 @@ function renderFlaterListe() {
   el.innerHTML = liste.length ? liste.map(f => {
     const ordrer = (S.ordrer||[]).filter(o=>o.flateId===f.id);
     const aktiveOrdrer = ordrer.filter(o=>o.status==='aktiv');
-    return `<div class="box" style="margin-bottom:8px;cursor:pointer" onclick="visFlateDetalj('${f.id}')">
-      <div class="row">
-        <div><b>${esc(f.flatenummer)}</b></div>
-        <span class="small muted">${ordrer.length} ordre${ordrer.length===1?'':'r'}</span>
+    return `<div style="border:1px solid #27272a;border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="visFlateDetalj('${f.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <b style="font-size:15px">${esc(f.flatenummer)}</b>
+        <span class="small muted" style="flex-shrink:0">${ordrer.length} ordre${ordrer.length===1?'':'r'}</span>
       </div>
-      ${aktiveOrdrer.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${aktiveOrdrer.map(o=>{
+      ${aktiveOrdrer.length ? `<div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:4px">${aktiveOrdrer.map(o=>{
         const si = statusInfo(o.ordreStatus);
         return `<span style="font-size:10px;padding:2px 7px;border-radius:999px;background:${si.bg};color:${si.txt};border:1px solid ${si.border}">${si.lbl}</span>`;
       }).join('')}</div>` : ''}
@@ -113,14 +113,17 @@ function renderFlateDetalj() {
   el.innerHTML = ordrer.length ? ordrer.map(o => {
     const si = statusInfo(o.ordreStatus);
     const erPrimaer = f.primaerOrdreId === o.id;
-    return `<div style="background:#111114;border:2px solid ${erPrimaer?'#facc15':si.border};border-radius:16px;padding:10px;margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-        <b style="cursor:pointer" onclick="closeModal('flaterModal');openOrdre('${o.id}')">${erPrimaer?'⭐ ':''}${ordreLabel(o)}</b>
+    return `<div style="border:1px solid ${erPrimaer?'#facc15':si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;background:#18181b">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <b style="font-size:15px;cursor:pointer" onclick="closeModal('flaterModal');openOrdre('${o.id}')">${erPrimaer?'⭐ ':''}${ordreLabel(o)}</b>
         ${statusDropdown(o.id, o.ordreStatus)}
       </div>
-      ${erPrimaer?'<div class="small" style="color:#facc15;margin-top:2px">Primær kjøretøy – kilden for type/variant/versjon/vekter</div>':''}
-      <div class="small muted" style="margin-top:3px">${esc(o.kunde||'')}${o.status==='arkivert'?' · <span class="err-text">Arkivert</span>':''}</div>
-      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+        <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Kunde</span><span>${esc(o.kunde)||'—'}</span></div>
+        ${erPrimaer?'<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Rolle</span><span style="color:#facc15">Primær – kilde for type/variant/versjon/vekter</span></div>':''}
+        ${o.status==='arkivert'?'<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Status</span><span class="err-text">Arkivert</span></div>':''}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
         ${erPrimaer?'':`<button class="btn sm" onclick="settFlatePrimaer('${o.id}')">☆ Gjør til primær</button>`}
         <button class="btn sm" onclick="fjernOrdreFraFlate('${o.id}')">✕ Fjern fra flåte</button>
       </div>
