@@ -480,8 +480,8 @@ function tvangsflyt(o) {
   ];
 }
 
-// Brukt av tvangsflyt-filteret på Ordre- og Ordrearkiv-siden (#ordreTvangsflytFilter/
-// #arkivTvangsflytFilter). verdi='' betyr "ingen filter" (vis alt), verdi='_alle'
+// Brukt av tvangsflyt-filteret på Ordrearkiv-siden (#arkivTvangsflytFilter). verdi=''
+// betyr "ingen filter" (vis alt), verdi='_alle'
 // betyr "mangler minst ett krav", ellers er verdi selve lbl-teksten til ett bestemt
 // tvangsflyt-punkt (f.eks. "Vekter fylt ut") - viser da kun ordre som mangler NETTOPP det.
 function ordreMatcherTvangsflytFilter(o, verdi) {

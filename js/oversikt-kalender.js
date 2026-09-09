@@ -39,7 +39,7 @@ function renderOrdreList() {
   // Ikke rebuild mens bruker har et interaktivt element fokusert (bakgrunnsoppdatering ville lukket picker/miste input)
   // - unntatt søkefeltet selv, ellers slutter søk-mens-du-skriver å virke siden feltet har fokus mens man skriver i det.
   const aktivtEl = document.activeElement;
-  const sokFokusert = aktivtEl?.id === 'ordreSok' || aktivtEl?.id === 'ordreStatusFilter' || aktivtEl?.id === 'ordreTvangsflytFilter';
+  const sokFokusert = aktivtEl?.id === 'ordreSok' || aktivtEl?.id === 'ordreStatusFilter' || aktivtEl?.id === 'ordreSorterValg';
   const focusTag = aktivtEl?.tagName;
   if (!sokFokusert && listEl?.contains(aktivtEl) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   detailEl.style.display = 'none';
@@ -55,11 +55,13 @@ function renderOrdreList() {
   const gammelSok = document.getElementById('ordreSok')?.value || '';
   const sokTekst = gammelSok.toLowerCase().trim();
   const statusFilter = document.getElementById('ordreStatusFilter')?.value || '';
-  const tvangsflytFilter = document.getElementById('ordreTvangsflytFilter')?.value || '';
+  const sorterValg = document.getElementById('ordreSorterValg')?.value || '';
+  const sorterFn = sorterValg === 'nyest' ? (a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||'')
+    : sorterValg === 'eldst' ? (a,b) => (a.ankomstdato||'').localeCompare(b.ankomstdato||'')
+    : sorterOrdre;
   const alle = S.ordrer.filter(o => {
     if (o.status !== 'aktiv') return false;
     if (statusFilter && o.ordreStatus !== statusFilter) return false;
-    if (!ordreMatcherTvangsflytFilter(o, tvangsflytFilter)) return false;
     if (!sokTekst) return true;
     return (o.regnr||'').toLowerCase().includes(sokTekst) ||
            (o.kunde||'').toLowerCase().includes(sokTekst) ||
@@ -70,7 +72,7 @@ function renderOrdreList() {
            (o.chassis||'').toLowerCase().includes(sokTekst) ||
            (o.utstyr?.skalHa||'').toLowerCase().includes(sokTekst) ||
            (o.utstyr?.har||'').toLowerCase().includes(sokTekst);
-  }).sort(sorterOrdre);
+  }).sort(sorterFn);
   const antallEl = document.getElementById('ordreListAntall');
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
