@@ -376,9 +376,13 @@ function apneGodkjennerChat() {
   openModal('godkjennerChatModal');
   document.getElementById('godkjennerChatInput')?.focus();
 }
+// Kun Jan Henrik (id 17) av de to admin-kontoene skal ha tilgang til denne chatten - Jan
+// Børre (den andre admin-kontoen) skal ikke se den. Se samme sperre i RLS-policyene for
+// godkjenner_meldinger (migrasjon) og i send-push-funksjonens varsling.
+const GODKJENNER_CHAT_ADMIN_ID = 17;
 function renderGodkjennerChat() {
   const btnEl = document.getElementById('godkjennerChatBtn');
-  const erGodkjenner = me && (me.rolle==='admin' || me.rolle==='godkjenner');
+  const erGodkjenner = me && (me.rolle==='godkjenner' || (me.rolle==='admin' && me.id===GODKJENNER_CHAT_ADMIN_ID));
   if (btnEl) btnEl.style.display = erGodkjenner ? '' : 'none';
   if (!erGodkjenner) return;
   const el = document.getElementById('godkjennerChatMeldinger');

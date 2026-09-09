@@ -109,15 +109,20 @@ Deno.serve(async (req) => {
     )
 
     // Sendes fra klienten idet en ny melding postes i chatten mellom admin/godkjennere -
-    // varsler alle ANDRE med den rollen (aldri avsenderen selv om sin egen melding).
+    // varsler alle ANDRE deltakere (aldri avsenderen selv om sin egen melding). Kun én av
+    // de to admin-kontoene (id 17, Jan Henrik) er med i denne chatten - se samme sperre i
+    // js/arkiv-mer.js (GODKJENNER_CHAT_ADMIN_ID) og RLS-policyene for godkjenner_meldinger.
+    const GODKJENNER_CHAT_ADMIN_ID = 17
     if (payload.type === 'godkjenner_melding') {
       const { data: mottakere } = await supabase
         .from('ansatte')
-        .select('id')
+        .select('id, rolle')
         .in('rolle', ['admin', 'godkjenner'])
         .eq('aktiv', true)
         .neq('id', payload.avsenderId)
-      const mottakerIder = (mottakere ?? []).map((a: any) => a.id)
+      const mottakerIder = (mottakere ?? [])
+        .filter((a: any) => a.rolle === 'godkjenner' || a.id === GODKJENNER_CHAT_ADMIN_ID)
+        .map((a: any) => a.id)
       if (mottakerIder.length) {
         await sendTilAbonnenter(supabase, [{
           title: `Ny melding fra ${payload.avsenderNavn}`,
