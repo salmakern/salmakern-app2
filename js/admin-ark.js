@@ -234,7 +234,9 @@ function adminArkByggRader() {
       timeBekreftetVis: fmtTimeBekreftetVis(ark?.timeBekreftet, ark?.timeBekreftetTid, ark?.timeBekreftetSted),
       ventendeTimer: ark?.ventendeTimer || '',
       rekkefolge: ark ? (ark.rekkefolge ?? 999999) : nesteRekkefolge++,
-      _arkivert: ark?.arkivert || false
+      _arkivert: ark?.arkivert || false,
+      chassisFarge: ark?.chassisFarge || '',
+      _ordreStatus: o.ordreStatus
     };
   });
   const loseRader = (S.adminArk||[])
@@ -263,7 +265,9 @@ function adminArkByggRader() {
       timeBekreftetVis: fmtTimeBekreftetVis(r.timeBekreftet, r.timeBekreftetTid, r.timeBekreftetSted),
       ventendeTimer: r.ventendeTimer || '',
       rekkefolge: r.rekkefolge ?? 999999,
-      _arkivert: r.arkivert || false
+      _arkivert: r.arkivert || false,
+      chassisFarge: r.chassisFarge || '',
+      _ordreStatus: null
     }));
   return [...ordreRader, ...loseRader]
     .sort((a,b) => a.rekkefolge - b.rekkefolge || (a.chassisNr||'').localeCompare(b.chassisNr||'','no'));
@@ -279,7 +283,7 @@ async function adminArkLagreFelter(rad, endringer) {
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: adminArkNesteRekkefolge(),
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
+      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false, chassisFarge:'' };
     S.adminArk = [...(S.adminArk||[]), ark];
   }
   Object.assign(ark, endringer);
@@ -289,7 +293,8 @@ async function adminArkLagreFelter(rad, endringer) {
     forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
     serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
     fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
-    time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
+    time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert,
+    chassis_farge: ark.chassisFarge||null };
   // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig re-rendering av
   // hele Admin-ark-tabellen like etterpå (samme mønster som ordre bruker via save()).
   ignorerRealtimeAdminArk.add(ark.id);
@@ -495,6 +500,49 @@ async function tbFlyttTilbake(rad, tekst, row) {
   visToast('Satt tilbake til Ventende timer', 'ok');
 }
 
+// ── Manuell fargeoverstyring på Chassis.nr (se kolonneformatteren over) ──
+// Gjenbruker STATUSER-paletten som swatches i en liten popup, pluss "Automatisk" for å
+// fjerne overstyringen igjen og gå tilbake til fargen fra ordrens status (om noen).
+let adminArkFargePopup = null;
+function adminArkLukkFargePopup() {
+  if (adminArkFargePopup) { adminArkFargePopup.remove(); adminArkFargePopup = null; }
+}
+if (!window._adminArkFargePopupLyttereBundet) {
+  window._adminArkFargePopupLyttereBundet = true;
+  document.addEventListener('click', e => {
+    if (adminArkFargePopup && !e.target.closest('.admin-ark-farge-popup') && !e.target.closest('.admin-ark-farge-knapp')) adminArkLukkFargePopup();
+  });
+}
+function adminArkApneFargePopup(knappEl, row) {
+  const varSammeKnapp = adminArkFargePopup && adminArkFargePopup._knapp === knappEl;
+  adminArkLukkFargePopup();
+  if (varSammeKnapp) return;
+  const rekt = knappEl.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.className = 'admin-ark-farge-popup';
+  pop.style.cssText = `position:fixed;top:${rekt.bottom + 4}px;left:${Math.max(4, rekt.right - 140)}px;z-index:200;background:#18181b;border:1px solid #3f3f46;border-radius:12px;padding:8px;box-shadow:0 8px 24px #000a;display:flex;flex-wrap:wrap;gap:6px;width:140px`;
+  STATUSER.forEach(s => {
+    const sw = document.createElement('div');
+    sw.title = s.lbl;
+    sw.style.cssText = `width:22px;height:22px;border-radius:50%;background:${s.border};cursor:pointer;border:2px solid #ffffff22`;
+    sw.addEventListener('click', () => { adminArkSettChassisFarge(row, s.border); adminArkLukkFargePopup(); });
+    pop.appendChild(sw);
+  });
+  const nullstill = document.createElement('div');
+  nullstill.textContent = 'Automatisk (fjern farge)';
+  nullstill.style.cssText = 'width:100%;font-size:11px;color:#a1a1aa;cursor:pointer;padding:5px 2px 0;border-top:1px solid #27272a;margin-top:3px';
+  nullstill.addEventListener('click', () => { adminArkSettChassisFarge(row, ''); adminArkLukkFargePopup(); });
+  pop.appendChild(nullstill);
+  document.body.appendChild(pop);
+  pop._knapp = knappEl;
+  adminArkFargePopup = pop;
+}
+async function adminArkSettChassisFarge(row, farge) {
+  await adminArkLagreFelter(row.getData(), { chassisFarge: farge });
+  row.update({ chassisFarge: farge });
+  row.reformat();
+}
+
 // ── Merking og flytting av FLERE HELE RADER via '#'-kolonnen ──
 // Samme mekanikk som Ventende timer-merkingen: klikk-og-dra nedover på '#' markerer
 // en sammenhengende rekke rader (helramme rundt hele raden), et NYTT klikk-og-dra som
@@ -654,7 +702,7 @@ function adminArkTomRadTilVisning(r) {
   return { _ordreId:null, _arkId:r.id, _erOrdre:false, forhandler:'', kontaktperson:'', chassisNr:'', serienummer:'',
     mottatt:false, dato:'', papirer:false, dokumenter:false, fakturertVis:'', fraktselskap:'', henteklarVis:'',
     merknader:'', flateVis:'', _flateErEkte:false, timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'',
-    timeBekreftetVis:'', ventendeTimer:'', rekkefolge:r.rekkefolge, _arkivert:false };
+    timeBekreftetVis:'', ventendeTimer:'', rekkefolge:r.rekkefolge, _arkivert:false, chassisFarge:'', _ordreStatus:null };
 }
 
 // Sørger for at det alltid finnes minst `antall` tomme, klikkbare rader nederst i arket
@@ -736,7 +784,33 @@ function renderAdminArk(scrollTilBunn) {
     },
     {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
+      // Cellen får farge automatisk fra ordrens status (kun rader som faktisk matcher en
+      // ordre - _ordreStatus er null for løse admin_ark-rader, bl.a. gamle Excel-importerte
+      // rader, se adminArkByggRader()) - med mindre en manuell overstyring er satt
+      // (chassisFarge), som alltid vinner. Se adminArkApneFargePopup()/adminArkSettChassisFarge().
+      formatter: (cell, params, onRendered) => {
+        const rad = cell.getRow().getData();
+        const verdi = esc(cell.getValue() || '');
+        onRendered(() => {
+          const el = cell.getElement();
+          const automatiskFarge = rad._ordreStatus ? statusInfo(rad._ordreStatus).border : '';
+          const farge = rad.chassisFarge || automatiskFarge;
+          el.style.background = farge ? farge + '2a' : '';
+          el.style.boxShadow = farge ? `inset 3px 0 0 ${farge}` : '';
+          el.style.position = 'relative';
+          if (!kanRedigere) return;
+          const knapp = document.createElement('span');
+          knapp.className = 'admin-ark-farge-knapp';
+          knapp.title = rad.chassisFarge ? 'Farge satt manuelt - klikk for å endre eller fjerne' : (automatiskFarge ? 'Automatisk farge fra ordrestatus - klikk for å overstyre' : 'Klikk for å sette farge');
+          knapp.style.cssText = `position:absolute;right:3px;top:50%;transform:translateY(-50%);width:11px;height:11px;border-radius:50%;cursor:pointer;border:1px solid #ffffff40;background:${farge || '#3f3f46'}`;
+          knapp.addEventListener('mousedown', e => e.stopPropagation());
+          knapp.addEventListener('click', e => { e.stopPropagation(); adminArkApneFargePopup(knapp, cell.getRow()); });
+          el.appendChild(knapp);
+        });
+        return verdi;
+      }
+    },
     {title:'Serienummer', field:'serienummer', width:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Mottatt', field:'mottatt', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dato', field:'dato', width:85, headerSort:false, hozAlign:'center', editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
