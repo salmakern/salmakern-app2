@@ -269,7 +269,7 @@ function genPDF(id) {
       <div class="s-hode" style="margin-top:20px"><span class="s-tittel">Hengerfeste</span></div>
       <div style="font-size:13px;margin-top:8px">${
         o.utstyr?.hengerfeste==='hengerfeste'
-          ? 'Hengerfeste ('+(o.utstyr?.hengerfesteMontert==='montert'?'montert':'ikke montert')+')'
+          ? 'Hengerfeste (' + (HENGERFESTE_MONTERT_LBL[o.utstyr?.hengerfesteMontert]||'Ikke montert').toLowerCase() + ')'
           : 'Ikke hengerfeste'}</div>
     </div>
   </div>

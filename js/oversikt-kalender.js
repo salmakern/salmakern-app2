@@ -410,17 +410,22 @@ function statusDropdown(ordreId, currentStatus, extraStyle='') {
   </select>`;
 }
 
+const HENGERFESTE_MONTERT_LBL = {ikke_montert:'Ikke montert', ledningsnett:'Ledningsnett', montert:'Montert'};
 function hengerfesteMontertDropdown(ordreId, montert) {
-  const erMontert = montert === 'montert';
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${erMontert?'#052e1688':'#42200688'};color:${erMontert?'#86efac':'#fef08a'};border:2px solid ${erMontert?'#22c55e':'#facc15'};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
-    <option value="ikke_montert" ${erMontert?'':'selected'}>Ikke montert</option>
-    <option value="montert" ${erMontert?'selected':''}>Montert</option>
+  const FARGE = {
+    ikke_montert: {bg:'#42200688', txt:'#fef08a', border:'#facc15'},
+    ledningsnett: {bg:'#17255488', txt:'#bfdbfe', border:'#60a5fa'},
+    montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
+  };
+  const f = FARGE[montert] || FARGE.ikke_montert;
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
+    ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
 function settHengerfesteMontert(id, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.utstyr.hengerfesteMontert = val;
-  logChange(o, 'Hengerfeste: ' + (val==='montert'?'Montert':'Ikke montert'));
+  logChange(o, 'Hengerfeste: ' + (HENGERFESTE_MONTERT_LBL[val]||val));
   // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
   // ikke herfra - ellers sendes varselet dobbelt.
   save(id); renderAll();
