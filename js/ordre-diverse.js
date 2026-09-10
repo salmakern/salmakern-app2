@@ -281,13 +281,30 @@ function openFlytt(id) {
   document.getElementById('fl_dato').value=new Date().toISOString().split('T')[0];
   openModal('flytt');
 }
-function bekreftFlytt() {
+async function bekreftFlytt() {
   const o=S.ordrer.find(x=>x.id===flyttOrdreId); if(!o) return;
   o.kalenderDato=document.getElementById('fl_dato').value;
   o.kalenderTid=document.getElementById('fl_tid').value;
   logChange(o,'Flyttet til kalender: '+o.kalenderDato+' '+o.kalenderTid);
-  save(flyttOrdreId); closeModal('flytt'); renderAll();
+  // Må speile Time på biltilsynet/Admin-arkets Time bekreftet på samme måte som
+  // drag-og-slipp (bekreftKalenderSted()) og fjerning (fjernFraKalender()) gjør - ellers
+  // blir de stående på den GAMLE datoen etter en flytting, som fortsatt trigger 30-min-
+  // varselet på feil dag og viser feil dato i Admin-arket (rapportert av Henrik: varsel om
+  // biltilsyn i dag for en ordre som ikke lenger sto i kalenderen i dag).
+  if (o.chassis) {
+    await adminArkLagreFelter({chassisNr: o.chassis, _erOrdre: true}, {
+      timeBekreftet: o.kalenderDato || '',
+      timeBekreftetTid: o.kalenderTid || '',
+      timeBekreftetSted: o.tidBiltilsynetSted || ''
+    });
+  } else {
+    o.tidBiltilsynet = o.kalenderDato || '';
+    o.tidBiltilsynetTid = o.kalenderTid || '';
+    save(flyttOrdreId);
+  }
+  closeModal('flytt'); renderAll();
   if (activeOrdreId===flyttOrdreId) buildOrdreDetail();
+  if (document.getElementById('admin')?.classList.contains('active')) renderAdminArk();
 }
 
 // ════════════════════════════════════════════════════
