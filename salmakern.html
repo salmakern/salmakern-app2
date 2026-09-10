@@ -269,6 +269,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800}
 .update-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#1c1c1e;border:1px solid #ef4444;color:#f4f4f5;padding:12px 20px;border-radius:12px;display:flex;gap:12px;align-items:center;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,.5);font-size:14px;max-width:90vw}
 .update-toast button{background:#ef4444;border:none;color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap}
+/* Feltetiketter på Ordredetalj følger samme versal-språk som seksjonsoverskriftene i samme kort */
+#ordreDetail label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a}
+/* Avkrysningsbokser og radiovalg er ikke feltetiketter - de skal være normal tekst */
+#ordreDetail label:has(input[type=checkbox]){font-size:13.5px;letter-spacing:0;text-transform:none;color:inherit}
 </style>
 </head>
 <body>

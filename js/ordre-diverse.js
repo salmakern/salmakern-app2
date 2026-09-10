@@ -128,7 +128,7 @@ function ordreTimerKortHTML(o) {
   const h = Math.floor(totalMs/3600000);
   const m = Math.floor((totalMs%3600000)/60000);
   const s = Math.floor((totalMs%60000)/1000);
-  const tidStr = totalMs>0 ? `${h>0?h+'t ':''} ${m}min ${s}s` : '–';
+  const tidStr = totalMs>0 ? `${h>0?h+'t ':''} ${m}min ${s}s` : '<span class="muted small">Ingen tid registrert på denne ordren</span>';
   const fmtTs = ts => new Date(ts).toLocaleString('no-NO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
@@ -503,7 +503,11 @@ async function lastOppFoto(e, id, side, idx) {
   // Oppdater telleren i korttittelen
   Object.keys(FOTO_SIDER).forEach(s => {
     const teller = document.getElementById(`bildeTeller_${s}_${id}`);
-    if (teller) teller.textContent = o[FOTO_SIDER[s].felt].filter(Boolean).length + '/' + FOTO_SIDER[s].labler.length;
+    if (teller) {
+      const antall = o[FOTO_SIDER[s].felt].filter(Boolean).length;
+      teller.textContent = antall + '/' + FOTO_SIDER[s].labler.length;
+      teller.style.color = antall === FOTO_SIDER[s].labler.length ? '#4ade80' : '#fca5a5';
+    }
   });
 }
 

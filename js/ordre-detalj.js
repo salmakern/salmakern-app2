@@ -63,9 +63,9 @@ function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 8px">
       ${sjekk.map((p,i)=>`
-        <label style="display:flex;align-items:center;gap:6px;padding:5px 0 5px 4px;cursor:pointer;min-width:0;border-radius:8px;background:${p.ok?'#052e1620':'transparent'}">
+        <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;cursor:pointer;min-width:0;border-radius:9px;background:${p.ok?'rgba(34,197,94,.07)':'transparent'}">
           <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:15px;height:15px;accent-color:#22c55e;flex-shrink:0">
-          <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${p.ok?'color:#4ade80':''}" title="${esc(p.punkt)}">${esc(p.punkt)}</span>
+          <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${p.ok?'#86efac':'#71717a'}" title="${esc(p.punkt)}">${esc(p.punkt)}</span>
         </label>`).join('')}
     </div>
   </div>`;
@@ -78,7 +78,7 @@ function fotoSeksjonHTML(o, side, tittel) {
   const { felt, labler } = FOTO_SIDER[side];
   const bilder = o[felt] || (o[felt] = labler.map(() => null));
   return `<div class="card">
-    <div class="h">${tittel} (<span id="bildeTeller_${side}_${o.id}">${bilder.filter(Boolean).length}/${labler.length}</span>)</div>
+    <div class="h">${tittel} (<span id="bildeTeller_${side}_${o.id}" style="color:${bilder.filter(Boolean).length===labler.length?'#4ade80':'#fca5a5'}">${bilder.filter(Boolean).length}/${labler.length}</span>)</div>
     <div class="photo-grid">${labler.map((lbl,i)=>`
       <div class="photo-box" id="foboks_${side}_${i}" onclick="${bilder[i]?`openLightbox('fo_${side}_${i}_src')`:`document.getElementById('fo_${side}_${i}').click()`}">
         ${bilder[i]
@@ -88,7 +88,10 @@ function fotoSeksjonHTML(o, side, tittel) {
                <button onclick="document.getElementById('fo_${side}_${i}').click()" title="Bytt bilde">📷</button>
                <button onclick="slettFoto('${o.id}','${side}',${i})" title="Slett">🗑</button>
              </div>`
-          : `<div style="font-size:22px">📷</div><div>${lbl}</div>`}
+          : `<div style="position:absolute;inset:0;border-radius:8px;background:repeating-linear-gradient(45deg,#22222a 0 7px,#17171b 7px 14px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px">
+               <div style="font-size:20px;opacity:.5">📷</div>
+               <div style="background:#0f0f12;border:1px solid #27272a;border-left:2px solid #52525b;padding:3px 7px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#d4d4d8;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lbl)}</div>
+             </div>`}
       </div>
       <input type="file" id="fo_${side}_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','${side}',${i})">`).join('')}</div>
   </div>`;
@@ -118,30 +121,31 @@ function buildOrdreDetail() {
   <div style="position:sticky;top:${headerH}px;z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <button class="btn sm" onclick="tilbakeOrdreList()">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
     <div style="display:flex;gap:8px;align-items:center">
-      <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="${o.prioritert?'background:#78350f;border-color:#facc15;color:#facc15':''}">${o.prioritert?'PRIORITERT ✕':'+ Prioriter'}</button>
-      <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport">📄 PDF</button>
-      <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="padding:6px 10px">🔄</button>
-      ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">🗑 Slett ordre</button>` : ''}
+      <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:12px;padding:8px 13px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'PRIORITERT ✕':'+ Prioriter'}</button>
+      <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:12px;padding:8px 13px">📄 PDF</button>
+      <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:12px;padding:8px 11px">🔄</button>
+      ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:12px;padding:8px 13px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">🗑 Slett ordre</button>` : ''}
     </div>
   </div>
   ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">🗄 Arkivert ordre — kun visning</div>`:''}
   <div class="card">
     <div class="row">
-      <div>
-        <div class="title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          ${ordreLabel(o)}
-          <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer">
-            Vedtak
-            <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
-          </label>
-        </div>
-        ${o.chassis&&o.regnr?`<div class="small" style="color:#a1a1aa;margin-top:1px">Chassis: ${esc(o.chassis)}</div>`:''}
-        <div class="muted" style="margin-top:2px">${esc(o.type)}${o.variant?' – '+esc(o.variant):''}</div>
+      <div style="min-width:0">
+        ${o.regnr
+          ? `<div class="title" style="letter-spacing:.02em">${esc(o.regnr)}</div>
+             ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px">CHASSIS <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
+          : `<div style="font-size:10px;letter-spacing:.16em;color:#52525b">CHASSIS</div>
+             <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:.01em;margin-top:3px;word-break:break-all">${esc(o.chassis)||'Uten reg.nr'}</div>`}
+        <div class="muted" style="margin-top:6px">${esc(o.type)}${o.variant?' – '+esc(o.variant):''}</div>
         <div class="small muted">Kontaktperson: ${o.eier?esc(o.eier):'–'}</div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:7px 12px;')}
-        <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
+      <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end;flex-shrink:0">
+        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:8px 13px;border-radius:999px;')}
+        <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px;margin:0">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
+        <label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;white-space:nowrap">
+          Vedtak
+          <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
+        </label>
       </div>
     </div>
   </div>
@@ -208,8 +212,8 @@ function buildOrdreDetail() {
             </div>
             <div>
               <label>Chassis-nr (VIN)</label>
-              <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase" oninput="this.nextElementSibling.textContent=this.value.length+'/17'" onchange="sf('${o.id}','chassis',this.value);this.value=this.value.toUpperCase()">
-              <div class="small muted" style="margin-top:2px">${(o.chassis||'').length}/17</div>
+              <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase;font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.02em" oninput="this.nextElementSibling.textContent=this.value.length+'/17';this.nextElementSibling.style.color=this.value.length===17?'#4ade80':'#71717a'" onchange="sf('${o.id}','chassis',this.value);this.value=this.value.toUpperCase()">
+              <div class="small" style="margin-top:2px;text-align:right;color:${(o.chassis||'').length===17?'#4ade80':'#71717a'}">${(o.chassis||'').length}/17</div>
             </div>
           </div>
         </div>
@@ -236,7 +240,10 @@ function buildOrdreDetail() {
         ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="apneAdminMeldPaaModal('${o.id}')">👥 Meld på ansatte</button>`:''}
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Endringer</div>
-          ${ansatteEndringer.length?[...ansatteEndringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+          ${ansatteEndringer.length?[...ansatteEndringer].reverse().map(e=>`<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid #1f1f23;font-size:12px;align-items:baseline">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#52525b;flex-shrink:0;white-space:nowrap">${esc(e.tid)}</span>
+            <span style="color:#d4d4d8;min-width:0">${esc(e.txt)}<span style="color:#52525b"> · ${esc(e.av)}</span></span>
+          </div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
         </div>
       </div>
 
@@ -252,14 +259,19 @@ function buildOrdreDetail() {
 
       <div class="card">
         <div class="h">Vekter (kg)</div>
-        <table><thead><tr><th></th><th>Ved ankomst</th><th>Endring</th><th>Før visning</th></tr></thead><tbody>
+        <table><thead><tr><th></th>
+          <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Ved ankomst</th>
+          <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Endring</th>
+          <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Før visning</th>
+        </tr></thead><tbody>
           ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,lbl],i)=>{
             const rod = ['totalvekt','vogntog'].includes(k) && o.vekter[k].e && o.vekter[k].a && o.vekter[k].e !== o.vekter[k].a;
+            const vektInputStil = "font-family:ui-monospace,'SF Mono',Menlo,monospace;text-align:right;";
             return `<tr>
               <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
-              <td><input value="${o.vekter[k].a}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'a')" onchange="sv('${o.id}','${k}','a',this.value)"></td>
-              <td><input value="${o.vekter[k].e}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'e')" onchange="sv('${o.id}','${k}','e',this.value)" style="${rod?'color:#ef4444;border-color:#ef4444':''}"></td>
-              <td>${k==='vogntog' ? '<span class="small muted">–</span>' : `<input value="${o.vekter[k].v}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'v')" onchange="sv('${o.id}','${k}','v',this.value)">`}</td>
+              <td><input value="${o.vekter[k].a}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'a')" onchange="sv('${o.id}','${k}','a',this.value)" style="${vektInputStil}"></td>
+              <td><input value="${o.vekter[k].e}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'e')" onchange="sv('${o.id}','${k}','e',this.value)" style="${vektInputStil}${rod?'color:#ef4444;border-color:#ef4444':''}"></td>
+              <td>${k==='vogntog' ? '<span class="small muted">–</span>' : `<input value="${o.vekter[k].v}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'v')" onchange="sv('${o.id}','${k}','v',this.value)" style="${vektInputStil}">`}</td>
             </tr>`;
           }).join('')}
         </tbody></table>
@@ -305,7 +317,17 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Endringer</div>
-        ${generelleEndringer.length?[...generelleEndringer].reverse().map(e=>`<div class="small muted" style="margin-bottom:3px">${e.av} – ${e.tid}: ${e.txt}</div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+        ${(() => {
+          const vises = [...generelleEndringer].reverse();
+          if (!vises.length) return '<div class="small muted">Ingen registrerte endringer</div>';
+          const VIS = 12;
+          const rad = (e,skjult) => `<div${skjult?' data-skjult':''} style="display:${skjult?'none':'flex'};gap:10px;padding:6px 0;border-top:1px solid #1f1f23;font-size:12px;align-items:baseline">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#52525b;flex-shrink:0;white-space:nowrap">${esc(e.tid)}</span>
+            <span style="color:#d4d4d8;min-width:0">${esc(e.txt)}<span style="color:#52525b"> · ${esc(e.av)}</span></span>
+          </div>`;
+          return `<div>${vises.slice(0,VIS).map(e=>rad(e,false)).join('')}${vises.slice(VIS).map(e=>rad(e,true)).join('')}</div>`
+            + (vises.length>VIS?`<button class="btn sm" style="margin-top:8px" onclick="this.previousElementSibling.querySelectorAll('[data-skjult]').forEach(e=>e.style.display='flex');this.remove()">Vis ${vises.length-VIS} eldre endringer</button>`:'');
+        })()}
       </div>
     </div>
 
@@ -313,10 +335,13 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
     <div>
       <div class="card">
         <div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
-        <div style="margin-top:10px;display:flex;flex-direction:column;gap:7px">
-          ${tf.map(t=>`<div style="display:flex;align-items:center;gap:10px${t.ok?'':';background:#450a0a20;border-radius:12px;padding:5px 8px'}">
-            <span style="flex-shrink:0;width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;background:${t.ok?'#052e16':'#450a0a'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
-            <span class="small" style="font-size:13.5px">${esc(t.lbl)}</span>
+        <div style="display:flex;gap:3px;margin-top:10px">
+          ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:5px;border-radius:999px;background:${t.ok?'#4ade80':'rgba(239,68,68,.5)'}"></span>`).join('')}
+        </div>
+        <div class="box" style="margin-top:10px;padding:0;overflow:hidden">
+          ${tf.map((t,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid ${i===0?'transparent':'#1f1f23'};background:${t.ok?'transparent':'rgba(239,68,68,.05)'}">
+            <span style="flex-shrink:0;width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:${t.ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.14)'};border:1px solid ${t.ok?'rgba(34,197,94,.35)':'rgba(239,68,68,.4)'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
+            <span style="font-size:13.5px;color:${t.ok?'#a1a1aa':'#f4f4f5'}">${esc(t.lbl)}</span>
           </div>`).join('')}
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
@@ -329,9 +354,9 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card">
         <div class="h">Time på biltilsynet</div>
         <div class="grid g3" style="margin-top:8px">
-          <div><label>Dato</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet):'Ikke satt'}</div></div>
-          <div><label>Tid</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynetTid||'Ikke satt'}</div></div>
-          <div><label>Sted</label><div style="background:#27272a;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:13px">${o.tidBiltilsynetSted?esc(o.tidBiltilsynetSted):'–'}</div></div>
+          <div><label>Dato</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet):'<span class="muted">Ikke satt</span>'}</div></div>
+          <div><label>Tid</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynetTid||'<span class="muted">Ikke satt</span>'}</div></div>
+          <div><label>Sted</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynetSted?esc(o.tidBiltilsynetSted):'<span class="muted">–</span>'}</div></div>
         </div>
         <div class="small muted" style="margin-top:8px">Settes under Time bekreftet i Admin-arket</div>
       </div>
@@ -411,7 +436,7 @@ function togglePrioritert(id) {
     .then(r=>{if(r.error) console.error('Prioritering-oppdatering feilet:', r.error.message);});
   renderOrdreList(); renderOversikt();
   const btn = document.getElementById('prioritertBtn_' + id);
-  if (btn) { btn.textContent = o.prioritert ? 'PRIORITERT ✕' : '+ Prioriter'; btn.style.background = o.prioritert ? '#78350f' : ''; btn.style.borderColor = o.prioritert ? '#facc15' : ''; btn.style.color = o.prioritert ? '#facc15' : ''; }
+  if (btn) { btn.textContent = o.prioritert ? 'PRIORITERT ✕' : '+ Prioriter'; btn.style.background = o.prioritert ? 'rgba(250,204,21,.12)' : ''; btn.style.borderColor = o.prioritert ? '#facc15' : ''; btn.style.color = o.prioritert ? '#facc15' : ''; }
 }
 
 function toggleGodkjentBiltilsyn(id) {
@@ -427,7 +452,14 @@ function toggleGodkjentBiltilsyn(id) {
 
 function renderAnsOrdre(o) {
   if (!o.ansatteSignert.length) return '<div class="small muted">Ingen ansatte meldt på</div>';
-  return o.ansatteSignert.map(a=>`<div class="small" style="margin-bottom:3px">${esc(a.navn)} – ${a.tid}</div>`).join('');
+  return o.ansatteSignert.map(a=>{
+    const ini = (a.navn||'?').split(' ').map(d=>d[0]).slice(0,2).join('').toUpperCase();
+    return `<div class="box" style="padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="flex-shrink:0;width:26px;height:26px;border-radius:999px;background:#18181b;border:1px solid #27272a;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#a1a1aa">${esc(ini)}</span>
+      <span style="font-size:13.5px">${esc(a.navn)}</span>
+      <span class="small muted">meldt på ${a.tid}</span>
+    </div>`;
+  }).join('');
 }
 // Lar admin melde ansatte på/av ordren via et eget vindu i stedet for kun seg selv -
 // f.eks. når en ansatt glemmer å melde seg på selv, eller admin fordeler arbeid. Viser
@@ -494,9 +526,9 @@ function ordreMatcherTvangsflytFilter(o, verdi) {
 function ombyggingBoksHTML(o) {
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
-      <label style="display:flex;align-items:center;gap:10px;background:#18181b;border:2px solid ${o.ombygging?.[k]?'#ef4444':'#27272a'};border-radius:12px;padding:12px;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
         <input type="checkbox" ${o.ombygging?.[k]?'checked':''} onchange="sfOmbygging('${o.id}','${k}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0">
-        <span style="font-weight:600">${lbl}</span>
+        <span style="font-size:13.5px;font-weight:${o.ombygging?.[k]?'700':'400'};color:${o.ombygging?.[k]?'#f4f4f5':'#a1a1aa'}">${lbl}</span>
       </label>
     `).join('')}
   </div>`;
