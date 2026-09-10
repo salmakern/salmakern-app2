@@ -328,11 +328,13 @@ function renderWeek() {
   </div>
   <div class="cal-wrap">
     <div class="cal-scroll">
-      <div class="cal-head"><div class="cal-gutter"></div>${headCols}</div>
-      <div class="cal-body-scroll">
-        <div class="cal-body">
-          <div class="cal-times">${timeCol}</div>
-          <div class="cal-cols">${dayCols}</div>
+      <div class="cal-inner">
+        <div class="cal-head"><div class="cal-gutter"></div>${headCols}</div>
+        <div class="cal-body-scroll">
+          <div class="cal-body">
+            <div class="cal-times">${timeCol}</div>
+            <div class="cal-cols">${dayCols}</div>
+          </div>
         </div>
       </div>
     </div>
