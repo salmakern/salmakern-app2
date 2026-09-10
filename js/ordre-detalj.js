@@ -681,30 +681,40 @@ function sd(id,f,val) {
   if (el) el.innerHTML = drivstoffKortHTML(o);
 }
 
-function drivstoffKortHTML(o) {
+// Regner ut kundeprisen etter at valgt drivstoff-sats er brukt på totalprisen
+// (rabatt/påslags-formelen for hver satstype) - returnerer 0 hvis det mangler
+// totalpris eller sats. Delt mellom "Endring"-boksen på selve drivstoffkortet under
+// og de kompakte Drivstoff-radene på ordrekort/Ordrearkiv, som viser DENNE prisen,
+// aldri den rå totalprisen (satt av forhandler/verksted, ikke det kunden skal se).
+function drivstoffKundepris(o) {
   const df = o.drivstoff||{};
   const totalpris = parseFloat(String(df.totalpris||df.literpris||'').replace(',','.'))||0;
+  const sats = (S.drivstoffSatser||[]).find(s=>s.id===(df.satsId||''));
+  if (!totalpris || !sats) return 0;
+  let kundepris = totalpris;
+  if(sats.type==='kr_rabatt')      kundepris=totalpris-parseFloat(sats.verdi||0);
+  if(sats.type==='prosent_rabatt') kundepris=totalpris*(1-parseFloat(sats.verdi||0)/100);
+  if(sats.type==='uten_moms')      kundepris=totalpris/1.25;
+  if(sats.type==='uten_mva')       kundepris=totalpris*0.8;
+  if(sats.type==='bos')            kundepris=(totalpris*0.8)/0.97;
+  if(sats.type==='prosent')        kundepris=totalpris*(parseFloat(sats.verdi||100)/100);
+  if(sats.type==='fast_pris')      kundepris=parseFloat(sats.verdi||0);
+  return kundepris<0 ? 0 : kundepris;
+}
+function drivstoffKundeprisTekst(o) {
+  const kundepris = drivstoffKundepris(o);
+  return kundepris ? kundepris.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' kr' : '';
+}
+
+function drivstoffKortHTML(o) {
+  const df = o.drivstoff||{};
   const satsId = df.satsId||'';
   const satser = S.drivstoffSatser||[];
-  const sats = satser.find(s=>s.id===satsId);
-  const kr = n=>n.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2});
-  let endringHTML = '';
-  if (totalpris && sats) {
-    let kundepris = totalpris;
-    if(sats.type==='kr_rabatt')      kundepris=totalpris-parseFloat(sats.verdi||0);
-    if(sats.type==='prosent_rabatt') kundepris=totalpris*(1-parseFloat(sats.verdi||0)/100);
-    if(sats.type==='uten_moms')      kundepris=totalpris/1.25;
-    if(sats.type==='uten_mva')       kundepris=totalpris*0.8;
-    if(sats.type==='bos')            kundepris=(totalpris*0.8)/0.97;
-    if(sats.type==='prosent')        kundepris=totalpris*(parseFloat(sats.verdi||100)/100);
-    if(sats.type==='fast_pris')      kundepris=parseFloat(sats.verdi||0);
-    if(kundepris<0) kundepris=0;
-    const endring=totalpris-kundepris;
-    endringHTML=`<div style="flex:1;min-width:100px">
+  const kundepris = drivstoffKundepris(o);
+  const endringHTML = kundepris ? `<div style="flex:1;min-width:100px">
       <label>Endring</label>
-      <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center;font-size:14px;font-weight:800;color:#86efac;line-height:1.4">${kr(kundepris)} kr</div>
-    </div>`;
-  }
+      <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center;font-size:14px;font-weight:800;color:#86efac;line-height:1.4">${drivstoffKundeprisTekst(o)}</div>
+    </div>` : '';
   return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
     <div style="flex:1;min-width:120px">
       <label>Totalpris (kr)</label>
