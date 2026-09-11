@@ -562,7 +562,8 @@ function lagreLagerEndring() {
   const v = (S.lagervarer||[]).find(x=>x.id===vareId); if (!v) return;
   const endring = fortegn * antallRaw;
   if (endring < 0 && v.antall + endring < 0) {
-    if (!confirm(`Det er kun ${fmtAntall(v.antall)} ${v.enhet} igjen. Fortsett og gå i minus?`)) return;
+    alert(`Kan ikke ta ut ${fmtAntall(antallRaw)} ${v.enhet} - det er kun ${fmtAntall(v.antall)} igjen på lager.`);
+    return;
   }
   // Kom det mindre enn forventet? Noter det i historikken og varsle, slik at
   // noen kan følge opp med leverandøren om resten av leveransen.
@@ -1299,11 +1300,11 @@ function renderOrdreLagerbruk() {
 function trekkOppskriftForOrdre(oppskriftId) {
   const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId); if (!r) return;
   const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
-  const mangler = (r.ingredienser||[]).filter(i => {
-    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
-    return !v || v.antall < i.antall;
-  });
-  if (mangler.length && !confirm('Det er ikke nok på lager av alle varene i denne oppskriften. Fortsett og gå i minus der det trengs?')) return;
+  // Trekkes uansett beholdning, med vilje - en oppskrift brukes ofte på nytt før
+  // varene er fylt opp igjen (f.eks. rekvirert, men ikke levert ennå), og skal
+  // fortsatt registreres/trekkes nå - beholdningen går i minus til påfyllingen
+  // kommer og retter det opp. Ingen sperre eller advarsel her, i motsetning til
+  // manuelt uttak i lagreLagerEndring() som ER en bevisst engangshandling.
 
   const batchId = 'batch_' + Date.now();
   const lagerBatch = lagerBatchNy();
