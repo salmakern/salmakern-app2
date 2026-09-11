@@ -208,9 +208,11 @@ function apneNyOrdreModal() {
   const statusFelt = document.getElementById('n_status');
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
   oppdaterNyOrdreStatusFelt();
-  document.getElementById('n_type_forslag').innerHTML = feltForslagHTML('n_type', typeForslag());
-  renderVariantForslag('n_type','n_variant','n_variant_forslag');
-  renderVersjonForslag('n_type','n_versjon','n_versjon_forslag');
+  document.getElementById('n_merke_forslag').innerHTML = feltForslagHTML('n_merke', merkeForslag());
+  renderModellForslag('n_merke','n_modell','n_modell_forslag');
+  renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');
+  renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');
+  renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');
   openModal('nyOrdre');
 }
 

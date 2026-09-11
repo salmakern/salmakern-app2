@@ -165,28 +165,42 @@ function buildOrdreDetail() {
             </div>
           </div>
           <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
-          <div><label>Merke</label><input value="${esc(o.merke||'')}" onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk()"></div>
+          <div class="felt-wrap">
+            <label>Merke</label>
+            <input id="merkeInput_${o.id}" value="${esc(o.merke||'')}" autocomplete="off"
+              oninput="renderModellForslag('merkeInput_${o.id}','modellInput_${o.id}','typeForslag_modell_${o.id}');renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk()"
+              onfocus="visFeltDropdown('typeForslag_merke_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_merke_${o.id}'))">
+            <div id="typeForslag_merke_${o.id}" class="felt-dropdown">${feltForslagHTML('merkeInput_'+o.id, merkeForslag())}</div>
+          </div>
           <div class="felt-wrap">
             <label>Type</label>
             <input id="typeInput_${o.id}" value="${esc(o.type||'')}" autocomplete="off"
-              oninput="renderVariantForslag('typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              oninput="renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
               onchange="sf('${o.id}','type',this.value)"
               onfocus="visFeltDropdown('typeForslag_type_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_type_${o.id}'))">
-            <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag())}</div>
+            <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag(o.merke, o.modell))}</div>
           </div>
-          <div><label>Modell</label><input value="${esc(o.modell||'')}" onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk()"></div>
+          <div class="felt-wrap">
+            <label>Modell</label>
+            <input id="modellInput_${o.id}" value="${esc(o.modell||'')}" autocomplete="off"
+              oninput="renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk()"
+              onfocus="visFeltDropdown('typeForslag_modell_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_modell_${o.id}'))">
+            <div id="typeForslag_modell_${o.id}" class="felt-dropdown">${feltForslagHTML('modellInput_'+o.id, modellForslag(o.merke))}</div>
+          </div>
           <div class="felt-wrap">
             <label>Variant</label>
             <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" autocomplete="off" onchange="sf('${o.id}','variant',this.value)"
               onfocus="visFeltDropdown('typeForslag_var_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_var_${o.id}'))">
-            <div id="typeForslag_var_${o.id}" class="felt-dropdown">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.type))}</div>
+            <div id="typeForslag_var_${o.id}" class="felt-dropdown">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.merke, o.modell, o.type))}</div>
           </div>
           <div><label>Farge</label><input value="${esc(o.farge||'')}" onchange="sf('${o.id}','farge',this.value)"></div>
           <div class="felt-wrap">
             <label>Versjon</label>
             <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" autocomplete="off" onchange="sf('${o.id}','versjon',this.value)"
               onfocus="visFeltDropdown('typeForslag_ver_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_ver_${o.id}'))">
-            <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.type))}</div>
+            <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.merke, o.modell, o.type))}</div>
           </div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
         </div>
@@ -558,10 +572,11 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
 function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · Chassis: '+esc(o.chassis) : ordreLabel(o); }
 
-// Foreslår Type/Variant/Versjon basert på hva som faktisk er brukt på tidligere ordre,
-// sortert etter hvor ofte de forekommer (mest brukt først). Variant og Versjon
-// filtreres til det som er brukt sammen med valgt Type - de henger som regel sammen
-// (f.eks. har "Sprinter" andre varianter enn "Crafter").
+// Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
+// tidligere ordre, sortert etter hvor ofte de forekommer (mest brukt først). Hvert felt
+// filtreres til det som er brukt sammen med feltene til VENSTRE for det i kjeden
+// Merke → Modell → Type → Variant → Versjon (tomt felt til venstre = ikke filtrer på
+// det) - de henger som regel sammen (f.eks. har "Sprinter" andre varianter enn "Crafter").
 //
 // Vises som en nedtrekkbar liste under feltet (samme mønster som en vanlig <select>,
 // men lar deg fortsatt skrive inn en helt ny verdi) - IKKE nettleserens innebygde
@@ -573,16 +588,27 @@ function frekvenssortert(verdier) {
   verdier.forEach(v => { if (v) tell[v] = (tell[v]||0) + 1; });
   return Object.keys(tell).sort((a,b) => tell[b]-tell[a] || a.localeCompare(b,'no'));
 }
-function typeForslag() {
-  return frekvenssortert(S.ordrer.map(o=>o.type));
+function kjedeFilter(merke, modell, type) {
+  return S.ordrer.filter(o =>
+    (!merke  || (o.merke ||'').toLowerCase()===merke.toLowerCase())  &&
+    (!modell || (o.modell||'').toLowerCase()===modell.toLowerCase()) &&
+    (!type   || (o.type  ||'').toLowerCase()===type.toLowerCase())
+  );
 }
-function variantForslag(type) {
-  const kilde = type ? S.ordrer.filter(o=>(o.type||'').toLowerCase()===type.toLowerCase()) : S.ordrer;
-  return frekvenssortert(kilde.map(o=>o.variant));
+function merkeForslag() {
+  return frekvenssortert(S.ordrer.map(o=>o.merke));
 }
-function versjonForslag(type) {
-  const kilde = type ? S.ordrer.filter(o=>(o.type||'').toLowerCase()===type.toLowerCase()) : S.ordrer;
-  return frekvenssortert(kilde.map(o=>o.versjon));
+function modellForslag(merke) {
+  return frekvenssortert(kjedeFilter(merke).map(o=>o.modell));
+}
+function typeForslag(merke, modell) {
+  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.type));
+}
+function variantForslag(merke, modell, type) {
+  return frekvenssortert(kjedeFilter(merke, modell, type).map(o=>o.variant));
+}
+function versjonForslag(merke, modell, type) {
+  return frekvenssortert(kjedeFilter(merke, modell, type).map(o=>o.versjon));
 }
 function feltForslagHTML(inputId, verdier) {
   if (!verdier.length) return '<div class="small muted" style="padding:9px 12px">Ingen tidligere verdier</div>';
@@ -609,15 +635,26 @@ function visFeltDropdown(listeId) {
 function skjulFeltDropdown(el) {
   if (el) el.style.display = 'none';
 }
-// Oppdaterer Variant/Versjon-forslagene til det som faktisk er brukt sammen med
-// innholdet i Type-feltet akkurat nå - kalt fra Type-feltets oninput.
-function renderVariantForslag(typeInputId, variantInputId, listeId) {
+// Oppdaterer forslagslisten til ett felt i kjeden ut fra hva som faktisk står i
+// feltene til venstre for det akkurat nå - kalt fra oninput på Merke/Modell/Type
+// (feltene som har noe til høyre for seg i kjeden Merke → Modell → Type → Variant →
+// Versjon). feltVerdi(id) leser gjeldende verdi av et felt via input-elementets id.
+function feltVerdi(inputId) { return document.getElementById(inputId)?.value||''; }
+function renderModellForslag(merkeInputId, modellInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
-  el.innerHTML = feltForslagHTML(variantInputId, variantForslag(document.getElementById(typeInputId)?.value||''));
+  el.innerHTML = feltForslagHTML(modellInputId, modellForslag(feltVerdi(merkeInputId)));
 }
-function renderVersjonForslag(typeInputId, versjonInputId, listeId) {
+function renderTypeForslag(merkeInputId, modellInputId, typeInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
-  el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(document.getElementById(typeInputId)?.value||''));
+  el.innerHTML = feltForslagHTML(typeInputId, typeForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId)));
+}
+function renderVariantForslag(merkeInputId, modellInputId, typeInputId, variantInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(variantInputId, variantForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId), feltVerdi(typeInputId)));
+}
+function renderVersjonForslag(merkeInputId, modellInputId, typeInputId, versjonInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId), feltVerdi(typeInputId)));
 }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, pluss modell-feltet på lagervarer

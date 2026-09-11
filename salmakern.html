@@ -954,15 +954,27 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="box" style="margin-top:10px">
       <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KJØRETØY</div>
       <div class="grid g2">
-        <div><label>Merke</label><input id="n_merke" placeholder="Mercedes"></div>
+        <div class="felt-wrap">
+          <label>Merke</label>
+          <input id="n_merke" placeholder="Mercedes" autocomplete="off"
+            oninput="renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
+            onfocus="visFeltDropdown('n_merke_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_merke_forslag'))">
+          <div id="n_merke_forslag" class="felt-dropdown"></div>
+        </div>
         <div class="felt-wrap">
           <label>Type</label>
           <input id="n_type" placeholder="Sprinter" autocomplete="off"
-            oninput="renderVariantForslag('n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_type','n_versjon','n_versjon_forslag')"
+            oninput="renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
             onfocus="visFeltDropdown('n_type_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_type_forslag'))">
           <div id="n_type_forslag" class="felt-dropdown"></div>
         </div>
-        <div><label>Modell</label><input id="n_modell" placeholder="L2H2"></div>
+        <div class="felt-wrap">
+          <label>Modell</label>
+          <input id="n_modell" placeholder="L2H2" autocomplete="off"
+            oninput="renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
+            onfocus="visFeltDropdown('n_modell_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_modell_forslag'))">
+          <div id="n_modell_forslag" class="felt-dropdown"></div>
+        </div>
         <div class="felt-wrap">
           <label>Variant</label>
           <input id="n_variant" placeholder="Med takluke" autocomplete="off"
