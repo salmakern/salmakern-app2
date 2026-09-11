@@ -956,35 +956,35 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="grid g2">
         <div class="felt-wrap">
           <label>Merke</label>
-          <input id="n_merke" placeholder="Mercedes" autocomplete="off"
+          <input id="n_merke" autocomplete="off"
             oninput="renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
             onfocus="visFeltDropdown('n_merke_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_merke_forslag'))">
           <div id="n_merke_forslag" class="felt-dropdown"></div>
         </div>
         <div class="felt-wrap">
           <label>Type</label>
-          <input id="n_type" placeholder="Sprinter" autocomplete="off"
+          <input id="n_type" autocomplete="off"
             oninput="renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
             onfocus="visFeltDropdown('n_type_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_type_forslag'))">
           <div id="n_type_forslag" class="felt-dropdown"></div>
         </div>
         <div class="felt-wrap">
           <label>Modell</label>
-          <input id="n_modell" placeholder="L2H2" autocomplete="off"
+          <input id="n_modell" autocomplete="off"
             oninput="renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
             onfocus="visFeltDropdown('n_modell_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_modell_forslag'))">
           <div id="n_modell_forslag" class="felt-dropdown"></div>
         </div>
         <div class="felt-wrap">
           <label>Variant</label>
-          <input id="n_variant" placeholder="Med takluke" autocomplete="off"
+          <input id="n_variant" autocomplete="off"
             onfocus="visFeltDropdown('n_variant_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_variant_forslag'))">
           <div id="n_variant_forslag" class="felt-dropdown"></div>
         </div>
-        <div><label>Farge</label><input id="n_farge" placeholder="Arctic hvit"></div>
+        <div><label>Farge</label><input id="n_farge"></div>
         <div class="felt-wrap">
           <label>Versjon</label>
-          <input id="n_versjon" placeholder="2019→" autocomplete="off"
+          <input id="n_versjon" autocomplete="off"
             onfocus="visFeltDropdown('n_versjon_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_versjon_forslag'))">
           <div id="n_versjon_forslag" class="felt-dropdown"></div>
         </div>
