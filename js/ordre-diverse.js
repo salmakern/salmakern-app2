@@ -228,6 +228,8 @@ function apneNyOrdreModal() {
   renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');
   renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');
   renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');
+  renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag');
+  renderKontaktpersonForslag('n_merke','n_modell','n_eier','n_eier_forslag');
   openModal('nyOrdre');
 }
 

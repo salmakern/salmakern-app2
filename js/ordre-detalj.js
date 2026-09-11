@@ -157,18 +157,25 @@ function buildOrdreDetail() {
         <div class="h">Kunde og bilinfo</div>
 
         <div class="grid g2" style="gap:8px;margin-top:10px">
-          <div>
+          <div class="felt-wrap">
             <label>Forhandler</label>
             <div style="display:flex;gap:6px">
-              <input value="${esc(o.kunde)}" onchange="sf('${o.id}','kunde',this.value)" style="flex:1">
+              <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off" onchange="sf('${o.id}','kunde',this.value)"
+                onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
+            <div id="typeForslag_kunde_${o.id}" class="felt-dropdown">${feltForslagHTML('kundeInput_'+o.id, forhandlerForslag(o.merke, o.modell))}</div>
           </div>
-          <div><label>Kontaktperson</label><input value="${esc(o.eier)}" onchange="sf('${o.id}','eier',this.value)"></div>
+          <div class="felt-wrap">
+            <label>Kontaktperson</label>
+            <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)"
+              onfocus="visFeltDropdown('typeForslag_eier_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_eier_${o.id}'))">
+            <div id="typeForslag_eier_${o.id}" class="felt-dropdown">${feltForslagHTML('eierInput_'+o.id, kontaktpersonForslag(o.merke, o.modell))}</div>
+          </div>
           <div class="felt-wrap">
             <label>Merke</label>
             <input id="merkeInput_${o.id}" value="${esc(o.merke||'')}" autocomplete="off"
-              oninput="renderModellForslag('merkeInput_${o.id}','modellInput_${o.id}','typeForslag_modell_${o.id}');renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              oninput="renderModellForslag('merkeInput_${o.id}','modellInput_${o.id}','typeForslag_modell_${o.id}');renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}');renderForhandlerForslag('merkeInput_${o.id}','modellInput_${o.id}','kundeInput_${o.id}','typeForslag_kunde_${o.id}');renderKontaktpersonForslag('merkeInput_${o.id}','modellInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}')"
               onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk()"
               onfocus="visFeltDropdown('typeForslag_merke_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_merke_${o.id}'))">
             <div id="typeForslag_merke_${o.id}" class="felt-dropdown">${feltForslagHTML('merkeInput_'+o.id, merkeForslag())}</div>
@@ -184,7 +191,7 @@ function buildOrdreDetail() {
           <div class="felt-wrap">
             <label>Modell</label>
             <input id="modellInput_${o.id}" value="${esc(o.modell||'')}" autocomplete="off"
-              oninput="renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              oninput="renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}');renderForhandlerForslag('merkeInput_${o.id}','modellInput_${o.id}','kundeInput_${o.id}','typeForslag_kunde_${o.id}');renderKontaktpersonForslag('merkeInput_${o.id}','modellInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}')"
               onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk()"
               onfocus="visFeltDropdown('typeForslag_modell_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_modell_${o.id}'))">
             <div id="typeForslag_modell_${o.id}" class="felt-dropdown">${feltForslagHTML('modellInput_'+o.id, modellForslag(o.merke))}</div>
@@ -613,6 +620,15 @@ function variantForslag(merke, modell, type) {
 function versjonForslag(merke, modell, type) {
   return frekvenssortert(kjedeFilter(merke, modell, type).map(o=>o.versjon));
 }
+// Forhandler/Kontaktperson henger ikke sammen med Type/Variant/Versjon (ulike forhandlere
+// bestiller gjerne samme Type), men henger som regel sammen med Merke+Modell - en
+// forhandlernettverk bestiller gjerne stort sett samme bilmerke/-modell om og om igjen.
+function forhandlerForslag(merke, modell) {
+  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.kunde));
+}
+function kontaktpersonForslag(merke, modell) {
+  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.eier));
+}
 function feltForslagHTML(inputId, verdier) {
   if (!verdier.length) return '<div class="small muted" style="padding:9px 12px">Ingen tidligere verdier</div>';
   return verdier.slice(0,20).map(v =>
@@ -658,6 +674,14 @@ function renderVariantForslag(merkeInputId, modellInputId, typeInputId, variantI
 function renderVersjonForslag(merkeInputId, modellInputId, typeInputId, versjonInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
   el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId), feltVerdi(typeInputId)));
+}
+function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(kundeInputId, forhandlerForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId)));
+}
+function renderKontaktpersonForslag(merkeInputId, modellInputId, eierInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(eierInputId, kontaktpersonForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId)));
 }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, pluss modell-feltet på lagervarer

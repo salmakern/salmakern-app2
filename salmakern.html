@@ -957,7 +957,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="felt-wrap">
           <label>Merke</label>
           <input id="n_merke" autocomplete="off"
-            oninput="renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
+            oninput="renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag');renderKontaktpersonForslag('n_merke','n_modell','n_eier','n_eier_forslag')"
             onfocus="visFeltDropdown('n_merke_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_merke_forslag'))">
           <div id="n_merke_forslag" class="felt-dropdown"></div>
         </div>
@@ -971,7 +971,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="felt-wrap">
           <label>Modell</label>
           <input id="n_modell" autocomplete="off"
-            oninput="renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
+            oninput="renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag');renderKontaktpersonForslag('n_merke','n_modell','n_eier','n_eier_forslag')"
             onfocus="visFeltDropdown('n_modell_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_modell_forslag'))">
           <div id="n_modell_forslag" class="felt-dropdown"></div>
         </div>
@@ -994,10 +994,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="box" style="margin-top:10px">
       <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KUNDE</div>
       <div class="grid g2">
-        <div><label>Forhandler</label><input id="n_kunde"></div>
-        <div>
+        <div class="felt-wrap">
+          <label>Forhandler</label>
+          <input id="n_kunde" autocomplete="off"
+            onfocus="visFeltDropdown('n_kunde_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_kunde_forslag'))">
+          <div id="n_kunde_forslag" class="felt-dropdown"></div>
+        </div>
+        <div class="felt-wrap">
           <label>Kontaktperson</label>
-          <input id="n_eier">
+          <input id="n_eier" autocomplete="off"
+            onfocus="visFeltDropdown('n_eier_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_eier_forslag'))">
+          <div id="n_eier_forslag" class="felt-dropdown"></div>
           <button class="btn sm" style="margin-top:6px;padding:4px 10px;font-size:12px"
             onclick="document.getElementById('n_eier').value=document.getElementById('n_kunde').value">
             Samme som forhandler
