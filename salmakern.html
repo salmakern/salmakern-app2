@@ -149,9 +149,11 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 /* FORMS */
 input,select,textarea{width:100%;padding:9px 12px;border-radius:12px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;font-family:Arial,sans-serif;font-size:13px;resize:vertical}
 /* iOS zoomer inn på felter med under 16px tekst. 16px på telefon fjerner
-   hoppet uten å måtte blokkere pinch-zoom for hele appen. */
+   hoppet uten å måtte blokkere pinch-zoom for hele appen. !important fordi
+   statuspiller o.l. (f.eks. Ordre-sidens status-dropdown) setter sin egen,
+   mindre font-size direkte i style-attributtet, som ellers vinner over denne. */
 @media(max-width:860px){
-  input,select,textarea{font-size:16px}
+  input,select,textarea{font-size:16px!important}
   input[type=date],input[type=time]{min-height:44px}
 }
 input:focus,select:focus,textarea:focus{outline:none;border-color:#ef4444}
