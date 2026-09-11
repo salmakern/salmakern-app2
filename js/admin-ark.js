@@ -184,11 +184,15 @@ function parseTimeBekreftetTekst(tekst) {
 // adminArkLagreFelter) - slik at en ny ordre alltid havner nederst i arket,
 // uansett hvor mange rader som totalt finnes (på tvers av år/arkiverte rader).
 function adminArkNesteRekkefolge() {
-  // Ekskluderer tomme rader (Ny rad/reserve-rader, som ligger helt i bunnen på
-  // ADMIN_ARK_REKKEFOLGE_BUNN) fra maks-utregningen - ellers ville en ny ordre uten
-  // admin-ark-kobling regne seg til ETT HØYERE tall enn selve bunn-grensen, som
-  // overskrider det Postgres sin "integer"-kolonne tåler ved lagring.
-  const maks = Math.max(0, ...(S.adminArk||[]).filter(r=>r.aar===adminArkAar && !adminArkErTomRad(r)).map(r=>Number(r.rekkefolge)||0));
+  // Ekskluderer kun rader som faktisk STÅR på bunn-grensen ADMIN_ARK_REKKEFOLGE_BUNN
+  // fra maks-utregningen - ellers ville en ny ordre uten admin-ark-kobling regne seg
+  // til ETT HØYERE tall enn selve bunn-grensen, som overskrider det Postgres sin
+  // "integer"-kolonne tåler ved lagring. Sjekker rekkefolge direkte (ikke om raden ER
+  // tom via adminArkErTomRad()) - noen gamle tomme rader fra før reserve-radene alltid
+  // fikk bunn-verdien har fortsatt en "normal" rekkefolge, og en tom-rad-sjekk her ville
+  // ignorert dem og latt nye rader kollidere med dem (rapportert av Henrik 2026-09-11:
+  // "rot i nr. tallene" - to rader delte samme radnummer i visningen).
+  const maks = Math.max(0, ...(S.adminArk||[]).filter(r=>r.aar===adminArkAar && Number(r.rekkefolge) !== ADMIN_ARK_REKKEFOLGE_BUNN).map(r=>Number(r.rekkefolge)||0));
   return maks + 1;
 }
 
