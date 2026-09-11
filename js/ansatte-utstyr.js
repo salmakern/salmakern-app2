@@ -354,15 +354,17 @@ function detRapportPivotHTML(ordrerIAar, valgtAar) {
   if (!ordrerIAar.length) return `<div class="muted small">Ingen ordre registrert i ${valgtAar}</div>`;
 
   const modellNavn = o => [o.merke, o.modell].filter(Boolean).join(' ') || 'Ukjent bil';
-  const modeller = [...new Set(ordrerIAar.map(modellNavn))].sort((a,b)=>a.localeCompare(b,'no'));
-
+  const modellTotal = {};
   const perForhandler = {};
   ordrerIAar.forEach(o => {
     const fh = o.kunde || 'Ukjent forhandler';
     const m = modellNavn(o);
     if (!perForhandler[fh]) perForhandler[fh] = {};
     perForhandler[fh][m] = (perForhandler[fh][m]||0) + 1;
+    modellTotal[m] = (modellTotal[m]||0) + 1;
   });
+  // Både rader og kolonner sortert flest til færrest ordre, ikke alfabetisk.
+  const modeller = Object.keys(modellTotal).sort((a,b)=>modellTotal[b]-modellTotal[a]);
   const totalForFh = fh => Object.values(perForhandler[fh]).reduce((s,n)=>s+n,0);
   const forhandlere = Object.keys(perForhandler).sort((a,b)=>totalForFh(b)-totalForFh(a));
 
