@@ -226,7 +226,7 @@ function genPDF(id) {
       ${infoRad('Fullmakt', esc(o.fullmakt), o.fullmakt==='Har'?OK:NEI)}
       ${infoRad('Diagnose', o.diagnose?'Utført av '+esc(o.diagnoseAv):'Ikke utført', o.diagnose?OK:NEI)}
       ${infoRad('Time biltilsyn', o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet)+' '+(o.tidBiltilsynetTid||'')+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'')}
-      ${infoRad('Fakturert', o.fakturert?'Ja, av '+esc(o.fakturertAv):'Ikke fakturert', o.fakturert?OK:NEI)}
+      ${infoRad('Fakturert', o.fakturert?'Ja':'Ikke fakturert', o.fakturert?OK:NEI)}
     </div>
   </div>
 

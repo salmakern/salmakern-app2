@@ -2,6 +2,7 @@
 // ARKIV
 // ════════════════════════════════════════════════════
 function renderArkiv() {
+  const erAdmin = me && me.rolle === 'admin';
   const q=(document.getElementById('arkivSok')?.value||'').toLowerCase().trim();
   const match=o=>!q||o.regnr?.toLowerCase().includes(q)||o.kunde?.toLowerCase().includes(q)||o.chassis?.toLowerCase().includes(q)||o.eier?.toLowerCase().includes(q);
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o)).sort(sorterOrdre);
@@ -49,17 +50,16 @@ function renderArkiv() {
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
           ${drivstoffKundeprisTekst(o)?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
-          ${o.fakturert&&o.fakturertAv?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Fakturert av</span><span>${esc(o.fakturertAv)}</span></div>`:''}
         </div>
 
         <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
           <button class="btn sm" onclick="genPDF('${o.id}')">📄 PDF</button>
-          <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
+          ${erAdmin?`<button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>`:''}
           <span style="flex:1"></span>
-          ${o.fakturert
+          ${erAdmin ? (o.fakturert
             ?`<button class="btn sm" onclick="toggleFakturert('${o.id}')">Fjern fakturert</button>`
-            :`<button class="btn sm red" onclick="toggleFakturert('${o.id}')">✔ Merk fakturert</button>`}
+            :`<button class="btn sm red" onclick="toggleFakturert('${o.id}')">✔ Merk fakturert</button>`) : ''}
         </div>
       </div>`).join('')
     :'<div class="muted small">Ingen arkiverte ordrer</div>';
@@ -125,6 +125,7 @@ function slettOrdre(id) {
 }
 
 async function gjenopprett(id) {
+  if (!me || me.rolle !== 'admin') return;
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
   o.status='aktiv';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Gjenopprettet'};

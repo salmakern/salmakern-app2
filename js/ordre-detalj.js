@@ -401,7 +401,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <div class="h">Fakturering</div>
         <div style="margin-top:8px">
           ${o.fakturert
-            ? `<span class="pill ok">✔ Fakturert av ${o.fakturertAv}</span>
+            ? `<span class="pill ok">✔ Fakturert</span>
                <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleFakturert('${o.id}')">Merk som ikke fakturert</button>`
             : `<div class="muted small" style="margin-bottom:8px">Ikke fakturert</div>
                <button class="btn sm red" style="width:100%" onclick="toggleFakturert('${o.id}')">✔ Merk som fakturert</button>`}
@@ -438,9 +438,9 @@ function toggleDiagnose(id) {
 }
 
 function toggleFakturert(id) {
+  if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.fakturert = !o.fakturert;
-  o.fakturertAv = o.fakturert ? me.navn : '';
   logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
   save(id);
   // Kan nå trykkes fra tre steder: Fakturering-kortet på selve ordresiden, Arkiv-kortet,
