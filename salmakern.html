@@ -801,6 +801,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div id="ordreRapportInnhold" style="margin-top:10px"></div>
           <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
+          <button class="btn sm" style="margin-top:14px" onclick="visDetaljertOrdrerapport()">📊 Detaljert ordrerapport</button>
         </div>
       </div>
 
@@ -872,6 +873,26 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
       </div>
 
+    </section>
+
+    <!-- ── DETALJERT ORDRERAPPORT ── -->
+    <section id="detaljertOrdrerapport" class="page">
+      <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraDetaljertOrdrerapport()">← Mer</button>
+      <div class="card">
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <div class="h">Detaljert ordrerapport</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn sm" id="detRapport5Btn" onclick="settDetRapportRange(5)">5 år</button>
+            <button class="btn sm" id="detRapport10Btn" onclick="settDetRapportRange(10)">10 år</button>
+          </div>
+        </div>
+        <div class="muted small" style="margin-top:6px">Klikk på et år i grafen for å se bilene det året, gruppert på modell og forhandler.</div>
+        <div id="detRapportGraf" style="margin-top:14px"></div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="h">Biler i <span id="detRapportValgtAar">–</span></div>
+        <div id="detRapportModellOversikt" style="margin-top:10px"></div>
+      </div>
     </section>
 
     <!-- ── ADMIN ── -->

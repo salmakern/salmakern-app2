@@ -222,6 +222,128 @@ function renderOrdreRapport() {
 }
 
 // ════════════════════════════════════════════════════
+// DETALJERT ORDRERAPPORT - egen side, åpnes fra en knapp på Ordrerapport-kortet.
+// Viser en glattet "bølge"-graf (areal-graf) over antall biler per år de siste 5/10
+// årene - klikk på et årspunkt for å se det årets biler gruppert på modell og hvilke
+// forhandlere de kom fra.
+// ════════════════════════════════════════════════════
+let detRapportRange = 5; // 5 eller 10 år
+let detRapportValgtAar = new Date().getFullYear();
+
+function visDetaljertOrdrerapport() {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('detaljertOrdrerapport').classList.add('active');
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab')[5].classList.add('active'); // "Mer" - denne siden er nådd derfra
+  renderDetaljertOrdrerapport();
+  window.scrollTo(0,0);
+}
+function tilbakeFraDetaljertOrdrerapport() {
+  showPage('mer', document.querySelectorAll('.tab')[5]);
+}
+function settDetRapportRange(range) {
+  detRapportRange = range;
+  const naAar = new Date().getFullYear();
+  // Faller det valgte året utenfor det nye tidsrommet, hopp til nyeste år i det
+  if (detRapportValgtAar < naAar - range + 1) detRapportValgtAar = naAar;
+  renderDetaljertOrdrerapport();
+}
+function velgDetRapportAar(aar) {
+  detRapportValgtAar = aar;
+  renderDetaljertOrdrerapport();
+}
+
+// Tegner en glattet kurve (kubiske bezier-segmenter mellom punktene, ikke rette
+// linjer) med et gradient-fylt areal under - selve "bølgen". Hvert punkt er klikkbart
+// og markerer valgt år tydelig (rødt, større).
+function detRapportGrafSVG(data, valgtAar) {
+  const bredde = 700, hoyde = 170, padX = 26, padTopp = 22, padBunn = 34;
+  const maxVal = Math.max(1, ...data.map(d=>d.antall));
+  const stepX = data.length>1 ? (bredde - padX*2) / (data.length-1) : 0;
+  const yFor = antall => hoyde - padBunn - (antall/maxVal) * (hoyde - padTopp - padBunn);
+  const punkter = data.map((d,i) => ({ x: padX + i*stepX, y: yFor(d.antall), d }));
+
+  let linje = `M ${punkter[0].x} ${punkter[0].y}`;
+  for (let i=0; i<punkter.length-1; i++) {
+    const p0=punkter[i], p1=punkter[i+1], midX=(p0.x+p1.x)/2;
+    linje += ` C ${midX} ${p0.y}, ${midX} ${p1.y}, ${p1.x} ${p1.y}`;
+  }
+  const grunnlinje = hoyde - padBunn;
+  const areal = `${linje} L ${punkter[punkter.length-1].x} ${grunnlinje} L ${punkter[0].x} ${grunnlinje} Z`;
+
+  const merker = punkter.map(p => {
+    const valgt = p.d.aar === valgtAar;
+    return `
+      <text x="${p.x}" y="${p.y-11}" text-anchor="middle" font-size="12" font-weight="700" fill="#e4e4e7">${p.d.antall}</text>
+      <circle cx="${p.x}" cy="${p.y}" r="${valgt?7:4}" fill="${valgt?'#ef4444':'#f4f4f5'}" stroke="#09090b" stroke-width="2" style="cursor:pointer" onclick="velgDetRapportAar(${p.d.aar})"/>
+      <text x="${p.x}" y="${hoyde-10}" text-anchor="middle" font-size="12" font-weight="${valgt?'700':'400'}" fill="${valgt?'#f4f4f5':'#71717a'}" style="cursor:pointer" onclick="velgDetRapportAar(${p.d.aar})">${p.d.aar}</text>
+    `;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${bredde} ${hoyde}" style="width:100%;height:auto;display:block">
+    <defs>
+      <linearGradient id="detRapportGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="#ef4444" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${areal}" fill="url(#detRapportGrad)"/>
+    <path d="${linje}" fill="none" stroke="#ef4444" stroke-width="2.5"/>
+    ${merker}
+  </svg>`;
+}
+
+function renderDetaljertOrdrerapport() {
+  const el = document.getElementById('detRapportGraf'); if (!el) return;
+  const naAar = new Date().getFullYear();
+  const data = [];
+  for (let i = detRapportRange-1; i >= 0; i--) {
+    const aar = naAar - i;
+    data.push({ aar, antall: S.ordrer.filter(o=>o.ankomstdato?.startsWith(String(aar))).length });
+  }
+  document.getElementById('detRapport5Btn')?.classList.toggle('red', detRapportRange===5);
+  document.getElementById('detRapport10Btn')?.classList.toggle('red', detRapportRange===10);
+  el.innerHTML = detRapportGrafSVG(data, detRapportValgtAar);
+
+  const valgtAar = detRapportValgtAar;
+  const valgtAarEl = document.getElementById('detRapportValgtAar');
+  if (valgtAarEl) valgtAarEl.textContent = valgtAar;
+
+  const ordrerIAar = S.ordrer.filter(o=>o.ankomstdato?.startsWith(String(valgtAar)));
+  const perModell = {};
+  ordrerIAar.forEach(o => {
+    const navn = [o.merke, o.modell].filter(Boolean).join(' ') || 'Ukjent bil';
+    if (!perModell[navn]) perModell[navn] = { antall:0, forhandlere:{} };
+    perModell[navn].antall++;
+    const fh = o.kunde || 'Ukjent forhandler';
+    perModell[navn].forhandlere[fh] = (perModell[navn].forhandlere[fh]||0) + 1;
+  });
+  const modellNokler = Object.keys(perModell).sort((a,b)=>perModell[b].antall-perModell[a].antall);
+
+  const oversiktEl = document.getElementById('detRapportModellOversikt');
+  if (!oversiktEl) return;
+  oversiktEl.innerHTML = modellNokler.length
+    ? modellNokler.map(navn => {
+        const m = perModell[navn];
+        const forhandlerNokler = Object.keys(m.forhandlere).sort((a,b)=>m.forhandlere[b]-m.forhandlere[a]);
+        return `<div class="box" style="margin-bottom:8px;padding:12px 14px">
+          <div class="row">
+            <b>${esc(navn)}</b>
+            <span class="pill" style="margin:0;background:rgba(239,68,68,.16);color:#fca5a5">${m.antall} stk</span>
+          </div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+            ${forhandlerNokler.map(fh => `
+              <div style="display:flex;justify-content:space-between;font-size:12.5px">
+                <span class="muted">${esc(fh)}</span>
+                <span>${m.forhandlere[fh]} stk</span>
+              </div>`).join('')}
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="muted small">Ingen ordre registrert i ${valgtAar}</div>`;
+}
+
+// ════════════════════════════════════════════════════
 // LAGRE INNSTILLINGER TIL SUPABASE
 // ════════════════════════════════════════════════════
 function saveInnstillinger() {
