@@ -217,7 +217,10 @@ Deno.serve(async (req) => {
       const vektNy  = record.vekter?.totalvekt?.v
       const vektGml = old_record?.vekter?.totalvekt?.v
       const vektEndret = vektNy && !vektGml
-      const hengerfesteMontertEndret = record.utstyr?.hengerfesteMontert === 'montert' && old_record?.utstyr?.hengerfesteMontert !== 'montert'
+      const hengerfesteNy  = record.utstyr?.hengerfesteMontert
+      const hengerfesteGml = old_record?.utstyr?.hengerfesteMontert
+      const hengerfesteBlittMontert     = hengerfesteNy === 'montert'     && hengerfesteGml !== 'montert'
+      const hengerfesteBlittLedningsnett = hengerfesteNy === 'ledningsnett' && hengerfesteGml !== 'ledningsnett'
 
       console.log('bil:', bil, 'ordre_status ny:', record.ordre_status, 'gammel:', old_record?.ordre_status, 'statusEndret:', statusEndret)
 
@@ -228,9 +231,12 @@ Deno.serve(async (req) => {
       } else if (vektEndret) {
         title = 'Vekt registrert'
         body = `${bil} er veid: ${vektNy} kg`
-      } else if (hengerfesteMontertEndret) {
+      } else if (hengerfesteBlittMontert) {
         title = 'Hengerfeste'
         body = `${bil} har fått montert hengerfeste`
+      } else if (hengerfesteBlittLedningsnett) {
+        title = 'Hengerfeste'
+        body = `${bil} har fått montert ledningsnett til hengerfeste`
       }
     } else if (payload.type === 'lav_lager') {
       title = `Lav beholdning: ${payload.vareNavn}`
