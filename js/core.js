@@ -129,7 +129,7 @@ let timerStart    = null;
 let timerType     = 'normal';
 let timerTick     = null;
 let timerPINMode  = 'gps'; // 'gps' eller 'manuell'
-let ordreTimerTick = null;
+let ordreTimerTicks = {}; // nøkkel: felt+'_'+ordreId - to uavhengige tidtakere kan gå samtidig på samme ordre
 let calWeekOffset = 0;
 
 // ════════════════════════════════════════════════════
@@ -362,7 +362,7 @@ function dbToOrdre(r) {
     diagnose:r.diagnose||false, diagnoseAv:r.diagnose_av||'',
     fakturert:r.fakturert||false, fakturertAv:r.fakturert_av||'',
     ordreStart:r.ordre_start||null, ordreStopp:r.ordre_stopp||null,
-    ordreTimerSessions:r.ordre_timer_sessions||[],
+    ordreTimerSessions:r.ordre_timer_sessions||[], klargjoringTimerSessions:r.klargjoring_timer_sessions||[],
     notater:r.notater||'', endringer:r.endringer||[],
     utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
     visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
@@ -386,7 +386,7 @@ function ordreToDb(o) {
     diagnose:o.diagnose||false, diagnose_av:o.diagnoseAv||'',
     fakturert:o.fakturert, fakturert_av:o.fakturertAv,
     ordre_start:o.ordreStart, ordre_stopp:o.ordreStopp,
-    ordre_timer_sessions:o.ordreTimerSessions||[],
+    ordre_timer_sessions:o.ordreTimerSessions||[], klargjoring_timer_sessions:o.klargjoringTimerSessions||[],
     notater:o.notater, endringer:o.endringer,
     utstyr_sjekkliste:o.utstyrSjekkliste||[], utstyr_mal_navn:o.utstyrMalNavn||'',
     visnings_sjekkliste:o.visningsSjekkliste||[], visnings_mal_navn:o.visningsMalNavn||'',
@@ -796,7 +796,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa,
     godkjent:false, godkjennerNavn:'',
     diagnose:false, diagnoseAv:'',
     fakturert:false, fakturertAv:'',
-    ordreStart:null, ordreStopp:null, ordreTimerSessions:[],
+    ordreStart:null, ordreStopp:null, ordreTimerSessions:[], klargjoringTimerSessions:[],
     notater:'', endringer:[],
     utstyrSjekkliste:[], utstyrMalNavn:'',
     visningsSjekkliste:[], visningsMalNavn:'', prioritert:false

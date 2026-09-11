@@ -320,8 +320,11 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       ${fotoSeksjonHTML(o, 's', 'Bilder – Avstand/skader')}
       ${fotoSeksjonHTML(o, 'l', 'Bilder – Levering')}
 
-      <div class="card" id="ordretimerKort_${o.id}">
-        ${ordreTimerKortHTML(o)}
+      <div class="card" id="ordretimerKort_ordreTimerSessions_${o.id}">
+        ${ordreTimerKortHTML(o, 'ordreTimerSessions')}
+      </div>
+      <div class="card" id="ordretimerKort_klargjoringTimerSessions_${o.id}">
+        ${ordreTimerKortHTML(o, 'klargjoringTimerSessions')}
       </div>
 
       <div class="card">

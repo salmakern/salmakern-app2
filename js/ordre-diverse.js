@@ -112,19 +112,25 @@ function meldAv(id) {
   o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==me.id);
   logChange(o, me.navn+' meldt av'); save(id); buildOrdreDetail();
 }
-function ordreTimerLoper(o) {
-  const sessions = o.ordreTimerSessions||[];
+// Ordretid er delt i to uavhengige tidtakere på samme ordre - Ombygging (feltet het
+// opprinnelig bare "Ordretid" og er nå gjenbrukt som Ombygging-tiden, uendret lagringsform)
+// og Klargjøring (nytt, egen kolonne). Alle funksjonene under tar "felt" (hvilket av de to
+// session-arrayene på ordren det gjelder) som parameter, slik at begge kan stå og gå
+// samtidig uten å påvirke hverandre.
+const ORDRE_TIMER_LABEL = { ordreTimerSessions:'Ombygging', klargjoringTimerSessions:'Klargjøring' };
+function ordreTimerLoper(o, felt) {
+  const sessions = o[felt]||[];
   return sessions.length>0 && !sessions[sessions.length-1].stopp;
 }
-function ordreTimerTotalMs(o) {
-  const sessions = o.ordreTimerSessions||[];
+function ordreTimerTotalMs(o, felt) {
+  const sessions = o[felt]||[];
   const now = Date.now();
   return sessions.reduce((sum,s)=>sum+(s.stopp||now)-s.start, 0);
 }
-function ordreTimerKortHTML(o) {
-  const sessions = o.ordreTimerSessions||[];
-  const loper = ordreTimerLoper(o);
-  const totalMs = ordreTimerTotalMs(o);
+function ordreTimerKortHTML(o, felt) {
+  const sessions = o[felt]||[];
+  const loper = ordreTimerLoper(o, felt);
+  const totalMs = ordreTimerTotalMs(o, felt);
   const h = Math.floor(totalMs/3600000);
   const m = Math.floor((totalMs%3600000)/60000);
   const s = Math.floor((totalMs%60000)/1000);
@@ -133,14 +139,14 @@ function ordreTimerKortHTML(o) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
-        <div class="h">Ordretid</div>
+        <div class="h">${ORDRE_TIMER_LABEL[felt]}</div>
         <div style="font-size:28px;font-weight:800;margin-top:4px;color:${loper?'#86efac':'#f4f4f5'}">${tidStr}</div>
         ${loper?'<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå</div>':''}
       </div>
       <div style="display:flex;gap:8px">
         ${loper
-          ? `<button class="btn red" onclick="stoppOrdreTimer('${o.id}')">⏹ Stopp</button>`
-          : `<button class="btn green" onclick="startOrdreTimer('${o.id}')">▶ Start</button>`}
+          ? `<button class="btn red" onclick="stoppOrdreTimer('${o.id}','${felt}')">⏹ Stopp</button>`
+          : `<button class="btn green" onclick="startOrdreTimer('${o.id}','${felt}')">▶ Start</button>`}
       </div>
     </div>
     ${sessions.length>0?`
@@ -156,34 +162,36 @@ function ordreTimerKortHTML(o) {
       }).join('')}
     </div>`:''}`;
 }
-function startOrdreTimerTick(id) {
-  if (ordreTimerTick) clearInterval(ordreTimerTick);
-  ordreTimerTick = setInterval(()=>{
-    const o=S.ordrer.find(x=>x.id===id); if(!o) { clearInterval(ordreTimerTick); return; }
-    const el=document.getElementById('ordretimerKort_'+id);
-    if(!el) { clearInterval(ordreTimerTick); return; }
-    if(!ordreTimerLoper(o)) { clearInterval(ordreTimerTick); ordreTimerTick=null; return; }
-    el.innerHTML=ordreTimerKortHTML(o);
+function startOrdreTimerTick(id, felt) {
+  const nokkel = felt+'_'+id;
+  if (ordreTimerTicks[nokkel]) clearInterval(ordreTimerTicks[nokkel]);
+  ordreTimerTicks[nokkel] = setInterval(()=>{
+    const o=S.ordrer.find(x=>x.id===id); if(!o) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
+    const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
+    if(!el) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
+    if(!ordreTimerLoper(o, felt)) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
+    el.innerHTML=ordreTimerKortHTML(o, felt);
   },1000);
 }
-function startOrdreTimer(id) {
-  const o=S.ordrer.find(x=>x.id===id); if(!o||ordreTimerLoper(o)) return;
-  if(!o.ordreTimerSessions) o.ordreTimerSessions=[];
-  o.ordreTimerSessions.push({start:Date.now(), stopp:null});
-  logChange(o,'Ordretid startet'); save(id);
-  const el=document.getElementById('ordretimerKort_'+id);
-  if(el) el.innerHTML=ordreTimerKortHTML(o);
-  startOrdreTimerTick(id);
+function startOrdreTimer(id, felt) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o||ordreTimerLoper(o, felt)) return;
+  if(!o[felt]) o[felt]=[];
+  o[felt].push({start:Date.now(), stopp:null});
+  logChange(o, ORDRE_TIMER_LABEL[felt]+' startet'); save(id);
+  const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
+  if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
+  startOrdreTimerTick(id, felt);
 }
-function stoppOrdreTimer(id) {
-  const o=S.ordrer.find(x=>x.id===id); if(!o||!ordreTimerLoper(o)) return;
-  const sessions=o.ordreTimerSessions||[];
+function stoppOrdreTimer(id, felt) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o||!ordreTimerLoper(o, felt)) return;
+  const sessions=o[felt]||[];
   const last=sessions[sessions.length-1];
   if(last&&!last.stopp) last.stopp=Date.now();
-  if(ordreTimerTick){clearInterval(ordreTimerTick);ordreTimerTick=null;}
-  logChange(o,'Ordretid stoppet'); save(id);
-  const el=document.getElementById('ordretimerKort_'+id);
-  if(el) el.innerHTML=ordreTimerKortHTML(o);
+  const nokkel = felt+'_'+id;
+  if(ordreTimerTicks[nokkel]){clearInterval(ordreTimerTicks[nokkel]);delete ordreTimerTicks[nokkel];}
+  logChange(o, ORDRE_TIMER_LABEL[felt]+' stoppet'); save(id);
+  const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
+  if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
 }
 async function arkiver(id) {
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
