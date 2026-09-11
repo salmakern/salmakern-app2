@@ -454,22 +454,23 @@ async function slaOppRegnr(ordreId) {
   if (!regnr) { if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Skriv inn reg.nr først</span>'; return; }
   if(statusEl) statusEl.innerHTML='<span style="color:#a1a1aa">Søker...</span>';
   try {
-    const res = await fetch(`https://www.vegvesen.no/ws/no/vegvesen/kjoretoy/felles/datautlevering/enkeltoppslag/kjoretoydata?kjennemerke=${regnr}`,
-      {headers:{'SVV-Authorization':'Apikey na'}});
-    if (!res.ok) throw new Error('Ikke funnet');
+    // Kaller en Supabase Edge Function (vegvesen-oppslag) i stedet for Statens vegvesen
+    // direkte - nøkkelen holdes server-side der, se funksjonens egen kommentar for hvorfor.
+    const res = await fetch(SUPA_URL + '/functions/v1/vegvesen-oppslag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      body: JSON.stringify({ regnr })
+    });
     const data = await res.json();
-    const kjt = data?.kjoretoydataListe?.[0];
-    if (!kjt) throw new Error('Ingen data');
-    const td = kjt.godkjenning?.tekniskGodkjenning?.tekniskeData;
-    const merke    = td?.generelt?.merke?.[0]?.merke || '';
-    const modell   = td?.generelt?.handelsbetegnelse?.[0] || '';
-    const aar      = kjt.forstegangsregistrering?.registrertForstegangNorgeDato?.substring(0,4) || '';
-    const chassis  = kjt.kjennemerke?.understellsnummer || o.chassis || '';
-    const eier     = kjt.eier?.person?.etternavn ? (kjt.eier.person.fornavn||'')+' '+(kjt.eier.person.etternavn||'') : o.eier;
+    if (!res.ok || data.error) throw new Error(data.error || 'Ikke funnet');
+    const { merke, modell, aar, chassis } = data;
     if (merke)   { o.type    = merke+(modell?' '+modell:''); }
     if (aar)     { o.versjon = aar; }
-    if (chassis) { o.chassis = chassis; }
-    if (eier && eier.trim()) { o.eier = eier.trim(); }
+    // Chassis-nr skal alltid være nøyaktig 17 tegn i denne appen (se sf()) - Statens
+    // vegvesen sitt understellsnummer-felt kan i sjeldne tilfeller være kortere/lengre
+    // (eldre/spesialkjøretøy), så vi lar heller det eksisterende feltet stå enn å bryte
+    // den regelen automatisk.
+    if (chassis && chassis.length === 17) { o.chassis = chassis; }
     logChange(o, 'Bilinfo hentet fra Statens vegvesen: '+merke+' '+modell);
     save(ordreId); buildOrdreDetail();
     if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${merke} ${modell} ${aar}</span>`;
