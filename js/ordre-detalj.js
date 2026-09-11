@@ -310,7 +310,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Hengerfeste</div>
-        <select onchange="su('${o.id}','hengerfeste',this.value)" style="margin-top:8px;background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
+        <select onchange="settHengerfeste('${o.id}',this.value)" style="margin-top:8px;background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
           <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>
           <option value="hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'selected':''}>Hengerfeste</option>
         </select>

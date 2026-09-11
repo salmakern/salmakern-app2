@@ -95,6 +95,13 @@ function su(id,f,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.utstyr[f]=val; save(id);
 }
+// Velges Hengerfeste, skal artikkelnummeret til hengerfestet (526) automatisk stå i
+// "Utstyr - Skal ha etter visning" - samme mønster som oppdaterSkalHaForOppskrift()
+// bruker for Ekstra utstyr-oppskrifter (legger til/fjerner én navngitt linje).
+function settHengerfeste(id, val) {
+  su(id, 'hengerfeste', val);
+  oppdaterSkalHaForOppskrift('526', val === 'hengerfeste');
+}
 
 // ════════════════════════════════════════════════════
 // ORDRE ACTIONS
