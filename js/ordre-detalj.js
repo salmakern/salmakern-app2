@@ -226,7 +226,7 @@ function buildOrdreDetail() {
             </div>
             <div>
               <label>Chassis-nr (VIN)</label>
-              <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase;font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.02em" oninput="this.nextElementSibling.textContent=this.value.length+'/17';this.nextElementSibling.style.color=this.value.length===17?'#4ade80':'#71717a'" onchange="sf('${o.id}','chassis',this.value);this.value=this.value.toUpperCase()">
+              <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase;font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.02em" oninput="this.nextElementSibling.textContent=this.value.length+'/17';this.nextElementSibling.style.color=this.value.length===17?'#4ade80':'#71717a'" onchange="if(sf('${o.id}','chassis',this.value)){this.value=this.value.toUpperCase();}else{this.value='${esc(o.chassis)}';this.dispatchEvent(new Event('input'))}">
               <div class="small" style="margin-top:2px;text-align:right;color:${(o.chassis||'').length===17?'#4ade80':'#71717a'}">${(o.chassis||'').length}/17</div>
             </div>
           </div>
@@ -683,13 +683,21 @@ function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digi
 function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
 
 function sf(id, field, val) {
-  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return false;
   // Chassis-nr normaliseres alltid til store bokstaver her - uansett hvilket skjema/felt
   // som kaller sf() med det - slik at det matcher konsekvent mot Admin-ark uten å være
-  // avhengig av at hvert enkelt inputfelt husker å gjøre det selv.
-  if (field === 'chassis') val = (val||'').trim().toUpperCase();
+  // avhengig av at hvert enkelt inputfelt husker å gjøre det selv. Et chassis-nr er
+  // enten tomt eller nøyaktig 17 tegn - aldri noe midt imellom.
+  if (field === 'chassis') {
+    val = (val||'').trim().toUpperCase();
+    if (val && val.length !== 17) {
+      alert(`Chassis-nr må være nøyaktig 17 tegn (er nå ${val.length}).`);
+      return false;
+    }
+  }
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
+  return true;
 }
 function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;

@@ -228,6 +228,7 @@ function opprettOrdre() {
   const regnr  = document.getElementById('n_regnr').value.trim().toUpperCase();
   const chassis= document.getElementById('n_chassis').value.trim().toUpperCase();
   if (!regnr && !chassis){ alert('Fyll inn enten reg.nr eller chassis-nr'); return; }
+  if (chassis && chassis.length !== 17) { alert(`Chassis-nr må være nøyaktig 17 tegn (er nå ${chassis.length}).`); return; }
 
   // Chassis-nr er en unik identifikator for selve bilen - finnes det allerede en aktiv
   // ordre på samme chassis, åpnes DEN i stedet for å opprette en duplikat-ordre.
