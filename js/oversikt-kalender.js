@@ -364,7 +364,14 @@ async function endreStatus(id, nyStatus) {
   // flyten). Er den ikke det ennå, skal den bli stående som aktiv slik at den fortsatt
   // dukker opp i "Til godkjenning"-lista på Mer-siden - ellers forsvinner den sporløst
   // inn i arkivet før noen har fått godkjent den.
-  const skalArkiveres = nyStatus === 'hentet' && tvangsflyt(o).every(t=>t.ok) && o.godkjent;
+  let skalArkiveres = nyStatus === 'hentet' && tvangsflyt(o).every(t=>t.ok) && o.godkjent;
+  // Bekreft før den faktisk forsvinner fra aktive ordre - et feilklikk på "Hentet" (f.eks.
+  // fra den delte Booking-kontoen) skal ikke kunne arkivere en ordre stille i bakgrunnen.
+  // Svarer man nei, settes statusen fortsatt til Hentet - det er bare selve arkiveringen
+  // som stoppes (rapportert av Henrik 2026-09-11).
+  if (skalArkiveres && !confirm('Denne ordren oppfyller tvangsflyt og er godkjent - den vil bli arkivert automatisk. Er du sikker?')) {
+    skalArkiveres = false;
+  }
   if (skalArkiveres) o.status = 'arkivert';
   // Admin-arket viser denne datoen i Henteklar-kolonnen mens ordren står i denne
   // statusen - satt her (ikke bare regnet ut fra endringer-loggen) slik at den er
