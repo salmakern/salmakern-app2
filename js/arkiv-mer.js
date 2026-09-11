@@ -33,36 +33,41 @@ function renderArkiv() {
       </div>`;
     }).join('')
     :'<div class="muted small">Ingen</div>';
+  const arkivTh = 'text-align:left;padding:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#71717a;font-weight:600;border-bottom:1px solid #27272a;white-space:nowrap';
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
-    ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <div style="min-width:0">
-            <b style="font-size:15px">${ordreLabelFull(o)}</b>
-            <div class="small muted" style="margin-top:2px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</div>
-          </div>
-          ${o.fakturert
-            ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">✔ Fakturert</span>`
-            :`<span class="pill bad" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">Ikke fakturert</span>`}
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:3px;margin-top:10px">
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
-          ${drivstoffKundeprisTekst(o)?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
-          ${o.fakturert&&o.fakturertAv?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Fakturert av</span><span>${esc(o.fakturertAv)}</span></div>`:''}
-        </div>
-
-        <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
-          <button class="btn sm" onclick="genPDF('${o.id}')">📄 PDF</button>
-          <button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>
-          <span style="flex:1"></span>
-          ${o.fakturert
-            ?`<button class="btn sm" onclick="toggleFakturert('${o.id}')">Fjern fakturert</button>`
-            :`<button class="btn sm red" onclick="toggleFakturert('${o.id}')">✔ Merk fakturert</button>`}
-        </div>
-      </div>`).join('')
+    ?`<div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>
+          <th style="${arkivTh}">Reg.nr</th>
+          <th style="${arkivTh}">Modell / Forhandler</th>
+          <th style="${arkivTh}">Lukket</th>
+          <th style="${arkivTh}text-align:right">Faktura</th>
+        </tr></thead>
+        <tbody>${ferdig.map(o=>{
+          const lukketTekst = o.ankomstdato ? new Date(o.ankomstdato+'T00:00:00').toLocaleDateString('no-NO',{day:'numeric',month:'short'}) : '—';
+          return `<tr style="cursor:pointer" onclick="openOrdre('${o.id}',true)">
+            <td style="padding:10px 8px;border-bottom:1px solid #27272a">
+              <b>${esc(o.regnr)||'—'}</b>
+              ${o.chassis?`<div class="small muted" style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px">${esc(o.chassis)}</div>`:''}
+            </td>
+            <td style="padding:10px 8px;border-bottom:1px solid #27272a;min-width:0">
+              <div>${esc(o.type)}${o.variant?' '+esc(o.variant):''}</div>
+              <div class="small muted">${esc(o.kunde)||'—'}</div>
+            </td>
+            <td style="padding:10px 8px;border-bottom:1px solid #27272a;white-space:nowrap;color:#a1a1aa">${lukketTekst}</td>
+            <td style="padding:10px 8px;border-bottom:1px solid #27272a;text-align:right">
+              <div style="display:flex;gap:6px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
+                ${o.fakturert
+                  ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;cursor:pointer" onclick="event.stopPropagation();toggleFakturert('${o.id}')">✔ Fakturert</span>`
+                  :`<span class="pill bad" style="margin:0;font-size:11px;padding:4px 11px;cursor:pointer" onclick="event.stopPropagation();toggleFakturert('${o.id}')">Ikke fakturert</span>`}
+                <button class="btn sm" onclick="event.stopPropagation();genPDF('${o.id}')" title="PDF">📄</button>
+                <button class="btn sm" onclick="event.stopPropagation();gjenopprett('${o.id}')" title="Gjenopprett">↩</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`
     :'<div class="muted small">Ingen arkiverte ordrer</div>';
 }
 
