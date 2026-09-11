@@ -88,6 +88,12 @@ body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:10
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
 
+/* ARKIV: søkefelt tar resten av bredden, filtrene til høyre - under 640px legger
+   filtrene seg under søkefeltet i stedet for å klemmes sammen. */
+.arkiv-sok-filter-rad{display:flex;gap:10px;align-items:center}
+.arkiv-sok-filter-rad input{flex:1;min-width:0}
+@media(max-width:640px){ .arkiv-sok-filter-rad{flex-direction:column;align-items:stretch} }
+
 /* BUTTONS */
 button{cursor:pointer;font-family:Arial,sans-serif}
 .tab,.btn{border:1px solid #27272a;background:#18181b;color:#f4f4f5;border-radius:14px;padding:9px 14px;font-size:13px}
@@ -548,28 +554,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <!-- ── ARKIV ── -->
     <section id="arkiv" class="page">
       <div class="card" style="margin-bottom:14px">
-        <div class="row">
-          <div class="h">Søk i arkiv</div>
-          <input id="arkivSok" style="max-width:320px" placeholder="Reg.nr, chassisnummer eller kunde..." oninput="renderArkiv()">
-        </div>
+        <div id="arkivFaneRad"></div>
       </div>
-      <div class="grid g2">
-        <div class="card"><div class="h">Aktive</div><div id="arkivAktiv" style="margin-top:10px"></div></div>
-        <div class="card">
-          <div class="row">
-            <div class="h">Arkiv</div>
-            <div class="small muted" id="arkivFakturertSammendrag"></div>
-          </div>
-          <div style="display:flex;gap:14px;margin-top:8px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0">
-              <input type="checkbox" id="arkivFilterIkkeFakturert" onchange="renderArkiv()" style="width:16px;height:16px;accent-color:#ef4444">
-              <span class="small">Vis kun ikke fakturert</span>
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0">
-              <input type="checkbox" id="arkivFilterFakturert" onchange="renderArkiv()" style="width:16px;height:16px;accent-color:#16a34a">
-              <span class="small">Vis kun fakturert</span>
-            </label>
-            <select id="arkivTvangsflytFilter" onchange="renderArkiv()" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:6px 9px;font-size:13px">
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="arkiv-sok-filter-rad">
+          <input id="arkivSok" placeholder="Reg.nr, chassisnummer eller kunde..." oninput="arkivSideTilbake();renderArkiv()">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div id="arkivFiltreRad"></div>
+            <select id="arkivTvangsflytFilter" onchange="arkivSideTilbake();renderArkiv()" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px 10px;font-size:13px">
               <option value="">Alle (tvangsflyt)</option>
               <option value="_alle">Manglet noe (alle krav)</option>
               <option value="Diagnose utført">Diagnose utført</option>
@@ -581,7 +574,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <option value="Time på biltilsynet">Time på biltilsynet</option>
             </select>
           </div>
-          <div id="arkivFerdig" style="margin-top:10px"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <div class="small muted" id="arkivTreffAntall"></div>
+          <button class="btn sm" id="arkivNullstillBtn" style="display:none" onclick="nullstillArkivFiltre()">Nullstill</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="arkivListe"></div>
+        <div id="arkivPaginering" style="display:none;margin-top:14px;justify-content:center;align-items:center;gap:14px">
+          <button class="btn sm" id="arkivForrigeBtn" onclick="arkivBladre(-1)">◀ Forrige</button>
+          <span class="small muted" id="arkivSideLbl"></span>
+          <button class="btn sm" id="arkivNesteBtn" onclick="arkivBladre(1)">Neste ▶</button>
         </div>
       </div>
     </section>

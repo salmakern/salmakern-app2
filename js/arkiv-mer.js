@@ -1,68 +1,160 @@
 // ════════════════════════════════════════════════════
 // ARKIV
 // ════════════════════════════════════════════════════
+const ARKIV_PER_SIDE = 25;
+let arkivFane = 'aktiv';         // 'aktiv' eller 'ferdig' - hvilken liste som vises
+let arkivFakturertFilter = '';   // '', 'ikke' eller 'ja'
+let arkivSide = 1;
+
+// Generisk segmentkontroll (kapsel med knapper der bare én kan være valgt om gangen)
+// i samme stil som resten av appen - gjenbrukt for både Aktive/Arkiv-fanene og
+// fakturert-filteret.
+function segmentKontrollHTML(valgt, valg, onclickNavn) {
+  return `<div style="display:inline-flex;background:#0f0f12;border:1px solid #27272a;border-radius:999px;padding:4px;gap:2px;flex-wrap:wrap">
+    ${valg.map(v => `<button onclick="${onclickNavn}('${v.verdi}')" style="border-radius:999px;padding:7px 14px;font-size:13px;cursor:pointer;border:1px solid transparent;font-family:inherit;white-space:nowrap;${v.verdi===valgt?'background:rgba(239,68,68,.12);border-color:#ef4444;color:#fca5a5;font-weight:700':'background:transparent;color:#a1a1aa'}">${esc(v.label)}</button>`).join('')}
+  </div>`;
+}
+
+function settArkivFane(fane) {
+  arkivFane = fane;
+  arkivSide = 1;
+  renderArkiv();
+}
+function settArkivFakturertFilter(verdi) {
+  arkivFakturertFilter = verdi;
+  arkivSide = 1;
+  renderArkiv();
+}
+// Kalt fra søk/filter-feltenes egne oninput/onchange FØR renderArkiv() - egen
+// funksjon (ikke bakt inn i renderArkiv) fordi den skal kjøres når brukeren endrer
+// søk/filter, men IKKE hver gang renderArkiv() kjører av andre grunner (sanntid o.l.).
+function arkivSideTilbake() {
+  arkivSide = 1;
+}
+function arkivBladre(retning) {
+  arkivSide += retning;
+  renderArkiv();
+  const listeEl = document.getElementById('arkivListe');
+  if (listeEl) window.scrollTo(0, listeEl.getBoundingClientRect().top + window.scrollY - 70);
+}
+function nullstillArkivFiltre() {
+  const sokFelt = document.getElementById('arkivSok');
+  if (sokFelt) sokFelt.value = '';
+  arkivFakturertFilter = '';
+  const tvangsflyt = document.getElementById('arkivTvangsflytFilter');
+  if (tvangsflyt) tvangsflyt.value = '';
+  arkivSide = 1;
+  renderArkiv();
+}
+
 function renderArkiv() {
   const erAdmin = me && me.rolle === 'admin';
   const q=(document.getElementById('arkivSok')?.value||'').toLowerCase().trim();
   const match=o=>!q||o.regnr?.toLowerCase().includes(q)||o.kunde?.toLowerCase().includes(q)||o.chassis?.toLowerCase().includes(q)||o.eier?.toLowerCase().includes(q);
+
+  const aktiveTotal = S.ordrer.filter(o=>o.status==='aktiv').length;
+  const ferdigTotal = S.ordrer.filter(o=>o.status==='arkivert').length;
+
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o)).sort(sorterOrdre);
-  const kunIkkeFakturert = document.getElementById('arkivFilterIkkeFakturert')?.checked;
-  const kunFakturert = document.getElementById('arkivFilterFakturert')?.checked;
+
   const tvangsflytFilter = document.getElementById('arkivTvangsflytFilter')?.value || '';
   let ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
     .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
-  if (kunIkkeFakturert && !kunFakturert) ferdig = ferdig.filter(o=>!o.fakturert);
-  else if (kunFakturert && !kunIkkeFakturert) ferdig = ferdig.filter(o=>!!o.fakturert);
+  if (arkivFakturertFilter === 'ikke') ferdig = ferdig.filter(o=>!o.fakturert);
+  else if (arkivFakturertFilter === 'ja') ferdig = ferdig.filter(o=>!!o.fakturert);
   ferdig = ferdig.filter(o=>ordreMatcherTvangsflytFilter(o, tvangsflytFilter));
-  const fakturertAntall = ferdig.filter(o=>o.fakturert).length;
-  const fakturertSammendrag = document.getElementById('arkivFakturertSammendrag');
-  if (fakturertSammendrag) fakturertSammendrag.textContent = ferdig.length ? `${fakturertAntall} av ${ferdig.length} fakturert` : '';
-  document.getElementById('arkivAktiv').innerHTML=aktive.length
-    ?aktive.map(o=>{
-      const si=statusInfo(o.ordreStatus);
-      return `<div style="border:1px solid ${si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="openOrdre('${o.id}',true)">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <b style="font-size:15px">${ordreLabelFull(o)}</b>
-          <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;flex-shrink:0">${si.lbl}</span>
-        </div>
-        <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
-        </div>
-      </div>`;
-    }).join('')
-    :'<div class="muted small">Ingen</div>';
-  document.getElementById('arkivFerdig').innerHTML=ferdig.length
-    ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <div style="min-width:0">
+
+  const faneEl = document.getElementById('arkivFaneRad');
+  if (faneEl) faneEl.innerHTML = segmentKontrollHTML(arkivFane, [
+    {verdi:'aktiv', label:`Aktive ${aktiveTotal}`},
+    {verdi:'ferdig', label:`Arkiv ${ferdigTotal}`}
+  ], 'settArkivFane');
+
+  const filtreEl = document.getElementById('arkivFiltreRad');
+  if (filtreEl) filtreEl.innerHTML = segmentKontrollHTML(arkivFakturertFilter, [
+    {verdi:'', label:'Alle'},
+    {verdi:'ikke', label:'Ikke fakturert'},
+    {verdi:'ja', label:'Fakturert'}
+  ], 'settArkivFakturertFilter');
+
+  const gjeldendeListe = arkivFane === 'aktiv' ? aktive : ferdig;
+  const gjeldendeTotal = arkivFane === 'aktiv' ? aktiveTotal : ferdigTotal;
+
+  const treffEl = document.getElementById('arkivTreffAntall');
+  if (treffEl) treffEl.textContent = `${gjeldendeListe.length} av ${gjeldendeTotal} ordrer`;
+  const harAktivtFilter = !!q || arkivFakturertFilter !== '' || !!tvangsflytFilter;
+  const nullstillBtn = document.getElementById('arkivNullstillBtn');
+  if (nullstillBtn) nullstillBtn.style.display = harAktivtFilter ? '' : 'none';
+
+  const antallSider = Math.max(1, Math.ceil(gjeldendeListe.length / ARKIV_PER_SIDE));
+  if (arkivSide > antallSider) arkivSide = antallSider;
+  if (arkivSide < 1) arkivSide = 1;
+  const startIdx = (arkivSide-1) * ARKIV_PER_SIDE;
+  const sideListe = gjeldendeListe.slice(startIdx, startIdx + ARKIV_PER_SIDE);
+
+  const listeEl = document.getElementById('arkivListe');
+  if (listeEl) {
+    if (arkivFane === 'aktiv') {
+      listeEl.innerHTML = sideListe.length ? sideListe.map(o=>{
+        const si=statusInfo(o.ordreStatus);
+        return `<div style="border:1px solid ${si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="openOrdre('${o.id}',true)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
             <b style="font-size:15px">${ordreLabelFull(o)}</b>
-            ${o.farge?`<div class="small muted" style="margin-top:2px">${esc(o.farge)}</div>`:''}
+            <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;flex-shrink:0">${si.lbl}</span>
           </div>
-          ${o.fakturert
-            ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">✔ Fakturert</span>`
-            :`<span class="pill bad" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">Ikke fakturert</span>`}
-        </div>
+          <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
+          </div>
+        </div>`;
+      }).join('') : '<div class="muted small">Ingen</div>';
+    } else {
+      listeEl.innerHTML = sideListe.length ? sideListe.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+            <div style="min-width:0">
+              <b style="font-size:15px">${ordreLabelFull(o)}</b>
+              ${o.farge?`<div class="small muted" style="margin-top:2px">${esc(o.farge)}</div>`:''}
+            </div>
+            ${o.fakturert
+              ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">✔ Fakturert</span>`
+              :`<span class="pill bad" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">Ikke fakturert</span>`}
+          </div>
 
-        <div style="display:flex;flex-direction:column;gap:3px;margin-top:10px">
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
-          ${drivstoffKundeprisTekst(o)?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
-        </div>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-top:10px">
+            <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
+            <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
+            ${drivstoffKundeprisTekst(o)?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
+          </div>
 
-        <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
-          <button class="btn sm" onclick="genPDF('${o.id}')">📄 PDF</button>
-          ${erAdmin?`<button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>`:''}
-          <span style="flex:1"></span>
-          ${erAdmin ? (o.fakturert
-            ?`<button class="btn sm" onclick="toggleFakturert('${o.id}')">Fjern fakturert</button>`
-            :`<button class="btn sm red" onclick="toggleFakturert('${o.id}')">✔ Merk fakturert</button>`) : ''}
-        </div>
-      </div>`).join('')
-    :'<div class="muted small">Ingen arkiverte ordrer</div>';
+          <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn sm" onclick="openOrdre('${o.id}',true)">Åpne</button>
+            <button class="btn sm" onclick="genPDF('${o.id}')">📄 PDF</button>
+            ${erAdmin?`<button class="btn sm" onclick="gjenopprett('${o.id}')">Gjenopprett</button>`:''}
+            <span style="flex:1"></span>
+            ${erAdmin ? (o.fakturert
+              ?`<button class="btn sm" onclick="toggleFakturert('${o.id}')">Fjern fakturert</button>`
+              :`<button class="btn sm red" onclick="toggleFakturert('${o.id}')">✔ Merk fakturert</button>`) : ''}
+          </div>
+        </div>`).join('') : `<div class="muted small">${harAktivtFilter ? 'Ingen treff' : 'Ingen arkiverte ordrer'}</div>`;
+    }
+  }
+
+  const pagEl = document.getElementById('arkivPaginering');
+  if (pagEl) {
+    if (gjeldendeListe.length > ARKIV_PER_SIDE) {
+      pagEl.style.display = 'flex';
+      const sideLbl = document.getElementById('arkivSideLbl');
+      if (sideLbl) sideLbl.textContent = `Side ${arkivSide} av ${antallSider}`;
+      const forrigeBtn = document.getElementById('arkivForrigeBtn');
+      const nesteBtn = document.getElementById('arkivNesteBtn');
+      if (forrigeBtn) forrigeBtn.disabled = arkivSide <= 1;
+      if (nesteBtn) nesteBtn.disabled = arkivSide >= antallSider;
+    } else {
+      pagEl.style.display = 'none';
+    }
+  }
 }
 
 function visKundeHistorikk(kunde) {
