@@ -560,20 +560,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="card" style="margin-bottom:14px">
         <div class="arkiv-sok-filter-rad">
           <input id="arkivSok" placeholder="Reg.nr, chassisnummer eller kunde..." oninput="arkivSideTilbake();renderArkiv()">
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <div id="arkivFiltreRad"></div>
-            <select id="arkivTvangsflytFilter" onchange="arkivSideTilbake();renderArkiv()" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px 10px;font-size:13px">
-              <option value="">Alle (tvangsflyt)</option>
-              <option value="_alle">Manglet noe (alle krav)</option>
-              <option value="Diagnose utført">Diagnose utført</option>
-              <option value="6 bilder ankomst">6 bilder ankomst</option>
-              <option value="6 bilder levering">6 bilder levering</option>
-              <option value="Ansatt meldt på">Ansatt meldt på</option>
-              <option value="Vekter fylt ut">Vekter fylt ut</option>
-              <option value="Ombygging valgt">Ombygging valgt</option>
-              <option value="Time på biltilsynet">Time på biltilsynet</option>
-            </select>
-          </div>
+          <div id="arkivFiltreRad"></div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
           <div class="small muted" id="arkivTreffAntall"></div>

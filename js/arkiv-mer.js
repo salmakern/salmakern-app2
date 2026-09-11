@@ -41,8 +41,6 @@ function nullstillArkivFiltre() {
   const sokFelt = document.getElementById('arkivSok');
   if (sokFelt) sokFelt.value = '';
   arkivFakturertFilter = '';
-  const tvangsflyt = document.getElementById('arkivTvangsflytFilter');
-  if (tvangsflyt) tvangsflyt.value = '';
   arkivSide = 1;
   renderArkiv();
 }
@@ -57,12 +55,10 @@ function renderArkiv() {
 
   const aktive=S.ordrer.filter(o=>o.status==='aktiv'&&match(o)).sort(sorterOrdre);
 
-  const tvangsflytFilter = document.getElementById('arkivTvangsflytFilter')?.value || '';
   let ferdig=S.ordrer.filter(o=>o.status==='arkivert'&&match(o))
     .sort((a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||''));
   if (arkivFakturertFilter === 'ikke') ferdig = ferdig.filter(o=>!o.fakturert);
   else if (arkivFakturertFilter === 'ja') ferdig = ferdig.filter(o=>!!o.fakturert);
-  ferdig = ferdig.filter(o=>ordreMatcherTvangsflytFilter(o, tvangsflytFilter));
 
   const faneEl = document.getElementById('arkivFaneRad');
   if (faneEl) faneEl.innerHTML = segmentKontrollHTML(arkivFane, [
@@ -82,7 +78,7 @@ function renderArkiv() {
 
   const treffEl = document.getElementById('arkivTreffAntall');
   if (treffEl) treffEl.textContent = `${gjeldendeListe.length} av ${gjeldendeTotal} ordrer`;
-  const harAktivtFilter = !!q || arkivFakturertFilter !== '' || !!tvangsflytFilter;
+  const harAktivtFilter = !!q || arkivFakturertFilter !== '';
   const nullstillBtn = document.getElementById('arkivNullstillBtn');
   if (nullstillBtn) nullstillBtn.style.display = harAktivtFilter ? '' : 'none';
 
