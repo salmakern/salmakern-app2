@@ -353,7 +353,7 @@ function renderDetaljertOrdrerapport() {
 function detRapportPivotHTML(ordrerIAar, valgtAar) {
   if (!ordrerIAar.length) return `<div class="muted small">Ingen ordre registrert i ${valgtAar}</div>`;
 
-  const modellNavn = o => [o.merke, o.modell].filter(Boolean).join(' ') || 'Ukjent bil';
+  const modellNavn = o => o.modell || o.merke || 'Ukjent bil'; // kun modellnavn her - kortere kolonner
   const modellTotal = {};
   const perForhandler = {};
   ordrerIAar.forEach(o => {
@@ -368,9 +368,9 @@ function detRapportPivotHTML(ordrerIAar, valgtAar) {
   const totalForFh = fh => Object.values(perForhandler[fh]).reduce((s,n)=>s+n,0);
   const forhandlere = Object.keys(perForhandler).sort((a,b)=>totalForFh(b)-totalForFh(a));
 
-  const th = 'text-align:center;padding:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#71717a;font-weight:600;border-bottom:1px solid #27272a;white-space:nowrap';
+  const th = 'text-align:center;padding:3px 6px;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#71717a;font-weight:600;border-bottom:1px solid #27272a;white-space:nowrap;line-height:1.3';
   return `<div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <table style="width:100%;border-collapse:collapse;font-size:10.5px;line-height:1.3">
       <thead><tr>
         <th style="${th}text-align:left">Forhandler</th>
         ${modeller.map(m=>`<th style="${th}">${esc(m)}</th>`).join('')}
@@ -378,15 +378,15 @@ function detRapportPivotHTML(ordrerIAar, valgtAar) {
       </tr></thead>
       <tbody>
         ${forhandlere.map(fh => `<tr>
-          <td style="padding:8px;border-bottom:1px solid #27272a">${esc(fh)}</td>
-          ${modeller.map(m => `<td style="text-align:center;padding:8px;border-bottom:1px solid #27272a;color:${perForhandler[fh][m]?'#f4f4f5':'#3f3f46'}">${perForhandler[fh][m]||'–'}</td>`).join('')}
-          <td style="text-align:center;padding:8px;border-bottom:1px solid #27272a;font-weight:700">${totalForFh(fh)}</td>
+          <td style="padding:3px 6px;border-bottom:1px solid #27272a">${esc(fh)}</td>
+          ${modeller.map(m => `<td style="text-align:center;padding:3px 6px;border-bottom:1px solid #27272a;color:${perForhandler[fh][m]?'#f4f4f5':'#3f3f46'}">${perForhandler[fh][m]||'–'}</td>`).join('')}
+          <td style="text-align:center;padding:3px 6px;border-bottom:1px solid #27272a;font-weight:700">${totalForFh(fh)}</td>
         </tr>`).join('')}
       </tbody>
       <tfoot><tr>
-        <td style="padding:8px;font-weight:700;border-top:2px solid #3f3f46">Totalt</td>
-        ${modeller.map(m=>`<td style="text-align:center;padding:8px;font-weight:700;border-top:2px solid #3f3f46">${modellTotal[m]}</td>`).join('')}
-        <td style="text-align:center;padding:8px;font-weight:700;border-top:2px solid #3f3f46">${ordrerIAar.length}</td>
+        <td style="padding:3px 6px;font-weight:700;border-top:2px solid #3f3f46">Totalt</td>
+        ${modeller.map(m=>`<td style="text-align:center;padding:3px 6px;font-weight:700;border-top:2px solid #3f3f46">${modellTotal[m]}</td>`).join('')}
+        <td style="text-align:center;padding:3px 6px;font-weight:700;border-top:2px solid #3f3f46">${ordrerIAar.length}</td>
       </tr></tfoot>
     </table>
   </div>`;
