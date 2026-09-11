@@ -321,8 +321,7 @@ function renderDetaljertOrdrerapport() {
   const modellNokler = Object.keys(perModell).sort((a,b)=>perModell[b].antall-perModell[a].antall);
 
   const oversiktEl = document.getElementById('detRapportModellOversikt');
-  if (!oversiktEl) return;
-  oversiktEl.innerHTML = modellNokler.length
+  if (oversiktEl) oversiktEl.innerHTML = modellNokler.length
     ? modellNokler.map(navn => {
         const m = perModell[navn];
         const forhandlerNokler = Object.keys(m.forhandlere).sort((a,b)=>m.forhandlere[b]-m.forhandlere[a]);
@@ -341,6 +340,49 @@ function renderDetaljertOrdrerapport() {
         </div>`;
       }).join('')
     : `<div class="muted small">Ingen ordre registrert i ${valgtAar}</div>`;
+
+  const valgtAarEl2 = document.getElementById('detRapportValgtAar2');
+  if (valgtAarEl2) valgtAarEl2.textContent = valgtAar;
+  const pivotEl = document.getElementById('detRapportPivot');
+  if (pivotEl) pivotEl.innerHTML = detRapportPivotHTML(ordrerIAar, valgtAar);
+}
+
+// Kryss-tabell: forhandlere som rader, modeller som kolonner, antall solgt i hver
+// krysning - samme data som modell-oversikten over, bare snudd for å se hvilke
+// forhandlere som kjøper hvilke modeller (og hvilke som IKKE kjøper en gitt modell).
+function detRapportPivotHTML(ordrerIAar, valgtAar) {
+  if (!ordrerIAar.length) return `<div class="muted small">Ingen ordre registrert i ${valgtAar}</div>`;
+
+  const modellNavn = o => [o.merke, o.modell].filter(Boolean).join(' ') || 'Ukjent bil';
+  const modeller = [...new Set(ordrerIAar.map(modellNavn))].sort((a,b)=>a.localeCompare(b,'no'));
+
+  const perForhandler = {};
+  ordrerIAar.forEach(o => {
+    const fh = o.kunde || 'Ukjent forhandler';
+    const m = modellNavn(o);
+    if (!perForhandler[fh]) perForhandler[fh] = {};
+    perForhandler[fh][m] = (perForhandler[fh][m]||0) + 1;
+  });
+  const totalForFh = fh => Object.values(perForhandler[fh]).reduce((s,n)=>s+n,0);
+  const forhandlere = Object.keys(perForhandler).sort((a,b)=>totalForFh(b)-totalForFh(a));
+
+  const th = 'text-align:center;padding:8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#71717a;font-weight:600;border-bottom:1px solid #27272a;white-space:nowrap';
+  return `<div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="${th}text-align:left">Forhandler</th>
+        ${modeller.map(m=>`<th style="${th}">${esc(m)}</th>`).join('')}
+        <th style="${th}">Totalt</th>
+      </tr></thead>
+      <tbody>
+        ${forhandlere.map(fh => `<tr>
+          <td style="padding:8px;border-bottom:1px solid #27272a">${esc(fh)}</td>
+          ${modeller.map(m => `<td style="text-align:center;padding:8px;border-bottom:1px solid #27272a;color:${perForhandler[fh][m]?'#f4f4f5':'#3f3f46'}">${perForhandler[fh][m]||'–'}</td>`).join('')}
+          <td style="text-align:center;padding:8px;border-bottom:1px solid #27272a;font-weight:700">${totalForFh(fh)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 // ════════════════════════════════════════════════════
