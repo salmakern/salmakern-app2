@@ -383,6 +383,11 @@ function detRapportPivotHTML(ordrerIAar, valgtAar) {
           <td style="text-align:center;padding:8px;border-bottom:1px solid #27272a;font-weight:700">${totalForFh(fh)}</td>
         </tr>`).join('')}
       </tbody>
+      <tfoot><tr>
+        <td style="padding:8px;font-weight:700;border-top:2px solid #3f3f46">Totalt</td>
+        ${modeller.map(m=>`<td style="text-align:center;padding:8px;font-weight:700;border-top:2px solid #3f3f46">${modellTotal[m]}</td>`).join('')}
+        <td style="text-align:center;padding:8px;font-weight:700;border-top:2px solid #3f3f46">${ordrerIAar.length}</td>
+      </tr></tfoot>
     </table>
   </div>`;
 }
