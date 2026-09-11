@@ -20,7 +20,11 @@ function renderArkiv() {
     ?aktive.map(o=>{
       const si=statusInfo(o.ordreStatus);
       return `<div style="border:1px solid ${si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="openOrdre('${o.id}')">
-        <b style="font-size:15px">${ordreLabelFull(o)}</b>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <b style="font-size:15px">${ordreLabelFull(o)}</b>
+          <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;flex-shrink:0">${si.lbl}</span>
+        </div>
+        <div class="small muted" style="margin-top:4px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</div>
         <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
@@ -32,17 +36,21 @@ function renderArkiv() {
   document.getElementById('arkivFerdig').innerHTML=ferdig.length
     ?ferdig.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-          <b style="font-size:15px">${ordreLabelFull(o)}</b>
+          <div style="min-width:0">
+            <b style="font-size:15px">${ordreLabelFull(o)}</b>
+            <div class="small muted" style="margin-top:2px">${esc(o.type)} ${esc(o.variant)}${o.farge?' · '+esc(o.farge):''}</div>
+          </div>
           ${o.fakturert
             ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">✔ Fakturert</span>`
             :`<span class="pill bad" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">Ikke fakturert</span>`}
         </div>
 
-        <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:10px">
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span></div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)||'—'}</span></div>
+          ${drivstoffKundeprisTekst(o)?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
+          ${o.fakturert&&o.fakturertAv?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Fakturert av</span><span>${esc(o.fakturertAv)}</span></div>`:''}
         </div>
 
         <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
