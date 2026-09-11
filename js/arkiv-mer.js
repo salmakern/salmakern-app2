@@ -19,7 +19,7 @@ function renderArkiv() {
   document.getElementById('arkivAktiv').innerHTML=aktive.length
     ?aktive.map(o=>{
       const si=statusInfo(o.ordreStatus);
-      return `<div style="border:1px solid ${si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="openOrdre('${o.id}')">
+      return `<div style="border:1px solid ${si.border};border-radius:18px;padding:14px 16px;margin-bottom:8px;cursor:pointer;background:#18181b" onclick="openOrdre('${o.id}',true)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
           <b style="font-size:15px">${ordreLabelFull(o)}</b>
           <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;flex-shrink:0">${si.lbl}</span>
