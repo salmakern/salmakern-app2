@@ -54,10 +54,12 @@ let aktivModell = null; // satt når man er inne i en modells underkategorier (f
 // Delt av renderLagerListe() (flate kategorier uten modell) og renderModellDetalj()
 // (underkategorier for én modell) - samme boks-utseende begge steder.
 function kategoriBoksHTML(kat, varerIKat, onclickAttr) {
-  const lavtIKat = varerIKat.filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
+  const lavtIKat = varerIKat.filter(erLavBeholdning).length;
   const sumEnheter = varerIKat.reduce((s,v)=>s+(Number(v.antall)||0),0);
   const sumMin = varerIKat.reduce((s,v)=>s+(Number(v.minAntall)||0),0);
-  const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, sumEnheter/sumMin*100)) : 100;
+  const pct = sumMin>0 ? sumEnheter/sumMin*100 : 100;            // til farge
+  const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, pct)) : 100; // til bredde
+  const stripeFarge = sumMin===0 ? '#3f3f46' : (pct<=100 ? '#ef4444' : (pct<150 ? '#facc15' : '#22c55e'));
   return `<div class="box" style="cursor:pointer;border-color:${lavtIKat?'rgba(239,68,68,.3)':'#27272a'}" onclick="${onclickAttr}">
     <div class="row">
       <b>${esc(kat)}</b>
@@ -65,20 +67,29 @@ function kategoriBoksHTML(kat, varerIKat, onclickAttr) {
     </div>
     <div class="small muted" style="margin-top:2px">${varerIKat.length} vare${varerIKat.length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter</div>
     <div style="margin-top:9px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden">
-      <div style="height:100%;width:${fyllPct}%;background:${fyllPct<=100?'#ef4444':'#22c55e'};border-radius:999px"></div>
+      <div style="height:100%;width:${fyllPct}%;background:${stripeFarge};border-radius:999px"></div>
     </div>
-    ${sumMin>0?`<div class="small muted" style="margin-top:4px;font-size:11px">${Math.round(fyllPct)}% av samlet minimum (${fmtAntall(sumMin)})</div>`:''}
+    ${sumMin>0?`<div class="small muted" style="margin-top:4px;font-size:11px">${Math.round(pct)}% av samlet minimum (${fmtAntall(sumMin)})</div>`:''}
   </div>`;
 }
 function modellBoksHTML(modell, varerIModell) {
   const antallKat = new Set(varerIModell.map(v=>v.kategori||'Uten kategori')).size;
-  const lavt = varerIModell.filter(v=>v.minAntall>0 && v.antall<=v.minAntall && !v.bestilt).length;
-  return `<div class="box" style="cursor:pointer;border-color:${lavt?'rgba(239,68,68,.3)':'#3f3f46'}" onclick="visModellDetalj('${esc(modell).replace(/'/g,"\\'")}')">
+  const lavt = varerIModell.filter(erLavBeholdning).length;
+  const sumEnheter = varerIModell.reduce((s,v)=>s+(Number(v.antall)||0),0);
+  const sumMin = varerIModell.reduce((s,v)=>s+(Number(v.minAntall)||0),0);
+  const pct = sumMin>0 ? sumEnheter/sumMin*100 : 100;
+  const fyllPct = sumMin>0 ? Math.max(4, Math.min(100, pct)) : 100;
+  const stripeFarge = sumMin===0 ? '#3f3f46' : (pct<=100 ? '#ef4444' : (pct<150 ? '#facc15' : '#22c55e'));
+  return `<div class="box" style="cursor:pointer;border-color:${lavt?'rgba(239,68,68,.3)':'#27272a'}" onclick="visModellDetalj('${esc(modell).replace(/'/g,"\\'")}')">
     <div class="row">
-      <b>🚐 ${esc(modell)}</b>
+      <b>${esc(modell)}</b>
       ${lavt?`<span class="pill bad" style="margin:0;font-size:11px">${lavt} lavt</span>`:'<span style="color:#a1a1aa">›</span>'}
     </div>
-    <div class="small muted" style="margin-top:2px">${antallKat} underkategori${antallKat===1?'':'er'} · ${varerIModell.length} vare${varerIModell.length===1?'':'r'}</div>
+    <div class="small muted" style="margin-top:2px">${antallKat} underkategori${antallKat===1?'':'er'} · ${varerIModell.length} vare${varerIModell.length===1?'':'r'} · ${fmtAntall(sumEnheter)} enheter</div>
+    <div style="margin-top:9px;height:4px;border-radius:999px;background:#0f0f12;overflow:hidden">
+      <div style="height:100%;width:${fyllPct}%;background:${stripeFarge};border-radius:999px"></div>
+    </div>
+    ${sumMin>0?`<div class="small muted" style="margin-top:4px;font-size:11px">${Math.round(pct)}% av samlet minimum</div>`:''}
   </div>`;
 }
 
@@ -103,7 +114,7 @@ function renderLagerListe() {
     // Ved søk: vis treffene direkte, uten å måtte inn i en kategori/modell
     varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.modell||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
     el.innerHTML = varer.length
-      ? `<div class="small muted" style="margin-bottom:10px">${varer.length} treff på «${esc(sok)}»</div><div class="grid g3">${varer.map(v => vareBoksHTML(v)).join('')}</div>`
+      ? `<div class="small muted" style="margin-bottom:10px">${varer.length} treff på «${esc(sok)}»</div><div class="grid g3">${varer.map(v => vareBoksHTML(v, false, true)).join('')}</div>`
       : `<div class="box" style="text-align:center;padding:24px">
            <div class="muted small">Ingen varer matcher «${esc(sok)}»</div>
            <button class="btn sm red" style="margin-top:10px" onclick="apneNyVare()">+ Opprett «${esc(sok)}» som ny vare</button>
@@ -134,14 +145,15 @@ function renderLagerListe() {
   `;
 }
 
-function vareBoksHTML(v, kanFlytte) {
+function vareBoksHTML(v, kanFlytte, visKontekst) {
   const lavt = erLavBeholdning(v);
   const bestilt = !!v.bestilt;
   const harMin = v.minAntall > 0;
   // Hvor langt under minimum: gir "mangler 6" i stedet for bare "lavt"
   const mangler = harMin && v.antall < v.minAntall ? v.minAntall - v.antall : 0;
-  const fyllPct = harMin ? Math.max(3, Math.min(100, (Number(v.antall)||0) / v.minAntall * 100)) : 100;
-  const stripeFarge = !harMin ? '#3f3f46' : (lavt ? '#ef4444' : (fyllPct < 150 ? '#facc15' : '#22c55e'));
+  const pct = harMin ? (Number(v.antall)||0) / v.minAntall * 100 : 100;
+  const fyllPct = harMin ? Math.max(3, Math.min(100, pct)) : 100;
+  const stripeFarge = !harMin ? '#3f3f46' : (lavt ? '#ef4444' : (pct < 150 ? '#facc15' : '#22c55e'));
 
   return `<div class="box" style="position:relative;padding:14px;display:flex;flex-direction:column;gap:11px;border-color:${lavt?'rgba(239,68,68,.35)':(bestilt?'rgba(34,197,94,.3)':'#27272a')}">
     ${kanFlytte?`<div style="position:absolute;top:10px;right:10px;display:flex;flex-direction:column;gap:2px;z-index:1">
@@ -154,6 +166,9 @@ function vareBoksHTML(v, kanFlytte) {
     <div onclick="visVareDetalj('${v.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:8px;${kanFlytte?'padding-right:34px':''}">
       <div style="min-width:0">
         <b style="font-size:15px">${esc(v.navn)}</b>
+        ${visKontekst && (v.modell || v.kategori)
+          ? `<div class="small" style="font-size:11px;color:#8f8f96;margin-top:2px">${[v.modell, v.kategori].filter(Boolean).map(esc).join(' › ')}</div>`
+          : ''}
         ${v.tegningsnummer?`<div class="small muted" style="font-size:11.5px">${esc(v.tegningsnummer)}</div>`:''}
       </div>
       <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
@@ -213,7 +228,16 @@ function renderModellDetalj() {
   varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
   const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
   const modellEsc = esc(aktivModell).replace(/'/g,"\\'");
-  el.innerHTML = `<div class="grid g3">${kategorier.map(kat=>kategoriBoksHTML(kat, grupper[kat], `visKategoriDetalj('${modellEsc}','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>`;
+  const laveIModell = varer.filter(erLavBeholdning);
+  const modellVarsel = laveIModell.length ? `
+    <div class="box" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;border-color:rgba(239,68,68,.35)">
+      <span style="flex-shrink:0;width:32px;height:32px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.4);color:#fca5a5;display:flex;align-items:center;justify-content:center;font-weight:800">!</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:#fca5a5;font-size:13.5px">${laveIModell.length} vare${laveIModell.length===1?'':'r'} under minimum</div>
+        <div class="small muted">Fordelt på ${new Set(laveIModell.map(v=>v.kategori||'Uten kategori')).size} underkategori${new Set(laveIModell.map(v=>v.kategori||'Uten kategori')).size===1?'':'er'}</div>
+      </div>
+    </div>` : '';
+  el.innerHTML = modellVarsel + `<div class="grid g3">${kategorier.map(kat=>kategoriBoksHTML(kat, grupper[kat], `visKategoriDetalj('${modellEsc}','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>`;
 }
 
 function visKategoriDetalj(modell, kat) {
@@ -264,7 +288,10 @@ function renderKategoriDetalj() {
         <div style="font-weight:700;color:#fca5a5;font-size:13.5px">${lave.length} vare${lave.length===1?'':'r'} under minimum</div>
         <div class="small muted">${lave.slice(0,3).map(v=>esc(v.navn)).join(', ')}${lave.length>3?` +${lave.length-3} til`:''}</div>
       </div>
-      <button class="btn sm" style="flex-shrink:0" onclick="settKategoriBestilt('${esc(aktivKategori).replace(/'/g,"\\'")}','${esc(aktivModell||'').replace(/'/g,"\\'")}');renderKategoriDetalj()">✓ Merk bestilt</button>
+      <div style="display:flex;gap:7px;flex-shrink:0">
+        <button class="btn sm" onclick="apneBestillingslisteForKategori('${esc(aktivModell||'').replace(/'/g,"\\'")}','${esc(aktivKategori).replace(/'/g,"\\'")}')">📋 Bestillingsliste</button>
+        <button class="btn sm" onclick="settKategoriBestilt('${esc(aktivKategori).replace(/'/g,"\\'")}','${esc(aktivModell||'').replace(/'/g,"\\'")}');renderKategoriDetalj()">✓ Merk bestilt</button>
+      </div>
     </div>` : '';
 
   el.innerHTML = varsel + `<div class="grid g3">${varer.map(v => vareBoksHTML(v, true)).join('')}</div>`;
@@ -424,7 +451,7 @@ function renderVareDetalj() {
   const v = (S.lagervarer||[]).find(x=>x.id===aktivVareId);
   if (!v) { tilbakeLagerListe(); return; }
   document.getElementById('vareDetaljNavn').textContent = v.navn;
-  document.getElementById('vareDetaljUndertekst').textContent = [v.kategori, v.tegningsnummer].filter(Boolean).join(' · ');
+  document.getElementById('vareDetaljUndertekst').textContent = [v.modell, v.kategori, v.tegningsnummer].filter(Boolean).join(' · ');
   document.getElementById('vareDetaljAntall').textContent = fmtAntall(v.antall);
   document.getElementById('vareDetaljEnhet').textContent = v.enhet;
   const lavtLager = v.minAntall > 0 && v.antall <= v.minAntall;
@@ -531,7 +558,7 @@ function varselMangelfullLevering(v, forventet, mottatt, mangler) {
 // i denne appen før (noen forsvinner stille) - se flyttVare() som løste det likt for
 // rekkefølge-oppdatering. Uten batch (vanlig enkelt-vare-endring) lagres som før, med
 // en gang.
-function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, lagerBatch) {
+function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, lagerBatch, oppskriftId) {
   const varLavFor = v.minAntall > 0 && (Number(v.antall)||0) <= v.minAntall;
   v.antall = (Number(v.antall)||0) + endring;
   const erLavNa = v.minAntall > 0 && v.antall <= v.minAntall;
@@ -545,12 +572,12 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, la
   }
 
   const hId = 'lh_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-  const hist = { id:hId, vareId:v.id, vareNavn:v.navn, endring, type, ordreId:ordreId||null, batchId:batchId||null, ansattNavn: me?me.navn:'', kommentar:kommentar||'', createdAt:new Date().toISOString() };
+  const hist = { id:hId, vareId:v.id, vareNavn:v.navn, endring, type, ordreId:ordreId||null, batchId:batchId||null, oppskriftId:oppskriftId||null, ansattNavn: me?me.navn:'', kommentar:kommentar||'', createdAt:new Date().toISOString() };
   S.lagerhistorikk = S.lagerhistorikk || [];
   S.lagerhistorikk.unshift(hist);
 
   const vareOppdatering = bestiltEndret ? {id:v.id, antall:v.antall, bestilt:false} : {id:v.id, antall:v.antall};
-  const historikkInnsetting = {id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''};
+  const historikkInnsetting = {id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, oppskrift_id:oppskriftId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''};
   if (lagerBatch) {
     lagerBatch.vareOppdateringer.push(vareOppdatering);
     lagerBatch.historikkInnsettinger.push(historikkInnsetting);
@@ -742,7 +769,7 @@ function bestillingslisteArkHTML() {
   const grupper = bestillingslisteGruppert();
   const antallVarer = Object.values(grupper).reduce((s,v)=>s+v.length,0);
   const dato = new Date().toLocaleDateString('nb-NO', {day:'numeric', month:'long', year:'numeric'});
-  const LOGO = document.querySelector('#appScreen img')?.src || '';
+  const LOGO = 'logoer/logo-lys-bakgrunn.png';
   const omfangTekst = bestillingslisteFilter
     ? (bestillingslisteFilter.modell ? `${bestillingslisteFilter.modell} – ${bestillingslisteFilter.kategori}` : bestillingslisteFilter.kategori)
     : "Salmaker'n · varelager";
@@ -750,6 +777,11 @@ function bestillingslisteArkHTML() {
   const innhold = Object.entries(grupper).map(([kat, varer]) => `
     <h2>${esc(kat)} <span class="kat-antall">${varer.length} vare${varer.length===1?'':'r'}</span></h2>
     <table>
+      <tr class="hode">
+        <td class="boks-hode"></td>
+        <td>Vare</td>
+        <td class="antall">På lager / minimum</td>
+      </tr>
       ${varer.map(v=>`
         <tr>
           <td class="boks"></td>
@@ -763,7 +795,7 @@ function bestillingslisteArkHTML() {
       *{box-sizing:border-box}
       body{font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;background:#fff;padding:32px;max-width:760px;margin:0 auto}
       .topp{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #cc0000;padding-bottom:14px;margin-bottom:6px}
-      .topp img{height:48px;object-fit:contain}
+      .topp img{height:52px;object-fit:contain}
       h1{font-size:22px;font-weight:bold;color:#cc0000;margin:0}
       .undertittel{font-size:12.5px;color:#666;margin-top:3px}
       .topp-h{text-align:right}
@@ -778,6 +810,9 @@ function bestillingslisteArkHTML() {
       td.boks{width:26px}
       td.boks::before{content:'';display:block;width:16px;height:16px;border:1.5px solid #1a1a1a;border-radius:3px}
       td.antall{text-align:right;color:#555;white-space:nowrap;font-size:13px}
+      tr.hode td{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#8a8a8a;
+                 border-bottom:1.5px solid #1a1a1a;padding-bottom:4px}
+      tr.hode td.boks-hode::before{content:none}
       .tegn{color:#999;font-size:12px}
       .signaturer{display:flex;gap:28px;margin-top:44px;page-break-inside:avoid}
       .sign{flex:1}
@@ -788,7 +823,7 @@ function bestillingslisteArkHTML() {
     </style></head>
     <body>
       <div class="topp">
-        ${LOGO?`<img src="${LOGO}" alt="Salmaker'n">`:'<div></div>'}
+        <img src="${LOGO}" alt="Salmaker'n">
         <div class="topp-h">
           <h1>Bestillingsliste</h1>
           <div class="undertittel">${esc(omfangTekst)}</div>
@@ -1179,14 +1214,19 @@ function renderOrdreLagerbruk() {
   if (!el) return;
   const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
 
-  const brukteNavn = new Set((S.lagerhistorikk||[]).filter(h=>h.ordreId===o.id && h.batchId).map(h=>h.kommentar));
+  const ordreBatchRader = (S.lagerhistorikk||[]).filter(h=>h.ordreId===o.id && h.batchId);
+  // Trekk matches primært via oppskriftId (satt fra og med 2026-09-11). Eldre rader fra
+  // før den kolonnen fantes har ingen oppskriftId - de faller tilbake på navn-matching,
+  // men mister koblingen hvis oppskriften byttes navn i ettertid (kjent, akseptert
+  // begrensning for historiske rader - se migrasjonsfilens kommentar).
+  const erOppskriftHuket = r => ordreBatchRader.some(h => h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn);
 
   const seksjonHTML = (type, tittel) => {
     const treff = (S.lagerOppskrifter||[]).filter(r => (r.type||'ombygging')===type && oppskriftMatcherOrdre(r, o));
     if (!treff.length) return '';
-    const valgt = treff.filter(r => brukteNavn.has(r.navn));
+    const valgt = treff.filter(erOppskriftHuket);
     const rader = treff.map(r => {
-      const huket = brukteNavn.has(r.navn);
+      const huket = erOppskriftHuket(r);
       const delerTekst = (r.ingredienser||[]).map(i => {
         const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
         return v ? `${fmtAntall(i.antall)} ${esc(v.enhet)} ${esc(v.navn)}` : null;
@@ -1232,7 +1272,7 @@ function trekkOppskriftForOrdre(oppskriftId) {
   const lagerBatch = lagerBatchNy();
   (r.ingredienser||[]).forEach(i => {
     const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
-    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId, lagerBatch);
+    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId, lagerBatch, r.id);
   });
   lagerBatchFlush(lagerBatch);
   renderOrdreLagerbruk();
@@ -1248,7 +1288,7 @@ function toggleOppskriftPaaOrdre(oppskriftId, huket) {
   if (huket) {
     trekkOppskriftForOrdre(oppskriftId);
   } else {
-    const rad = r && (S.lagerhistorikk||[]).find(h=>h.ordreId===activeOrdreId && h.batchId && h.kommentar===r.navn);
+    const rad = r && (S.lagerhistorikk||[]).find(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn));
     if (rad) angreLagerBatch(rad.batchId);
   }
   // Kun Ekstra utstyr (ikke Ombygging) legges automatisk inn i "Utstyr – Skal ha etter
@@ -1256,7 +1296,7 @@ function toggleOppskriftPaaOrdre(oppskriftId, huket) {
   // "huket"-parameteren), siden trekkOppskriftForOrdre()/angreLagerBatch() kan returnere
   // uten å gjøre noe hvis brukeren avbryter en confirm()-dialog underveis.
   if (r && (r.type||'ombygging')==='ekstra_utstyr') {
-    const faktiskHuket = (S.lagerhistorikk||[]).some(h=>h.ordreId===activeOrdreId && h.batchId && h.kommentar===r.navn);
+    const faktiskHuket = (S.lagerhistorikk||[]).some(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn));
     oppdaterSkalHaForOppskrift(r.navn, faktiskHuket);
   }
   renderOrdreLagerbruk();

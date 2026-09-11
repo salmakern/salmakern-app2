@@ -402,7 +402,7 @@ function dbToLagervare(r) {
   return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', modell:r.modell||'', tegningsnummer:r.tegningsnummer||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, rekkefolge:Number(r.rekkefolge)||0, createdAt:r.created_at||'' };
 }
 function dbToLagerhistorikk(r) {
-  return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
+  return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, oppskriftId:r.oppskrift_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
 }
 function dbToLagerOppskrift(r) {
   return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', type:r.type||'ombygging', ingredienser:r.ingredienser||[], createdAt:r.created_at||'' };
