@@ -890,7 +890,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div id="detRapportGraf" style="margin-top:14px"></div>
       </div>
       <div class="card" style="margin-top:12px">
-        <div class="h">Biler i <span id="detRapportValgtAar">–</span></div>
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <div class="h">Biler i <span id="detRapportValgtAar">–</span></div>
+          <input id="detRapportForhandlerSok" type="search" placeholder="Filtrer på forhandler..." oninput="renderDetaljertOrdrerapport()" style="max-width:240px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px 10px;font-size:13px">
+        </div>
         <div id="detRapportModellOversikt" style="margin-top:10px"></div>
       </div>
       <div class="card" style="margin-top:12px">

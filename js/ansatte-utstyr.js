@@ -235,6 +235,8 @@ function visDetaljertOrdrerapport() {
   document.getElementById('detaljertOrdrerapport').classList.add('active');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab')[5].classList.add('active'); // "Mer" - denne siden er nådd derfra
+  const sokFelt = document.getElementById('detRapportForhandlerSok');
+  if (sokFelt) sokFelt.value = '';
   renderDetaljertOrdrerapport();
   window.scrollTo(0,0);
 }
@@ -309,7 +311,10 @@ function renderDetaljertOrdrerapport() {
   const valgtAarEl = document.getElementById('detRapportValgtAar');
   if (valgtAarEl) valgtAarEl.textContent = valgtAar;
 
-  const ordrerIAar = S.ordrer.filter(o=>o.ankomstdato?.startsWith(String(valgtAar)));
+  const forhandlerSok = (document.getElementById('detRapportForhandlerSok')?.value||'').toLowerCase().trim();
+  const ordrerIAar = S.ordrer
+    .filter(o=>o.ankomstdato?.startsWith(String(valgtAar)))
+    .filter(o=>!forhandlerSok || (o.kunde||'').toLowerCase().includes(forhandlerSok));
   const perModell = {};
   ordrerIAar.forEach(o => {
     const navn = [o.merke, o.modell].filter(Boolean).join(' ') || 'Ukjent bil';
@@ -339,7 +344,7 @@ function renderDetaljertOrdrerapport() {
           </div>
         </div>`;
       }).join('')
-    : `<div class="muted small">Ingen ordre registrert i ${valgtAar}</div>`;
+    : `<div class="muted small">${forhandlerSok ? `Ingen treff på «${esc(forhandlerSok)}» i ${valgtAar}` : `Ingen ordre registrert i ${valgtAar}`}</div>`;
 
   const valgtAarEl2 = document.getElementById('detRapportValgtAar2');
   if (valgtAarEl2) valgtAarEl2.textContent = valgtAar;
