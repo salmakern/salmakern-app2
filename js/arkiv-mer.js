@@ -24,7 +24,6 @@ function renderArkiv() {
           <b style="font-size:15px">${ordreLabelFull(o)}</b>
           <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;flex-shrink:0">${si.lbl}</span>
         </div>
-        ${o.farge?`<div class="small muted" style="margin-top:4px">${esc(o.farge)}</div>`:''}
         <div class="box" style="margin-top:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
