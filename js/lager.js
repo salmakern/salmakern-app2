@@ -42,10 +42,14 @@ function oppdaterLagerVarselBadge() {
   const el = document.getElementById('lagerVarselBadge');
   if (!el) return;
   const varer = S.lagervarer||[];
-  const lave = varer.filter(v => v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
-  el.innerHTML = lave.length
-    ? `<a href="#" onclick="event.preventDefault();apneBestillingslisteGlobal()" style="color:#f87171;text-decoration:underline;cursor:pointer">⚠ ${lave.length} vare${lave.length===1?'':'r'} med lav beholdning</a>`
-    : `${varer.length} vare${varer.length===1?'':'r'} på lager`;
+  const lave = varer.filter(erLavBeholdning);
+  const modeller = new Set(varer.map(v=>v.modell).filter(Boolean)).size;
+  const deler = [
+    `${varer.length} vare${varer.length===1?'':'r'}`,
+    modeller ? `${modeller} modell${modeller===1?'':'er'}` : null,
+    lave.length ? `<span style="color:#fca5a5">${lave.length} under minimum</span>` : null
+  ].filter(Boolean);
+  el.innerHTML = deler.join(' · ');
 }
 
 let aktivKategori = null;
@@ -114,7 +118,7 @@ function renderLagerListe() {
     // Ved søk: vis treffene direkte, uten å måtte inn i en kategori/modell
     varer = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.modell||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
     el.innerHTML = varer.length
-      ? `<div class="small muted" style="margin-bottom:10px">${varer.length} treff på «${esc(sok)}»</div><div class="grid g3">${varer.map(v => vareBoksHTML(v, false, true)).join('')}</div>`
+      ? `<div class="small muted" style="margin-bottom:10px">${varer.length} treff på «${esc(sok)}»</div><div class="lager-grid">${varer.map(v => vareBoksHTML(v, false, true)).join('')}</div>`
       : `<div class="box" style="text-align:center;padding:24px">
            <div class="muted small">Ingen varer matcher «${esc(sok)}»</div>
            <button class="btn sm red" style="margin-top:10px" onclick="apneNyVare()">+ Opprett «${esc(sok)}» som ny vare</button>
@@ -139,10 +143,22 @@ function renderLagerListe() {
   utenModell.forEach(v => { const k = v.kategori || 'Uten kategori'; (katGrupper[k] = katGrupper[k] || []).push(v); });
   const kategorier = Object.keys(katGrupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
 
-  el.innerHTML = `
-    ${modeller.length ? `<div class="mer-seksjon-label" style="margin-top:0">MODELLER</div><div class="grid g3">${modeller.map(m=>modellBoksHTML(m, modellGrupper[m])).join('')}</div>` : ''}
-    ${kategorier.length ? `<div class="mer-seksjon-label" style="${modeller.length?'':'margin-top:0'}">KATEGORIER</div><div class="grid g3">${kategorier.map(kat=>kategoriBoksHTML(kat, katGrupper[kat], `visKategoriDetalj('','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>` : ''}
-  `;
+  const seksjon = (tittel, antall, innhold, forste) => `
+    <div style="display:flex;align-items:center;gap:11px;margin:${forste?'14px':'22px'} 0 9px">
+      <span style="font-size:10.5px;letter-spacing:.14em;color:#71717a">${tittel}</span>
+      <span style="font-size:11px;color:#52525b">${antall}</span>
+      <span style="flex:1;height:1px;background:#27272a"></span>
+    </div>
+    <div class="lager-grid">${innhold}</div>`;
+
+  const hint = (!modeller.length && kategorier.length)
+    ? `<div class="box" style="margin-top:14px;padding:11px 14px">
+         <div class="small muted">Fyll inn <b>Modell</b> på en vare for å gruppere den under en bilmodell med egne underkategorier.</div>
+       </div>` : '';
+
+  el.innerHTML = hint +
+    (modeller.length ? seksjon('MODELLER', modeller.length, modeller.map(m=>modellBoksHTML(m, modellGrupper[m])).join(''), true) : '') +
+    (kategorier.length ? seksjon('KATEGORIER', kategorier.length, kategorier.map(kat=>kategoriBoksHTML(kat, katGrupper[kat], `visKategoriDetalj('','${esc(kat).replace(/'/g,"\\'")}')`)).join(''), !modeller.length) : '');
 }
 
 function vareBoksHTML(v, kanFlytte, visKontekst) {
@@ -202,6 +218,8 @@ function visModellDetalj(modell) {
   document.getElementById('modellDetaljView').style.display = 'block';
   document.getElementById('kategoriDetaljView').style.display = 'none';
   document.getElementById('vareDetaljView').style.display = 'none';
+  const sokInput = document.getElementById('modellDetaljSokInput');
+  if (sokInput) sokInput.value = '';
   renderModellDetalj();
   window.scrollTo(0, 0);
 }
@@ -224,10 +242,6 @@ function renderModellDetalj() {
     </div>`;
     return;
   }
-  const grupper = {};
-  varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
-  const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
-  const modellEsc = esc(aktivModell).replace(/'/g,"\\'");
   const laveIModell = varer.filter(erLavBeholdning);
   const modellVarsel = laveIModell.length ? `
     <div class="box" style="display:flex;align-items:center;gap:12px;margin-bottom:12px;border-color:rgba(239,68,68,.35)">
@@ -237,7 +251,21 @@ function renderModellDetalj() {
         <div class="small muted">Fordelt på ${new Set(laveIModell.map(v=>v.kategori||'Uten kategori')).size} underkategori${new Set(laveIModell.map(v=>v.kategori||'Uten kategori')).size===1?'':'er'}</div>
       </div>
     </div>` : '';
-  el.innerHTML = modellVarsel + `<div class="grid g3">${kategorier.map(kat=>kategoriBoksHTML(kat, grupper[kat], `visKategoriDetalj('${modellEsc}','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>`;
+
+  const sok = (document.getElementById('modellDetaljSokInput')?.value||'').toLowerCase().trim();
+  if (sok) {
+    const treff = varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.kategori||'').toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok));
+    el.innerHTML = modellVarsel + (treff.length
+      ? `<div class="small muted" style="margin-bottom:10px">${treff.length} treff på «${esc(sok)}»</div><div class="lager-grid">${treff.map(v => vareBoksHTML(v, false, true)).join('')}</div>`
+      : `<div class="box" style="text-align:center;padding:24px"><div class="muted small">Ingen varer matcher «${esc(sok)}»</div></div>`);
+    return;
+  }
+
+  const grupper = {};
+  varer.forEach(v => { const k = v.kategori || 'Uten kategori'; (grupper[k] = grupper[k] || []).push(v); });
+  const kategorier = Object.keys(grupper).sort((a,b)=> a==='Uten kategori'?1 : b==='Uten kategori'?-1 : a.localeCompare(b,'no'));
+  const modellEsc = esc(aktivModell).replace(/'/g,"\\'");
+  el.innerHTML = modellVarsel + `<div class="lager-grid">${kategorier.map(kat=>kategoriBoksHTML(kat, grupper[kat], `visKategoriDetalj('${modellEsc}','${esc(kat).replace(/'/g,"\\'")}')`)).join('')}</div>`;
 }
 
 function visKategoriDetalj(modell, kat) {
@@ -249,6 +277,8 @@ function visKategoriDetalj(modell, kat) {
   document.getElementById('vareDetaljView').style.display = 'none';
   const tilbakeBtn = document.getElementById('kategoriDetaljTilbakeBtn');
   if (tilbakeBtn) tilbakeBtn.textContent = aktivModell ? '← ' + aktivModell : '← Alle kategorier';
+  const sokInput = document.getElementById('kategoriDetaljSokInput');
+  if (sokInput) sokInput.value = '';
   renderKategoriDetalj();
   window.scrollTo(0, 0);
 }
@@ -294,7 +324,14 @@ function renderKategoriDetalj() {
       </div>
     </div>` : '';
 
-  el.innerHTML = varsel + `<div class="grid g3">${varer.map(v => vareBoksHTML(v, true)).join('')}</div>`;
+  const sok = (document.getElementById('kategoriDetaljSokInput')?.value||'').toLowerCase().trim();
+  const visVarer = sok ? varer.filter(v => v.navn.toLowerCase().includes(sok) || (v.tegningsnummer||'').toLowerCase().includes(sok)) : varer;
+  const treffTekst = sok ? `<div class="small muted" style="margin-bottom:10px">${visVarer.length} treff på «${esc(sok)}»</div>` : '';
+  const grid = visVarer.length
+    ? `<div class="lager-grid">${visVarer.map(v => vareBoksHTML(v, !sok)).join('')}</div>`
+    : `<div class="box" style="text-align:center;padding:24px"><div class="muted small">Ingen varer matcher «${esc(sok)}»</div></div>`;
+
+  el.innerHTML = varsel + treffTekst + grid;
 }
 
 function apneNyVareIKategori() {

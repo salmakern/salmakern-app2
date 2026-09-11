@@ -117,6 +117,11 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 .mer-seksjon-label::after{content:'';flex:1;height:1px;background:#27272a}
 .mer-seksjon-label.mer-har-badge::after{order:1}
 .mer-seksjon-label.mer-har-badge .mer-kun-admin{order:2}
+
+/* LAGER: autofyll i stedet for faste kolonner - tre kort på brede skjermer, men fire
+   modeller blir 2+2 heller enn 3+1, og én kategori blir ett kort i normal bredde. */
+.lager-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+@media(max-width:520px){ .lager-grid{grid-template-columns:1fr} }
 .mer-kun-admin{font-size:10.5px;font-weight:400;text-transform:none;letter-spacing:.6px;color:#fca5a5;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:999px;padding:3px 9px;white-space:nowrap}
 
 /* TYPE */
@@ -583,25 +588,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <section id="lager" class="page">
       <div id="lagerListeView">
         <div class="card">
-          <div class="row">
-            <div>
-              <div class="h">Oppskrifter</div>
-              <div class="muted small">Hvilke deler som går med per modell, for Ombygging og Ekstra utstyr.</div>
+          <div class="row" style="flex-wrap:wrap;gap:10px;align-items:flex-start">
+            <div style="min-width:0">
+              <div class="h">Varelager</div>
+              <div id="lagerVarselBadge" class="muted small" style="margin-top:2px"></div>
             </div>
-            <button class="btn sm red" onclick="visOppskriftModeller()">Åpne oppskrifter</button>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:12px">
-          <div class="row" style="flex-wrap:wrap;gap:8px">
-            <div><div class="h">Varelager</div><div id="lagerVarselBadge" class="muted small"></div></div>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0">
+              <button class="btn sm" onclick="visOppskriftModeller()">📖 Oppskrifter</button>
               <button class="btn sm" onclick="apneBestillingslisteGlobal()">📋 Bestillingsliste</button>
               <button class="btn red" onclick="apneNyVare()">+ Ny vare</button>
             </div>
           </div>
-          <div style="margin-top:10px">
-            <input id="lagerSokInput" type="search" placeholder="Søk vare, modell, kategori eller tegningsnummer..." oninput="renderLagerListe()" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+          <div style="margin-top:12px">
+            <input id="lagerSokInput" type="search" placeholder="Søk vare, modell, kategori eller tegningsnummer..." oninput="renderLagerListe()" style="width:100%;background:#0f0f12;color:#f4f4f5;border:1px solid #27272a;border-radius:12px;padding:10px 13px;font-size:14px">
           </div>
         </div>
         <div id="lagerListe" style="margin-top:12px"></div>
@@ -616,6 +615,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <div class="muted small" style="margin-top:4px">Underkategorier for denne modellen</div>
             </div>
             <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
+          </div>
+          <div style="margin-top:10px">
+            <input id="modellDetaljSokInput" type="search" placeholder="Søk vare, kategori eller tegningsnummer..." oninput="renderModellDetalj()" style="width:100%;background:#0f0f12;color:#f4f4f5;border:1px solid #27272a;border-radius:12px;padding:9px 12px;font-size:14px">
           </div>
         </div>
         <div id="modellKategoriListe" style="margin-top:12px"></div>
@@ -653,6 +655,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <button class="btn sm" onclick="redigerKategoriNavn()">✎ Rediger navn</button>
               <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
             </div>
+          </div>
+          <div style="margin-top:10px">
+            <input id="kategoriDetaljSokInput" type="search" placeholder="Søk vare eller tegningsnummer..." oninput="renderKategoriDetalj()" style="width:100%;background:#0f0f12;color:#f4f4f5;border:1px solid #27272a;border-radius:12px;padding:9px 12px;font-size:14px">
           </div>
         </div>
         <div id="kategoriVareListe" style="margin-top:12px"></div>
