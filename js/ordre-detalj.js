@@ -451,13 +451,36 @@ function fikenLinjerHTML(o) {
         <input type="number" min="1" value="${l.antall||1}" onchange="settFikenLinje('${o.id}',${i},'antall',this.value)" style="width:64px;flex-shrink:0">
         <button class="btn sm" onclick="fjernFikenLinje('${o.id}',${i})" style="flex-shrink:0" title="Fjern linje">✕</button>
       </div>`).join('')}
-    <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
+      <button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>
+    </div>
   </div>`;
 }
 function leggTilFikenLinje(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer) o.fikenLinjer = [];
   o.fikenLinjer.push({produktnummer:'', antall:1});
+  save(id);
+  const el = document.getElementById('fikenLinjer_'+id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+// "Utstyr – Skal ha etter visning" inneholder rene produktnumre på egne linjer, men kan
+// også ha fritekst innimellom (bekreftet av Henrik) - bare linjer som er RENE tall skal
+// tas med her, alt annet ignoreres bevisst i stedet for å risikere feil tekst på en ekte
+// faktura. Samme nummer på flere linjer telles opp som antall i stedet for flere 1-linjer.
+function hentFikenLinjerFraUtstyr(o) {
+  const linjer = (o.utstyr?.skalHa || '').split('\n').map(l => l.trim()).filter(l => /^\d+$/.test(l));
+  const antallPerNummer = {};
+  linjer.forEach(n => { antallPerNummer[n] = (antallPerNummer[n]||0) + 1; });
+  return Object.entries(antallPerNummer).map(([produktnummer, antall]) => ({produktnummer, antall}));
+}
+function leggTilFikenLinjerFraUtstyr(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const nye = hentFikenLinjerFraUtstyr(o);
+  if (!nye.length) { visToast('Fant ingen rene produktnumre i Utstyr-boksen'); return; }
+  if (!o.fikenLinjer) o.fikenLinjer = [];
+  o.fikenLinjer.push(...nye);
   save(id);
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
