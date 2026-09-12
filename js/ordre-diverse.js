@@ -279,6 +279,10 @@ function opprettOrdre() {
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_farge','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
+  const nRegnrStatus = document.getElementById('n_regnrStatus');
+  if (nRegnrStatus) nRegnrStatus.innerHTML = '';
+  const nChassisTel = document.getElementById('n_chassis_tel');
+  if (nChassisTel) nChassisTel.textContent = '0/17';
   const statusFelt = document.getElementById('n_status');
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
   oppdaterNyOrdreStatusFelt();
@@ -482,6 +486,42 @@ async function slaOppRegnr(ordreId) {
     if (chassis && chassis.length === 17) { o.chassis = chassis; }
     logChange(o, 'Bilinfo hentet fra Statens vegvesen: '+merke+' '+modell);
     save(ordreId); buildOrdreDetail();
+    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${merke} ${modell} ${aar}</span>`;
+  } catch(e) {
+    if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Ikke funnet – fyll inn manuelt</span>';
+  }
+}
+// Samme oppslag som slaOppRegnr(), bare mot Ny ordre-skjemaets egne felt i stedet for
+// en allerede lagret ordre - det finnes jo ingen S.ordrer-rad å skrive til ennå her.
+async function slaOppRegnrNyOrdre() {
+  const regnr = (document.getElementById('n_regnr')?.value || '').trim().toUpperCase().replace(/\s/g,'');
+  const statusEl = document.getElementById('n_regnrStatus');
+  if (!regnr) { if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Skriv inn reg.nr først</span>'; return; }
+  if(statusEl) statusEl.innerHTML='<span style="color:#a1a1aa">Søker...</span>';
+  try {
+    const res = await fetch(SUPA_URL + '/functions/v1/vegvesen-oppslag', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      body: JSON.stringify({ regnr })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'Ikke funnet');
+    const { merke, modell, aar, chassis } = data;
+    const typeInput = document.getElementById('n_type');
+    if (merke && typeInput) {
+      typeInput.value = merke+(modell?' '+modell:'');
+      // Trigger samme oninput-kjede som når man skriver selv, slik at Variant/Versjon
+      // sine forslagslister oppdaterer seg til det som faktisk hører til denne typen.
+      typeInput.dispatchEvent(new Event('input', {bubbles:true}));
+    }
+    const versjonInput = document.getElementById('n_versjon');
+    if (aar && versjonInput) versjonInput.value = aar;
+    if (chassis && chassis.length === 17) {
+      const chassisInput = document.getElementById('n_chassis');
+      if (chassisInput) chassisInput.value = chassis;
+      const chassisTel = document.getElementById('n_chassis_tel');
+      if (chassisTel) chassisTel.textContent = '17/17';
+    }
     if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${merke} ${modell} ${aar}</span>`;
   } catch(e) {
     if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Ikke funnet – fyll inn manuelt</span>';

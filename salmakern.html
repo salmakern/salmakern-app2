@@ -962,7 +962,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="grid g2">
         <div>
           <label>Reg.nr</label>
-          <input id="n_regnr" placeholder="EL 84213" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')">
+          <div style="display:flex;gap:6px">
+            <input id="n_regnr" placeholder="EL 84213" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')" style="flex:1">
+            <button class="btn sm red" onclick="slaOppRegnrNyOrdre()" title="Hent bilinfo fra Statens vegvesen" style="white-space:nowrap;flex-shrink:0">🔍 Søk</button>
+          </div>
+          <div id="n_regnrStatus" class="small" style="margin-top:4px"></div>
         </div>
         <div>
           <label>Chassis-nr (VIN)</label>
