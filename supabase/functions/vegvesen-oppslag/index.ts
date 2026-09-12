@@ -29,7 +29,12 @@ Deno.serve(async (req) => {
       return jsonSvar({ error: 'Ingen API-nøkkel for Statens vegvesen er satt opp ennå' }, 500)
     }
 
-    const { regnr } = await req.json()
+    // req.json() har vist seg upålitelig på denne kjøretiden (kaster "Unexpected
+    // end of JSON input" selv med en gyldig body) - les som tekst og parse selv,
+    // samme mønster som send-push allerede bruker.
+    const raw = await req.text()
+    if (!raw) return jsonSvar({ error: 'Tom body' }, 400)
+    const { regnr } = JSON.parse(raw)
     if (!regnr) return jsonSvar({ error: 'Mangler regnr' }, 400)
 
     const res = await fetch(
@@ -38,7 +43,16 @@ Deno.serve(async (req) => {
     )
     if (!res.ok) return jsonSvar({ error: `Statens vegvesen svarte ${res.status}` }, 502)
 
-    const data = await res.json()
+    // Et gyldig, men ukjent/ikke-registrert reg.nr gir 200 OK med enten en tom body
+    // eller ren tekst ("OPPLYSNINGER_IKKE_TILGJENGELIGE") - IKKE gyldig JSON. Les som
+    // tekst og prøv å parse selv, i stedet for å anta res.json() alltid lykkes.
+    const rawSvar = await res.text()
+    let data: any
+    try {
+      data = rawSvar ? JSON.parse(rawSvar) : null
+    } catch {
+      return jsonSvar({ error: 'Ingen data funnet for dette reg.nr-et' }, 404)
+    }
     const kjt = data?.kjoretoydataListe?.[0]
     if (!kjt) return jsonSvar({ error: 'Ingen data funnet for dette reg.nr-et' }, 404)
 
