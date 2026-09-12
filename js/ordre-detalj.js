@@ -399,7 +399,9 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       ${me&&me.rolle==='admin'?`
       <div class="card">
         <div class="h">Fakturering</div>
-        <div style="margin-top:8px">
+        <div class="small muted" style="margin-top:6px">Produktnummer og antall som skal med på Fiken-fakturaen.</div>
+        <div id="fikenLinjer_${o.id}" style="margin-top:10px">${fikenLinjerHTML(o)}</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           ${o.fakturert
             ? `<span class="pill ok">✔ Fakturert</span>
                <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleFakturert('${o.id}')">Merk som ikke fakturert</button>`
@@ -435,6 +437,42 @@ function toggleDiagnose(id) {
   o.diagnoseAv = o.diagnose ? me.navn : '';
   logChange(o, o.diagnose ? 'Diagnose utført' : 'Diagnose fjernet');
   save(id); buildOrdreDetail();
+}
+
+// Fakturalinjer (produktnummer + antall) som senere skal sendes til Fiken ved
+// fakturering - én ordre kan trenge flere linjer (f.eks. ombygging + ekstra utstyr),
+// akkurat som en vanlig faktura har flere linjer.
+function fikenLinjerHTML(o) {
+  const linjer = o.fikenLinjer || [];
+  return `<div style="display:flex;flex-direction:column;gap:8px">
+    ${linjer.map((l, i) => `
+      <div style="display:flex;gap:6px;align-items:center">
+        <input value="${esc(l.produktnummer||'')}" placeholder="Produktnr." onchange="settFikenLinje('${o.id}',${i},'produktnummer',this.value)" style="flex:2;min-width:0">
+        <input type="number" min="1" value="${l.antall||1}" onchange="settFikenLinje('${o.id}',${i},'antall',this.value)" style="width:64px;flex-shrink:0">
+        <button class="btn sm" onclick="fjernFikenLinje('${o.id}',${i})" style="flex-shrink:0" title="Fjern linje">✕</button>
+      </div>`).join('')}
+    <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
+  </div>`;
+}
+function leggTilFikenLinje(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!o.fikenLinjer) o.fikenLinjer = [];
+  o.fikenLinjer.push({produktnummer:'', antall:1});
+  save(id);
+  const el = document.getElementById('fikenLinjer_'+id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+function fjernFikenLinje(id, idx) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
+  o.fikenLinjer.splice(idx, 1);
+  save(id);
+  const el = document.getElementById('fikenLinjer_'+id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+function settFikenLinje(id, idx, felt, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer || !o.fikenLinjer[idx]) return;
+  o.fikenLinjer[idx][felt] = felt==='antall' ? (Number(val)||1) : val;
+  save(id);
 }
 
 function toggleFakturert(id) {
