@@ -157,6 +157,17 @@ function egenerklaeringVariant(o) {
   return harPanorama ? 'panorama' : 'standard';
 }
 
+// Antall sitteplasser (Inn) på Fabrikantattest avhenger av hvilken seterad-variant som er
+// huket av på Utstyr - Har ved ankomst: "5-seter bak" -> 7 seter totalt, "4-seter bak" ->
+// 6 seter totalt (bekreftet av Henrik 2026-09-14). Fallback 7 (vanligste variant) hvis
+// ingen av punktene er huket av.
+function fabrikantattestSitteplasser(o) {
+  const punkt = (o.utstyrSjekkliste || []).find(p => p.ok && /\d\s*-?\s*seter\s*bak/i.test(p.punkt || ''));
+  if (!punkt) return 7;
+  const antall = parseInt(punkt.punkt.match(/(\d)\s*-?\s*seter\s*bak/i)[1], 10);
+  return antall === 4 ? 6 : 7;
+}
+
 async function genEgenerklaeringPDF(o) {
   const { PDFDocument, StandardFonts } = PDFLib;
   const pdfDoc = await PDFDocument.create();
@@ -477,7 +488,7 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
     ['Tillatt totalvekt', vegvesenFmtKg(innTotalvekt)+'kg', vegvesenFmtKg(endringP)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Tillatt vogntogvekt', vegvesenFmtKg(innVogntog)+'kg', vegvesenFmtKg(endringVogntog)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Karosserikode', 'AC', 'BB', 'Egenerklæring', 'Telemark Salmakerverksted'],
-    ['Antall sitteplasser', '7', '2', 'Egenerklæring', 'Telemark Salmakerverksted'],
+    ['Antall sitteplasser', String(fabrikantattestSitteplasser(o)), '2', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Varerommets lengde', '-', '2120mm', 'Egenerklæring', 'Telemark Salmakerverksted']
   ];
   const endrRadHoyde = 13.5;
