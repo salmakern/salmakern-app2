@@ -428,7 +428,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
       ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
     </div>
-    <div>
+    <div class="ordre-dok-kolonne">
       <div class="card">
         <div class="h">Dokumenter</div>
         <div class="muted small" style="margin-bottom:8px">Ordren fungerer som en mappe - last opp kontrakter, følgebrev og annet her. Samme filnavn erstatter forrige versjon.</div>
