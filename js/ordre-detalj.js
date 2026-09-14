@@ -449,11 +449,13 @@ function fikenLinjerHTML(o) {
       <div style="display:flex;gap:6px;align-items:center">
         <input value="${esc(l.produktnummer||'')}" placeholder="Produktnr." onchange="settFikenLinje('${o.id}',${i},'produktnummer',this.value)" style="flex:2;min-width:0">
         <input type="number" min="1" value="${l.antall||1}" onchange="settFikenLinje('${o.id}',${i},'antall',this.value)" style="width:64px;flex-shrink:0">
+        ${l.belop!==undefined?`<input type="number" step="0.01" value="${l.belop||0}" title="Overstyrt beløp (kr) - erstatter produktets faste pris i Fiken" onchange="settFikenLinje('${o.id}',${i},'belop',this.value)" style="width:90px;flex-shrink:0">`:''}
         <button class="btn sm" onclick="fjernFikenLinje('${o.id}',${i})" style="flex-shrink:0" title="Fjern linje">✕</button>
       </div>`).join('')}
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
       <button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>
+      <button class="btn sm" onclick="leggTilFikenLinjeDrivstoff('${o.id}')">⛽ Hent drivstoff</button>
     </div>
   </div>`;
 }
@@ -492,9 +494,28 @@ function fjernFikenLinje(id, idx) {
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
+// Fiken sitt "Drivstoff"-produkt (nr. 21, bekreftet av Henrik) har ingen fastpris - kunde-
+// prisen er ulik fra ordre til ordre, så beløpet overstyres alltid med drivstoffKundepris(o)
+// i stedet for å hente pris fra produktet slik de andre linjene gjør. Legger til/oppdaterer
+// ÉN linje (ikke flere ved gjentatte trykk) siden en ordre kun har én reell drivstoffpris.
+const FIKEN_PRODUKTNUMMER_DRIVSTOFF = '21';
+function leggTilFikenLinjeDrivstoff(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const belop = drivstoffKundepris(o);
+  if (!belop) { visToast('Ingen drivstoffpris registrert på denne ordren'); return; }
+  if (!o.fikenLinjer) o.fikenLinjer = [];
+  const eksisterende = o.fikenLinjer.find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
+  if (eksisterende) { eksisterende.antall = 1; eksisterende.belop = belop; }
+  else { o.fikenLinjer.push({produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop}); }
+  save(id);
+  const el = document.getElementById('fikenLinjer_'+id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
 function settFikenLinje(id, idx, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer || !o.fikenLinjer[idx]) return;
-  o.fikenLinjer[idx][felt] = felt==='antall' ? (Number(val)||1) : val;
+  if (felt==='antall') val = Number(val)||1;
+  else if (felt==='belop') val = Number(val)||0;
+  o.fikenLinjer[idx][felt] = val;
   save(id);
 }
 
