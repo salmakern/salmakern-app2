@@ -167,10 +167,6 @@ function buildOrdreDetail() {
             <div id="typeForslag_kunde_${o.id}" class="felt-dropdown">${feltForslagHTML('kundeInput_'+o.id, forhandlerForslag(o.merke, o.modell))}</div>
           </div>
           <div class="felt-wrap">
-            <label>Forhandler org.nr</label>
-            <input value="${esc(o.forhandlerOrgnr||'')}" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer">
-          </div>
-          <div class="felt-wrap">
             <label>Kontaktperson</label>
             <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)"
               onfocus="visFeltDropdown('typeForslag_eier_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_eier_${o.id}'))">
@@ -214,6 +210,10 @@ function buildOrdreDetail() {
             <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.merke, o.modell, o.type))}</div>
           </div>
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
+          <div class="felt-wrap">
+            <label>Forhandler org.nr</label>
+            <input value="${esc(o.forhandlerOrgnr||'')}" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer">
+          </div>
         </div>
 
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
