@@ -812,8 +812,8 @@ function renderAdminArk(scrollTilBunn) {
         return cell.getRow().getPosition();
       }
     },
-    {title:'Forhandler', field:'forhandler', width:110, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Kontaktperson', field:'kontaktperson', width:110, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
       // Cellen får farge automatisk fra ordrens status - kun rader som faktisk matcher en
       // ordre (_ordreStatus er null for løse admin_ark-rader, bl.a. gamle Excel-importerte
@@ -843,12 +843,12 @@ function renderAdminArk(scrollTilBunn) {
       editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Fraktselskap', field:'fraktselskap', width:100, headerSort:false, hozAlign:'center',
+    {title:'Fraktselskap', field:'fraktselskap', minWidth:90, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'list' : false, editorParams: cell => ({values: adminArkFraktselskapVerdier(cell.getValue())}), rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
     {title:'Bestilt frakt', field:'bestiltFrakt', width:85, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
-    {title:'Merknader', field:'merknader', width:150, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
-    {title:'Utstyr', field:'utstyr', width:130, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
+    {title:'Merknader', field:'merknader', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Utstyr', field:'utstyr', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
       formatter: cell => esc(cell.getValue()||'')},
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
@@ -857,7 +857,7 @@ function renderAdminArk(scrollTilBunn) {
       editor: kanRedigere ? 'list' : false,
       editorParams:{values: ADMIN_ARK_VEDTAK_VERDIER},
       editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
-    {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
+    {title:'Time bekreftet', field:'timeBekreftetVis', minWidth:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal admin-ark-tb-celle',
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';

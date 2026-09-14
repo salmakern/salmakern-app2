@@ -59,11 +59,11 @@ if ('serviceWorker' in navigator) {
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:100vh;touch-action:manipulation}
 
-/* ADMIN-ARK - kompakte rader for å få flest mulig rader synlig uten scroll.
-   white-space:normal + word-break gjør at lang tekst brytes til flere linjer inni
-   cellen (raden vokser med), i stedet for å bli kuttet av eller flyte utenfor
-   boksen sin bredde - se admin-ark.js sine faste (ikke auto-) kolonnebredder. */
-#adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px;white-space:normal;word-break:break-word}
+/* ADMIN-ARK - kompakte, enkeltlinje rader (klassisk Excel-oppførsel): kolonnene
+   bredde-tilpasser seg egen tekst via Tabulators layout:'fitData' (se admin-ark.js -
+   kolonnene har ikke lenger faste bredder), i stedet for at teksten brytes til flere
+   linjer og gjør raden høyere. */
+#adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px;white-space:nowrap}
 #adminArkTabell .tabulator-row{min-height:0}
 /* Selve kort-boksen rundt Admin-arket skal kun være så bred som innholdet (kolonnene),
    ikke strekke seg utover hele skjermen - #adminArkTabell får en eksplikt pixel-bredde
