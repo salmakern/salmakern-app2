@@ -603,7 +603,10 @@ async function fakturerViaFiken(id) {
 // datalist-forslagene (fylt av kallFikenFakturer sin needsBekreftelse-gren).
 function bekreftFikenKunde() {
   const navn = (document.getElementById('fikenKundeInput').value || '').trim();
-  const valgt = fikenFaktureringKandidater.find(k => k.navn === navn);
+  // Case-ufølsom match - mobil/nettleser autokapitaliserer ofte bokstaven rett etter en
+  // bindestrek ("Ikke" i stedet for "ikke"), og en eksakt match ville da feile selv om
+  // brukeren tydelig valgte riktig kunde (bekreftet av Henrik i testing).
+  const valgt = fikenFaktureringKandidater.find(k => k.navn.toLowerCase() === navn.toLowerCase());
   if (!valgt) { document.getElementById('fikenKundeErr').textContent = 'Velg en kunde fra listen'; return; }
   const btn = document.getElementById('fikenKundeBekreftBtn');
   btn.disabled = true; btn.textContent = 'Oppretter...';
