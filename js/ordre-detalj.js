@@ -561,7 +561,7 @@ async function kallFikenFakturer(id, ekstra) {
     const res = await fetch(SUPA_URL + '/functions/v1/fiken-fakturer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
-      body: JSON.stringify({ kundeNavn: o.kunde, kontaktpersonNavn: o.eier, linjer: o.fikenLinjer, ...ekstra })
+      body: JSON.stringify({ kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, linjer: o.fikenLinjer, ...ekstra })
     });
     const data = await res.json();
     if (data.needsBekreftelse) {
