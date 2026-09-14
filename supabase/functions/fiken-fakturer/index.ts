@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
     const raw = await req.text()
     if (!raw) return jsonSvar({ error: 'Tom body' }, 400)
-    const { kundeNavn, linjer, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
+    const { kundeNavn, kontaktpersonNavn, linjer, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
 
@@ -142,10 +142,26 @@ Deno.serve(async (req) => {
     const ukjente = linjer.map((l: any) => l.produktnummer).filter((n: string) => !produktMap.has(String(n)))
     if (ukjente.length) return jsonSvar({ error: `Fant ikke Fiken-produkt for produktnummer: ${ukjente.join(', ')}` }, 400)
 
+    // Kontaktperson (o.eier i appen, kalt "Kontaktperson" i PDF-rapporten) - kobles KUN
+    // hvis en person med samme navn allerede finnes registrert på denne Fiken-kontakten.
+    // Fiken krever navn+e-post for å OPPRETTE en kontaktperson, og appen har ingen e-post
+    // lagret på "eier" - så vi oppretter aldri en ny, bare bruker en som Henrik har lagt
+    // inn i Fiken fra før (bekreftet at han allerede har gjort dette for flere kunder).
+    let contactPersonId: number | undefined
+    if (kontaktpersonNavn) {
+      const kontaktRes = await fikenFetch(`/companies/${slug}/contacts/${contactId}`)
+      if (kontaktRes.ok) {
+        const kontakt = await kontaktRes.json()
+        const treff = (kontakt.contactPerson || []).find((p: any) => (p.name || '').toLowerCase() === kontaktpersonNavn.toLowerCase())
+        if (treff) contactPersonId = treff.contactPersonId
+      }
+    }
+
     const idag = new Date().toISOString().slice(0, 10)
     const draftBody = {
       type: 'invoice',
       customerId: contactId,
+      ...(contactPersonId ? { contactPersonId } : {}),
       daysUntilDueDate: 14,
       issueDate: idag,
       lines: linjer.map((l: any) => {
