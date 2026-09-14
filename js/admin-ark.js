@@ -148,20 +148,6 @@ function adminArkFlateNavn(o) {
   return f ? (f.flatenummer || f.kunde || '') : '';
 }
 
-// Kopierer en celleverdi til utklippstavlen - brukt på Forhandler/Kontaktperson/
-// Chassis.nr, som ofte skal limes inn andre steder (Vegvesen, Fiken, e-post til forhandler).
-function adminArkKopier(tekst, feltnavn) {
-  if (!tekst) return;
-  navigator.clipboard.writeText(tekst)
-    .then(()=>visToast(feltnavn + ' kopiert'))
-    .catch(()=>visToast('Klarte ikke å kopiere'));
-}
-function adminArkKopiKnappHTML(verdi, feltnavn) {
-  if (!verdi) return '';
-  const trygg = esc(verdi).replace(/'/g,"\\'");
-  return `<button onmousedown="event.stopPropagation()" onclick="event.stopPropagation();adminArkKopier('${trygg}','${feltnavn}')" title="Kopier ${feltnavn}" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:12px;padding:0 0 0 4px;flex-shrink:0">⧉</button>`;
-}
-
 // ── Fraktselskap: nedtrekksliste, men beholder en eksisterende verdi som ikke matcher
 // listen (f.eks. gammel fritekst) som eget valg - samme mønster som fargeSelectOptions().
 const FRAKTSELSKAP_LISTE = ['BOS','Thune','NBT','Axess','Hente selv'];
@@ -826,18 +812,8 @@ function renderAdminArk(scrollTilBunn) {
         return cell.getRow().getPosition();
       }
     },
-    {title:'Forhandler', field:'forhandler', width:110, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
-      formatter: cell => {
-        const verdi = cell.getValue() || '';
-        return `<div style="display:flex;align-items:center;gap:2px"><span style="min-width:0">${esc(verdi)}</span>${adminArkKopiKnappHTML(verdi,'Forhandler')}</div>`;
-      }
-    },
-    {title:'Kontaktperson', field:'kontaktperson', width:110, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
-      formatter: cell => {
-        const verdi = cell.getValue() || '';
-        return `<div style="display:flex;align-items:center;gap:2px"><span style="min-width:0">${esc(verdi)}</span>${adminArkKopiKnappHTML(verdi,'Kontaktperson')}</div>`;
-      }
-    },
+    {title:'Forhandler', field:'forhandler', width:110, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Kontaktperson', field:'kontaktperson', width:110, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
     {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
       // Cellen får farge automatisk fra ordrens status - kun rader som faktisk matcher en
       // ordre (_ordreStatus er null for løse admin_ark-rader, bl.a. gamle Excel-importerte
@@ -845,14 +821,14 @@ function renderAdminArk(scrollTilBunn) {
       // selve ordren - ingen egen manuell overstyring her.
       formatter: (cell, params, onRendered) => {
         const rad = cell.getRow().getData();
-        const verdi = cell.getValue() || '';
+        const verdi = esc(cell.getValue() || '');
         onRendered(() => {
           const el = cell.getElement();
           const farge = rad._ordreStatus ? statusInfo(rad._ordreStatus).border : '';
           el.style.background = farge ? farge + '2a' : '';
           el.style.boxShadow = farge ? `inset 3px 0 0 ${farge}` : '';
         });
-        return `<div style="display:flex;align-items:center;justify-content:center;gap:2px"><span>${esc(verdi)}</span>${adminArkKopiKnappHTML(verdi,'Chassis.nr')}</div>`;
+        return verdi;
       }
     },
     {title:'Serienummer', field:'serienummer', width:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
@@ -974,6 +950,13 @@ function renderAdminArk(scrollTilBunn) {
     movableRows: kanRedigere,
     clipboard: true,
     clipboardPasteAction: 'update',
+    // Excel-lignende oppførsel: klikk-og-dra markerer en rekke celler over flere rader/
+    // kolonner, Ctrl+C kopierer hele markeringen, Ctrl+V limer inn fra samme markering og
+    // nedover/bortover (bedt om av Henrik 2026-09-14, erstatter enkelt-felt kopier-knappene).
+    selectableRange: true,
+    selectableRangeColumns: true,
+    selectableRangeRows: false,
+    selectableRangeClearCells: true,
     placeholder: 'Ingen ordre for ' + adminArkAar
   });
 
