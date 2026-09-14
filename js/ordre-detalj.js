@@ -236,6 +236,10 @@ function buildOrdreDetail() {
               <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase;font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.02em" oninput="this.nextElementSibling.textContent=this.value.length+'/17';this.nextElementSibling.style.color=this.value.length===17?'#4ade80':'#71717a'" onchange="if(sf('${o.id}','chassis',this.value)){this.value=this.value.toUpperCase();}else{this.value='${esc(o.chassis)}';this.dispatchEvent(new Event('input'))}">
               <div class="small" style="margin-top:2px;text-align:right;color:${(o.chassis||'').length===17?'#4ade80':'#71717a'}">${(o.chassis||'').length}/17</div>
             </div>
+            <div>
+              <label>Serienummer</label>
+              <div class="small" style="padding:6px 0">${esc(adminArkFinnRadForVisning(o.chassis)?.serienummer||'') || '<span class="muted">Ikke registrert</span>'}</div>
+            </div>
           </div>
         </div>
 
@@ -276,6 +280,16 @@ function buildOrdreDetail() {
       <div class="card">
         <div class="h">Varer fra lager</div>
         <div id="ordreLagerbruk_${o.id}" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <div class="h">Dokumenter</div>
+        <div class="muted small" style="margin-bottom:8px">Ordren fungerer som en mappe - last opp kontrakter, følgebrev og annet her. Samme filnavn erstatter forrige versjon.</div>
+        <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
+        ${me&&(me.rolle==='admin'||me.rolle==='godkjenner')?`<label class="btn sm" style="margin-top:8px;width:100%;display:block;text-align:center;cursor:pointer">
+          + Last opp dokument
+          <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
+        </label>`:''}
       </div>
 
       <div class="card">
@@ -545,15 +559,24 @@ function togglePrioritert(id) {
   if (btn) { btn.textContent = o.prioritert ? 'PRIORITERT ✕' : '+ Prioriter'; btn.style.background = o.prioritert ? 'rgba(250,204,21,.12)' : ''; btn.style.borderColor = o.prioritert ? '#facc15' : ''; btn.style.color = o.prioritert ? '#facc15' : ''; }
 }
 
-function toggleGodkjentBiltilsyn(id) {
+// godkjentBiltilsyn ligger IKKE i ordreToDb() (med vilje - se save()), så den må alltid
+// lagres via sitt eget målrettede update-kall, ikke via sf()/save(). settGodkjentBiltilsyn
+// tar en eksplisitt verdi (brukt fra Admin-arkets Vedtak-kolonne); toggleGodkjentBiltilsyn
+// er den opprinnelige av/på-varianten brukt på selve ordresiden/ordrekortet.
+function settGodkjentBiltilsyn(id, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  o.godkjentBiltilsyn = !o.godkjentBiltilsyn;
-  logChange(o, o.godkjentBiltilsyn ? 'Godkjent på biltilsynet' : 'Fjernet godkjent-merking (biltilsyn)');
+  if (o.godkjentBiltilsyn === val) return;
+  o.godkjentBiltilsyn = val;
+  logChange(o, val ? 'Godkjent på biltilsynet' : 'Fjernet godkjent-merking (biltilsyn)');
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-  if (db) db.from('ordrer').update({godkjent_biltilsyn:o.godkjentBiltilsyn}).eq('id', id)
+  if (db) db.from('ordrer').update({godkjent_biltilsyn:val}).eq('id', id)
     .then(r=>{if(r.error) console.error('Godkjent-biltilsyn oppdatering feilet:', r.error.message);});
   renderOrdreList(); renderOversikt();
   if (activeOrdreId===id) buildOrdreDetail();
+}
+function toggleGodkjentBiltilsyn(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  settGodkjentBiltilsyn(id, !o.godkjentBiltilsyn);
 }
 
 function renderAnsOrdre(o) {

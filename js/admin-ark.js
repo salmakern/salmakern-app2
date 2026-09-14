@@ -93,7 +93,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
       if (!rad.chassisNr) return;
       ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
         forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-        serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
+        serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
       S.adminArk = [...(S.adminArk||[]), ark];
     } else {
       ark.rekkefolge = idx;
@@ -101,8 +101,9 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
     }
     oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
       forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
-      serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
-      fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
+      serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
+      fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, utstyr: ark.utstyr||'',
+      merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
       time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
   });
   // Oppdaterer selve tabellvisningen slik at Ventende timer-kolonnen faktisk viser
@@ -145,6 +146,82 @@ function adminArkFlateNavn(o) {
   if (!o.flateId) return '';
   const f = (S.flater||[]).find(x => x.id === o.flateId);
   return f ? (f.flatenummer || f.kunde || '') : '';
+}
+
+// Kopierer en celleverdi til utklippstavlen - brukt på Forhandler/Kontaktperson/
+// Chassis.nr, som ofte skal limes inn andre steder (Vegvesen, Fiken, e-post til forhandler).
+function adminArkKopier(tekst, feltnavn) {
+  if (!tekst) return;
+  navigator.clipboard.writeText(tekst)
+    .then(()=>visToast(feltnavn + ' kopiert'))
+    .catch(()=>visToast('Klarte ikke å kopiere'));
+}
+function adminArkKopiKnappHTML(verdi, feltnavn) {
+  if (!verdi) return '';
+  const trygg = esc(verdi).replace(/'/g,"\\'");
+  return `<button onmousedown="event.stopPropagation()" onclick="event.stopPropagation();adminArkKopier('${trygg}','${feltnavn}')" title="Kopier ${feltnavn}" style="background:none;border:none;color:#71717a;cursor:pointer;font-size:12px;padding:0 0 0 4px;flex-shrink:0">⧉</button>`;
+}
+
+// ── Fraktselskap: nedtrekksliste, men beholder en eksisterende verdi som ikke matcher
+// listen (f.eks. gammel fritekst) som eget valg - samme mønster som fargeSelectOptions().
+const FRAKTSELSKAP_LISTE = ['BOS','Thune','NBT','Axess','Hente selv'];
+function adminArkFraktselskapVerdier(gjeldende) {
+  const verdier = {'':'– Velg –'};
+  FRAKTSELSKAP_LISTE.forEach(f => verdier[f] = f);
+  if (gjeldende && !FRAKTSELSKAP_LISTE.includes(gjeldende)) verdier[gjeldende] = gjeldende + ' (gammel verdi)';
+  return verdier;
+}
+
+// ── Felles hake-formattering (Papirer: tom/gul/grønn, Fullmakt: samme via
+// FULLMAKT_TIL_HAKE, Vedtak: rød/grønn) - viser en fargelagt ✓, eller ingenting for
+// tomt/ukoblet felt.
+const ADMIN_ARK_HAKE_FARGE = { gul:'#facc15', gronn:'#22c55e', rod:'#ef4444' };
+function adminArkHakeFormatter(cell) {
+  const v = cell.getValue() || '';
+  const farge = ADMIN_ARK_HAKE_FARGE[v];
+  return farge ? `<span style="color:${farge};font-size:16px;font-weight:900">✓</span>` : '';
+}
+const ADMIN_ARK_HAKE_VERDIER = {'':'– Ingen –', gul:'🟡 Gul hake', gronn:'🟢 Grønn hake'};
+
+// Fullmakt-kolonnen i Admin-ark speiler o.fullmakt direkte (samme 3 tilstander som
+// dokStatusDropdown bruker på selve ordresiden - har_ikke/etterspurt/har), bare vist som
+// hake i stedet for tekst her. Ingen egen admin_ark-kolonne for dette - se cellEdited.
+const FULLMAKT_TIL_HAKE = { har_ikke:'', etterspurt:'gul', har:'gronn' };
+const ADMIN_ARK_FULLMAKT_VERDIER = {har_ikke:'– Ingen –', etterspurt:'🟡 Gul hake', har:'🟢 Grønn hake'};
+
+// Vedtak-kolonnen speiler o.godkjentBiltilsyn direkte (rød/grønn, ingen tredje "tom"-
+// tilstand) - løse rader uten ordre har vedtakVis=null og vises/redigeres ikke.
+const ADMIN_ARK_VEDTAK_VERDIER = {rod:'🔴 Rød hake', gronn:'🟢 Grønn hake'};
+
+// Bytter ut ADMIN-ARKETS forrige Utstyr-linje (gammelVerdi) med den nye i ordrens "Utstyr -
+// Skal ha etter visning", uten å røre annen fritekst som står der fra før - samme prinsipp
+// som oppdaterSkalHaForOppskrift() i lager.js bruker for Ekstra utstyr-oppskrifter.
+function adminArkSyncUtstyr(o, gammelVerdi, nyVerdi) {
+  let linjer = (o.utstyr?.skalHa||'').split('\n').map(l=>l.trim()).filter(Boolean);
+  if (gammelVerdi) linjer = linjer.filter(l=>l!==gammelVerdi);
+  if (nyVerdi && !linjer.includes(nyVerdi)) linjer.push(nyVerdi);
+  su(o.id, 'skalHa', linjer.join('\n'));
+}
+
+// Skrives det inn et chassis-nr på en løs admin-ark-rad (uten ordre ennå), opprettes det
+// automatisk en ny ordre for den - status "På vei", siden bilen bare er meldt inn og ikke
+// fysisk ankommet ennå (samme regel som opprettOrdre() bruker for på_vei-status manuelt
+// opprettede ordre). Finnes det allerede en aktiv ordre på samme chassis, opprettes ingen
+// duplikat - raden kobles i stedet naturlig sammen med den ved neste rendring (matches på
+// chassis.nr, se adminArkByggRader()).
+function adminArkOpprettOrdreForChassis(rad, chassis) {
+  if ((S.ordrer||[]).some(o => o.status==='aktiv' && samsvarerChassis(o.chassis, chassis))) {
+    visToast('Finnes allerede en aktiv ordre på dette chassisnummeret');
+    return;
+  }
+  const id = 'ord_' + Date.now();
+  const ny = mkOrdre(id, '', rad.forhandler||'', rad.kontaktperson||'', '', '', '', '', '', '', '', 'paa_vei');
+  ny.chassis = chassis;
+  ny._localAt = Date.now();
+  S.ordrer.push(ny);
+  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  visToast('Ny ordre opprettet (På vei)', 'ok');
 }
 
 // Time bekreftet skrives inn som fri tekst "DD.MM - HH:MM" (tiden er valgfri), med et
@@ -218,10 +295,14 @@ function adminArkByggRader() {
       serienummer: ark?.serienummer || '',
       mottatt: ark?.mottatt || false,
       dato: o.ankomstdato || '',
-      papirer: ark?.papirer || false,
+      papirer: ark?.papirer || '',
       dokumenter: ark?.dokumenter || false,
       fakturertVis: o.fakturert ? '✓' : '',
       fraktselskap: ark?.fraktselskap || '',
+      fullmaktVis: o.fullmakt || 'har_ikke',
+      bestiltFrakt: ark?.bestiltFrakt || false,
+      utstyr: ark?.utstyr || '',
+      vedtakVis: o.godkjentBiltilsyn ? 'gronn' : 'rod',
       // Viser datoen ordren ble satt til Klar for henting (satt av endreStatus() i
       // oversikt-kalender.js) - blir stående permanent i arket selv etter at ordren
       // går videre til Hentet eller en annen status, siden dette er en historikk-dato
@@ -254,10 +335,14 @@ function adminArkByggRader() {
       serienummer: r.serienummer || '',
       mottatt: r.mottatt || false,
       dato: '',
-      papirer: r.papirer || false,
+      papirer: r.papirer || '',
       dokumenter: r.dokumenter || false,
       fakturertVis: '',
       fraktselskap: r.fraktselskap || '',
+      fullmaktVis: null,
+      bestiltFrakt: r.bestiltFrakt || false,
+      utstyr: r.utstyr || '',
+      vedtakVis: null,
       henteklarVis: '',
       merknader: r.merknader || '',
       flateVis: r.flateHypotetisk || '',
@@ -275,7 +360,7 @@ function adminArkByggRader() {
     .sort((a,b) => a.rekkefolge - b.rekkefolge || (a.chassisNr||'').localeCompare(b.chassisNr||'','no'));
 }
 
-const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','merknader','ventendeTimer'];
+const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','bestiltFrakt','merknader','ventendeTimer'];
 
 // endringer er et objekt med ett eller flere felt->verdi (f.eks. {serienummer:'x'} eller
 // {timeBekreftet:'2026-08-07', timeBekreftetTid:'09:00'}) - lagres samlet i én upsert.
@@ -285,7 +370,7 @@ async function adminArkLagreFelter(rad, endringer) {
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: adminArkNesteRekkefolge(),
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-      serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
+      serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
     S.adminArk = [...(S.adminArk||[]), ark];
   }
   Object.assign(ark, endringer);
@@ -293,8 +378,9 @@ async function adminArkLagreFelter(rad, endringer) {
   // kan lande på serveren FØR den tilhørende insert-en, som stille treffer 0 rader.
   const payload = { id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: ark.rekkefolge,
     forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
-    serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: !!ark.papirer, dokumenter: !!ark.dokumenter,
-    fraktselskap: ark.fraktselskap||'', merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
+    serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
+    fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, utstyr: ark.utstyr||'',
+    merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
     time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
   // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig re-rendering av
   // hele Admin-ark-tabellen like etterpå (samme mønster som ordre bruker via save()).
@@ -644,21 +730,21 @@ if (!window._adminArkResizeBundet) {
 // som allerede ligger klare nederst i arket.
 function adminArkErTomRad(r) {
   return !r.chassisNr && !r.forhandler && !r.kontaktperson && !r.serienummer &&
-         !r.mottatt && !r.papirer && !r.dokumenter && !r.fraktselskap && !r.merknader &&
+         !r.mottatt && !r.papirer && !r.dokumenter && !r.fraktselskap && !r.bestiltFrakt && !r.utstyr && !r.merknader &&
          !r.flateHypotetisk && !r.timeBekreftet && !r.ventendeTimer;
 }
 
 // Lager én tom, ikke-lagret admin_ark-rad (S.adminArk-form) for gitt år.
 function adminArkNyTomRadObjekt() {
   return { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
-    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:false, dokumenter:false, fraktselskap:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
 }
 // Samme rad, men i visnings-formen Tabulator/adminArkByggRader() bruker (se loseRader
 // lenger ned) - trengs for å legge raden rett inn i den LEVENDE tabellen (addData) uten
 // en full re-rendring, se adminArkLeggTilFlereReserveRader().
 function adminArkTomRadTilVisning(r) {
   return { _ordreId:null, _arkId:r.id, _erOrdre:false, forhandler:'', kontaktperson:'', chassisNr:'', serienummer:'',
-    mottatt:false, dato:'', papirer:false, dokumenter:false, fakturertVis:'', fraktselskap:'', henteklarVis:'',
+    mottatt:false, dato:'', papirer:'', dokumenter:false, fakturertVis:'', fraktselskap:'', bestiltFrakt:false, utstyr:'', fullmaktVis:null, vedtakVis:null, henteklarVis:'',
     merknader:'', flateVis:'', _flateErEkte:false, timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'',
     timeBekreftetVis:'', ventendeTimer:'', rekkefolge:r.rekkefolge, _arkivert:false, _ordreStatus:null };
 }
@@ -740,8 +826,18 @@ function renderAdminArk(scrollTilBunn) {
         return cell.getRow().getPosition();
       }
     },
-    {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
+      formatter: cell => {
+        const verdi = cell.getValue() || '';
+        return `<div style="display:flex;align-items:center;gap:2px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(verdi)}</span>${adminArkKopiKnappHTML(verdi,'Forhandler')}</div>`;
+      }
+    },
+    {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
+      formatter: cell => {
+        const verdi = cell.getValue() || '';
+        return `<div style="display:flex;align-items:center;gap:2px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(verdi)}</span>${adminArkKopiKnappHTML(verdi,'Kontaktperson')}</div>`;
+      }
+    },
     {title:'Chassis.nr', field:'chassisNr', width:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
       // Cellen får farge automatisk fra ordrens status - kun rader som faktisk matcher en
       // ordre (_ordreStatus er null for løse admin_ark-rader, bl.a. gamle Excel-importerte
@@ -749,27 +845,42 @@ function renderAdminArk(scrollTilBunn) {
       // selve ordren - ingen egen manuell overstyring her.
       formatter: (cell, params, onRendered) => {
         const rad = cell.getRow().getData();
-        const verdi = esc(cell.getValue() || '');
+        const verdi = cell.getValue() || '';
         onRendered(() => {
           const el = cell.getElement();
           const farge = rad._ordreStatus ? statusInfo(rad._ordreStatus).border : '';
           el.style.background = farge ? farge + '2a' : '';
           el.style.boxShadow = farge ? `inset 3px 0 0 ${farge}` : '';
         });
-        return verdi;
+        return `<div style="display:flex;align-items:center;justify-content:center;gap:2px"><span>${esc(verdi)}</span>${adminArkKopiKnappHTML(verdi,'Chassis.nr')}</div>`;
       }
     },
     {title:'Serienummer', field:'serienummer', width:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Mottatt', field:'mottatt', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dato', field:'dato', width:85, headerSort:false, hozAlign:'center', editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
-    {title:'Papirer', field:'papirer', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
+    {title:'Papirer', field:'papirer', width:70, headerSort:false, hozAlign:'center', formatter: adminArkHakeFormatter,
+      editor: kanRedigere ? 'list' : false, editorParams:{values: ADMIN_ARK_HAKE_VERDIER}, rowHandle:true},
+    {title:'Fullmakt', field:'fullmaktVis', width:70, headerSort:false, hozAlign:'center',
+      formatter: cell => cell.getValue()==null ? '' : adminArkHakeFormatter({getValue:()=>FULLMAKT_TIL_HAKE[cell.getValue()]}),
+      editor: kanRedigere ? 'list' : false,
+      editorParams:{values: ADMIN_ARK_FULLMAKT_VERDIER},
+      editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Fraktselskap', field:'fraktselskap', minWidth:70, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Fraktselskap', field:'fraktselskap', minWidth:90, headerSort:false, hozAlign:'center',
+      editor: kanRedigere ? 'list' : false, editorParams: cell => ({values: adminArkFraktselskapVerdier(cell.getValue())}), rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
+    {title:'Bestilt frakt', field:'bestiltFrakt', width:85, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Merknader', field:'merknader', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Utstyr', field:'utstyr', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
+      formatter: cell => esc(cell.getValue()||'')},
     {title:'Flåte', field:'flateVis', width:80, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
+    {title:'Vedtak', field:'vedtakVis', width:70, headerSort:false, hozAlign:'center',
+      formatter: cell => cell.getValue()==null ? '' : adminArkHakeFormatter(cell),
+      editor: kanRedigere ? 'list' : false,
+      editorParams:{values: ADMIN_ARK_VEDTAK_VERDIER},
+      editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
     {title:'Time bekreftet', field:'timeBekreftetVis', width:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal admin-ark-tb-celle',
       formatter: (cell, params, onRendered) => {
@@ -880,7 +991,7 @@ function renderAdminArk(scrollTilBunn) {
   // S.adminArk sin adminArkErTomRad(), derfor egen sjekk her).
   function adminArkVisningRadErTom(r) {
     return !r.chassisNr && !r.forhandler && !r.kontaktperson && !r.mottatt && !r.papirer &&
-           !r.dokumenter && !r.fraktselskap && !r.merknader && !r.flateVis && !r.timeBekreftet && !r.ventendeTimer;
+           !r.dokumenter && !r.fraktselskap && !r.bestiltFrakt && !r.utstyr && !r.merknader && !r.flateVis && !r.timeBekreftet && !r.ventendeTimer;
   }
   function scrollAdminArkTilBunn() {
     const rader = adminArkTable.getRows();
@@ -970,6 +1081,39 @@ function renderAdminArk(scrollTilBunn) {
       return;
     }
 
+    // Fullmakt og Vedtak har ingen egen admin_ark-kolonne - de speiler o.fullmakt/
+    // o.godkjentBiltilsyn direkte, og er derfor kun redigerbare for rader som faktisk
+    // tilhører en ordre (kolonnedefinisjonens `editable` hindrer vanlig redigering av løse
+    // rader, men lim inn går utenom det - se tilsvarende kommentar over for chassisNr).
+    if (felt === 'fullmaktVis') {
+      if (!rad._erOrdre) { cell.restoreOldValue(); return; }
+      sf(rad._ordreId, 'fullmakt', cell.getValue());
+      return;
+    }
+    if (felt === 'vedtakVis') {
+      if (!rad._erOrdre) { cell.restoreOldValue(); return; }
+      settGodkjentBiltilsyn(rad._ordreId, cell.getValue() === 'gronn');
+      return;
+    }
+
+    // Utstyr sendes inn som egen linje i den matchede ordrens "Utstyr - Skal ha etter
+    // visning" - den forrige verdien (rad.utstyr, FØR denne redigeringen) fjernes og
+    // erstattes med den nye, uten å røre annen fritekst i feltet. Krever et chassisnummer
+    // (som de fleste andre feltene) - uten en ordre å synke mot lagres teksten bare lokalt.
+    if (felt === 'utstyr') {
+      if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
+      const nyVerdi = (cell.getValue()||'').trim();
+      // cell.getOldValue() - IKKE rad.utstyr - siden Tabulator allerede har oppdatert
+      // radens data til den NYE verdien på dette tidspunktet (det er jo poenget med
+      // cellEdited). rad.utstyr ville da vært identisk med nyVerdi, og aldri funnet den
+      // forrige linja som skal fjernes.
+      const gammelVerdi = (cell.getOldValue()||'').trim();
+      const o = S.ordrer.find(x => samsvarerChassis(x.chassis, rad.chassisNr));
+      if (o) adminArkSyncUtstyr(o, gammelVerdi, nyVerdi);
+      adminArkLagreFelter(rad, { utstyr: nyVerdi });
+      return;
+    }
+
     if (felt === 'timeBekreftetVis') {
       if (!rad.chassisNr) { visToast('Denne raden mangler chassisnummer og kan ikke lagres'); cell.restoreOldValue(); return; }
       const tekst = (cell.getValue()||'').trim();
@@ -1001,7 +1145,13 @@ function renderAdminArk(scrollTilBunn) {
     // visnings-normaliseringen - det siste ville trigget et nytt cellEdited-kall.
     const verdi = felt === 'chassisNr' ? (cell.getValue()||'').trim().toUpperCase() : cell.getValue();
     adminArkLagreFelter(rad, {[felt]: verdi})
-      .then(() => { if (felt === 'chassisNr' && verdi !== cell.getValue()) cell.getRow().update({ chassisNr: verdi }); });
+      .then(() => {
+        if (felt !== 'chassisNr') return;
+        if (verdi !== cell.getValue()) cell.getRow().update({ chassisNr: verdi });
+        // Løs rad (ingen ordre ennå) som nettopp fikk et chassis-nr - oppretter automatisk
+        // en ny ordre ("På vei") for den, se adminArkOpprettOrdreForChassis().
+        if (verdi && !rad._erOrdre) { adminArkOpprettOrdreForChassis(rad, verdi); renderAdminArk(); }
+      });
   });
 
   adminArkTable.on('rowMoved', () => {
