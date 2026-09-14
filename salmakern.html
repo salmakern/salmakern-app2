@@ -1138,6 +1138,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
+<div class="modal" id="fikenKundeBekreft">
+  <div class="modal-box">
+    <div class="h">Bekreft kunde for Fiken-faktura</div>
+    <div class="muted small" style="margin:8px 0">Fant ingen tidligere kobling for «<span id="fikenKundeNavnVis"></span>». Velg riktig kunde i Fiken under - kobles automatisk neste gang samme navn dukker opp.</div>
+    <input list="fikenKundeListe" id="fikenKundeInput" placeholder="Søk kunde i Fiken..." style="width:100%">
+    <datalist id="fikenKundeListe"></datalist>
+    <div id="fikenKundeErr" class="err-text small" style="margin-top:6px;min-height:18px"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" id="fikenKundeBekreftBtn" onclick="bekreftFikenKunde()">Bekreft og opprett faktura</button>
+      <button class="btn" onclick="closeModal('fikenKundeBekreft')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="nyAnsatt">
   <div class="modal-box">
     <div class="h">Ny ansatt</div>

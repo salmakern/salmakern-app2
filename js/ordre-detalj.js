@@ -421,7 +421,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
             ? `<span class="pill ok">✔ Fakturert</span>
                <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleFakturert('${o.id}')">Merk som ikke fakturert</button>`
             : `<div class="muted small" style="margin-bottom:8px">Ikke fakturert</div>
-               <button class="btn sm red" style="width:100%" onclick="toggleFakturert('${o.id}')">✔ Merk som fakturert</button>`}
+               <button class="btn sm red" id="fakturerBtn_${o.id}" style="width:100%" onclick="fakturerViaFiken('${o.id}')">✔ Merk som fakturert (oppretter kladd i Fiken)</button>`}
         </div>
       </div>`:''}
 
@@ -543,6 +543,78 @@ function settFikenLinje(id, idx, felt, val) {
   else if (felt==='belop') val = Number(val)||0;
   o.fikenLinjer[idx][felt] = val;
   save(id);
+}
+
+// ============================================================
+// Fiken-fakturering - kaller Edge Function fiken-fakturer, som oppretter en KLADD i
+// Fiken (aldri sendt automatisk, se funksjonens egen kommentar for hvorfor). To runder
+// når kunden er ukjent for koblingen: første kall uten bekreftetContactId får tilbake
+// en kandidatliste fra Fiken, admin velger riktig kunde i fikenKundeBekreft-modalen,
+// og et nytt kall med bekreftetContactId fullfører og husker koblingen for godt.
+// ============================================================
+let fikenFaktureringOrdreId = null;
+let fikenFaktureringKandidater = [];
+
+async function kallFikenFakturer(id, ekstra) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return 'error';
+  try {
+    const res = await fetch(SUPA_URL + '/functions/v1/fiken-fakturer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      body: JSON.stringify({ kundeNavn: o.kunde, linjer: o.fikenLinjer, ...ekstra })
+    });
+    const data = await res.json();
+    if (data.needsBekreftelse) {
+      fikenFaktureringOrdreId = id;
+      fikenFaktureringKandidater = data.kandidater || [];
+      document.getElementById('fikenKundeListe').innerHTML = fikenFaktureringKandidater.map(k=>`<option value="${esc(k.navn)}">`).join('');
+      document.getElementById('fikenKundeNavnVis').textContent = o.kunde || '';
+      document.getElementById('fikenKundeInput').value = '';
+      document.getElementById('fikenKundeErr').textContent = '';
+      openModal('fikenKundeBekreft');
+      return 'needsBekreftelse';
+    }
+    if (!res.ok || data.error) throw new Error(data.error || ('Fiken svarte ' + res.status));
+    o.fakturert = true;
+    logChange(o, 'Fakturert - kladd opprettet i Fiken');
+    save(id);
+    if (o.status === 'arkivert') renderArkiv();
+    else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
+    else buildOrdreDetail();
+    visToast('Kladd opprettet i Fiken - gå inn og send den derfra');
+    return 'ok';
+  } catch (e) {
+    visToast('Kunne ikke opprette faktura i Fiken: ' + e.message + ' - prøv igjen');
+    return 'error';
+  }
+}
+
+async function fakturerViaFiken(id) {
+  if (!me || me.rolle !== 'admin') return;
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!o.fikenLinjer || !o.fikenLinjer.length) { visToast('Legg til minst én fakturalinje først'); return; }
+  const btn = document.getElementById('fakturerBtn_'+id);
+  if (btn) { btn.disabled = true; btn.textContent = 'Oppretter kladd i Fiken...'; }
+  const status = await kallFikenFakturer(id, {});
+  if (status !== 'ok' && btn) { btn.disabled = false; btn.textContent = '✔ Merk som fakturert (oppretter kladd i Fiken)'; }
+}
+
+// Kalt fra fikenKundeBekreft-modalen etter at admin har valgt riktig kunde fra
+// datalist-forslagene (fylt av kallFikenFakturer sin needsBekreftelse-gren).
+function bekreftFikenKunde() {
+  const navn = (document.getElementById('fikenKundeInput').value || '').trim();
+  const valgt = fikenFaktureringKandidater.find(k => k.navn === navn);
+  if (!valgt) { document.getElementById('fikenKundeErr').textContent = 'Velg en kunde fra listen'; return; }
+  const btn = document.getElementById('fikenKundeBekreftBtn');
+  btn.disabled = true; btn.textContent = 'Oppretter...';
+  kallFikenFakturer(fikenFaktureringOrdreId, {
+    bekreftetContactId: valgt.contactId,
+    bekreftetFikenNavn: valgt.navn,
+    bekreftetAv: me?.navn || ''
+  }).then(status => {
+    btn.disabled = false; btn.textContent = 'Bekreft og opprett faktura';
+    if (status === 'ok') closeModal('fikenKundeBekreft');
+  });
 }
 
 function toggleFakturert(id) {
