@@ -150,8 +150,8 @@ function buildOrdreDetail() {
     </div>
   </div>
 
-  <div class="grid g2l ordre-detalj-grid">
-    <div class="ordre-hoved">
+  <div class="grid g2l">
+    <div>
 
       <div class="card">
         <div class="h">Kunde og bilinfo</div>
@@ -371,7 +371,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
     </div>
 
     <!-- SIDEBAR -->
-    <div class="ordre-sidebar">
+    <div>
       <div class="card">
         <div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
         <div style="display:flex;gap:3px;margin-top:10px">
@@ -425,10 +425,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </div>
       </div>`:''}
 
-      ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
-      ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
-    </div>
-    <div class="ordre-dok-kolonne">
       <div class="card">
         <div class="h">Dokumenter</div>
         <div class="muted small" style="margin-bottom:8px">Ordren fungerer som en mappe - last opp kontrakter, følgebrev og annet her. Samme filnavn erstatter forrige versjon.</div>
@@ -439,6 +435,9 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </label>`:''}
         ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Under utprøving - genererer foreløpig Egenerklæring, Vektfordeling og Fabrikantattest">🧪 Generer Vegvesen-dokumenter (test)</button>`:''}
       </div>
+
+      ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
+      ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
     </div>
   </div>`;
   renderOrdreLagerbruk();

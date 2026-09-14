@@ -495,9 +495,12 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   page.drawLine({ start:{x:vX,y:y-2}, end:{x:vX+90,y:y-2}, thickness:0.5, color: SORT }); y -= 13;
   page.drawText('Det er gjort en endring på baksiden av seteryggene på framstolene', { x: vX, y, size: 9, font }); y -= 22;
 
-  page.drawText(vegvesenDatoNorsk(), { x: vX, y, size: 9.5, font }); y -= 22;
-  // Ingen signatur her - Henriks eget referanseeksempel for Fabrikantattest har den ikke,
-  // i motsetning til Egenerklæring/Vektfordeling/Melding om registrering.
+  page.drawText(vegvesenDatoNorsk(), { x: vX, y, size: 9.5, font }); y -= 40;
+  const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
+  const sigImg = await pdfDoc.embedPng(sigBytes);
+  const sigBredde = 90, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
+  page.drawImage(sigImg, { x: vX-5, y: y - sigHoyde + 16, width: sigBredde, height: sigHoyde });
+  y -= 4;
   ['Jan Børre Sigurdsen', 'Teknisk leder', 'Telemark Salmakerverksted'].forEach(linje => {
     page.drawText(linje, { x: vX, y, size: 9.5, font });
     y -= 12;
