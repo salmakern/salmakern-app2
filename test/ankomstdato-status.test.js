@@ -109,7 +109,9 @@ describe('Krever ansatt meldt på før "Ikke påbegynt" → "Påbegynt" (bedt om
   let sandbox, ordre;
   beforeEach(() => {
     sandbox = nyEnvironment();
-    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [] };
+    // bilderAnkomst har ett bilde her - denne describe-blokken tester KUN
+    // ansatt-kravet isolert, se egen blokk under for bilde-kravet.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [], bilderAnkomst: ['data:image/png;base64,x'] };
     sandbox._setS({ ordrer: [ordre] });
     settDbUtfall(sandbox, true);
   });
@@ -122,6 +124,35 @@ describe('Krever ansatt meldt på før "Ikke påbegynt" → "Påbegynt" (bedt om
 
   it('tillater overgangen når minst én ansatt er meldt på', async () => {
     ordre.ansatteSignert = [{id:1, navn:'Test Testesen', tid:'09:00'}];
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paabegynt');
+  });
+
+  it('påvirker ikke andre statusoverganger (f.eks. til "På vei")', async () => {
+    await sandbox.endreStatus('ord_1', 'paa_vei');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paa_vei');
+  });
+});
+
+describe('Krever minst ett ankomstbilde før "Ikke påbegynt" → "Påbegynt" (bedt om av Henrik 2026-09-14)', () => {
+  let sandbox, ordre;
+  beforeEach(() => {
+    sandbox = nyEnvironment();
+    // ansatteSignert har ett medlem her - denne describe-blokken tester KUN
+    // bilde-kravet isolert, se blokken over for ansatt-kravet.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], bilderAnkomst: [null,null,null,null,null,null] };
+    sandbox._setS({ ordrer: [ordre] });
+    settDbUtfall(sandbox, true);
+  });
+
+  it('blokkerer overgangen når ingen ankomstbilder er tatt', async () => {
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
+    expect(sandbox._getS().ordrer[0].endringer.length).toBe(0);
+  });
+
+  it('tillater overgangen når minst ett ankomstbilde finnes', async () => {
+    ordre.bilderAnkomst = [null,'data:image/png;base64,x',null,null,null,null];
     await sandbox.endreStatus('ord_1', 'paabegynt');
     expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paabegynt');
   });

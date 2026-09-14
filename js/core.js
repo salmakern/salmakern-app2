@@ -370,7 +370,8 @@ function dbToOrdre(r) {
     flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
     coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn,
     tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||'', tidBiltilsynetSted:r.tid_biltilsynet_sted||'',
-    datoKlarHenting:r.dato_klar_henting||''
+    datoKlarHenting:r.dato_klar_henting||'',
+    typegodkjenning:r.typegodkjenning||'', egenvektCoc:r.egenvekt_coc||'', forhandlerOrgnr:r.forhandler_orgnr||''
   };
 }
 function ordreToDb(o) {
@@ -394,6 +395,7 @@ function ordreToDb(o) {
     visnings_sjekkliste:o.visningsSjekkliste||[], visnings_mal_navn:o.visningsMalNavn||'',
     flate_id:o.flateId||null,
     coc:o.coc||'har_ikke', fullmakt:o.fullmakt||'har_ikke',
+    typegodkjenning:o.typegodkjenning||'', egenvekt_coc:o.egenvektCoc||'', forhandler_orgnr:o.forhandlerOrgnr||'',
     updated_at:new Date().toISOString()
   };
 }

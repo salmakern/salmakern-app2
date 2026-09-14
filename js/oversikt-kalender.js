@@ -358,6 +358,16 @@ async function endreStatus(id, nyStatus) {
     if (activeOrdreId===id) buildOrdreDetail();
     return;
   }
+  // Samme prinsipp som ansatt-sjekken over: det skal ikke gå an å begynne å jobbe på
+  // bilen før det finnes minst ett bilde fra ankomst (dokumentasjon av tilstand før
+  // ombygging starter). Bedt om av Henrik 2026-09-14.
+  if (forrigeStatus === 'ikke_paabegynt' && nyStatus === 'paabegynt' && !(o.bilderAnkomst||[]).some(Boolean)) {
+    visToast('Minst ett bilde fra ankomst må tas før ordren kan settes til Påbegynt.');
+    if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
+    renderAll();
+    if (activeOrdreId===id) buildOrdreDetail();
+    return;
+  }
   o.ordreStatus = nyStatus;
   // Ordren arkiveres automatisk når den er hentet - MEN kun hvis den allerede er
   // ferdig godkjent (tvangsflyt fullført og godkjenner har lukket den via signatur-

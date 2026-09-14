@@ -167,6 +167,10 @@ function buildOrdreDetail() {
             <div id="typeForslag_kunde_${o.id}" class="felt-dropdown">${feltForslagHTML('kundeInput_'+o.id, forhandlerForslag(o.merke, o.modell))}</div>
           </div>
           <div class="felt-wrap">
+            <label>Forhandler org.nr</label>
+            <input value="${esc(o.forhandlerOrgnr||'')}" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer">
+          </div>
+          <div class="felt-wrap">
             <label>Kontaktperson</label>
             <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)"
               onfocus="visFeltDropdown('typeForslag_eier_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_eier_${o.id}'))">
@@ -217,6 +221,13 @@ function buildOrdreDetail() {
           <div class="grid g2" style="gap:8px">
             <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
             <div><label>Fullmakt</label>${dokStatusDropdown(o.id,'fullmakt',o.fullmakt)}</div>
+            <div class="felt-wrap">
+              <label>Typegodkjenning</label>
+              <input id="typegodkjenningInput_${o.id}" value="${esc(o.typegodkjenning||'')}" autocomplete="off" onchange="sf('${o.id}','typegodkjenning',this.value)" placeholder="f.eks. e4*2018/858*00178*04"
+                onfocus="visFeltDropdown('typeForslag_typegodkjenning_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_typegodkjenning_${o.id}'))">
+              <div id="typeForslag_typegodkjenning_${o.id}" class="felt-dropdown">${feltForslagHTML('typegodkjenningInput_'+o.id, typegodkjenningForslag())}</div>
+            </div>
+            <div><label>Egenvekt (fra COC)</label><input type="number" value="${o.egenvektCoc||''}" onchange="sf('${o.id}','egenvektCoc',this.value)" placeholder="kg"></div>
           </div>
         </div>
 
@@ -280,16 +291,6 @@ function buildOrdreDetail() {
       <div class="card">
         <div class="h">Varer fra lager</div>
         <div id="ordreLagerbruk_${o.id}" style="margin-top:8px"></div>
-      </div>
-
-      <div class="card">
-        <div class="h">Dokumenter</div>
-        <div class="muted small" style="margin-bottom:8px">Ordren fungerer som en mappe - last opp kontrakter, følgebrev og annet her. Samme filnavn erstatter forrige versjon.</div>
-        <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
-        ${me&&(me.rolle==='admin'||me.rolle==='godkjenner')?`<label class="btn sm" style="margin-top:8px;width:100%;display:block;text-align:center;cursor:pointer">
-          + Last opp dokument
-          <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
-        </label>`:''}
       </div>
 
       <div class="card">
@@ -410,6 +411,10 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </div>
       </div>
 
+      ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
+      ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
+    </div>
+    <div>
       ${me&&me.rolle==='admin'?`
       <div class="card">
         <div class="h">Fakturering</div>
@@ -424,8 +429,16 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </div>
       </div>`:''}
 
-      ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
-      ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
+      <div class="card">
+        <div class="h">Dokumenter</div>
+        <div class="muted small" style="margin-bottom:8px">Ordren fungerer som en mappe - last opp kontrakter, følgebrev og annet her. Samme filnavn erstatter forrige versjon.</div>
+        <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
+        ${me&&(me.rolle==='admin'||me.rolle==='godkjenner')?`<label class="btn sm" style="margin-top:8px;width:100%;display:block;text-align:center;cursor:pointer">
+          + Last opp dokument
+          <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
+        </label>`:''}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Under utprøving - genererer foreløpig Egenerklæring, Vektfordeling og Fabrikantattest">🧪 Generer Vegvesen-dokumenter (test)</button>`:''}
+      </div>
     </div>
   </div>`;
   renderOrdreLagerbruk();
@@ -701,6 +714,9 @@ function kjedeFilter(merke, modell, type) {
 }
 function merkeForslag() {
   return frekvenssortert(S.ordrer.map(o=>o.merke));
+}
+function typegodkjenningForslag() {
+  return frekvenssortert(S.ordrer.map(o=>o.typegodkjenning));
 }
 function modellForslag(merke) {
   return frekvenssortert(kjedeFilter(merke).map(o=>o.modell));

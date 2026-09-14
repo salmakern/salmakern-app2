@@ -54,12 +54,16 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_midnight.min.css" rel="stylesheet">
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:100vh;touch-action:manipulation}
 
-/* ADMIN-ARK - kompakte rader for å få flest mulig rader synlig uten scroll */
-#adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px}
+/* ADMIN-ARK - kompakte rader for å få flest mulig rader synlig uten scroll.
+   white-space:normal + word-break gjør at lang tekst brytes til flere linjer inni
+   cellen (raden vokser med), i stedet for å bli kuttet av eller flyte utenfor
+   boksen sin bredde - se admin-ark.js sine faste (ikke auto-) kolonnebredder. */
+#adminArkTabell .tabulator-cell, #adminArkTabell .tabulator-col-title{font-size:12px;padding:2px 6px;white-space:normal;word-break:break-word}
 #adminArkTabell .tabulator-row{min-height:0}
 /* Selve kort-boksen rundt Admin-arket skal kun være så bred som innholdet (kolonnene),
    ikke strekke seg utover hele skjermen - #adminArkTabell får en eksplikt pixel-bredde
@@ -1275,6 +1279,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <script src="js/flate.js"></script>
 <script src="js/lager.js"></script>
 <script src="js/admin-ark.js"></script>
+<script src="js/vegvesen-dokumenter.js"></script>
 <!-- Ansatt-detalj modal -->
 <div class="modal" id="ansattDetaljModal">
   <div class="modal-box" style="max-width:520px;width:95%">
