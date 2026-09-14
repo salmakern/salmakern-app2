@@ -186,6 +186,17 @@ function adminArkHakeFormatter(cell) {
 }
 const ADMIN_ARK_HAKE_VERDIER = {'':'– Ingen –', gul:'🟡 Gul hake', gronn:'🟢 Grønn hake'};
 
+// Samme visuelle hake-symbol som adminArkHakeFormatter, brukt på de rene av/på-feltene
+// (Mottatt/Dokumenter/Bestilt frakt/Fakturert/Henteklar) i stedet for Tabulators eget
+// tickCross-ikon eller en ustylet rå "✓"-tekst - alle boksene i arket skal se like ut
+// (bedt om av Henrik 2026-09-14). Henteklar kan også vise en dato i stedet for haken -
+// den passerer uendret gjennom.
+function adminArkTickFormatter(cell) {
+  const v = cell.getValue();
+  if (v === true || v === '✓') return `<span style="color:${ADMIN_ARK_HAKE_FARGE.gronn};font-size:16px;font-weight:900">✓</span>`;
+  return v || '';
+}
+
 // Fullmakt-kolonnen i Admin-ark speiler o.fullmakt direkte (samme 3 tilstander som
 // dokStatusDropdown bruker på selve ordresiden - har_ikke/etterspurt/har), bare vist som
 // hake i stedet for tekst her. Ingen egen admin_ark-kolonne for dette - se cellEdited.
@@ -849,7 +860,7 @@ function renderAdminArk(scrollTilBunn) {
       }
     },
     {title:'Serienummer', field:'serienummer', width:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
-    {title:'Mottatt', field:'mottatt', width:75, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
+    {title:'Mottatt', field:'mottatt', width:75, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dato', field:'dato', width:85, headerSort:false, hozAlign:'center', editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
     {title:'Papirer', field:'papirer', width:70, headerSort:false, hozAlign:'center', formatter: adminArkHakeFormatter,
       editor: kanRedigere ? 'list' : false, editorParams:{values: ADMIN_ARK_HAKE_VERDIER}, rowHandle:true},
@@ -858,12 +869,12 @@ function renderAdminArk(scrollTilBunn) {
       editor: kanRedigere ? 'list' : false,
       editorParams:{values: ADMIN_ARK_FULLMAKT_VERDIER},
       editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
-    {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
-    {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
+    {title:'Dokumenter', field:'dokumenter', width:80, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
+    {title:'Fakturert', field:'fakturertVis', width:75, headerSort:false, editable:false, hozAlign:'center', formatter: adminArkTickFormatter, rowHandle:true},
     {title:'Fraktselskap', field:'fraktselskap', minWidth:90, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'list' : false, editorParams: cell => ({values: adminArkFraktselskapVerdier(cell.getValue())}), rowHandle:true},
-    {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', rowHandle:true},
-    {title:'Bestilt frakt', field:'bestiltFrakt', width:85, headerSort:false, hozAlign:'center', formatter:'tickCross', formatterParams:{crossElement:false}, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
+    {title:'Henteklar', field:'henteklarVis', width:75, headerSort:false, editable:false, hozAlign:'center', formatter: adminArkTickFormatter, rowHandle:true},
+    {title:'Bestilt frakt', field:'bestiltFrakt', width:85, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Merknader', field:'merknader', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Utstyr', field:'utstyr', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
       formatter: cell => esc(cell.getValue()||'')},
