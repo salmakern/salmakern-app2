@@ -1148,6 +1148,7 @@ function apneNyOppskrift(forhaandsvalgtModell, forhaandsvalgtType) {
   document.getElementById('oppskriftNavn').value = '';
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(forhaandsvalgtModell||'');
   document.getElementById('oppskriftType').value = forhaandsvalgtType || 'ombygging';
+  document.getElementById('oppskriftFikenProduktnummer').value = '';
   oppskriftVisAlleVarer = false;
   fyllOppskriftVareListe();
   openModal('nyOppskriftModal');
@@ -1160,6 +1161,7 @@ function apneRedigerOppskrift(id) {
   document.getElementById('oppskriftNavn').value = o.navn;
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(o.biltype||'');
   document.getElementById('oppskriftType').value = o.type||'ombygging';
+  document.getElementById('oppskriftFikenProduktnummer').value = o.fikenProduktnummer||'';
   oppskriftVisAlleVarer = false;
   const forhaandsvalgt = {};
   (o.ingredienser||[]).forEach(i => forhaandsvalgt[i.vareId] = i.antall);
@@ -1172,22 +1174,25 @@ function lagreOppskrift() {
   if (!navn) { alert('Skriv inn et navn på oppskriften'); return; }
   const biltype = document.getElementById('oppskriftBiltype').value.trim();
   const type = document.getElementById('oppskriftType').value;
+  const fikenProduktnummer = document.getElementById('oppskriftFikenProduktnummer').value.trim();
   const editId = document.getElementById('redigerOppskriftId').value;
   const valgt = lesOppskriftIngredienser();
   const ingredienser = Object.entries(valgt).map(([vareId, antall]) => ({vareId, antall})).filter(i => i.antall > 0);
-  if (!ingredienser.length) { alert('Huk av minst én vare med antall større enn 0'); return; }
+  // Rent arbeid (f.eks. montering) trekker ikke nødvendigvis noe fra lageret - da holder
+  // det at oppskriften har et Fiken-produktnummer, den trenger ikke varer i tillegg.
+  if (!ingredienser.length && !fikenProduktnummer) { alert('Huk av minst én vare med antall større enn 0, eller fyll inn et Fiken produktnummer (for rent arbeid uten lagervarer)'); return; }
 
   if (editId) {
     const o = (S.lagerOppskrifter||[]).find(x=>x.id===editId); if (!o) return;
-    o.navn = navn; o.biltype = biltype; o.type = type; o.ingredienser = ingredienser;
-    if (db) db.from('lager_oppskrifter').update({navn, biltype, type, ingredienser}).eq('id', o.id)
+    o.navn = navn; o.biltype = biltype; o.type = type; o.ingredienser = ingredienser; o.fikenProduktnummer = fikenProduktnummer;
+    if (db) db.from('lager_oppskrifter').update({navn, biltype, type, ingredienser, fiken_produktnummer:fikenProduktnummer}).eq('id', o.id)
       .then(r=>{if(r.error) console.error('Oppskrift-oppdatering feilet:', r.error.message);});
   } else {
     const id = 'oppskrift_' + Date.now();
-    const oppskrift = { id, navn, biltype, type, ingredienser, createdAt:new Date().toISOString() };
+    const oppskrift = { id, navn, biltype, type, ingredienser, fikenProduktnummer, createdAt:new Date().toISOString() };
     S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.lagerOppskrifter.push(oppskrift);
-    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, type, ingredienser})
+    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, type, ingredienser, fiken_produktnummer:fikenProduktnummer})
       .then(r=>{if(r.error) console.error('Oppskrift-lagring feilet:', r.error.message);});
   }
   closeModal('nyOppskriftModal');
@@ -1332,10 +1337,15 @@ function toggleOppskriftPaaOrdre(oppskriftId, huket) {
   // Kun Ekstra utstyr (ikke Ombygging) legges automatisk inn i "Utstyr – Skal ha etter
   // visning" - sjekker den FAKTISKE tilstanden i lagerhistorikk etterpå (ikke bare
   // "huket"-parameteren), siden trekkOppskriftForOrdre()/angreLagerBatch() kan returnere
-  // uten å gjøre noe hvis brukeren avbryter en confirm()-dialog underveis.
+  // uten å gjøre noe hvis brukeren avbryter en confirm()-dialog underveis. Unntak: rent
+  // arbeid uten lagervarer (f.eks. montering av airbag-tillegg) rører aldri lagerhistorikk
+  // i det hele tatt, så da er det ingen confirm()-risiko å sjekke mot - stol på "huket" rett.
   if (r && (r.type||'ombygging')==='ekstra_utstyr') {
-    const faktiskHuket = (S.lagerhistorikk||[]).some(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn));
+    const faktiskHuket = (r.ingredienser||[]).length
+      ? (S.lagerhistorikk||[]).some(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn))
+      : huket;
     oppdaterSkalHaForOppskrift(r.navn, faktiskHuket);
+    if (r.fikenProduktnummer) oppdaterFikenLinjeForOppskrift(r.fikenProduktnummer, faktiskHuket);
   }
   renderOrdreLagerbruk();
 }
@@ -1353,6 +1363,22 @@ function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa) {
   su(o.id, 'skalHa', ny);
   const textareaEl = document.getElementById('skalHaInput_' + o.id);
   if (textareaEl) textareaEl.value = ny;
+}
+
+// Se toggleOppskriftPaaOrdre() - legger fakturalinjen rett i o.fikenLinjer i stedet for
+// å gå via fritekstboksen og stole på at noen henter tallet derfra etterpå. Én linje per
+// oppskrift (antall 1) - trenger oppskriften flere enheter samtidig, juster antallet
+// manuelt i Fakturering-kortet etterpå.
+function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa) {
+  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+  if (!o.fikenLinjer) o.fikenLinjer = [];
+  const idx = o.fikenLinjer.findIndex(l=>l.produktnummer===produktnummer);
+  if (skalStaa && idx===-1) o.fikenLinjer.push({produktnummer, antall:1});
+  else if (!skalStaa && idx!==-1) o.fikenLinjer.splice(idx, 1);
+  else return;
+  save(o.id);
+  const el = document.getElementById('fikenLinjer_'+o.id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
 }
 
 async function angreLagerBatch(batchId) {

@@ -1503,6 +1503,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <option value="ombygging">Ombygging</option>
       <option value="ekstra_utstyr">Ekstra utstyr</option>
     </select>
+    <label>Fiken produktnummer</label>
+    <div class="muted small" style="margin-bottom:6px">Kun relevant for Ekstra utstyr. Legges automatisk til på fakturaen når utstyret hukes av på en ordre - kan stå tomt hvis oppskriften ikke skal faktureres separat. Trenger ikke varer fra lageret for å lagres (f.eks. rent arbeid).</div>
+    <input id="oppskriftFikenProduktnummer" placeholder="F.eks. 501">
     <label>Modell</label>
     <div class="muted small" style="margin-bottom:6px">Matches mot Merke + Modell på ordren. Samme liste som biltype på utstyr-maler.</div>
     <select id="oppskriftBiltype" onchange="oppskriftVisAlleVarer=false;fyllOppskriftVareListe(lesOppskriftIngredienser())"></select>
