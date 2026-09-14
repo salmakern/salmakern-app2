@@ -532,9 +532,17 @@ function applyUtstyrMal(ordreId, malIdx) {
   save(ordreId); buildOrdreDetail();
 }
 
+// Produktnummer for panorama glasstak i "Utstyr – Skal ha etter visning" (bekreftet
+// av Henrik) - samme /panorama/i-sjekk som allerede brukes i vegvesen-dokumenter.js
+// for å avgjøre Standard/Panorama-variant, så begge stedene er enige om hva som teller.
+const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
-  o.utstyrSjekkliste[idx].ok = !o.utstyrSjekkliste[idx].ok;
+  const punkt = o.utstyrSjekkliste[idx];
+  punkt.ok = !punkt.ok;
+  if (/panorama/i.test(punkt.punkt || '')) {
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
+  }
   save(ordreId);
   // Oppdater kun sjekklisten - ikke bygg om hele ordresiden, det gir et lite
   // layout-hopp midt i trykket som kan gjøre at neste trykk treffer feil boks.
