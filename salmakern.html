@@ -116,6 +116,12 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 .g3{grid-template-columns:repeat(3,1fr)}
 .g5{grid-template-columns:repeat(5,1fr)}
 .g2l{grid-template-columns:2fr 1fr}
+/* Ordredetalj: hoved-kolonnen spenner begge rader til høyre, sidebar og
+   Dokumenter stables i den smale kolonnen uten mellomrom seg imellom. */
+.ordre-detalj-grid{grid-template-areas:"hoved sidebar" "hoved dokumenter"}
+.ordre-detalj-grid .ordre-hoved{grid-area:hoved}
+.ordre-detalj-grid .ordre-sidebar{grid-area:sidebar}
+.ordre-detalj-grid .ordre-dok-kolonne{grid-area:dokumenter}
 
 /* CARDS */
 .card{background:#18181b;border:1px solid #27272a;border-radius:22px;padding:16px;margin-bottom:12px}
@@ -275,7 +281,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 ::-webkit-scrollbar-track{background:#09090b}
 ::-webkit-scrollbar-thumb{background:#27272a;border-radius:4px}
 
-@media(max-width:860px){.g2l,.g3,.g5{grid-template-columns:1fr}.g2{grid-template-columns:1fr 1fr}#clockEl{width:200px;height:200px}.ordre-dok-kolonne{order:-1}}
+@media(max-width:860px){.g2l,.g3,.g5{grid-template-columns:1fr}.g2{grid-template-columns:1fr 1fr}#clockEl{width:200px;height:200px}.ordre-detalj-grid{grid-template-areas:"dokumenter" "hoved" "sidebar"}}
 @media(max-width:480px){.g2{grid-template-columns:1fr}.photo-grid{grid-template-columns:repeat(2,1fr)}}
 /* Sjeldent brukte adminverktøy: samme kort, men visuelt tilbaketrukket */
 .card.dempet{border-color:#1f1f23;padding:16px}

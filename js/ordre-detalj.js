@@ -150,8 +150,8 @@ function buildOrdreDetail() {
     </div>
   </div>
 
-  <div class="grid g2l">
-    <div>
+  <div class="grid g2l ordre-detalj-grid">
+    <div class="ordre-hoved">
 
       <div class="card">
         <div class="h">Kunde og bilinfo</div>
@@ -371,7 +371,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
     </div>
 
     <!-- SIDEBAR -->
-    <div>
+    <div class="ordre-sidebar">
       <div class="card">
         <div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
         <div style="display:flex;gap:3px;margin-top:10px">
