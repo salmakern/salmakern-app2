@@ -379,10 +379,16 @@ async function endreStatus(id, nyStatus) {
   if (nyStatus === 'klar_henting') o.datoKlarHenting = new Date().toISOString().split('T')[0];
   // En bil "På vei" er ikke fysisk ankommet ennå, så den skal ikke ha en ankomstdato -
   // og motsatt: bilen regnes som ankommet først når den går til "Ikke påbegynt", så
-  // ankomstdato settes automatisk da (kun hvis den ikke allerede har en - overskriver
-  // ikke en dato som evt. er satt/rettet manuelt fra før). Det manuelle datofeltet på
-  // ordren fungerer som før uansett, så en feil kan alltid rettes opp for hånd etterpå.
+  // ankomstdato settes automatisk da. Kommer den FRA "På vei" spesifikt, overskrives
+  // datoen alltid (uansett hva som måtte stå der) - "På vei" garanterer per definisjon
+  // ingen gyldig dato, så et evt. innhold der må være en utdatert verdi fra en gammel
+  // kopi av ordren i en annens nettleser (rapportert av Henrik 2026-09-14: en ordre som
+  // sto på "På vei" i en måned fikk feil ankomstdato når den endelig ble flyttet videre,
+  // fordi en annens utdaterte fane fortsatt hadde den gamle datoen liggende i minnet).
+  // Fra andre statuser til "Ikke påbegynt" beholdes den forsiktige "kun hvis tom"-regelen,
+  // siden en dato satt derfra kan være tilsiktet manuelt korrigert.
   if (nyStatus === 'paa_vei') o.ankomstdato = '';
+  else if (nyStatus === 'ikke_paabegynt' && forrigeStatus === 'paa_vei') o.ankomstdato = new Date().toISOString().split('T')[0];
   else if (nyStatus === 'ikke_paabegynt' && !o.ankomstdato) o.ankomstdato = new Date().toISOString().split('T')[0];
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
