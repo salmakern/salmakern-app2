@@ -946,6 +946,11 @@ function renderAdminArk(scrollTilBunn) {
   adminArkTable = new Tabulator('#adminArkTabell', {
     data,
     layout: 'fitData',
+    // "basic" (ikke virtuell) rendering - virtuell DOM bruker én felles radhøyde for alle
+    // rader (beregnet fra en enkelt rad), som gjorde ALLE rader like høye som den høyeste
+    // (f.eks. en rad med et sted-navn som brytes over to linjer). Med "basic" får hver rad
+    // sin egen naturlige høyde ut fra sitt eget innhold (bedt om av Henrik 2026-09-14).
+    renderVertical: 'basic',
     columns: kolonner,
     movableRows: kanRedigere,
     clipboard: true,
