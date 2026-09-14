@@ -202,7 +202,7 @@ function buildOrdreDetail() {
               onfocus="visFeltDropdown('typeForslag_var_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_var_${o.id}'))">
             <div id="typeForslag_var_${o.id}" class="felt-dropdown">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.merke, o.modell, o.type))}</div>
           </div>
-          <div><label>Farge</label><input value="${esc(o.farge||'')}" onchange="sf('${o.id}','farge',this.value)"></div>
+          <div><label>Farge</label><select onchange="sf('${o.id}','farge',this.value)">${fargeSelectOptions(o.farge)}</select></div>
           <div class="felt-wrap">
             <label>Versjon</label>
             <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" autocomplete="off" onchange="sf('${o.id}','versjon',this.value)"
@@ -762,6 +762,14 @@ function alleKjenteModeller() {
     ...(S.utstyrMaler||[]).map(m=>m.biltype),
     ...(S.lagervarer||[]).map(v=>v.modell)
   ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+}
+const FARGE_LISTE = ['Hvit','Rød','Blå','Grønn','Grå','Svart','Beige','Brun','Gul','Oransje','Sølv','Gull','Rosa','Fiolet','Turkis'];
+// Tar med gjeldende verdi som eget valg selv om den ikke er i listen (f.eks. en gammel
+// ordre med en skrivefeil i fargen) - da forsvinner ikke det som faktisk står lagret.
+function fargeSelectOptions(gjeldende) {
+  const farger = FARGE_LISTE.slice();
+  if (gjeldende && !farger.includes(gjeldende)) farger.push(gjeldende);
+  return `<option value="">– Velg farge –</option>` + farger.map(f=>`<option value="${esc(f)}" ${f===gjeldende?'selected':''}>${esc(f)}</option>`).join('');
 }
 function modellSelectOptions(gjeldende) {
   const modeller = alleKjenteModeller();
