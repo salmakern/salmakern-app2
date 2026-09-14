@@ -1506,6 +1506,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <label>Fiken produktnummer</label>
     <div class="muted small" style="margin-bottom:6px">Kun relevant for Ekstra utstyr. Legges automatisk til på fakturaen når utstyret hukes av på en ordre - kan stå tomt hvis oppskriften ikke skal faktureres separat. Trenger ikke varer fra lageret for å lagres (f.eks. rent arbeid).</div>
     <input id="oppskriftFikenProduktnummer" placeholder="F.eks. 501">
+    <label>Kostpris (materialer, eks. mva)</label>
+    <div class="muted small" style="margin-bottom:6px">Brukes til å regne dekningsbidrag i lønnsomhets-oversikten. Kan stå tomt hvis ukjent.</div>
+    <input id="oppskriftKostpris" type="number" step="0.01" placeholder="F.eks. 850">
     <label>Modell</label>
     <div class="muted small" style="margin-bottom:6px">Matches mot Merke + Modell på ordren. Samme liste som biltype på utstyr-maler.</div>
     <select id="oppskriftBiltype" onchange="oppskriftVisAlleVarer=false;fyllOppskriftVareListe(lesOppskriftIngredienser())"></select>

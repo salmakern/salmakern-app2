@@ -409,7 +409,7 @@ function dbToLagerhistorikk(r) {
   return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, oppskriftId:r.oppskrift_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
 }
 function dbToLagerOppskrift(r) {
-  return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', type:r.type||'ombygging', ingredienser:r.ingredienser||[], fikenProduktnummer:r.fiken_produktnummer||'', createdAt:r.created_at||'' };
+  return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', type:r.type||'ombygging', ingredienser:r.ingredienser||[], fikenProduktnummer:r.fiken_produktnummer||'', kostpris:r.kostpris||0, createdAt:r.created_at||'' };
 }
 function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,

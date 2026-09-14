@@ -1149,6 +1149,7 @@ function apneNyOppskrift(forhaandsvalgtModell, forhaandsvalgtType) {
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(forhaandsvalgtModell||'');
   document.getElementById('oppskriftType').value = forhaandsvalgtType || 'ombygging';
   document.getElementById('oppskriftFikenProduktnummer').value = '';
+  document.getElementById('oppskriftKostpris').value = '';
   oppskriftVisAlleVarer = false;
   fyllOppskriftVareListe();
   openModal('nyOppskriftModal');
@@ -1162,6 +1163,7 @@ function apneRedigerOppskrift(id) {
   document.getElementById('oppskriftBiltype').innerHTML = modellSelectOptions(o.biltype||'');
   document.getElementById('oppskriftType').value = o.type||'ombygging';
   document.getElementById('oppskriftFikenProduktnummer').value = o.fikenProduktnummer||'';
+  document.getElementById('oppskriftKostpris').value = o.kostpris||'';
   oppskriftVisAlleVarer = false;
   const forhaandsvalgt = {};
   (o.ingredienser||[]).forEach(i => forhaandsvalgt[i.vareId] = i.antall);
@@ -1175,6 +1177,7 @@ function lagreOppskrift() {
   const biltype = document.getElementById('oppskriftBiltype').value.trim();
   const type = document.getElementById('oppskriftType').value;
   const fikenProduktnummer = document.getElementById('oppskriftFikenProduktnummer').value.trim();
+  const kostpris = Number(document.getElementById('oppskriftKostpris').value) || 0;
   const editId = document.getElementById('redigerOppskriftId').value;
   const valgt = lesOppskriftIngredienser();
   const ingredienser = Object.entries(valgt).map(([vareId, antall]) => ({vareId, antall})).filter(i => i.antall > 0);
@@ -1184,15 +1187,15 @@ function lagreOppskrift() {
 
   if (editId) {
     const o = (S.lagerOppskrifter||[]).find(x=>x.id===editId); if (!o) return;
-    o.navn = navn; o.biltype = biltype; o.type = type; o.ingredienser = ingredienser; o.fikenProduktnummer = fikenProduktnummer;
-    if (db) db.from('lager_oppskrifter').update({navn, biltype, type, ingredienser, fiken_produktnummer:fikenProduktnummer}).eq('id', o.id)
+    o.navn = navn; o.biltype = biltype; o.type = type; o.ingredienser = ingredienser; o.fikenProduktnummer = fikenProduktnummer; o.kostpris = kostpris;
+    if (db) db.from('lager_oppskrifter').update({navn, biltype, type, ingredienser, fiken_produktnummer:fikenProduktnummer, kostpris}).eq('id', o.id)
       .then(r=>{if(r.error) console.error('Oppskrift-oppdatering feilet:', r.error.message);});
   } else {
     const id = 'oppskrift_' + Date.now();
-    const oppskrift = { id, navn, biltype, type, ingredienser, fikenProduktnummer, createdAt:new Date().toISOString() };
+    const oppskrift = { id, navn, biltype, type, ingredienser, fikenProduktnummer, kostpris, createdAt:new Date().toISOString() };
     S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.lagerOppskrifter.push(oppskrift);
-    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, type, ingredienser, fiken_produktnummer:fikenProduktnummer})
+    if (db) db.from('lager_oppskrifter').insert({id, navn, biltype, type, ingredienser, fiken_produktnummer:fikenProduktnummer, kostpris})
       .then(r=>{if(r.error) console.error('Oppskrift-lagring feilet:', r.error.message);});
   }
   closeModal('nyOppskriftModal');
