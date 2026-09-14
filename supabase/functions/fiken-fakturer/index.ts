@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
     const raw = await req.text()
     if (!raw) return jsonSvar({ error: 'Tom body' }, 400)
-    const { kundeNavn, kontaktpersonNavn, chassisNr, linjer, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
+    const { kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
 
@@ -158,14 +158,16 @@ Deno.serve(async (req) => {
     }
 
     const idag = new Date().toISOString().slice(0, 10)
+    // Ordrereferanse: "<chassis> - <regnr>" hvis regnr finnes, ellers bare chassisnr.
+    // Kommentar på siste linje: "Ch. nr. <chassis>" - begge deler bekreftet av Henrik.
+    const ordreReferanse = chassisNr ? (regnr ? `${chassisNr} - ${regnr}` : chassisNr) : undefined
     const linjerMedIndeks = linjer.map((l: any, i: number) => {
       const line: Record<string, unknown> = { productId: produktMap.get(String(l.produktnummer)), quantity: l.antall || 1 }
       if (l.belop !== undefined && l.belop !== null) {
         line.unitPrice = Math.round(Number(l.belop) * 100)
         line.vatType = 'high' // 25% - alltid, uavhengig av drivstoff-satsen som ga beløpet (bekreftet av Henrik)
       }
-      // Chassisnummeret skal stå som kommentar på SISTE linje, bekreftet av Henrik.
-      if (chassisNr && i === linjer.length - 1) line.comment = chassisNr
+      if (chassisNr && i === linjer.length - 1) line.comment = `Ch. nr. ${chassisNr}`
       return line
     })
     const draftBody = {
@@ -175,7 +177,7 @@ Deno.serve(async (req) => {
       daysUntilDueDate: 14,
       issueDate: idag,
       ourReference: 'Jan Børre Sigurdsen',
-      ...(chassisNr ? { orderReference: chassisNr } : {}),
+      ...(ordreReferanse ? { orderReference: ordreReferanse } : {}),
       lines: linjerMedIndeks,
     }
 
