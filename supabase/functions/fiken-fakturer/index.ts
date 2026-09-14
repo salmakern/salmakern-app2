@@ -117,14 +117,23 @@ Deno.serve(async (req) => {
     } else {
       // Ukjent kundenavn - Fiken sitt navnesøk er eksakt match, ikke fuzzy, så det
       // hjelper ikke å søke på "kundeNavn" direkte. Send heller hele kundelisten
-      // tilbake, så admin kan velge riktig kontakt selv i UI-et.
+      // tilbake, så admin kan velge riktig kontakt selv i UI-et. MÅ hente ALLE sider -
+      // Henrik har 218 kundekontakter (over 2 sider), og en ny/nylig opprettet kontakt
+      // havner ofte utenfor side 0 - bekreftet i praksis da TEST-kontakten manglet.
       const slug = await hentCompanySlug()
-      const res = await fikenFetch(`/companies/${slug}/contacts?customer=true&pageSize=100`)
-      if (!res.ok) return jsonSvar({ error: `Fiken /contacts (slug=${slug}) svarte ${res.status}: ${await res.text()}` }, 502)
-      const kontakter = await res.json()
+      const kontakter: any[] = []
+      let page = 0
+      while (true) {
+        const res = await fikenFetch(`/companies/${slug}/contacts?customer=true&page=${page}&pageSize=100`)
+        if (!res.ok) return jsonSvar({ error: `Fiken /contacts (slug=${slug}) svarte ${res.status}: ${await res.text()}` }, 502)
+        kontakter.push(...(await res.json()))
+        const pageCount = Number(res.headers.get('Fiken-Api-Page-Count') || '1')
+        page++
+        if (page >= pageCount) break
+      }
       return jsonSvar({
         needsBekreftelse: true,
-        kandidater: (kontakter || []).map((k: any) => ({ contactId: k.contactId, navn: k.name })),
+        kandidater: kontakter.map((k: any) => ({ contactId: k.contactId, navn: k.name })),
       })
     }
 
