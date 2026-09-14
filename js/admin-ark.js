@@ -51,7 +51,24 @@ let adminArkManuellHoyde = null;
 let adminArkManuellBredde = null;
 if (!window._adminArkManuellHoydeLytterBundet) {
   window._adminArkManuellHoydeLytterBundet = true;
+  // Den automatiske bredde-/høyde-tilpasningen setter OGSÅ el.style.width/height selv -
+  // et enkelt "har elementet en inline style?"-sjekk på mouseup fanget derfor OPP ETHVERT
+  // klikk hvor som helst på siden (ikke bare et faktisk dra i endre-størrelse-håndtaket),
+  // og låste boksen permanent til hva bredden/høyden TILFELDIGVIS var i det øyeblikket -
+  // det gjorde at "tilpass selv"-oppførselen sluttet å virke etter første klikk noe sted.
+  // Fikset ved kun å fange opp mouseup som faktisk startet med et mousedown i selve det
+  // ~16px store endre-størrelse-hjørnet nederst til høyre på boksen.
+  let resizeDragStartet = false;
+  document.addEventListener('mousedown', e => {
+    const el = document.getElementById('adminArkTabell');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    resizeDragStartet = e.clientX >= r.right - 16 && e.clientX <= r.right
+      && e.clientY >= r.bottom - 16 && e.clientY <= r.bottom;
+  });
   document.addEventListener('mouseup', () => {
+    if (!resizeDragStartet) return;
+    resizeDragStartet = false;
     const el = document.getElementById('adminArkTabell');
     if (!el) return;
     if (el.style.height) adminArkManuellHoyde = el.style.height;
@@ -946,11 +963,6 @@ function renderAdminArk(scrollTilBunn) {
   adminArkTable = new Tabulator('#adminArkTabell', {
     data,
     layout: 'fitData',
-    // "basic" (ikke virtuell) rendering - virtuell DOM bruker én felles radhøyde for alle
-    // rader (beregnet fra en enkelt rad), som gjorde ALLE rader like høye som den høyeste
-    // (f.eks. en rad med et sted-navn som brytes over to linjer). Med "basic" får hver rad
-    // sin egen naturlige høyde ut fra sitt eget innhold (bedt om av Henrik 2026-09-14).
-    renderVertical: 'basic',
     columns: kolonner,
     movableRows: kanRedigere,
     clipboard: true,
