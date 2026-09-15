@@ -177,12 +177,16 @@ function adminArkFraktselskapVerdier(gjeldende) {
 
 // ── Felles hake-formattering (Papirer: tom/gul/grønn, Fullmakt: samme via
 // FULLMAKT_TIL_HAKE, Vedtak: rød/grønn) - viser en fargelagt ✓, eller ingenting for
-// tomt/ukoblet felt.
+// tomt/ukoblet felt. Skriftstørrelsen MÅ matche vanlig celletekst (12px, satt i
+// salmakern.html sin #adminArkTabell .tabulator-cell-regel) - en større hake ga cellen
+// (og dermed HELE raden) en høyere linjehøyde enn tomme celler/rader, som gjorde radene
+// synlig ujevne (rapportert av Henrik 2026-09-15, skjermbilde viste rader med hake
+// tydelig høyere enn tomme rader).
 const ADMIN_ARK_HAKE_FARGE = { gul:'#facc15', gronn:'#22c55e', rod:'#ef4444' };
 function adminArkHakeFormatter(cell) {
   const v = cell.getValue() || '';
   const farge = ADMIN_ARK_HAKE_FARGE[v];
-  return farge ? `<span style="color:${farge};font-size:16px;font-weight:900">✓</span>` : '';
+  return farge ? `<span style="color:${farge};font-size:12px;font-weight:900">✓</span>` : '';
 }
 const ADMIN_ARK_HAKE_VERDIER = {'':'– Ingen –', gul:'🟡 Gul hake', gronn:'🟢 Grønn hake'};
 
@@ -193,8 +197,30 @@ const ADMIN_ARK_HAKE_VERDIER = {'':'– Ingen –', gul:'🟡 Gul hake', gronn:'
 // den passerer uendret gjennom.
 function adminArkTickFormatter(cell) {
   const v = cell.getValue();
-  if (v === true || v === '✓') return `<span style="color:${ADMIN_ARK_HAKE_FARGE.gronn};font-size:16px;font-weight:900">✓</span>`;
+  if (v === true || v === '✓') return `<span style="color:${ADMIN_ARK_HAKE_FARGE.gronn};font-size:12px;font-weight:900">✓</span>`;
   return v || '';
+}
+
+// Tabulators layout:'fitData' bredde-tilpasning måler kun celler som faktisk er malt til
+// DOM-en - med virtuell rad-rendering (brukt for ytelse ved mange rader) er det kun
+// radene rundt synlig scroll-posisjon. Lange navn lenger ned i arket (utenfor det som var
+// synlig da bredden ble regnet ut) ble derfor aldri tatt med, og kolonnen forble for smal
+// - teksten ble kuttet av med "..." selv med minWidth (rapportert av Henrik 2026-09-15,
+// skjermbilde viste "Alexander Klop..." og "Freddy Andre P..." avkuttet lenger ned i
+// arket). Måler i stedet selv, med canvas, over HELE datasettet uansett scroll-posisjon.
+let adminArkMaaleCtx = null;
+function adminArkMaalBredde(data, felt, tittel, minBredde) {
+  if (!adminArkMaaleCtx) adminArkMaaleCtx = document.createElement('canvas').getContext('2d');
+  adminArkMaaleCtx.font = 'bold 12px Arial, sans-serif';
+  let maks = adminArkMaaleCtx.measureText(tittel).width;
+  adminArkMaaleCtx.font = '12px Arial, sans-serif';
+  for (const rad of data) {
+    const tekst = String(rad[felt] || '');
+    if (!tekst) continue;
+    const bredde = adminArkMaaleCtx.measureText(tekst).width;
+    if (bredde > maks) maks = bredde;
+  }
+  return Math.max(minBredde, Math.ceil(maks) + 30);
 }
 
 // Fullmakt-kolonnen i Admin-ark speiler o.fullmakt direkte (samme 3 tilstander som
@@ -840,9 +866,9 @@ function renderAdminArk(scrollTilBunn) {
         return cell.getRow().getPosition();
       }
     },
-    {title:'Forhandler', field:'forhandler', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Kontaktperson', field:'kontaktperson', minWidth:90, headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
-    {title:'Chassis.nr', field:'chassisNr', minWidth:155, headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
+    {title:'Forhandler', field:'forhandler', width: adminArkMaalBredde(data,'forhandler','Forhandler',90), headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Kontaktperson', field:'kontaktperson', width: adminArkMaalBredde(data,'kontaktperson','Kontaktperson',90), headerSort:false, hozAlign:'left', editor:'input', editable:kunLose, frozen:true, rowHandle:true},
+    {title:'Chassis.nr', field:'chassisNr', width: adminArkMaalBredde(data,'chassisNr','Chassis.nr',155), headerSort:false, hozAlign:'center', editor:'input', editable:kunLose, frozen:true, rowHandle:true,
       // Cellen får farge automatisk fra ordrens status - kun rader som faktisk matcher en
       // ordre (_ordreStatus er null for løse admin_ark-rader, bl.a. gamle Excel-importerte
       // rader, se adminArkByggRader()). Skal man endre fargen, endrer man ordrens status i
@@ -859,7 +885,7 @@ function renderAdminArk(scrollTilBunn) {
         return verdi;
       }
     },
-    {title:'Serienummer', field:'serienummer', minWidth:95, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Serienummer', field:'serienummer', width: adminArkMaalBredde(data,'serienummer','Serienummer',95), headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Mottatt', field:'mottatt', minWidth:75, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Dato', field:'dato', minWidth:85, headerSort:false, hozAlign:'center', editable:false, formatter: cell => fmtDatoKort(cell.getValue()), rowHandle:true},
     {title:'Papirer', field:'papirer', minWidth:70, headerSort:false, hozAlign:'center', formatter: adminArkHakeFormatter,
@@ -871,12 +897,12 @@ function renderAdminArk(scrollTilBunn) {
       editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
     {title:'Dokumenter', field:'dokumenter', minWidth:80, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     {title:'Fakturert', field:'fakturertVis', minWidth:75, headerSort:false, editable:false, hozAlign:'center', formatter: adminArkTickFormatter, rowHandle:true},
-    {title:'Fraktselskap', field:'fraktselskap', minWidth:90, headerSort:false, hozAlign:'center',
+    {title:'Fraktselskap', field:'fraktselskap', width: adminArkMaalBredde(data,'fraktselskap','Fraktselskap',90), headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'list' : false, editorParams: cell => ({values: adminArkFraktselskapVerdier(cell.getValue())}), rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', minWidth:75, headerSort:false, editable:false, hozAlign:'center', formatter: adminArkTickFormatter, rowHandle:true},
     {title:'Bestilt frakt', field:'bestiltFrakt', minWidth:85, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
-    {title:'Merknader', field:'merknader', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
-    {title:'Utstyr', field:'utstyr', minWidth:90, headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
+    {title:'Merknader', field:'merknader', width: adminArkMaalBredde(data,'merknader','Merknader',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
+    {title:'Utstyr', field:'utstyr', width: adminArkMaalBredde(data,'utstyr','Utstyr',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
       formatter: cell => esc(cell.getValue()||'')},
     {title:'Flåte', field:'flateVis', minWidth:80, headerSort:false, hozAlign:'center',
       editor: kanRedigere ? 'input' : false, editable: cell => kanRedigere && !cell.getRow().getData()._flateErEkte, rowHandle:true},
@@ -885,7 +911,7 @@ function renderAdminArk(scrollTilBunn) {
       editor: kanRedigere ? 'list' : false,
       editorParams:{values: ADMIN_ARK_VEDTAK_VERDIER},
       editable: cell => kanRedigere && cell.getRow().getData()._erOrdre, rowHandle:true},
-    {title:'Time bekreftet', field:'timeBekreftetVis', minWidth:115, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
+    {title:'Time bekreftet', field:'timeBekreftetVis', width: adminArkMaalBredde(data,'timeBekreftetVis','Time bekreftet',115), headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal admin-ark-tb-celle',
       formatter: (cell, params, onRendered) => {
         const verdi = cell.getValue() || '';
@@ -947,10 +973,11 @@ function renderAdminArk(scrollTilBunn) {
   // boksens bredde til det synlige - da får boksen sin EGEN vannrette scrollbar (overflow:
   // auto er allerede satt) med de frosne kolonnene liggende fast, i stedet for at siste
   // kolonne (Ventende timer) rett og slett havner utenfor skjermen og blir usynlig.
-  // Noen kolonner (Forhandler, Kontaktperson, Fraktselskap, Merknader) har ingen fast
-  // "width" lenger - de tilpasser seg selv til innholdet (som i Excel), så her bruker vi
-  // kun et grovt anslag (minWidth/100) FØR Tabulator finnes. Det egentlige, nøyaktige
-  // målet skjer i adminArkOppdaterTabellBredde() rett under, kalt fra tableBuilt.
+  // Kolonner med variabel tekstlengde (Forhandler, Kontaktperson, Chassis.nr osv.) har
+  // fått sin "width" forhåndsberegnet av adminArkMaalBredde() over, basert på HELE
+  // datasettet - IKKE Tabulators egen fitData-tilpasning, som kun måler rader som faktisk
+  // er tegnet til DOM-en (upålitelig med virtuell rad-rendering, se kommentaren ved
+  // adminArkMaalBredde). Summen her er derfor allerede nøyaktig.
   const totalKolonneBredde = kolonner.reduce((sum, k) => sum + (k.width || k.minWidth || 100), 0);
   const arkElForBredde = document.getElementById('adminArkTabell');
   const tilgjengeligBredde = window.innerWidth - arkElForBredde.getBoundingClientRect().left - 24;
