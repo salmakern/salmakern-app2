@@ -61,21 +61,30 @@ async function hentCompanySlug(): Promise<string> {
 // productId (f.eks. 8497364290) som selve faktura-API-et faktisk krever i lines[].
 // Bekreftet ved en ekte 404 ("Missing product with id 21") i testing - må alltid slå
 // opp riktig productId via produktlisten før en kladd opprettes.
-async function hentProduktnummerTilId(slug: string): Promise<Map<string, number>> {
-  const map = new Map<string, number>()
+async function hentProduktnummerTilId(slug: string): Promise<Map<string, { productId: number; navn: string }>> {
+  const map = new Map<string, { productId: number; navn: string }>()
   let page = 0
   while (true) {
     const res = await fikenFetch(`/companies/${slug}/products?page=${page}&pageSize=100`)
     if (!res.ok) throw new Error(`Fiken /products svarte ${res.status}`)
     const produkter = await res.json()
     for (const p of produkter) {
-      if (p.productNumber) map.set(String(p.productNumber), p.productId)
+      if (p.productNumber) map.set(String(p.productNumber), { productId: p.productId, navn: p.name || '' })
     }
     const pageCount = Number(res.headers.get('Fiken-Api-Page-Count') || '1')
     page++
     if (page >= pageCount) break
   }
   return map
+}
+
+// Avtalt rabatt er kundespesifikk, ikke en fast regel (bekreftet av Henrik - historikken
+// viste at samme produkttype fikk ulik rabatt hos ulike kunder). "ombygging"-linjer
+// identifiseres på at PRODUKTNAVNET i Fiken inneholder "ombygging" (dekker "Varebilombygging
+// av X" og "Ombygging av X til personbil" og "Ombyggingskit ..." likt) - alt annet regnes
+// som ekstra utstyr. Drivstoff (egen unitPrice-override) skal ALDRI ha rabatt, uansett.
+function erOmbyggingslinje(produktnavn: string): boolean {
+  return /ombygg/i.test(produktnavn || '')
 }
 
 Deno.serve(async (req) => {
@@ -142,6 +151,18 @@ Deno.serve(async (req) => {
     const ukjente = linjer.map((l: any) => l.produktnummer).filter((n: string) => !produktMap.has(String(n)))
     if (ukjente.length) return jsonSvar({ error: `Fant ikke Fiken-produkt for produktnummer: ${ukjente.join(', ')}` }, 400)
 
+    // Avtalt rabatt per kunde - kun forhåndsutfylt der historikken var konsekvent (se
+    // fiken_kunde_rabatt-migrasjonen), NULL/mangler rad betyr 0% til Henrik setter en verdi.
+    const { data: rabattRad } = await supabase
+      .from('fiken_kunde_rabatt')
+      .select('rabatt_ombygging, rabatt_ekstra_utstyr')
+      .eq('fiken_contact_id', contactId)
+      .maybeSingle()
+    // Fiken sitt discount-felt på en fakturalinje forventes 0-100 (prosent), samme skala
+    // som verdiene er lagret i her - ingen omregning nødvendig.
+    const rabattOmbygging = rabattRad?.rabatt_ombygging ?? 0
+    const rabattEkstraUtstyr = rabattRad?.rabatt_ekstra_utstyr ?? 0
+
     // Kontaktperson (o.eier i appen, kalt "Kontaktperson" i PDF-rapporten) - kobles KUN
     // hvis en person med samme navn allerede finnes registrert på denne Fiken-kontakten.
     // Fiken krever navn+e-post for å OPPRETTE en kontaktperson, og appen har ingen e-post
@@ -162,10 +183,17 @@ Deno.serve(async (req) => {
     // Kommentar på siste linje: "Ch. nr. <chassis>" - begge deler bekreftet av Henrik.
     const ordreReferanse = chassisNr ? (regnr ? `${chassisNr} - ${regnr}` : chassisNr) : undefined
     const linjerMedIndeks = linjer.map((l: any, i: number) => {
-      const line: Record<string, unknown> = { productId: produktMap.get(String(l.produktnummer)), quantity: l.antall || 1 }
-      if (l.belop !== undefined && l.belop !== null) {
+      const produkt = produktMap.get(String(l.produktnummer))!
+      const line: Record<string, unknown> = { productId: produkt.productId, quantity: l.antall || 1 }
+      const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
+      if (erOverstyrtBelop) {
         line.unitPrice = Math.round(Number(l.belop) * 100)
         line.vatType = 'high' // 25% - alltid, uavhengig av drivstoff-satsen som ga beløpet (bekreftet av Henrik)
+      } else {
+        // Drivstoff (overstyrt beløp) skal ALDRI ha rabatt - alt annet får kundens avtalte
+        // sats, valgt ut fra om Fiken-produktnavnet er en ombygging-linje eller ekstra utstyr.
+        const rabatt = erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr
+        if (rabatt > 0) line.discount = rabatt
       }
       if (chassisNr && i === linjer.length - 1) line.comment = `Ch. nr. ${chassisNr}`
       return line
