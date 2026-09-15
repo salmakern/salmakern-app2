@@ -530,18 +530,29 @@ function applyUtstyrMal(ordreId, malIdx) {
   o.utstyrMalNavn = mal.navn;
   logChange(o, 'Utstyr-mal (ankomst) valgt: '+mal.navn);
   save(ordreId); buildOrdreDetail();
+  // Alle punkter starter uhuket - har malen et panorama-punkt betyr det standard
+  // (ikke-panorama) glasstak, som skal vises som "ikke 501" med en gang (se
+  // toggleUtstyrPunkt over for samme logikk ved manuell av/på-huking).
+  if (o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
+  }
 }
 
 // Produktnummer for panorama glasstak i "Utstyr – Skal ha etter visning" (bekreftet
 // av Henrik) - samme /panorama/i-sjekk som allerede brukes i vegvesen-dokumenter.js
 // for å avgjøre Standard/Panorama-variant, så begge stedene er enige om hva som teller.
+// Feltet skal ALLTID ha én av de to linjene, aldri ingen av dem - er panorama IKKE
+// huket av (standard-varianten) skal "ikke 501" stå der i stedet (bekreftet av Henrik
+// 2026-09-15), ikke bare fravær av "501".
 const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
+const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'ikke 501';
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
   punkt.ok = !punkt.ok;
   if (/panorama/i.test(punkt.punkt || '')) {
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
   }
   save(ordreId);
   // Oppdater kun sjekklisten - ikke bygg om hele ordresiden, det gir et lite
