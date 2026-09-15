@@ -421,6 +421,10 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
             ? `<span class="pill ok">✔ Fakturert</span>
                <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleFakturert('${o.id}')">Merk som ikke fakturert</button>`
             : `<div class="muted small" style="margin-bottom:8px">Ikke fakturert</div>
+               <label style="display:flex;align-items:center;gap:7px;margin-bottom:10px;cursor:pointer">
+                 <input type="checkbox" id="brukRabatt_${o.id}" checked style="width:15px;height:15px;accent-color:#22c55e">
+                 <span class="small">Bruk kundens avtalte rabatt</span>
+               </label>
                <button class="btn sm red" id="fakturerBtn_${o.id}" style="width:100%" onclick="fakturerViaFiken('${o.id}')">✔ Merk som fakturert (oppretter kladd i Fiken)</button>`}
         </div>
       </div>`:''}
@@ -554,6 +558,7 @@ function settFikenLinje(id, idx, felt, val) {
 // ============================================================
 let fikenFaktureringOrdreId = null;
 let fikenFaktureringKandidater = [];
+let fikenFaktureringBrukRabatt = true;
 
 async function kallFikenFakturer(id, ekstra) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return 'error';
@@ -561,7 +566,7 @@ async function kallFikenFakturer(id, ekstra) {
     const res = await fetch(SUPA_URL + '/functions/v1/fiken-fakturer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
-      body: JSON.stringify({ kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: o.fikenLinjer, ...ekstra })
+      body: JSON.stringify({ kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: o.fikenLinjer, brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
     });
     const data = await res.json();
     if (data.needsBekreftelse) {
@@ -593,6 +598,7 @@ async function fakturerViaFiken(id) {
   if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer || !o.fikenLinjer.length) { visToast('Legg til minst én fakturalinje først'); return; }
+  fikenFaktureringBrukRabatt = document.getElementById('brukRabatt_'+id)?.checked ?? true;
   const btn = document.getElementById('fakturerBtn_'+id);
   if (btn) { btn.disabled = true; btn.textContent = 'Oppretter kladd i Fiken...'; }
   const status = await kallFikenFakturer(id, {});

@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
 
     const raw = await req.text()
     if (!raw) return jsonSvar({ error: 'Tom body' }, 400)
-    const { kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
+    const { kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
 
@@ -159,9 +159,12 @@ Deno.serve(async (req) => {
       .eq('fiken_contact_id', contactId)
       .maybeSingle()
     // Fiken sitt discount-felt på en fakturalinje forventes 0-100 (prosent), samme skala
-    // som verdiene er lagret i her - ingen omregning nødvendig.
-    const rabattOmbygging = rabattRad?.rabatt_ombygging ?? 0
-    const rabattEkstraUtstyr = rabattRad?.rabatt_ekstra_utstyr ?? 0
+    // som verdiene er lagret i her - ingen omregning nødvendig. brukRabatt===false betyr
+    // admin har bevisst huket av "Bruk kundens avtalte rabatt" på DENNE fakturaen - null
+    // ut satsene uansett hva som er avtalt, i stedet for å måtte fjerne dem per linje etterpå.
+    const rabattSkalBrukes = brukRabatt !== false
+    const rabattOmbygging = rabattSkalBrukes ? (rabattRad?.rabatt_ombygging ?? 0) : 0
+    const rabattEkstraUtstyr = rabattSkalBrukes ? (rabattRad?.rabatt_ekstra_utstyr ?? 0) : 0
 
     // Kontaktperson (o.eier i appen, kalt "Kontaktperson" i PDF-rapporten) - kobles KUN
     // hvis en person med samme navn allerede finnes registrert på denne Fiken-kontakten.
