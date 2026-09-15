@@ -437,7 +437,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
           + Last opp dokument
           <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
         </label>`:''}
-        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Under utprøving - genererer foreløpig Egenerklæring, Vektfordeling og Fabrikantattest">🧪 Generer Vegvesen-dokumenter (test)</button>`:''}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Under utprøving - genererer foreløpig Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering">🧪 Generer Vegvesen-dokumenter (test)</button>`:''}
       </div>
 
       ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}

@@ -520,6 +520,122 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   return pdfDoc.save();
 }
 
+// ── Melding om registrering ──────────────────────────────────────────────
+// I motsetning til de tre over er dette IKKE et Salmakerverksted-brevark, men det
+// offisielle skjemaet fra Statens vegvesen selv (samme layout på alle ekte eksempler
+// Henrik har delt) - derfor Vegvesen-logoen sentrert øverst i stedet for
+// vegvesenTegnBrevhode(). Signaturen ligger inni selve underskrift-cellene i tabellen,
+// IKKE nede ved navn/dato som på de andre dokumentene (bekreftet av Henrik 2026-09-14:
+// "signaturen på alt utenom melding om registring skal signaturen være nede ved navn og
+// dato" - dette dokumentet er det uttalte unntaket). Melder er alltid Telemark
+// Salmakerverksted selv (fast org.nr/navn/signatur i alle ekte referanseeksempler), og
+// Eier er forhandleren på ordren, signert av samme signatur på forhandlerens vegne i
+// alle referanseeksemplene (også når det ikke er noen Fullmakt-kobling å sjekke mot).
+function vegvesenFormaterOrgnr(v) {
+  const siffer = String(v || '').replace(/\D/g, '');
+  return siffer.length === 9 ? siffer.slice(0,3) + ' ' + siffer.slice(3,6) + ' ' + siffer.slice(6) : (v || '');
+}
+async function genMeldingOmRegistreringPDF(o) {
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const SORT = rgb(0,0,0), GRA = rgb(0.941,0.941,0.941), BLA = rgb(0.078,0.353,0.694);
+
+  const BREDDE = 595.28, HOYDE = 841.89; // A4 stående
+  const page = pdfDoc.addPage([BREDDE, HOYDE]);
+  const vX = 40, tabellBredde = 515, labelBredde = 225, verdiBredde = tabellBredde - labelBredde;
+
+  function ramme(x, y, bredde, hoyde, fyll) {
+    if (fyll) page.drawRectangle({ x, y, width: bredde, height: hoyde, color: fyll });
+    page.drawRectangle({ x, y, width: bredde, height: hoyde, borderColor: SORT, borderWidth: 0.75 });
+  }
+  // Tegner én tabellrad: labelLinjer (1-2 strenger) i venstre (grå) celle, og kaller
+  // verdiTegn(x, y, bredde) for å fylle høyre celle - ulikt innhold per rad (vanlig
+  // tekst, radioknapper, eller en signatur-bilde) uten å gjenta ramme-/posisjoneringskode.
+  function rad(y, hoyde, labelLinjer, verdiTegn) {
+    ramme(vX, y - hoyde, labelBredde, hoyde, GRA);
+    ramme(vX + labelBredde, y - hoyde, verdiBredde, hoyde, null);
+    const labelY = y - hoyde/2 + (labelLinjer.length===1 ? -3 : 4);
+    labelLinjer.forEach((l,i) => page.drawText(l, { x: vX+8, y: labelY - i*11, size: 9, font: fontBold }));
+    verdiTegn(vX + labelBredde + 10, y - hoyde/2 - 5, verdiBredde - 20);
+    return y - hoyde;
+  }
+
+  let y = HOYDE - 40;
+  const logoBytes = await vegvesenLastAsset('assets/statens-vegvesen-logo.png');
+  const logoImg = await pdfDoc.embedPng(logoBytes);
+  const logoBredde = 100, logoHoyde = logoImg.height * (logoBredde / logoImg.width);
+  page.drawImage(logoImg, { x: (BREDDE - logoBredde)/2, y: y - logoHoyde, width: logoBredde, height: logoHoyde });
+  y -= logoHoyde + 30;
+
+  page.drawText('Melding om registrering', { x: vX, y, size: 14, font: fontBold }); y -= 22;
+
+  const introBredde = tabellBredde;
+  [
+    'Skjemaet skal benyttes for å bekrefte melder og/eller kjøretøyeiers identitet (legitimering og signatur) ved førstegangsregistrering i Norge, jf. forskrift om bruk av kjøretøy § 2-5.',
+    'Feltet for melder fylles ut av den som er ansvarlig for avgiften og melder kjøretøyet til registrering.'
+  ].forEach(avsnitt => {
+    vegvesenOmbrytTekst(avsnitt, font, 9.5, introBredde).forEach(linje => { page.drawText(linje, { x: vX, y, size: 9.5, font }); y -= 13; });
+    y -= 6;
+  });
+  const forVegvesenLenke = 'Eierskapet kan enklest bekreftes digitalt via ';
+  page.drawText(forVegvesenLenke, { x: vX, y, size: 9.5, font: fontBold });
+  page.drawText('vegvesen.no', { x: vX + fontBold.widthOfTextAtSize(forVegvesenLenke, 9.5), y, size: 9.5, font: fontBold, color: BLA });
+  y -= 24;
+
+  // ── Kjøretøy ──
+  y = rad(y, 22, ['Understellsnummer*'], (x,ty,w) => page.drawText(o.chassis||'', { x, y: ty, size: 14, font }));
+  y = rad(y, 22, ['Merke*'], (x,ty,w) => page.drawText(o.merke||'KIA', { x, y: ty, size: 14, font }));
+  y = rad(y, 22, ['Kjøretøygruppe*'], (x,ty,w) => page.drawText('N1', { x, y: ty, size: 14, font }));
+  y = rad(y, 22, ['Farge på kjøretøy'], (x,ty,w) => page.drawText(o.farge||'', { x, y: ty, size: 14, font }));
+  // Denne raden har et bredere label-felt (selve spørsmålet) og radioknappene helt til
+  // høyre - egen layout i stedet for den vanlige rad()-hjelperen sin faste kolonnedeling.
+  {
+    const hoyde = 22;
+    ramme(vX, y-hoyde, tabellBredde, hoyde, GRA);
+    page.drawText('Skal registrering fullføres på trafikkstasjonen?', { x: vX+8, y: y-hoyde/2-3, size: 9, font: fontBold });
+    const radioY = y - hoyde/2, neiX = vX + 360, jaX = vX + 430;
+    page.drawText('Nei', { x: neiX, y: radioY-3, size: 9.5, font });
+    page.drawCircle({ x: neiX+28, y: radioY+1, size: 5, borderColor: SORT, borderWidth: 0.75, color: SORT });
+    page.drawText('Ja', { x: jaX, y: radioY-3, size: 9.5, font });
+    page.drawCircle({ x: jaX+22, y: radioY+1, size: 5, borderColor: SORT, borderWidth: 0.75 });
+    y -= hoyde;
+  }
+  y -= 18;
+
+  const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
+  const sigImg = await pdfDoc.embedPng(sigBytes);
+  function tegnSignatur(x, ty, w) {
+    const sigBredde = 85, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
+    page.drawImage(sigImg, { x, y: ty - sigHoyde/2 + 10, width: sigBredde, height: sigHoyde });
+  }
+
+  // ── Melder (alltid Telemark Salmakerverksted) ──
+  y = rad(y, 24, ['Melders fødselsnummer/','organisasjonsnummer*'], (x,ty,w) => page.drawText('983 885 713', { x, y: ty-4, size: 14, font }));
+  y = rad(y, 22, ['Navn på melder*'], (x,ty,w) => page.drawText('Telemark Salmakerverksted', { x, y: ty, size: 14, font }));
+  y = rad(y, 48, ['Melders underskrift*','(Legitimasjon må fremvises)'], tegnSignatur);
+  y -= 18;
+
+  // ── Eier (forhandleren på ordren) ──
+  y = rad(y, 24, ['fødselsnummer/','organisasjonsnummer eier*'], (x,ty,w) => page.drawText(vegvesenFormaterOrgnr(o.forhandlerOrgnr), { x, y: ty-4, size: 14, font }));
+  y = rad(y, 22, ['Navn på eier*'], (x,ty,w) => page.drawText(o.kunde||'', { x, y: ty, size: 14, font }));
+  y = rad(y, 48, ['Eiers underskrift*','(Legitimasjon må fremvises)'], tegnSignatur);
+  y -= 18;
+
+  // ── Medeier (aldri i bruk her - alltid tomt) ──
+  y = rad(y, 24, ['fødselsnummer/','organisasjonsnummer medeier'], () => {});
+  y = rad(y, 22, ['Navn på medeier'], () => {});
+  y = rad(y, 24, ['Medeiers underskrift','(Legitimasjon må fremvises)'], () => {});
+  y -= 20;
+
+  page.drawText('Punkter/felter med * MÅ fylles ut, med mindre de er bekreftet digitalt.', { x: vX, y, size: 9, font: fontBold }); y -= 16;
+  vegvesenOmbrytTekst('Punktene/feltene uten stjerne KAN fylles ut ved behov. Dersom kjøretøyet skal ha medeier, MÅ de nederste punktene/feltene fylles ut.', font, 9, introBredde)
+    .forEach(linje => { page.drawText(linje, { x: vX, y, size: 9, font }); y -= 13; });
+
+  return pdfDoc.save();
+}
+
 // ── Vektberegning + Endring-oppdatering ─────────────────────────────────────
 // Kjører jevnt-fordelt-last-beregningen (P/P1/P2 fra Vekter->Ved ankomst,
 // M/M1/M2 fra Vekter->Før visning), justerer totalvekt ned til den blir gyldig hvis
@@ -592,8 +708,8 @@ function vegvesenFilnavn(dokumenttype, chassis) {
 
 // Manuell test-utløser mens funksjonene bygges ut én etter én - den automatiske
 // "genereres når ordren veies"-koblingen kommer når alle seks er ferdige og bekreftet.
-// Genererer foreløpig Egenerklæring, Vektfordeling og Fabrikantattest (trinn 2-lapp,
-// Kjøretøyliste og Melding om registrering gjenstår).
+// Genererer foreløpig Egenerklæring, Vektfordeling, Fabrikantattest og Melding om
+// registrering (trinn 2-lapp og Kjøretøyliste gjenstår).
 async function genererVegvesenDokumenter(ordreId) {
   const o = S.ordrer.find(x => x.id === ordreId); if (!o) return;
   const geometri = vegvesenGeometri(o.merke, o.modell);
@@ -603,9 +719,13 @@ async function genererVegvesenDokumenter(ordreId) {
     const egenerklaeringBytes = await genEgenerklaeringPDF(o);
     await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Egenerklæring', o.chassis), egenerklaeringBytes);
 
+    // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata.
+    const meldingBytes = await genMeldingOmRegistreringPDF(o);
+    await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Melding om registrering', o.chassis), meldingBytes);
+
     const resultat = vegvesenBeregnOgSettEndring(o);
     if (!resultat) {
-      visToast('Egenerklæring generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.', 'ok');
+      visToast('Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.', 'ok');
       return;
     }
     const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
@@ -615,7 +735,7 @@ async function genererVegvesenDokumenter(ordreId) {
     const fabrikantattestBytes = await genFabrikantattestPDF(o, justertP, justertVogntog, M);
     await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Fabrikantattest', o.chassis), fabrikantattestBytes);
 
-    visToast('Egenerklæring, Vektfordeling og Fabrikantattest generert og lagret', 'ok');
+    visToast('Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering generert og lagret', 'ok');
   } catch (e) {
     console.error('Feil ved generering av Vegvesen-dokumenter:', e);
     visToast('Feil ved generering: ' + e.message);
