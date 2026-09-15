@@ -978,13 +978,6 @@ function renderAdminArk(scrollTilBunn) {
     movableRows: kanRedigere,
     clipboard: true,
     clipboardPasteAction: 'update',
-    // Excel-lignende oppførsel: klikk-og-dra markerer en rekke celler over flere rader/
-    // kolonner, Ctrl+C kopierer hele markeringen, Ctrl+V limer inn fra samme markering og
-    // nedover/bortover (bedt om av Henrik 2026-09-14, erstatter enkelt-felt kopier-knappene).
-    selectableRange: true,
-    selectableRangeColumns: true,
-    selectableRangeRows: false,
-    selectableRangeClearCells: true,
     placeholder: 'Ingen ordre for ' + adminArkAar
   });
 
