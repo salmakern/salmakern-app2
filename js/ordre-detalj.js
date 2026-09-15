@@ -97,6 +97,32 @@ function fotoSeksjonHTML(o, side, tittel) {
   </div>`;
 }
 
+// Bilder - manglende deler: fritt voksende liste (0-uendelig), i motsetning til de faste
+// FOTO_SIDER-seksjonene over - se lastOppBildeManglendeDel()/slettBildeManglendeDel() i
+// ordre-diverse.js. Siste rute er alltid en "+ Legg til"-knapp, ikke en tallfast plass.
+function manglendeDelerHTML(o) {
+  const bilder = o.bilderManglendeDeler || [];
+  return `<div class="card">
+    <div class="h">Bilder – Manglende deler${bilder.length?` (${bilder.length})`:''}</div>
+    <div class="photo-grid" id="manglendeDelerListe_${o.id}">${bilder.map((url,i)=>`
+      <div class="photo-box" onclick="openLightbox('mdel_${i}_src')">
+        <img id="mdel_${i}_src" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+        <div class="hover-del" onclick="event.stopPropagation()">
+          <button data-viewonly onclick="openLightbox('mdel_${i}_src')" title="Vis fullt bilde">🔍</button>
+          <button onclick="slettBildeManglendeDel('${o.id}',${i})" title="Slett">🗑</button>
+        </div>
+      </div>`).join('')}
+      <div class="photo-box" onclick="document.getElementById('mdelInput_${o.id}').click()">
+        <div style="position:absolute;inset:0;border-radius:8px;background:repeating-linear-gradient(45deg,#22222a 0 7px,#17171b 7px 14px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px">
+          <div style="font-size:20px;opacity:.5">+</div>
+          <div style="background:#0f0f12;border:1px solid #27272a;border-left:2px solid #52525b;padding:3px 7px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#d4d4d8">Legg til</div>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="mdelInput_${o.id}" accept="image/*" capture="environment" style="display:none" onchange="lastOppBildeManglendeDel(event,'${o.id}')">
+  </div>`;
+}
+
 function buildOrdreDetail() {
   try {
   const o = S.ordrer.find(x=>x.id===activeOrdreId);
@@ -341,6 +367,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       ${fotoSeksjonHTML(o, 'a', 'Bilder – Ankomst')}
       ${fotoSeksjonHTML(o, 's', 'Bilder – Avstand/skader')}
       ${fotoSeksjonHTML(o, 'l', 'Bilder – Levering')}
+      ${manglendeDelerHTML(o)}
 
       <div class="card" id="ordretimerKort_ordreTimerSessions_${o.id}">
         ${ordreTimerKortHTML(o, 'ordreTimerSessions')}

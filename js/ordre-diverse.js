@@ -687,6 +687,51 @@ async function slettFoto(id, side, idx) {
   save(id); buildOrdreDetail();
 }
 
+// Bilder - manglende deler: i motsetning til Ankomst/Levering/Avstand-skader (faste,
+// navngitte plasser via FOTO_SIDER) er dette en fritt voksende liste - fra 0 til
+// uendelig bilder, lagt til/fjernet fritt (bedt om av Henrik 2026-09-15). Egen, enklere
+// opplastings-/slettefunksjon i stedet for å tvinge inn i FOTO_SIDER-mønsteret.
+async function lastOppBildeManglendeDel(e, id) {
+  const file = e.target.files[0]; if (!file) return;
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const listeEl = document.getElementById('manglendeDelerListe_' + id);
+  if (listeEl) listeEl.insertAdjacentHTML('beforeend', '<div class="photo-box" id="manglendeDelLaster"><div style="font-size:22px">⏳</div><div style="font-size:11px">Laster opp...</div></div>');
+
+  const komprimert = await komprimer(file, 1200, 0.82);
+  let url = null;
+  if (db) {
+    try {
+      const filnavn = `${id}/m_${Date.now()}.jpg`;
+      const { error } = await db.storage.from('bilder').upload(filnavn, komprimert, {contentType:'image/jpeg', upsert:true, cacheControl:'31536000'});
+      if (!error) { url = db.storage.from('bilder').getPublicUrl(filnavn).data.publicUrl; }
+      else { console.warn('Storage feil:', error.message); visToast('Sky-lagring feilet (' + error.message + ') — lagrer lokalt'); }
+    } catch(err) { console.warn('Storage unntak:', err); visToast('Sky-lagring feilet — lagrer lokalt'); }
+  }
+  if (!url) {
+    const liten = await komprimer(file, 600, 0.65);
+    url = await new Promise(res=>{ const reader=new FileReader(); reader.onload=ev=>res(ev.target.result); reader.readAsDataURL(liten); });
+  }
+
+  const oNa = S.ordrer.find(x=>x.id===id);
+  if (!oNa) { visToast('Ordren ble oppdatert under opplasting — prøv igjen'); return; }
+  oNa.bilderManglendeDeler = [...(oNa.bilderManglendeDeler||[]), url];
+  logChange(oNa, 'Bilde av manglende del lastet opp');
+  save(id);
+  buildOrdreDetail();
+}
+async function slettBildeManglendeDel(id, idx) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const url = (o.bilderManglendeDeler||[])[idx];
+  if (db && url && url.startsWith('http')) {
+    const filnavn = url.split('/bilder/')[1];
+    if (filnavn) await db.storage.from('bilder').remove([filnavn]);
+  }
+  o.bilderManglendeDeler = (o.bilderManglendeDeler||[]).filter((_,i) => i !== idx);
+  logChange(o, 'Bilde av manglende del slettet');
+  save(id);
+  buildOrdreDetail();
+}
+
 const DOK_TILLATTE_EXT = ['pdf','doc','docx','xls','xlsx','ppt','pptx','odt','ods','txt','csv','jpg','jpeg','png','heic'];
 function dokIkon(navn) {
   const ext = (navn.split('.').pop()||'').toLowerCase();

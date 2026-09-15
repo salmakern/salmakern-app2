@@ -92,6 +92,22 @@ function genPDF(id) {
     </div>`;
   };
 
+  // Manglende deler har ingen faste antall/etiketter (fra 0 til uendelig bilder, lagt
+  // til/fjernet fritt - se manglendeDelBilderListeHTML i ordre-detalj.js) - vises derfor
+  // kun når det faktisk finnes bilder, uten "X av Y"-telleren fotoSeksjon() bruker.
+  const manglendeDelerSeksjon = o => {
+    const bilder = o.bilderManglendeDeler || [];
+    if (!bilder.length) return '';
+    return `<div class="seksjon">
+      <div class="s-hode"><span class="s-tittel">Bilder — manglende deler</span></div>
+      <div class="foto-grid">
+        ${bilder.map((url,i)=>`<div class="foto-celle">
+          <div class="foto-ramme"><img src="${url}" alt="Manglende del ${i+1}"></div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  };
+
   const html = `<!doctype html><html lang="nb"><head><meta charset="utf-8"><title>Ordrebekreftelse ${ordreLabel(o)}</title>
 <style>
   *{box-sizing:border-box}
@@ -336,6 +352,7 @@ function genPDF(id) {
     ${fotoSeksjon('a','Bilder — ankomst')}
     ${fotoSeksjon('s','Bilder — avstand / skader')}
     ${fotoSeksjon('l','Bilder — levering')}
+    ${manglendeDelerSeksjon(o)}
 
     <div class="merknad">
       <div>
