@@ -788,6 +788,14 @@ function ombyggingBoksHTML(o) {
     `).join('')}
   </div>`;
 }
+// Fiken produktnummer for selve ombyggingen på KIA EV9 - i motsetning til Ekstra
+// utstyr-oppskriftene (som kun legges til automatisk for "ekstra_utstyr"-type) har
+// ombygging-linjen ingen oppskrift/kobling i Lager, så den må håndteres separat her.
+// 500 skal stå på når enten Nytt Kjøretøy ELLER Brukt Kjøretøy er valgt, 529 når
+// Personbil er valgt - uavhengige av hverandre (bekreftet av Henrik 2026-09-16).
+// Modellspesifikk fordi produktnumrene trolig er ulike for andre modeller etter hvert.
+const FIKEN_PRODUKTNUMMER_OMBYGGING_EV9 = '500';
+const FIKEN_PRODUKTNUMMER_PERSONBIL_EV9 = '529';
 function sfOmbygging(id, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
@@ -796,6 +804,13 @@ function sfOmbygging(id, felt, val) {
   // Oppdater kun ombygging-boksen - ikke bygg om hele ordresiden (samme fiks som utstyr-sjekklisten).
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
+  if ((o.merke||'').trim().toUpperCase()==='KIA' && (o.modell||'').trim().toUpperCase()==='EV9') {
+    if (felt==='nyttKjoretoy'||felt==='bruktKjoretoy') {
+      oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_OMBYGGING_EV9, !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy));
+    } else if (felt==='personbil') {
+      oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PERSONBIL_EV9, val);
+    }
+  }
 }
 
 // ════════════════════════════════════════════════════
