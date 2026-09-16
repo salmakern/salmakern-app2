@@ -802,8 +802,12 @@ function ombyggingBoksHTML(o) {
 const FIKEN_OMBYGGING_MODELLER = [
   { match: /\bev9\b/i, ombygging: '500', personbil: '529' },
   { match: /discovery\s*5\b/i, ombygging: '250', personbil: '279' },
-  { match: /defender\s*110\b/i, ombygging: '280', personbil: '298' },
-  { match: /gel[aä]ndewagen.*2018|2018.*gel[aä]ndewagen/i, ombygging: '300', personbil: '319' },
+  // Utstyrsmalen heter bare "Defender" (ikke "Defender 110") og "Geländewagen" (ikke
+  // "...2018") - matcher derfor den korte teksten malene faktisk bruker, ikke et krav om
+  // årsmodell/variant i selve merke/modell-feltet (bekreftet av Henrik 2026-09-16: kun
+  // Defender 110 og Geländewagen 2018-> er i aktiv bruk, ikke 130 eller den eldre 166).
+  { match: /defender\b/i, ombygging: '280', personbil: '298' },
+  { match: /gel[aä]ndewagen/i, ombygging: '300', personbil: '319' },
   { match: /\bgls\b/i, ombygging: '320', personbil: '339' },
   { match: /\bvito\b/i, ombygging: '340', personbil: null },
   { match: /\beqv\b/i, ombygging: '360', personbil: null },
