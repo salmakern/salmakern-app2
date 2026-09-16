@@ -603,8 +603,8 @@ async function kallFikenFakturer(id, ekstra) {
       document.getElementById('fikenKundeNavnVis').textContent = o.kunde || '';
       document.getElementById('fikenKundeInput').value = '';
       document.getElementById('fikenKundeErr').textContent = '';
-      document.getElementById('fikenKundeRabattOmbygging').value = '';
-      document.getElementById('fikenKundeRabattEkstraUtstyr').value = '';
+      document.getElementById('fikenKundeRabattOmbygging').checked = false;
+      document.getElementById('fikenKundeRabattEkstraUtstyr').checked = false;
       openModal('fikenKundeBekreft');
       return 'needsBekreftelse';
     }
@@ -636,12 +636,12 @@ async function fakturerViaFiken(id) {
 
 // Kalt fra fikenKundeBekreft-modalen etter at admin har valgt riktig kunde fra
 // datalist-forslagene (fylt av kallFikenFakturer sin needsBekreftelse-gren). Setter
-// samtidig avtalt rabatt for kunden hvis admin fylte inn noe her - naturlig sted å
-// gjøre det siden dette uansett er "sett opp denne kundens Fiken-kobling for første
-// gang"-øyeblikket (bedt om av Henrik 2026-09-16). Skrives FØR selve fakturakallet,
-// slik at rabatten gjelder allerede på DENNE fakturaen. Skriver kun de feltene admin
-// faktisk fylte inn - tomt felt lar en eventuell eksisterende (historikk-satt) verdi
-// stå urørt i stedet for å nulle den ut.
+// samtidig avtalt rabatt for kunden - naturlig sted å gjøre det siden dette uansett er
+// "sett opp denne kundens Fiken-kobling for første gang"-øyeblikket (bedt om av Henrik
+// 2026-09-16). Kun av/på (ikke fritekst-prosent) - 20 % er den klare standardsatsen når
+// det faktisk gis rabatt (54 av 63 ombygging-kunder i historikken). Skrives FØR selve
+// fakturakallet, slik at rabatten gjelder allerede på DENNE fakturaen.
+const FIKEN_RABATT_STANDARDSATS = 20;
 async function bekreftFikenKunde() {
   const navn = (document.getElementById('fikenKundeInput').value || '').trim();
   // Case-ufølsom match - mobil/nettleser autokapitaliserer ofte bokstaven rett etter en
@@ -652,12 +652,10 @@ async function bekreftFikenKunde() {
   const btn = document.getElementById('fikenKundeBekreftBtn');
   btn.disabled = true; btn.textContent = 'Oppretter...';
 
-  const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').value;
-  const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').value;
-  if (db && (rabattOmbygging !== '' || rabattEkstraUtstyr !== '')) {
-    const rad = { fiken_contact_id: valgt.contactId, fiken_navn: valgt.navn, oppdatert_av: me?.navn || '' };
-    if (rabattOmbygging !== '') rad.rabatt_ombygging = Number(rabattOmbygging);
-    if (rabattEkstraUtstyr !== '') rad.rabatt_ekstra_utstyr = Number(rabattEkstraUtstyr);
+  if (db) {
+    const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').checked ? FIKEN_RABATT_STANDARDSATS : 0;
+    const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').checked ? FIKEN_RABATT_STANDARDSATS : 0;
+    const rad = { fiken_contact_id: valgt.contactId, fiken_navn: valgt.navn, rabatt_ombygging: rabattOmbygging, rabatt_ekstra_utstyr: rabattEkstraUtstyr, oppdatert_av: me?.navn || '' };
     const { error } = await db.from('fiken_kunde_rabatt').upsert(rad, { onConflict: 'fiken_contact_id' });
     if (error) visToast('Kunne ikke lagre rabatt: ' + error.message);
   }
