@@ -1149,6 +1149,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <input list="fikenKundeListe" id="fikenKundeInput" placeholder="Søk kunde i Fiken..." style="width:100%">
     <datalist id="fikenKundeListe"></datalist>
     <div id="fikenKundeErr" class="err-text small" style="margin-top:6px;min-height:18px"></div>
+    <div class="small muted" style="margin-top:14px;margin-bottom:6px">Avtalt rabatt for denne kunden (valgfritt - la stå tomt for 0 %, kan settes senere)</div>
+    <div class="grid g2" style="gap:8px">
+      <div class="felt-wrap"><label>Rabatt ombygging %</label><input type="number" id="fikenKundeRabattOmbygging" min="0" max="100" placeholder="0"></div>
+      <div class="felt-wrap"><label>Rabatt ekstra utstyr %</label><input type="number" id="fikenKundeRabattEkstraUtstyr" min="0" max="100" placeholder="0"></div>
+    </div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" id="fikenKundeBekreftBtn" onclick="bekreftFikenKunde()">Bekreft og opprett faktura</button>
       <button class="btn" onclick="closeModal('fikenKundeBekreft')">Avbryt</button>
