@@ -809,14 +809,7 @@ const FIKEN_OMBYGGING_MODELLER = [
   // Utstyrsmalen heter bare "Defender" (ikke "Defender 110") og "Geländewagen" (ikke
   // "...2018") - matcher derfor den korte teksten malene faktisk bruker, ikke et krav om
   // årsmodell/variant i selve merke/modell-feltet (bekreftet av Henrik 2026-09-16: kun
-  // Defender 110 og Geländewagen 2018-> er i aktiv bruk, ikke den eldre 166). Defender 130
-  // deler SAMME ombygging-produkt (280) som 110 i Fiken, men har sin EGEN personbil-kode
-  // (299, ikke 298) - må derfor sjekkes FØR den generiske Defender-raden under (find()
-  // stopper på første treff). Defender OCTA og VW ID.Buzz "GTX Lang" har ingen egne
-  // ombygging/personbil-produkter i Fiken (kun tillegg oppå grunnproduktet: "2841 Tillegg
-  // for OCTA" / "401 Tillegg for lang modell") - faller derfor naturlig inn under de
-  // generiske Defender-/ID.Buzz-radene.
-  { match: /defender\s*130\b/i, ombygging: '280', personbil: '299' },
+  // Defender 110 og Geländewagen 2018-> er i aktiv bruk, ikke 130 eller den eldre 166).
   { match: /defender\b/i, ombygging: '280', personbil: '298' },
   { match: /gel[aä]ndewagen/i, ombygging: '300', personbil: '319' },
   { match: /\bgls\b/i, ombygging: '320', personbil: '339' },
@@ -826,8 +819,6 @@ const FIKEN_OMBYGGING_MODELLER = [
   { match: /id\.?\s*buzz/i, ombygging: '400', personbil: '419' },
   { match: /rexton/i, ombygging: '520', personbil: '529' },
   { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '550', personbil: '549' },
-  { match: /land\s*cruiser\s*150|\blc\s*150\b/i, ombygging: '2050', personbil: null },
-  { match: /durango/i, ombygging: '430', personbil: null },
 ];
 function finnFikenOmbyggingModell(merke, modell) {
   const tekst = `${merke||''} ${modell||''}`;
