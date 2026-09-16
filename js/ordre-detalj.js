@@ -791,11 +791,35 @@ function ombyggingBoksHTML(o) {
 // Fiken produktnummer for selve ombyggingen på KIA EV9 - i motsetning til Ekstra
 // utstyr-oppskriftene (som kun legges til automatisk for "ekstra_utstyr"-type) har
 // ombygging-linjen ingen oppskrift/kobling i Lager, så den må håndteres separat her.
-// 500 skal stå på når enten Nytt Kjøretøy ELLER Brukt Kjøretøy er valgt, 529 når
-// Personbil er valgt - uavhengige av hverandre (bekreftet av Henrik 2026-09-16).
-// Modellspesifikk fordi produktnumrene trolig er ulike for andre modeller etter hvert.
+// 500 skal stå på når enten Nytt Kjøretøy ELLER Brukt Kjøretøy er valgt (bekreftet av
+// Henrik 2026-09-16). Foreløpig kun EV9 som har denne automatikken - andre modeller
+// legges inn etter hvert.
 const FIKEN_PRODUKTNUMMER_OMBYGGING_EV9 = '500';
-const FIKEN_PRODUKTNUMMER_PERSONBIL_EV9 = '529';
+
+// Personbil-ombygging (motsatt retning, N1->M1) har EGNE produktnumre i Fiken, hentet
+// direkte fra Fiken sin produktliste (fiken-produkter-funksjonen) og bekreftet av Henrik
+// 2026-09-16. 529 og 549 er generiske "Ombygging til personbil" uten modellnavn i selve
+// Fiken-teksten - tilordnet EV9/Rexton (529) og Land Cruiser 250 (549) ut fra plasseringen
+// i Fiken sin nummerrekkefølge (529 rett etter EV9/Rexton sin egen serie 500-528, 549 rett
+// etter det som ser ut som Land Cruiser 250-tilbehør 545-548) - IKKE bekreftet av Fiken selv,
+// så juster om det viser seg feil. MB Vito/EQV/V-klasse har ingen personbil-kode i Fiken i
+// det hele tatt - ingen linje legges til for de tre uansett hva som hukes av.
+const FIKEN_PERSONBIL_MODELLER = [
+  { match: /\bev9\b/i, produktnummer: '529' },
+  { match: /discovery\s*5\b/i, produktnummer: '279' },
+  { match: /defender\s*110\b/i, produktnummer: '298' },
+  { match: /gel[aä]ndewagen.*2018|2018.*gel[aä]ndewagen/i, produktnummer: '319' },
+  { match: /\bgls\b/i, produktnummer: '339' },
+  { match: /id\.?\s*buzz/i, produktnummer: '419' },
+  { match: /rexton/i, produktnummer: '529' },
+  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, produktnummer: '549' },
+];
+function finnFikenPersonbilProduktnummer(merke, modell) {
+  const tekst = `${merke||''} ${modell||''}`;
+  const treff = FIKEN_PERSONBIL_MODELLER.find(r => r.match.test(tekst));
+  return treff ? treff.produktnummer : null;
+}
+
 function sfOmbygging(id, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
@@ -804,12 +828,11 @@ function sfOmbygging(id, felt, val) {
   // Oppdater kun ombygging-boksen - ikke bygg om hele ordresiden (samme fiks som utstyr-sjekklisten).
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
-  if ((o.merke||'').trim().toUpperCase()==='KIA' && (o.modell||'').trim().toUpperCase()==='EV9') {
-    if (felt==='nyttKjoretoy'||felt==='bruktKjoretoy') {
-      oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_OMBYGGING_EV9, !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy));
-    } else if (felt==='personbil') {
-      oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PERSONBIL_EV9, val);
-    }
+  if ((felt==='nyttKjoretoy'||felt==='bruktKjoretoy') && (o.merke||'').trim().toUpperCase()==='KIA' && (o.modell||'').trim().toUpperCase()==='EV9') {
+    oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_OMBYGGING_EV9, !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy));
+  } else if (felt==='personbil') {
+    const produktnummer = finnFikenPersonbilProduktnummer(o.merke, o.modell);
+    if (produktnummer) oppdaterFikenLinjeForOppskrift(produktnummer, val);
   }
 }
 
