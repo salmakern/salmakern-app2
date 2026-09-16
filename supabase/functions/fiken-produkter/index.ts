@@ -38,9 +38,16 @@ Deno.serve(async (req) => {
       if (page >= pageCount) break
     }
 
+    // unitPrice fra Fiken er i øre (samme enhet som brukes ved overstyrt beløp i
+    // fiken-fakturer) - regnes om til kroner her for lesbarhet i svaret.
     const liste = produkter
       .filter((p: any) => p.productNumber)
-      .map((p: any) => ({ produktnummer: p.productNumber, navn: p.name || '', aktiv: p.active !== false }))
+      .map((p: any) => ({
+        produktnummer: p.productNumber,
+        navn: p.name || '',
+        prisKr: typeof p.unitPrice === 'number' ? p.unitPrice / 100 : null,
+        aktiv: p.active !== false,
+      }))
       .sort((a: any, b: any) => String(a.produktnummer).localeCompare(String(b.produktnummer), 'nb', { numeric: true }))
 
     return jsonSvar({ antall: liste.length, produkter: liste })
