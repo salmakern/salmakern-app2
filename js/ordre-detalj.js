@@ -186,7 +186,9 @@ function buildOrdreDetail() {
           <div class="felt-wrap">
             <label>Forhandler</label>
             <div style="display:flex;gap:6px">
-              <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off" onchange="sf('${o.id}','kunde',this.value)"
+              <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
+                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}')"
+                onchange="sf('${o.id}','kunde',this.value)"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
@@ -238,7 +240,9 @@ function buildOrdreDetail() {
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div class="felt-wrap">
             <label>Forhandler org.nr</label>
-            <input value="${esc(o.forhandlerOrgnr||'')}" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer">
+            <input id="forhandlerOrgnrInput_${o.id}" value="${esc(o.forhandlerOrgnr||'')}" autocomplete="off" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer"
+              onfocus="visFeltDropdown('typeForslag_forhandlerOrgnr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerOrgnr_${o.id}'))">
+            <div id="typeForslag_forhandlerOrgnr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerOrgnrInput_'+o.id, forhandlerOrgnrForslag(o.kunde))}</div>
           </div>
         </div>
 
@@ -903,6 +907,14 @@ function forhandlerForslag(merke, modell) {
 function kontaktpersonForslag(merke, modell) {
   return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.eier));
 }
+// Forhandler org.nr henger sammen med selve forhandler-NAVNET (samme forhandler har
+// alltid samme org.nr), ikke med Merke/Modell - filtrerer derfor på eksakt kunde-navn i
+// stedet for å gjenbruke kjedeFilter() (bedt om av Henrik 2026-09-16: "org. nr må hentes
+// fra forhandler sånn forslag det er på alt annet").
+function forhandlerOrgnrForslag(kunde) {
+  if (!kunde) return [];
+  return frekvenssortert(S.ordrer.filter(o => (o.kunde||'').toLowerCase()===kunde.toLowerCase()).map(o=>o.forhandlerOrgnr));
+}
 function feltForslagHTML(inputId, verdier) {
   if (!verdier.length) return '<div class="small muted" style="padding:9px 12px">Ingen tidligere verdier</div>';
   return verdier.slice(0,20).map(v =>
@@ -956,6 +968,10 @@ function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, list
 function renderKontaktpersonForslag(merkeInputId, modellInputId, eierInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
   el.innerHTML = feltForslagHTML(eierInputId, kontaktpersonForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId)));
+}
+function renderForhandlerOrgnrForslag(kundeInputId, orgnrInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(orgnrInputId, forhandlerOrgnrForslag(feltVerdi(kundeInputId)));
 }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, pluss modell-feltet på lagervarer
