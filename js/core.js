@@ -568,7 +568,15 @@ function subscribeRealtime() {
     .on('postgres_changes',{event:'*',schema:'public',table:'innstillinger'}, p => {
       if (ignorerRealtimeInnstillinger || !p.new) return;
       const row = p.new;
+      // Dagens PIN har byttet (enten admin sitt "Ny PIN"-trykk, eller den daglige
+      // automatiske rotasjonen ved midnatt) - da skal ALLE andre innloggede logges ut med
+      // en gang, ikke bare se en oppdatert PIN de aldri fikk vite om (bedt om av Henrik
+      // 2026-09-16: "alle brukerne skal også logge ut automatisk"). Klienten som selv
+      // gjorde endringen har allerede ignorerRealtimeInnstillinger satt over, så den
+      // rammes ikke av dette - kun alle ANDRE åpne økter.
+      const pinByttet = S.dagensPIN && row.dagens_pin && S.dagensPIN !== row.dagens_pin;
       S.dagensPIN = row.dagens_pin || '1234';
+      if (pinByttet && me) { visToast('Dagens PIN er byttet - logger ut'); doLogout(); return; }
       S.gps = {lat: row.gps_lat||null, lng: row.gps_lng||null, radius: row.gps_radius||300};
       S.utstyrMaler = row.utstyr_maler || [];
       S.drivstoffSatser = row.drivstoff_satser || [];
