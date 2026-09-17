@@ -467,7 +467,7 @@ function hengerfesteKortHTML(o) {
 function flateKortHTML(o) {
   const f = o.flateId ? (S.flater||[]).find(x=>x.id===o.flateId) : null;
   return f
-    ? `<span class="pill info" style="font-size:11px;margin:0;white-space:nowrap">🚛 Flåte ${esc(f.flatenummer)}</span>`
+    ? `<span class="pill info" style="font-size:11px;margin:0;white-space:nowrap">Flåte ${esc(f.flatenummer)}</span>`
     : `<span class="pill" style="font-size:11px;margin:0;white-space:nowrap;color:#a1a1aa">Ingen flåte</span>`;
 }
 
