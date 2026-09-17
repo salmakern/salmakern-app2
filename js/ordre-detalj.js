@@ -803,22 +803,29 @@ function ombyggingBoksHTML(o) {
 // serie 500-528, 549 rett etter det som ser ut som Land Cruiser 250-tilbehør 545-548),
 // IKKE bekreftet av Fiken selv - juster om det viser seg feil. MB Vito/EQV/V-klasse har
 // ingen personbil-kode i Fiken i det hele tatt (personbil: null under).
+// Produktnumrene under ble oppdatert 2026-09-17 etter en full opprydding i Fiken sin
+// produktkatalog - hver ombyggingsmodell fikk sin egen dedikerte "hundre" (i stedet for
+// at flere modeller delte tallområde, f.eks. KIA EV9 og KGM Rexton som tidligere lå i
+// samme 500-blokk). Se git-historikk for den fullstendige omnummereringsplanen.
 const FIKEN_OMBYGGING_MODELLER = [
-  { match: /\bev9\b/i, ombygging: '500', personbil: '529' },
-  { match: /discovery\s*5\b/i, ombygging: '250', personbil: '279' },
+  { match: /\bev9\b/i, ombygging: '500', personbil: '524' },
+  { match: /discovery\s*5\b/i, ombygging: '200', personbil: '229' },
   // Utstyrsmalen heter bare "Defender" (ikke "Defender 110") og "Geländewagen" (ikke
   // "...2018") - matcher derfor den korte teksten malene faktisk bruker, ikke et krav om
   // årsmodell/variant i selve merke/modell-feltet (bekreftet av Henrik 2026-09-16: kun
   // Defender 110 og Geländewagen 2018-> er i aktiv bruk, ikke 130 eller den eldre 166).
-  { match: /defender\b/i, ombygging: '280', personbil: '298' },
-  { match: /gel[aä]ndewagen/i, ombygging: '300', personbil: '319' },
-  { match: /\bgls\b/i, ombygging: '320', personbil: '339' },
-  { match: /\bvito\b/i, ombygging: '340', personbil: null },
-  { match: /\beqv\b/i, ombygging: '360', personbil: null },
-  { match: /v-?klasse/i, ombygging: '380', personbil: null },
-  { match: /id\.?\s*buzz/i, ombygging: '400', personbil: '419' },
-  { match: /rexton/i, ombygging: '520', personbil: '529' },
-  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '550', personbil: '549' },
+  { match: /defender\b/i, ombygging: '1400', personbil: '1415' },
+  { match: /gel[aä]ndewagen/i, ombygging: '300', personbil: '318' },
+  { match: /\bgls\b/i, ombygging: '400', personbil: '417' },
+  { match: /\bvito\b/i, ombygging: '1500', personbil: null },
+  { match: /\beqv\b/i, ombygging: '1600', personbil: null },
+  { match: /v-?klasse/i, ombygging: '1700', personbil: null },
+  { match: /id\.?\s*buzz/i, ombygging: '1800', personbil: '1812' },
+  // Rexton har ingen egen personbil-kode i Fiken (aldri fakturert, aldri opprettet) -
+  // matcher derfor mønsteret til Vito/EQV/V-klasse (null) i stedet for tidligere feilaktig
+  // å dele EV9 sin kode "529".
+  { match: /rexton/i, ombygging: '2400', personbil: null },
+  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: '2508' },
 ];
 function finnFikenOmbyggingModell(merke, modell) {
   const tekst = `${merke||''} ${modell||''}`;
