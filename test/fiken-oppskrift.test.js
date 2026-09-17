@@ -83,4 +83,11 @@ describe('renderOrdreLagerbruk selv-synkroniserer oppskrift-baserte Fiken-linjer
     env.renderOrdreLagerbruk();
     expect(o.fikenLinjer.length).toBe(0);
   });
+
+  it('rører ikke "ombygging"-type oppskrifter selv om fikenProduktnummer er satt - ombygging fakturers via Ombygging-boksene, ikke via lagerbruk-oppskrifter', () => {
+    env.S.lagerOppskrifter[0].type = 'ombygging';
+    env.S.lagerhistorikk = [{ ordreId: o.id, batchId: 'batch_1', oppskriftId: 'r1' }];
+    env.renderOrdreLagerbruk();
+    expect(o.fikenLinjer.length).toBe(0);
+  });
 });
