@@ -20,6 +20,10 @@ const FIKEN_API_KEY = Deno.env.get('FIKEN_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 const FIKEN_BASE = 'https://api.fiken.no/api/v2'
+// Driftskonto fakturaer skal betales til - oppgitt av Henrik 2026-09-17 ("2801 56 52790"),
+// lagret uten mellomrom/punktum siden Fiken sitt eget bankAccountNumber-felt (bekreftet
+// mot en ekte utstedt faktura) er en ren 11-sifret streng uten formattering.
+const FIKEN_DRIFTSKONTO = '28015652790'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -150,6 +154,14 @@ Deno.serve(async (req) => {
     const produktMap = await hentProduktnummerTilId(slug)
     const ukjente = linjer.map((l: any) => l.produktnummer).filter((n: string) => !produktMap.has(String(n)))
     if (ukjente.length) return jsonSvar({ error: `Fant ikke Fiken-produkt for produktnummer: ${ukjente.join(', ')}` }, 400)
+    // Hver fakturalinje MÅ ha en konto (bekreftet av Henrik) - stopp heller kladden helt
+    // enn å la Fiken sin egen default (som kan være feil/tom) stille avgjøre kontoen.
+    const utenKonto = linjer
+      .map((l: any) => ({ produktnummer: String(l.produktnummer), produkt: produktMap.get(String(l.produktnummer)) }))
+      .filter((x: any) => !x.produkt?.konto)
+    if (utenKonto.length) {
+      return jsonSvar({ error: `Produkt uten konto satt opp i Fiken: ${utenKonto.map((x: any) => x.produktnummer).join(', ')} - sett en inntektskonto på produktet i Fiken før fakturering.` }, 400)
+    }
 
     // Avtalt rabatt per kunde - kun forhåndsutfylt der historikken var konsekvent (se
     // fiken_kunde_rabatt-migrasjonen), NULL/mangler rad betyr 0% til Henrik setter en verdi.
@@ -190,10 +202,10 @@ Deno.serve(async (req) => {
       const line: Record<string, unknown> = { productId: produkt.productId, quantity: l.antall || 1 }
       // Fiken arver IKKE nødvendigvis produktets egen inntektskonto automatisk på en
       // fakturalinje opprettet via API-et (bekreftet av Henrik: kontoen kom ikke inn av
-      // seg selv) - send den derfor eksplisitt. Feltnavnet er bekreftet identisk på både
-      // produktet og en faktisk utstedt fakturalinje ("incomeAccount") ved å lese en ekte
-      // faktura tilbake fra Fiken.
-      if (produkt.konto) line.incomeAccount = produkt.konto
+      // seg selv) - send den derfor eksplisitt (validert obligatorisk over). Feltnavnet
+      // er bekreftet identisk på både produktet og en faktisk utstedt fakturalinje
+      // ("incomeAccount") ved å lese en ekte faktura tilbake fra Fiken.
+      line.incomeAccount = produkt.konto
       const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
       if (erOverstyrtBelop) {
         line.unitPrice = Math.round(Number(l.belop) * 100)
@@ -214,6 +226,9 @@ Deno.serve(async (req) => {
       daysUntilDueDate: 14,
       issueDate: idag,
       ourReference: 'Jan Børre Sigurdsen',
+      // Driftskontoen fakturaen skal betales til - satt eksplisitt fordi Fiken sin egen
+      // default ikke traff riktig konto (bekreftet av Henrik 2026-09-17).
+      bankAccountNumber: FIKEN_DRIFTSKONTO,
       ...(ordreReferanse ? { orderReference: ordreReferanse } : {}),
       lines: linjerMedIndeks,
     }
