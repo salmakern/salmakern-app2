@@ -616,7 +616,12 @@ async function kallFikenFakturer(id, ekstra) {
     if (!res.ok || data.error) throw new Error(data.error || ('Fiken svarte ' + res.status));
     o.fakturert = true;
     logChange(o, 'Fakturert - kladd opprettet i Fiken');
-    save(id);
+    // MÅ vente på selve lagringen her - uten await fortsetter koden (og viser suksess-
+    // meldingen som ber brukeren navigere videre til Fiken) før skrivingen til databasen
+    // faktisk er bekreftet ferdig. Reell bug funnet 2026-09-17: en kladd ble opprettet i
+    // Fiken, men "fakturert" ble aldri lagret i appen - brukeren rakk trolig å navigere
+    // til Fiken før den bakgrunnsstartede lagringen fikk fullføre.
+    await save(id);
     if (o.status === 'arkivert') renderArkiv();
     else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
     else buildOrdreDetail();
