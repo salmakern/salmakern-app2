@@ -1267,6 +1267,16 @@ function renderOrdreLagerbruk() {
   // begrensning for historiske rader - se migrasjonsfilens kommentar).
   const erOppskriftHuket = r => ordreBatchRader.some(h => h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn);
 
+  // Samme root-cause-fiks som synkroniserOmbyggingFikenLinjer i ordre-detalj.js: toggle-
+  // handleren legger kun til/fjerner Fiken-linjen i selve avkrysningsøyeblikket, så en
+  // ordre der en oppskrift ble valgt uavhengig av (eller før) fikenProduktnummer ble satt
+  // opp på den oppskriften, ville aldri fått linjen lagt til i etterkant. Kjøres her ved
+  // hvert render av lagerbruk-seksjonen, slik at ordren retter seg selv opp - no-op når
+  // linjen allerede står riktig (se oppdaterFikenLinjeForOppskrift).
+  (S.lagerOppskrifter||[]).filter(r => r.fikenProduktnummer && oppskriftMatcherOrdre(r, o)).forEach(r => {
+    oppdaterFikenLinjeForOppskrift(r.fikenProduktnummer, erOppskriftHuket(r));
+  });
+
   const seksjonHTML = (type, tittel) => {
     const treff = (S.lagerOppskrifter||[]).filter(r => (r.type||'ombygging')===type && oppskriftMatcherOrdre(r, o));
     if (!treff.length) return '';
