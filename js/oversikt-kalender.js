@@ -91,7 +91,10 @@ function renderOrdreList() {
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
         ${dokStatusKortHTML(o)}
-        ${o.utstyr?.hengerfeste==='hengerfeste'?`<div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>`:''}
+        <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">
+          ${flateKortHTML(o)}
+          ${hengerfesteKortHTML(o)}
+        </div>
         <div style="padding-bottom:9px;border-bottom:1px solid #27272a">${tvangsflytBarHTML(o)}</div>
         <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
@@ -156,7 +159,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}</div>
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</div>
@@ -176,7 +179,7 @@ function renderOversikt(q) {
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start">${hengerfesteKortHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}</div>
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
@@ -458,6 +461,14 @@ function hengerfesteKortHTML(o) {
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
   </div>` : '';
+}
+// Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
+// bare inne i ordredetaljen), bedt om av Henrik 2026-09-17 for bedre oversikt i listene.
+function flateKortHTML(o) {
+  const f = o.flateId ? (S.flater||[]).find(x=>x.id===o.flateId) : null;
+  return f
+    ? `<span class="pill info" style="font-size:11px;margin:0;white-space:nowrap">🚛 Flåte ${esc(f.flatenummer)}</span>`
+    : `<span class="pill" style="font-size:11px;margin:0;white-space:nowrap;color:#a1a1aa">Ingen flåte</span>`;
 }
 
 function dokStatusFarge(verdi) {
