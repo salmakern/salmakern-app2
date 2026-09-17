@@ -651,7 +651,10 @@ async function fakturerViaFiken(id) {
 // 2026-09-16). Kun av/på (ikke fritekst-prosent) - 20 % er den klare standardsatsen når
 // det faktisk gis rabatt (54 av 63 ombygging-kunder i historikken). Skrives FØR selve
 // fakturakallet, slik at rabatten gjelder allerede på DENNE fakturaen.
-const FIKEN_RABATT_STANDARDSATS = 20;
+// Ombygging og ekstra utstyr har ulik standardsats (bedt om av Henrik 2026-09-17 - satt
+// ned fra en tidligere felles 20% til 10% kun for ekstra utstyr).
+const FIKEN_RABATT_STANDARDSATS_OMBYGGING = 20;
+const FIKEN_RABATT_STANDARDSATS_EKSTRA_UTSTYR = 10;
 async function bekreftFikenKunde() {
   const navn = (document.getElementById('fikenKundeInput').value || '').trim();
   // Case-ufølsom match - mobil/nettleser autokapitaliserer ofte bokstaven rett etter en
@@ -663,8 +666,8 @@ async function bekreftFikenKunde() {
   btn.disabled = true; btn.textContent = 'Oppretter...';
 
   if (db) {
-    const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').checked ? FIKEN_RABATT_STANDARDSATS : 0;
-    const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').checked ? FIKEN_RABATT_STANDARDSATS : 0;
+    const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').checked ? FIKEN_RABATT_STANDARDSATS_OMBYGGING : 0;
+    const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').checked ? FIKEN_RABATT_STANDARDSATS_EKSTRA_UTSTYR : 0;
     const rad = { fiken_contact_id: valgt.contactId, fiken_navn: valgt.navn, rabatt_ombygging: rabattOmbygging, rabatt_ekstra_utstyr: rabattEkstraUtstyr, oppdatert_av: me?.navn || '' };
     const { error } = await db.from('fiken_kunde_rabatt').upsert(rad, { onConflict: 'fiken_contact_id' });
     if (error) visToast('Kunne ikke lagre rabatt: ' + error.message);
