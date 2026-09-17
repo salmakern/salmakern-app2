@@ -47,6 +47,8 @@ Deno.serve(async (req) => {
         navn: p.name || '',
         prisKr: typeof p.unitPrice === 'number' ? p.unitPrice / 100 : null,
         aktiv: p.active !== false,
+        konto: p.incomeAccount || null,
+        productId: p.productId,
       }))
       .sort((a: any, b: any) => String(a.produktnummer).localeCompare(String(b.produktnummer), 'nb', { numeric: true }))
 

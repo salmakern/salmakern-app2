@@ -61,15 +61,15 @@ async function hentCompanySlug(): Promise<string> {
 // productId (f.eks. 8497364290) som selve faktura-API-et faktisk krever i lines[].
 // Bekreftet ved en ekte 404 ("Missing product with id 21") i testing - må alltid slå
 // opp riktig productId via produktlisten før en kladd opprettes.
-async function hentProduktnummerTilId(slug: string): Promise<Map<string, { productId: number; navn: string }>> {
-  const map = new Map<string, { productId: number; navn: string }>()
+async function hentProduktnummerTilId(slug: string): Promise<Map<string, { productId: number; navn: string; konto: string | null }>> {
+  const map = new Map<string, { productId: number; navn: string; konto: string | null }>()
   let page = 0
   while (true) {
     const res = await fikenFetch(`/companies/${slug}/products?page=${page}&pageSize=100`)
     if (!res.ok) throw new Error(`Fiken /products svarte ${res.status}`)
     const produkter = await res.json()
     for (const p of produkter) {
-      if (p.productNumber) map.set(String(p.productNumber), { productId: p.productId, navn: p.name || '' })
+      if (p.productNumber) map.set(String(p.productNumber), { productId: p.productId, navn: p.name || '', konto: p.incomeAccount || null })
     }
     const pageCount = Number(res.headers.get('Fiken-Api-Page-Count') || '1')
     page++
@@ -188,6 +188,12 @@ Deno.serve(async (req) => {
     const linjerMedIndeks = linjer.map((l: any, i: number) => {
       const produkt = produktMap.get(String(l.produktnummer))!
       const line: Record<string, unknown> = { productId: produkt.productId, quantity: l.antall || 1 }
+      // Fiken arver IKKE nødvendigvis produktets egen inntektskonto automatisk på en
+      // fakturalinje opprettet via API-et (bekreftet av Henrik: kontoen kom ikke inn av
+      // seg selv) - send den derfor eksplisitt. Feltnavnet er bekreftet identisk på både
+      // produktet og en faktisk utstedt fakturalinje ("incomeAccount") ved å lese en ekte
+      // faktura tilbake fra Fiken.
+      if (produkt.konto) line.incomeAccount = produkt.konto
       const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
       if (erOverstyrtBelop) {
         line.unitPrice = Math.round(Number(l.belop) * 100)
