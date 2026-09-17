@@ -131,6 +131,7 @@ function buildOrdreDetail() {
   const detailEl = document.getElementById('ordreDetail');
   const focusTag = document.activeElement?.tagName;
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
+  synkroniserOmbyggingFikenLinjer(o);
   const tf = tvangsflyt(o);
   const tvangsflytOk = tf.every(t=>t.ok);
   const erAdmin = me && me.rolle==='admin';
@@ -832,6 +833,21 @@ function finnFikenOmbyggingModell(merke, modell) {
   return FIKEN_OMBYGGING_MODELLER.find(r => r.match.test(tekst)) || null;
 }
 
+// Sørger for at o.fikenLinjer faktisk stemmer med det ombygging-boksene sier akkurat nå.
+// Kalles både fra selve avkryssingen (sfOmbygging) OG fra buildOrdreDetail() ved hver
+// åpning/rerendring av ordren - sistnevnte fanger opp ordre der boksen ble huket av (eller
+// merke/modell ble endret) uten at dette rakk å trigge et onchange-kall, som ellers ville
+// latt fakturagrunnlaget mangle selve ombyggingslinjen for godt. oppdaterFikenLinjeForOppskrift
+// er selv en no-op (ingen lagring) når linjen allerede står riktig, så dette er trygt å
+// kalle på hvert eneste render uten å skape unødvendige lagringer.
+function synkroniserOmbyggingFikenLinjer(o) {
+  if (!o.ombygging) return;
+  const modell = finnFikenOmbyggingModell(o.merke, o.modell);
+  if (!modell) return;
+  oppdaterFikenLinjeForOppskrift(modell.ombygging, !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy));
+  if (modell.personbil) oppdaterFikenLinjeForOppskrift(modell.personbil, !!o.ombygging.personbil);
+}
+
 function sfOmbygging(id, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
@@ -840,13 +856,7 @@ function sfOmbygging(id, felt, val) {
   // Oppdater kun ombygging-boksen - ikke bygg om hele ordresiden (samme fiks som utstyr-sjekklisten).
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
-  const modell = finnFikenOmbyggingModell(o.merke, o.modell);
-  if (!modell) return;
-  if (felt==='nyttKjoretoy'||felt==='bruktKjoretoy') {
-    oppdaterFikenLinjeForOppskrift(modell.ombygging, !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy));
-  } else if (felt==='personbil' && modell.personbil) {
-    oppdaterFikenLinjeForOppskrift(modell.personbil, val);
-  }
+  synkroniserOmbyggingFikenLinjer(o);
 }
 
 // ════════════════════════════════════════════════════
