@@ -7,7 +7,7 @@ import { loadScript } from './helpers/load-script.js';
 // transkribert riktig, siden dette er tall som går videre til Statens vegvesen.
 const { beregnVektfordeling, finnJustertTotalvekt, vegvesenGeometri } = loadScript('vegvesen-dokumenter.js');
 
-const KIA_EV9_GEOMETRI = { a: 3.100, b: 1.480, d: 2.120 };
+const KIA_EV9_GEOMETRI = { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 };
 
 describe('vegvesenGeometri', () => {
   it('finner geometri for KIA EV9 uavhengig av store/små bokstaver', () => {
@@ -16,6 +16,19 @@ describe('vegvesenGeometri', () => {
   });
   it('returnerer null for ukjent modell', () => {
     expect(vegvesenGeometri('Mercedes', 'Sprinter')).toBeNull();
+  });
+
+  // cOffset er IKKE en universell EU-konstant (1.75), men varierer reelt per modell
+  // (1.55-1.97) - verifisert direkte mot FORMELEN (ikke bare hurtigbufret verdi) i hvert
+  // referanseregneark 2026-09-18. En feil her gir feil "jevnt fordelt last"-tall til
+  // Statens vegvesen for disse modellene.
+  it('bruker riktig per-modell cOffset for de nye modellene (ikke KIA sin 1.75)', () => {
+    expect(vegvesenGeometri('KGM', 'Rexton')).toEqual({ a: 2.865, b: 1.430, d: 2.061, cOffset: 1.75 });
+    expect(vegvesenGeometri('Land Rover', 'Defender 110')).toEqual({ a: 3.022, b: 1.600, d: 1.600, cOffset: 1.94 });
+    expect(vegvesenGeometri('Land Rover', 'Discovery 5')).toEqual({ a: 2.923, b: 1.550, d: 1.860, cOffset: 1.97 });
+    expect(vegvesenGeometri('Mercedes-Benz', 'GLS')).toEqual({ a: 3.135, b: 1.510, d: 2.080, cOffset: 1.88 });
+    expect(vegvesenGeometri('Mercedes-Benz', 'Geländewagen')).toEqual({ a: 2.890, b: 1.490, d: 1.620, cOffset: 1.87 });
+    expect(vegvesenGeometri('Volkswagen', 'ID.Buzz')).toEqual({ a: 3.239, b: 1.180, d: 2.416, cOffset: 1.55 });
   });
 });
 
@@ -77,7 +90,7 @@ describe('beregnVektfordeling (mot referanseeksempelet fra Henrik)', () => {
 describe('beregnVektfordeling (mot et andre ekte eksempel, chassis KNAAD8156T6076001)', () => {
   const P=3111, P1=1590, P2=1860, M=2500, M1=1230, M2=1260;
   it('gjenskaper tallene og alt er SANN uten justering', () => {
-    const res = beregnVektfordeling(P, P1, P2, M, M1, M2, {a:3.100,b:1.480,d:2.120});
+    const res = beregnVektfordeling(P, P1, P2, M, M1, M2, {a:3.100,b:1.480,d:2.120,cOffset:1.75});
     expect(res.rader[0].nyttelast).toBeCloseTo(536, 0);
     expect(res.rader[1].nyttelast).toBeCloseTo(461, 0);
     expect(res.rader[2].nyttelast).toBeCloseTo(386, 0);
@@ -88,7 +101,7 @@ describe('beregnVektfordeling (mot et andre ekte eksempel, chassis KNAAD8156T607
     expect(res.rader[1].bak).toBeCloseTo(489.49, 1);
     expect(res.rader[2].bak).toBeCloseTo(457.31, 1);
     expect(res.oppfylt).toBe(true);
-    const justertP = finnJustertTotalvekt(P, P1, P2, M, M1, M2, {a:3.100,b:1.480,d:2.120});
+    const justertP = finnJustertTotalvekt(P, P1, P2, M, M1, M2, {a:3.100,b:1.480,d:2.120,cOffset:1.75});
     expect(justertP).toBe(P);
   });
 });

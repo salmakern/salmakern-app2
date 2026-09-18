@@ -5,27 +5,230 @@
 // mal + geometri for (se VEGVESEN_MODELLER under).
 // ════════════════════════════════════════════════════
 
-// Faste fysiske mål per bilmodell (akselavstand, seteposisjon, varerommets lengde) -
-// IKKE del av ordrens egne vekter, brukes i jevnt-fordelt-last-beregningen
-// (EU 2021/535, Section B). Kun KIA EV9 foreløpig - flere modeller legges til etter
-// hvert som Henrik gir tilsvarende referansedokumenter for dem.
-const VEKTFORDELING_GEOMETRI = {
-  'KIA EV9': { a: 3.100, b: 1.480, d: 2.120 }
-};
+// Per-modell data for Vegvesen-dokumentene - lagt inn etter hvert som Henrik gir
+// ekte referansedokumenter for hver modell (se salmakern-app/Dokumenter til ordrer/).
+// Alt under (geometri, produsentadresse, krav-rader, særlig anmerkning) er hentet
+// direkte fra disse referansedokumentene 2026-09-18 - IKKE gjettet/interpolert.
+// Toyota Land Cruiser 250 mangler fortsatt referansedokumenter (tomme mapper) og er
+// derfor ikke med ennå.
+//
+// geometri: {a,b,d,cOffset} - a=akselavstand, b=avstand sete-foraksel, d=varerommets
+// lengde (m), cOffset=konstanten i c = d/2 + cOffset (VARIERER per modell - bekreftet
+// ved å lese selve Excel-formelen i hvert referanseark, IKKE en universell EU-konstant
+// slik det først så ut fra KIA EV9 alene).
+//
+// kravRader: samme 6-kolonners form som før: [kravLinje1, kravLinje2, kravnivå,
+// testrapport, testnr/kilde, utarbeidetAv] - alle modellers krav-tabeller er hentet
+// rad for rad fra deres egne Fabrikantattest-referanseark.
+//
+// Land Rover-familien (Defender/Discovery 5) har en ekstra teknisk operasjon (bytte av
+// støtdempertårn) som ikke finnes i noen andre modellers tekst, og avslutter
+// skilleveggsetningen uten "tak"-prefikset på braketten - gjengitt eksakt fra
+// referansedokumentene (Defender 110 og Discovery 5 sine tekster er ord-for-ord like).
+function egenerklaeringAvsnittLandRover(chassis, merkeModell) {
+  return [
+    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    'Telemark Salmakerverksted, påbyggerverksted 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften, og at det ikke er laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen. Det er kun tatt i bruk originale fester.',
+    'I forbindelse med ombygging av denne bilen blir andre og eventuelt tredje seterad, med tilhørende braketter og deksler demontert og fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, så legges disse bak sidepanelene. Så blir de originale støtdempertårnene byttet ut med egentilvirkede støtdempertårn. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres to gulvplater på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer og nagler, og i egne braketter som festes i de originale festene til håndtakene i taket.',
+    'Bilen er vist med taktrekk, men uten et uoriginalt teppe som blir lagt løst inn i bilen etter godkjenning. Dette teppe må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på statskassen, og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
+    'Beregning av jevnt fordelt last er gjort i henhold til direktiv 2021/535, Section B.',
+    'Bilen er merket med merkeplate for trinn 2 påbygger i henhold til direktiv 2021/535.',
+    'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
+    'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
+  ];
+}
+// Mercedes-familien (Geländewagen/GLS) - generisk tekst uten klimakanal-setningen
+// (bekreftet bevisst av Henrik 2026-09-18: Mercedes-modellene har ingen slike
+// takkanaler å fjerne), gjengitt fra GLS/Geländewagen sine referansedokumenter.
+function egenerklaeringAvsnittMercedes(chassis, merkeModell) {
+  return [
+    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    'Telemark Salmakerverksted, påbyggerverksted 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften. Det er ikke laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen, da det her kun er tatt i bruk originale fester.',
+    'I forbindelse med ombygging av denne bilen blir andre og tredje seteradene, med tilhørende braketter og deksler demontert og fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres gulvplaten på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer og nagler, og i egne braketter som festes i originale fester i taket.',
+    'Bilen er vist med taktrekk, men uten et uoriginalt teppe som legges løst inn etter godkjenning. Dette må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på «statskassen», og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
+    'Beregning av jevnt fordelt last er gjort i henhold til direktiv 2021/535, Seksjon B.',
+    'Bilen er merket med merkeplate for trinn 2 påbygger i henhold til direktiv 2021/535.',
+    'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
+    'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
+  ];
+}
+// KGM Rexton - vesentlig avvikende fra alle andre (bekrefter et fysisk inngrep i
+// karosseriet gjort av et eksternt skadeverksted, kun andre seterad fjernes (ikke
+// tredje), og et eget avsnitt om at original sete-/beltefester ikke er rørt slik at
+// bilen kan bygges tilbake til personbil senere) - gjengitt fra Rexton sitt eget
+// referansedokument, IKKE forenklet til en av de andre malene.
+function egenerklaeringAvsnittRexton(chassis, merkeModell) {
+  return [
+    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    'Telemark Salmakerverksted, påbyggerverksted nr. 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften. Det er under ombyggingen til varebil klasse 2 av denne bilen blitt gjort et inngrep i bilens karosseri, se vedlagt dokumentasjon. Det er ikke laget nye fester eller gjort andre inngrep i bilens karosseri ved monteringen av den resterende innredningen, da det her kun er tatt i bruk originale fester.',
+    'I forbindelse med den resterende ombygging av denne bilen blir andre seteraden med tilhørende braketter og deksler fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet og disse blir festet ved bruk av originale skruer i de originale festene i gulvet, eller med montasje lim. Så monteres gulvplaten på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer, og i egne takbraketter som festes i de originale festene til håndtakene i taket.',
+    'Bilen er vist med taktrekk, men uten et uoriginalt teppe og en skumsats. Teppe og skumsatsen er lagt løst inn i bilen etter godkjenning, og disse må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på «statskassen», og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
+    'Inngrepet på karosseriet er gjort av Star Bilskade, skadeverksted 02 nr. 4835. Dokumentasjonen på dette ligger vedlagt. Det er ikke airbager i 2. seteraden på denne bilen.',
+    'Beregning av jevnt fordelt last er gjort i henhold til direktiv 2021/535, Section B.',
+    'Bilen er merket med fabrikasjonsplate for trinn 2 påbygger i henhold til direktiv 2021/535.',
+    'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
+    'Det er ikke gjort endringer på de originale festene til setene og sikkerhetsbeltene, slik at endringen ikke påvirker ombyggingen tilbake til personbil på et senere tidspunkt.',
+    'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
+  ];
+}
+
+const VEGVESEN_MODELLER = [
+  {
+    match: /\bev9\b/i, navn: 'KIA EV9',
+    geometri: { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 },
+    fabrikant1: { navn: 'KIA Coporation', adresse: ['12, Heolleung-ro, Seocho-gu', 'Seoul', 'Korea'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177', 'TÜV NORD'],
+      ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2 og 6', 'No. 8124392177', 'TÜV NORD'],
+      ['A2', 'Seterygger', 'FN-Reg. 17', 'Annex 7', 'No. 8124392177', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 812439217', 'TÜV NORD'],
+      ['Airbager i 2. seterad', '', '', 'Annex 5 og 6', 'No. 8124392177', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177 / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: 'Det er gjort en endring på baksiden av seteryggene på framstolene',
+    antallSitteplasser: o => ({ inn: String(fabrikantattestSitteplasser(o)), ut: '2' }),
+    // egenerklaeringAvsnitt() er definert lenger ned i filen (Standard/Panorama-varianten
+    // som allerede fantes for KIA EV9 - urørt) - function-deklarasjoner heises, så det er
+    // trygt å referere til den herfra.
+    egenerklaering: (chassis, merkeModell, variant) => egenerklaeringAvsnitt(variant, chassis, merkeModell)
+  },
+  {
+    match: /\brexton\b/i, navn: 'KGM Rexton',
+    geometri: { a: 2.865, b: 1.430, d: 2.061, cOffset: 1.75 },
+    fabrikant1: { navn: 'KGM Mobility Corp.', adresse: ['455-12, Dongsak-ro, Pyeongtaek-21', 'Gyeonggi-do', 'Korea'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8123999128-YK', 'TÜV NORD'],
+      ['C7', 'Stabilitetskontroll', 'FN-Reg. 13-H / FN-Reg. 140', 'Annex 2', 'No. 8123999128-YK', 'TÜV NORD'],
+      ['G1', 'Støynivå', 'FN-Reg. 51', 'Annex 3', 'No. 8123999128-YK', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 4', 'No. 8123999128-YK', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 5', 'No. 8123999128-YK', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8123999128-YK / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted'],
+      ['Airbager i 2. seterad', '', '', 'Egenerklæring', '', 'Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: 'Bakre eksosanlegg er merket med delenummer: TS 2430036411',
+    antallSitteplasser: () => ({ inn: '5', ut: '2' }),
+    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittRexton(chassis, merkeModell)
+  },
+  {
+    match: /defender\b/i, navn: 'Land Rover Defender',
+    geometri: { a: 3.022, b: 1.600, d: 1.600, cOffset: 1.94 },
+    fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LE', 'TÜV NORD'],
+      ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2', 'No. 8124392177-LE', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177-LE', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177-LE', 'TÜV NORD'],
+      ['Støtdempertårn', '', '', 'Annex 5 og 6 / 7 og 8', 'No. 8124392177-LE', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-LE / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: 'Støtdempertårn er merket med delenummer: TS 095866/034244 L/R',
+    antallSitteplasser: () => ({ inn: '5/6/7', ut: '2/3' }),
+    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittLandRover(chassis, merkeModell)
+  },
+  {
+    match: /discovery\s*5\b/i, navn: 'Land Rover Discovery 5',
+    geometri: { a: 2.923, b: 1.550, d: 1.860, cOffset: 1.97 },
+    fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LR', 'TÜV NORD'],
+      ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2', 'No. 8124392177-LR', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177-LR', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177-LR', 'TÜV NORD'],
+      ['Støtdempertårn', '', '', 'Annex 5 og 6 / 7 og 8', 'No. 8124392177-LE', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-LE / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: 'Støtdempertårn er merket med delenummer: TS 095866/034244 L/R',
+    antallSitteplasser: () => ({ inn: '5/7', ut: '2' }),
+    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittLandRover(chassis, merkeModell)
+  },
+  {
+    match: /\bgls\b/i, navn: 'Mercedes-Benz GLS',
+    geometri: { a: 3.135, b: 1.510, d: 2.080, cOffset: 1.88 },
+    fabrikant1: { navn: 'Mercedes-Benz AG', adresse: ['DE-70372 Stuttgart', 'Germany'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_M-GLS', 'TÜV NORD'],
+      ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2 og 6', 'No. 8124392177_M-GLS', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177_M-GLS', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177_M-GLS', 'TÜV NORD'],
+      ['Airbager i 2. seterad', '', '', 'Annex 5 og 6', 'No. 8124392177_M-GLS', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177_M-GLS / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: null,
+    antallSitteplasser: () => ({ inn: '7', ut: '2' }),
+    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittMercedes(chassis, merkeModell)
+  },
+  {
+    match: /gel[aä]ndewagen/i, navn: 'Mercedes-Benz Geländewagen',
+    geometri: { a: 2.890, b: 1.490, d: 1.620, cOffset: 1.87 },
+    fabrikant1: { navn: 'Mercedes-Benz AG', adresse: ['DE-70372 Stuttgart', 'Germany'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_M-G', 'TÜV NORD'],
+      ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2 og 6', 'No. 8124392177_M-G', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177_M-G', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177_M-G', 'TÜV NORD'],
+      ['Airbager i 2. seterad', '', '', 'Annex 5 og 6', 'No. 8124392177_M-G', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177_M-G / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: null,
+    antallSitteplasser: () => ({ inn: '5', ut: '2' }),
+    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittMercedes(chassis, merkeModell)
+  },
+  {
+    match: /id\.?\s*buzz/i, navn: 'Volkswagen ID.Buzz',
+    geometri: { a: 3.239, b: 1.180, d: 2.416, cOffset: 1.55 },
+    fabrikant1: { navn: 'Volkswagen AG', adresse: ['Berliner Ring 2', '38 440 Wolfsburg', 'Germany'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-EB', 'TÜV NORD'],
+      ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2', 'No. 8124392177-EB', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177-EB', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177-EB', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-EB / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    // Henrik 2026-09-18: referansedokumentet for ID.Buzz var et ufullstendig utkast
+    // (motsatt betydning på teppe-setningen, manglet hele avsnitt) - bruk derfor samme
+    // fulle standardmal som KIA/Mercedes i stedet for å gjenskape utkastet.
+    saerligAnmerkning: null,
+    antallSitteplasser: () => ({ inn: '7', ut: '2' }),
+    // Henrik 2026-09-18: bruk samme fulle "standard"-tekst som KIA EV9 (inkl.
+    // klimakanal-setningen) - ingen egen Panorama-variant for VW.
+    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnitt('standard', chassis, merkeModell)
+  }
+];
+function vegvesenFinnModell(merke, modell) {
+  const tekst = `${merke || ''} ${modell || ''}`.trim();
+  return VEGVESEN_MODELLER.find(m => m.match.test(tekst)) || null;
+}
 function vegvesenGeometri(merke, modell) {
-  const noekkel = `${(merke || '').trim()} ${(modell || '').trim()}`.trim().toUpperCase();
-  const treff = Object.keys(VEKTFORDELING_GEOMETRI).find(k => k.toUpperCase() === noekkel);
-  return treff ? VEKTFORDELING_GEOMETRI[treff] : null;
+  const m = vegvesenFinnModell(merke, modell);
+  return m ? m.geometri : null;
 }
 
 // Selve jevnt-fordelt-last-beregningen (EU 2021/535, Section B / N1 2018/858 pk 3.6.1) -
 // gjenskaper formlene fra Telemark Salmakerverksted sitt eget Vektfordeling-regneark.
 // P/P1/P2 = Teknisk tillatt totalvekt/aksel 1/aksel 2 (fra Vekter -> Ved ankomst).
 // M/M1/M2 = Masse i kjøreklar stand totalt/aksel 1/aksel 2 (fra Vekter -> Før visning).
-// geometri = {a: akselavstand, b: avstand sete-foraksel, d: lengde lasterom}.
+// geometri = {a: akselavstand, b: avstand sete-foraksel, d: lengde lasterom, cOffset}.
+// cOffset (konstanten i c = d/2 + cOffset) er IKKE en universell EU-konstant slik det
+// først så ut fra KIA EV9 alene - bekreftet ved å lese Excel-formelen i hvert
+// referanseark, og den varierer reelt per modell (1.55-1.97) - se VEGVESEN_MODELLER.
 function beregnVektfordeling(P, P1, P2, M, M1, M2, geometri) {
-  const { a, b, d } = geometri;
-  const c = d / 2 + 1.75;
+  const { a, b, d, cOffset } = geometri;
+  const c = d / 2 + cOffset;
   const nyttelast = n => P - M - (n + 1) * 75;
   const frontLast = n => ((n + 1) * 75 * (a - b) + nyttelast(n) * (a - c)) / a;
   const bakLast = n => ((n + 1) * 75 * b + nyttelast(n) * c) / a;
@@ -49,8 +252,8 @@ function beregnVektfordeling(P, P1, P2, M, M1, M2, geometri) {
 // Returnerer alltid <= opprinnelig P (senker aldri en verdi som allerede er lav nok,
 // og runder alltid NED til nærmeste hele kg, som spesifisert av Henrik).
 function finnJustertTotalvekt(P, P1, P2, M, M1, M2, geometri) {
-  const { a, b, d } = geometri;
-  const c = d / 2 + 1.75;
+  const { a, b, d, cOffset } = geometri;
+  const c = d / 2 + cOffset;
   const frontMaks = P1 - M1;
   const bakMaks = P2 - M2;
   // Løser P <= ... for hvert krav som MÅ være sant (front: n=0,1,2 / bak: n=1,2).
@@ -189,7 +392,15 @@ async function genEgenerklaeringPDF(o) {
   page.drawText(tittel, { x: venstreMarg, y, size: 12, font: fontBold });
   y -= 26;
 
-  const avsnitt = egenerklaeringAvsnitt(variant, o.chassis || '', merkeModell);
+  // Hver modell(-familie) har sin egen, reelt forskjellige avsnitt-tekst (ikke bare
+  // modellnavn byttet ut - bekreftet ved å lese ekte referansedokumenter for hver
+  // modell 2026-09-18) - se VEGVESEN_MODELLER. Faller tilbake til KIA sin mal hvis
+  // ingen modell er funnet (skal ikke skje i praksis, siden genererVegvesenDokumenter
+  // allerede sjekker dette før noe genereres).
+  const vegvesenModell = vegvesenFinnModell(o.merke, o.modell);
+  const avsnitt = vegvesenModell
+    ? vegvesenModell.egenerklaering(o.chassis || '', merkeModell, variant)
+    : egenerklaeringAvsnitt(variant, o.chassis || '', merkeModell);
   const storrelse = 10.5, linjeHoyde = 14;
   avsnitt.forEach(tekst => {
     const linjer = vegvesenOmbrytTekst(tekst, font, storrelse, tekstBredde);
@@ -391,21 +602,8 @@ async function genVektfordelingPDF(o, P, P1, P2, M, M1, M2, geometri) {
 
 // ── Fabrikantattest ─────────────────────────────────────────────────────────
 
-// De 9 kravradene er 100% fast tekst for denne modellen (samme krav/testrapport-numre
-// på alle KIA EV9-ombygginger) - kun selve tallene i "Andre endringer" varierer per bil.
-const FABRIKANTATTEST_KRAVRADER = [
-  ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177', 'TÜV NORD'],
-  ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2 og 6', 'No. 8124392177', 'TÜV NORD'],
-  ['A2', 'Seterygger', 'FN-Reg. 17', 'Annex 7', 'No. 8124392177', 'TÜV NORD'],
-  ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
-  ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
-  ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177', 'TÜV NORD'],
-  ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 812439217', 'TÜV NORD'],
-  ['Airbager i 2. seterad', '', '', 'Annex 5 og 6', 'No. 8124392177', 'TÜV NORD'],
-  ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177 / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
-];
-
 async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
+  const vegvesenModell = vegvesenFinnModell(o.merke, o.modell);
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -435,7 +633,7 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   page.drawText('KJØRETØYET', { x: kol2X, y, size: 9, font: fontBold });
   page.drawText('TYPEGODKJENNING', { x: kol3X, y, size: 9, font: fontBold });
   y -= 13;
-  tekstLinjer(kol1X, y, ['KIA Coporation', '12, Heolleung-ro, Seocho-gu', 'Seoul', 'Korea']);
+  tekstLinjer(kol1X, y, [vegvesenModell.fabrikant1.navn, ...vegvesenModell.fabrikant1.adresse]);
   tekstLinjer(kol2X, y, [`Type:  ${o.type||''}`, `Variant:  ${o.variant||''}`, `Versjon:  ${o.versjon||''}`, `Understellnummer:  ${o.chassis||''}`]);
   tekstLinjer(kol3X, y, [o.typegodkjenning || '']);
   y -= 4*11 + 10;
@@ -457,7 +655,7 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   });
   y -= hodeHoyde;
   const kravRadHoyde = 26;
-  FABRIKANTATTEST_KRAVRADER.forEach(([l1a,l1b,kravniva,testrapp,testnr,utarbeidet]) => {
+  vegvesenModell.kravRader.forEach(([l1a,l1b,kravniva,testrapp,testnr,utarbeidet]) => {
     ramme(vX, y-kravRadHoyde, tabellBredde, kravRadHoyde);
     kravKolBredder.forEach((b,i) => { if (i>0) ramme(kravKolX[i], y-kravRadHoyde, 0.01, kravRadHoyde); });
     tekstLinjer(kravKolX[0]+3, y-9, [l1a, l1b], 8, 10);
@@ -483,13 +681,15 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   // vekter". Ut = Endring (samme kg trukket fra som i Vektfordeling, se endringP/endringVogntog).
   const innTotalvekt = parseFloat(String(o.vekter?.totalvekt?.a||'').replace(',','.')) || 0;
   const innVogntog = parseFloat(String(o.vekter?.vogntog?.a||'').replace(',','.')) || 0;
+  const sitteplasser = vegvesenModell.antallSitteplasser(o);
+  const varerommetUtMm = Math.round(vegvesenModell.geometri.d * 1000) + 'mm';
   const endrRader = [
     ['Egenvekt', vegvesenFmtKg(o.egenvektCoc||0)+'kg', vegvesenFmtKg(egenvektUt)+'kg', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
     ['Tillatt totalvekt', vegvesenFmtKg(innTotalvekt)+'kg', vegvesenFmtKg(endringP)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Tillatt vogntogvekt', vegvesenFmtKg(innVogntog)+'kg', vegvesenFmtKg(endringVogntog)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Karosserikode', 'AC', 'BB', 'Egenerklæring', 'Telemark Salmakerverksted'],
-    ['Antall sitteplasser', String(fabrikantattestSitteplasser(o)), '2', 'Egenerklæring', 'Telemark Salmakerverksted'],
-    ['Varerommets lengde', '-', '2120mm', 'Egenerklæring', 'Telemark Salmakerverksted']
+    ['Antall sitteplasser', sitteplasser.inn, sitteplasser.ut, 'Egenerklæring', 'Telemark Salmakerverksted'],
+    ['Varerommets lengde', '-', varerommetUtMm, 'Egenerklæring', 'Telemark Salmakerverksted']
   ];
   const endrRadHoyde = 13.5;
   endrRader.forEach(rad => {
@@ -502,9 +702,13 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   page.drawText('Disse kravområdene bekreftes oppfylt i henhold til', { x: vX, y, size: 9, font }); y -= 12;
   page.drawText('Forskrift om godkjenning av bil og tilhenger til bil - FOR-2022-06-28-1233.', { x: vX, y, size: 9, font }); y -= 20;
 
-  page.drawText('Særlig anmerkninger', { x: vX, y, size: 9.5, font: fontBold });
-  page.drawLine({ start:{x:vX,y:y-2}, end:{x:vX+90,y:y-2}, thickness:0.5, color: SORT }); y -= 13;
-  page.drawText('Det er gjort en endring på baksiden av seteryggene på framstolene', { x: vX, y, size: 9, font }); y -= 22;
+  if (vegvesenModell.saerligAnmerkning) {
+    page.drawText('Særlig anmerkninger', { x: vX, y, size: 9.5, font: fontBold });
+    page.drawLine({ start:{x:vX,y:y-2}, end:{x:vX+90,y:y-2}, thickness:0.5, color: SORT }); y -= 13;
+    page.drawText(vegvesenModell.saerligAnmerkning, { x: vX, y, size: 9, font }); y -= 22;
+  } else {
+    y -= 14;
+  }
 
   page.drawText(vegvesenDatoNorsk(), { x: vX, y, size: 9.5, font }); y -= 40;
   const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
@@ -586,7 +790,7 @@ async function genMeldingOmRegistreringPDF(o) {
 
   // ── Kjøretøy ──
   y = rad(y, 22, ['Understellsnummer*'], (x,ty,w) => page.drawText(o.chassis||'', { x, y: ty, size: 14, font }));
-  y = rad(y, 22, ['Merke*'], (x,ty,w) => page.drawText(o.merke||'KIA', { x, y: ty, size: 14, font }));
+  y = rad(y, 22, ['Merke*'], (x,ty,w) => page.drawText(o.merke||'', { x, y: ty, size: 14, font }));
   y = rad(y, 22, ['Kjøretøygruppe*'], (x,ty,w) => page.drawText('N1', { x, y: ty, size: 14, font }));
   y = rad(y, 22, ['Farge på kjøretøy'], (x,ty,w) => page.drawText(o.farge||'', { x, y: ty, size: 14, font }));
   // Denne raden har et bredere label-felt (selve spørsmålet) og radioknappene helt til
