@@ -396,8 +396,24 @@ function adminArkByggRader() {
       _arkivert: r.arkivert || false,
       _ordreStatus: null
     }));
+  // Sortert etter Time bekreftet (dato+tid), tidligst øverst - IKKE lenger etter manuelt
+  // dra-og-slipp-rekkefolge (bedt om av Henrik 2026-09-18, erstatter den forrige
+  // rekkefolge-baserte sorteringen fullt ut). timeBekreftet er lagret som "YYYY-MM-DD",
+  // så ren strengsammenligning gir riktig kronologisk rekkefølge. Rader uten Time
+  // bekreftet ennå (ikke booket time hos Biltilsynet) havner sist, sortert seg imellom
+  // etter rekkefolge (samme relative rekkefølge som før, siden de ikke har en dato å
+  // sortere etter) - deretter chassisNr som siste tie-breaker.
   return [...ordreRader, ...loseRader]
-    .sort((a,b) => a.rekkefolge - b.rekkefolge || (a.chassisNr||'').localeCompare(b.chassisNr||'','no'));
+    .sort((a, b) => {
+      const harA = !!a.timeBekreftet, harB = !!b.timeBekreftet;
+      if (harA !== harB) return harA ? -1 : 1;
+      if (harA && harB) {
+        const noekkelA = a.timeBekreftet + ' ' + (a.timeBekreftetTid || '00:00');
+        const noekkelB = b.timeBekreftet + ' ' + (b.timeBekreftetTid || '00:00');
+        if (noekkelA !== noekkelB) return noekkelA < noekkelB ? -1 : 1;
+      }
+      return a.rekkefolge - b.rekkefolge || (a.chassisNr||'').localeCompare(b.chassisNr||'','no');
+    });
 }
 
 const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','bestiltFrakt','merknader','ventendeTimer'];
@@ -1002,7 +1018,11 @@ function renderAdminArk(scrollTilBunn) {
     data,
     layout: 'fitData',
     columns: kolonner,
-    movableRows: kanRedigere,
+    // Rekkefølgen er nå fast (sortert etter Time bekreftet, se radDataFraAdminArk) - en
+    // dra-og-slipp-flytting av en rad ville bare bli overstyrt tilbake med én gang av
+    // sorteringen igjen, så selve dra-funksjonen er skrudd av i stedet for å la den virke
+    // ødelagt (Henrik 2026-09-18).
+    movableRows: false,
     clipboard: true,
     clipboardPasteAction: 'update',
     placeholder: 'Ingen ordre for ' + adminArkAar
