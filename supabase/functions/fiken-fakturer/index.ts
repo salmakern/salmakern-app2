@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
       type: 'invoice',
       customerId: contactId,
       ...(contactPersonId ? { contactPersonId } : {}),
-      daysUntilDueDate: 14,
+      daysUntilDueDate: 10, // 93,6% av 595 ekte fakturaer bruker 10 dager - verifisert, ikke antatt
       issueDate: idag,
       ourReference: 'Jan Børre Sigurdsen',
       // Driftskontoen fakturaen skal betales til - satt eksplisitt fordi Fiken sin egen
