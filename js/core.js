@@ -373,7 +373,8 @@ function dbToOrdre(r) {
     coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn,
     tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||'', tidBiltilsynetSted:r.tid_biltilsynet_sted||'',
     datoKlarHenting:r.dato_klar_henting||'',
-    typegodkjenning:r.typegodkjenning||'', egenvektCoc:r.egenvekt_coc||'', forhandlerOrgnr:r.forhandler_orgnr||''
+    typegodkjenning:r.typegodkjenning||'', egenvektCoc:r.egenvekt_coc||'', forhandlerOrgnr:r.forhandler_orgnr||'',
+    vegvesenFingerprint:r.vegvesen_fingerprint||null
   };
 }
 function ordreToDb(o) {
@@ -403,7 +404,7 @@ function ordreToDb(o) {
   };
 }
 function dbToFlate(r) {
-  return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'' };
+  return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'', vegvesenFingerprint:r.vegvesen_fingerprint||null };
 }
 function dbToLagervare(r) {
   return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', modell:r.modell||'', tegningsnummer:r.tegningsnummer||'', antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, rekkefolge:Number(r.rekkefolge)||0, createdAt:r.created_at||'' };

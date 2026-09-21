@@ -105,3 +105,125 @@ describe('beregnVektfordeling (mot et andre ekte eksempel, chassis KNAAD8156T607
     expect(justertP).toBe(P);
   });
 });
+
+// vegvesenErKomplett/vegvesenFingerprint/vegvesenFlateKontext trenger en egen S -
+// lastes i en egen sandbox (samme fil, men denne gangen med S i ekstraGlobals) i
+// stedet for å gjenbruke instansen over, som bevisst har ingen S.
+function nyFlateSandbox() {
+  const S = { ordrer: [], flater: [] };
+  const env = loadScript('vegvesen-dokumenter.js', { S });
+  return { S, ...env };
+}
+
+function komplettOrdre(overrides = {}) {
+  return {
+    id: 'ord_1', merke: 'KIA', modell: 'EV9', chassis: 'KNAAD8159S6071163',
+    farge: 'Hvit', kunde: 'Testforhandler AS', forhandlerOrgnr: '999888777',
+    vekter: {
+      totalvekt: { a: '3240', v: '2500' },
+      foraksel: { a: '1590', v: '1240' },
+      bakaksel: { a: '1860', v: '1260' },
+    },
+    ...overrides,
+  };
+}
+
+describe('vegvesenErKomplett', () => {
+  it('er komplett når chassis/farge/forhandler/org.nr og alle 6 vektfelt er fylt ut', () => {
+    const { vegvesenErKomplett } = nyFlateSandbox();
+    expect(vegvesenErKomplett(komplettOrdre())).toBe(true);
+  });
+
+  it.each(['chassis', 'farge', 'kunde', 'forhandlerOrgnr'])('er IKKE komplett når %s mangler', (felt) => {
+    const { vegvesenErKomplett } = nyFlateSandbox();
+    expect(vegvesenErKomplett(komplettOrdre({ [felt]: '' }))).toBe(false);
+  });
+
+  it.each(['totalvekt', 'foraksel', 'bakaksel'])('er IKKE komplett når vekt-feltet %s mangler "Ved ankomst"', (akse) => {
+    const { vegvesenErKomplett } = nyFlateSandbox();
+    const o = komplettOrdre();
+    o.vekter[akse].a = '';
+    expect(vegvesenErKomplett(o)).toBe(false);
+  });
+
+  it.each(['totalvekt', 'foraksel', 'bakaksel'])('er IKKE komplett når vekt-feltet %s mangler "Før visning"', (akse) => {
+    const { vegvesenErKomplett } = nyFlateSandbox();
+    const o = komplettOrdre();
+    o.vekter[akse].v = '';
+    expect(vegvesenErKomplett(o)).toBe(false);
+  });
+});
+
+describe('vegvesenFingerprint', () => {
+  it('gir samme fingerprint for identiske data (idempotent - ingen unødvendig regenerering)', () => {
+    const { vegvesenFingerprint } = nyFlateSandbox();
+    const o1 = komplettOrdre();
+    const o2 = komplettOrdre();
+    expect(vegvesenFingerprint(o1, null)).toBe(vegvesenFingerprint(o2, null));
+  });
+
+  it('endrer fingerprint når en vekt endres', () => {
+    const { vegvesenFingerprint } = nyFlateSandbox();
+    const o = komplettOrdre();
+    const fp1 = vegvesenFingerprint(o, null);
+    o.vekter.totalvekt.a = '3250';
+    expect(vegvesenFingerprint(o, null)).not.toBe(fp1);
+  });
+
+  it('endrer fingerprint når chassis endres', () => {
+    const { vegvesenFingerprint } = nyFlateSandbox();
+    const o = komplettOrdre();
+    const fp1 = vegvesenFingerprint(o, null);
+    o.chassis = 'ANNET-CHASSIS';
+    expect(vegvesenFingerprint(o, null)).not.toBe(fp1);
+  });
+
+  it('endrer fingerprint når et flåtemedlem legges til, selv om primær-dataene er uendret', () => {
+    const { vegvesenFingerprint } = nyFlateSandbox();
+    const primaer = komplettOrdre();
+    const flate = { id: 'flate_1', flatenummer: '1032', primaerOrdreId: primaer.id };
+    const fp1 = vegvesenFingerprint(primaer, { flate, primaer, medlemmer: [primaer] });
+    const annen = komplettOrdre({ id: 'ord_2', chassis: 'ANNET-CHASSIS-2' });
+    const fp2 = vegvesenFingerprint(primaer, { flate, primaer, medlemmer: [primaer, annen] });
+    expect(fp2).not.toBe(fp1);
+  });
+});
+
+describe('vegvesenFlateKontext', () => {
+  it('returnerer null for en ordre uten flateId', () => {
+    const { S, vegvesenFlateKontext } = nyFlateSandbox();
+    S.ordrer = [komplettOrdre()];
+    expect(vegvesenFlateKontext(S.ordrer[0])).toBeNull();
+  });
+
+  it('returnerer null hvis flateId peker på en flåte som ikke finnes', () => {
+    const { S, vegvesenFlateKontext } = nyFlateSandbox();
+    const o = komplettOrdre({ flateId: 'finnes_ikke' });
+    S.ordrer = [o];
+    S.flater = [];
+    expect(vegvesenFlateKontext(o)).toBeNull();
+  });
+
+  it('finner primær- og medlemslista for en flåte', () => {
+    const { S, vegvesenFlateKontext } = nyFlateSandbox();
+    const primaer = komplettOrdre({ id: 'ord_primaer', flateId: 'flate_1' });
+    const sekundaer = komplettOrdre({ id: 'ord_sek', chassis: 'ANNET-CHASSIS', flateId: 'flate_1' });
+    S.ordrer = [primaer, sekundaer];
+    S.flater = [{ id: 'flate_1', flatenummer: '1032', primaerOrdreId: 'ord_primaer' }];
+
+    const kontekst = vegvesenFlateKontext(sekundaer);
+    expect(kontekst.primaer.id).toBe('ord_primaer');
+    expect(kontekst.medlemmer.map(m => m.id).sort()).toEqual(['ord_primaer', 'ord_sek']);
+  });
+
+  it('faller tilbake til første medlem som primær hvis primaerOrdreId mangler eller peker på en ordre som ikke lenger er i flåten', () => {
+    const { S, vegvesenFlateKontext } = nyFlateSandbox();
+    const a = komplettOrdre({ id: 'ord_a', chassis: 'AAA', flateId: 'flate_1' });
+    const b = komplettOrdre({ id: 'ord_b', chassis: 'BBB', flateId: 'flate_1' });
+    S.ordrer = [a, b];
+    S.flater = [{ id: 'flate_1', flatenummer: '1032', primaerOrdreId: 'ordre_som_er_fjernet' }];
+
+    const kontekst = vegvesenFlateKontext(a);
+    expect(kontekst.primaer.id).toBe('ord_a'); // sortert på chassis - "AAA" før "BBB"
+  });
+});

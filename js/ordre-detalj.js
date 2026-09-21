@@ -132,6 +132,7 @@ function buildOrdreDetail() {
   const focusTag = document.activeElement?.tagName;
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   synkroniserOmbyggingFikenLinjer(o);
+  vegvesenAutoGenererHvisKomplett(o);
   const tf = tvangsflyt(o);
   const tvangsflytOk = tf.every(t=>t.ok);
   const erAdmin = me && me.rolle==='admin';
@@ -467,7 +468,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
           + Last opp dokument
           <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
         </label>`:''}
-        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Under utprøving - genererer foreløpig Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering">🧪 Generer Vegvesen-dokumenter (test)</button>`:''}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering">🔄 Regenerer Vegvesen-dokumenter</button>
+        <button class="btn sm" style="margin-top:6px;width:100%" onclick="vegvesenSkrivUt('${o.id}')">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
       </div>
 
       ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}

@@ -796,16 +796,27 @@ async function slettDokument(id, idx) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   const dok = o.dokumenter[idx]; if (!dok) return;
   if (!confirm(`Slette "${dok.navn}"?`)) return;
+
+  // Et Vegvesen-dokument generert for en hel flåte har samme navn+url på ALLE
+  // medlemsordrene (se vegvesenLagreGenerertDokumentFlere) - må fjernes fra alle,
+  // ellers sitter søsken-ordrene igjen med ødelagte lenker når storage-filen slettes.
+  const kontekst = vegvesenFlateKontext(o);
+  const beroerte = kontekst ? kontekst.medlemmer.filter(m => (m.dokumenter||[]).some(d => d.navn===dok.navn && d.url===dok.url)) : [o];
+
   if (db && dok.url) {
     const filnavn = dok.url.split('/ordre-dokumenter/')[1];
     if (filnavn) await db.storage.from('ordre-dokumenter').remove([filnavn]);
   }
-  o.dokumenter = o.dokumenter.filter((_,i)=>i!==idx);
-  logChange(o, 'Slettet dokument: ' + dok.navn);
-  if (db) db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
+  beroerte.forEach(m => {
+    m.dokumenter = m.dokumenter.filter(d => !(d.navn===dok.navn && d.url===dok.url));
+    logChange(m, 'Slettet dokument: ' + dok.navn);
+  });
+  if (db) db.from('ordrer').upsert(beroerte.map(m=>({id:m.id, dokumenter:m.dokumenter})), {onConflict:'id'})
     .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
-  const listEl = document.getElementById('dokumenterListe_'+id);
-  if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  beroerte.forEach(m => {
+    const listEl = document.getElementById('dokumenterListe_'+m.id);
+    if (listEl) listEl.innerHTML = dokumenterListeHTML(m);
+  });
 }
 

@@ -1,8 +1,12 @@
 // ════════════════════════════════════════════════════
 // VEGVESEN-DOKUMENTER — automatisk generering av Egenerklæring, Vektfordeling,
-// Fabrikantattest, trinn 2-lapp, Kjøretøyliste og Melding om registrering.
+// Fabrikantattest, Kjøretøyliste og Melding om registrering (trinn 2-lapp gjenstår).
 // Kun for ordre med o.ombygging.nyttKjoretoy=true, og kun for modeller det finnes
-// mal + geometri for (se VEGVESEN_MODELLER under).
+// mal + geometri for (se VEGVESEN_MODELLER under). Når ordren er del av en flåte
+// (se vegvesenFlateKontext) deles Egenerklæring/Vektfordeling/Fabrikantattest/Melding
+// om registrering for hele flåten i stedet for én per bil, og Kjøretøyliste genereres
+// i tillegg med det faktiske chassisnummeret for hver bil (bekreftet av Henrik
+// 2026-09-21).
 // ════════════════════════════════════════════════════
 
 // Per-modell data for Vegvesen-dokumentene - lagt inn etter hvert som Henrik gir
@@ -840,6 +844,71 @@ async function genMeldingOmRegistreringPDF(o) {
   return pdfDoc.save();
 }
 
+// ── Kjøretøyliste ────────────────────────────────────────────────────────────
+// Kun generert når ordren er del av en flåte (se vegvesenFlateKontext) - siden alle
+// biler i en flåte er samme modell, deles Egenerklæring/Vektfordeling/Fabrikantattest/
+// Melding om registrering for hele flåten i stedet for én per bil (bekreftet av Henrik
+// 2026-09-21), med "Se kjøretøyliste" i stedet for et enkelt chassisnummer der. Denne
+// lista er stedet det faktiske chassisnummeret for hver bil i flåten står.
+async function genKjoretoylistePDF(flate, primaer, medlemmer) {
+  const { PDFDocument, StandardFonts } = PDFLib;
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const logoBytes = await vegvesenLastAsset('logoer/SALMAKERN LOGOFORSLAG NY.png');
+  const logoImg = await pdfDoc.embedPng(logoBytes);
+
+  const BREDDE = 595.28, HOYDE = 841.89; // A4 stående
+  const page = pdfDoc.addPage([BREDDE, HOYDE]);
+  const venstreMarg = 40;
+
+  let y = await vegvesenTegnBrevhode(page, font, fontBold, logoImg, BREDDE, HOYDE - 40);
+
+  const merkeModell = `${primaer.merke||''} ${primaer.modell||''}`.trim();
+  page.drawText('KJØRETØYLISTE', { x: venstreMarg, y, size: 12, font: fontBold });
+  y -= 18;
+  page.drawText(`${merkeModell} — Flåte ${flate.flatenummer||''}`, { x: venstreMarg, y, size: 10.5, font });
+  y -= 28;
+
+  const kolX = [venstreMarg, venstreMarg+180, venstreMarg+360];
+  function seksjonshode(tittel) {
+    page.drawText(tittel, { x: venstreMarg, y, size: 10.5, font: fontBold });
+    y -= 15;
+    ['Chassis-nr', 'Forhandler', 'Org.nr'].forEach((t,i) => page.drawText(t, { x: kolX[i], y, size: 8.5, font: fontBold }));
+    y -= 12;
+  }
+  function kjoretoyRad(m) {
+    page.drawText(m.chassis||'', { x: kolX[0], y, size: 9.5, font });
+    page.drawText(m.kunde||'', { x: kolX[1], y, size: 9.5, font });
+    page.drawText(vegvesenFormaterOrgnr(m.forhandlerOrgnr), { x: kolX[2], y, size: 9.5, font });
+    y -= 14;
+  }
+
+  seksjonshode('Primærkjøretøy');
+  kjoretoyRad(primaer);
+  y -= 12;
+
+  const sekundaere = medlemmer.filter(m => m.id !== primaer.id);
+  seksjonshode('Sekundærkjøretøy');
+  if (sekundaere.length) sekundaere.forEach(kjoretoyRad);
+  else { page.drawText('Ingen', { x: kolX[0], y, size: 9.5, font }); y -= 14; }
+
+  y -= 20;
+  page.drawText(vegvesenDatoNorsk(), { x: venstreMarg, y, size: 10.5, font });
+  y -= 45;
+  const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
+  const sigImg = await pdfDoc.embedPng(sigBytes);
+  const sigBredde = 110, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
+  page.drawImage(sigImg, { x: venstreMarg - 5, y: y - sigHoyde + 20, width: sigBredde, height: sigHoyde });
+  y -= 5;
+  ['Jan Børre Sigurdsen', 'Teknisk leder', 'Telemark Salmakerverksted'].forEach(linje => {
+    page.drawText(linje, { x: venstreMarg, y, size: 9.5, font });
+    y -= 12;
+  });
+
+  return pdfDoc.save();
+}
+
 // ── Vektberegning + Endring-oppdatering ─────────────────────────────────────
 // Kjører jevnt-fordelt-last-beregningen (P/P1/P2 fra Vekter->Ved ankomst,
 // M/M1/M2 fra Vekter->Før visning), justerer totalvekt ned til den blir gyldig hvis
@@ -905,43 +974,245 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
 }
 
-// Alle genererte dokumentnavn følger mønsteret "<Dokumenttype>-<chassis>.pdf".
-function vegvesenFilnavn(dokumenttype, chassis) {
-  return `${dokumenttype}-${chassis || 'UKJENT'}.pdf`;
+// Alle genererte dokumentnavn følger mønsteret "<Dokumenttype>-<chassis>.pdf" - eller
+// "<Dokumenttype>-<flåtenummer>.pdf" når dokumentet gjelder en hel flåte (se
+// vegvesenFlateKontext), siden det da ikke finnes ett enkelt chassisnummer å bruke.
+function vegvesenFilnavn(dokumenttype, chassisEllerFlatenummer) {
+  return `${dokumenttype}-${chassisEllerFlatenummer || 'UKJENT'}.pdf`;
 }
 
-// Manuell test-utløser mens funksjonene bygges ut én etter én - den automatiske
-// "genereres når ordren veies"-koblingen kommer når alle seks er ferdige og bekreftet.
-// Genererer foreløpig Egenerklæring, Vektfordeling, Fabrikantattest og Melding om
-// registrering (trinn 2-lapp og Kjøretøyliste gjenstår).
+// Løser opp flåte-tilhørighet for en ordre. Returnerer null hvis ordren ikke er i noen
+// (aktiv) flåte, ellers {flate, primaer, medlemmer} - primaer er samme kildeordre som
+// flate.js allerede henter type/variant/versjon/vekter fra (leggOrdreIFlate/
+// settFlatePrimaer), så Vegvesen-dokumentene bruker konsekvent samme kilde som resten
+// av appen. medlemmer er ALLE ordre i flåten, inkl. primær, sortert stabilt på chassis.
+function vegvesenFlateKontext(o) {
+  if (!o.flateId) return null;
+  const flate = (S.flater || []).find(f => f.id === o.flateId);
+  if (!flate) return null;
+  // Vanlig strengsammenligning (ikke localeCompare) med vilje - chassisnummer/VIN er
+  // rent ASCII uten språkspesifikk betydning, og localeCompare() uten eksplisitt locale
+  // ga overraskende ikke-alfabetisk rekkefølge for repeterte bokstaver under nb-NO
+  // (f.eks. "AAA" > "BBB") - oppdaget i test 2026-09-21.
+  const medlemmer = (S.ordrer || []).filter(x => x.flateId === flate.id).sort((a, b) => {
+    const ca = (a.chassis || '').toUpperCase(), cb = (b.chassis || '').toUpperCase();
+    return ca < cb ? -1 : ca > cb ? 1 : 0;
+  });
+  if (!medlemmer.length) return null;
+  const primaer = medlemmer.find(x => x.id === flate.primaerOrdreId) || medlemmer[0];
+  return { flate, primaer, medlemmer };
+}
+
+// Som vegvesenLagreGenerertDokument, men for et dokument som gjelder en hel flåte -
+// lastes opp ÉN gang (under den første ordreId-en i lista), men samme offentlige URL
+// legges inn i dokumentlisten til ALLE ordrene i flåten (bekreftet av Henrik
+// 2026-09-21: skal være synlig uansett hvilken ordre i flåten man åpner). Faller
+// tilbake til den vanlige enkelt-ordre-varianten når det bare er én ordreId.
+async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) {
+  if (ordreIder.length === 1) return vegvesenLagreGenerertDokument(ordreIder[0], filnavn, pdfBytes);
+  if (!db) { visToast('Ikke koblet til Supabase'); return; }
+  const forsteOrdre = S.ordrer.find(x => x.id === ordreIder[0]);
+  const forrige = forsteOrdre && (forsteOrdre.dokumenter || []).find(d => d.navn === filnavn);
+
+  const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+  const tryggNavn = filnavn.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-]/g, '_');
+  const lagringsnavn = `${ordreIder[0]}/${Date.now()}_${tryggNavn}`;
+  const { error } = await db.storage.from('ordre-dokumenter').upload(lagringsnavn, blob, { contentType: 'application/pdf', cacheControl: '31536000' });
+  if (error) { visToast('Feil ved lagring av ' + filnavn + ': ' + error.message); return; }
+  const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(lagringsnavn);
+  const nyttDok = { navn: filnavn, url: data.publicUrl, lastetOppAv: me?.navn || 'Automatisk', dato: new Date().toISOString() };
+
+  if (forrige) {
+    const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
+    if (gammeltFilnavn) db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]).then(() => {});
+  }
+
+  const oppdaterte = [];
+  ordreIder.forEach(id => {
+    const o = S.ordrer.find(x => x.id === id); if (!o) return;
+    o.dokumenter = o.dokumenter || [];
+    const gammelIdx = o.dokumenter.findIndex(d => d.navn === filnavn);
+    o.dokumenter = gammelIdx !== -1 ? o.dokumenter.map((d, i) => i === gammelIdx ? nyttDok : d) : [...o.dokumenter, nyttDok];
+    logChange(o, 'Generert dokument (flåte): ' + filnavn);
+    oppdaterte.push(o);
+  });
+  if (db && oppdaterte.length) {
+    db.from('ordrer').upsert(oppdaterte.map(o => ({ id: o.id, dokumenter: o.dokumenter })), { onConflict: 'id' })
+      .then(r => { if (r.error) console.error('Dokument-oppdatering (flåte) feilet:', r.error.message); });
+  }
+  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  oppdaterte.forEach(o => {
+    const listEl = document.getElementById('dokumenterListe_' + o.id);
+    if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  });
+}
+
+// Selve genererings-kjernen, delt mellom det manuelle "Regenerer"-trykket og den
+// automatiske trigger-funksjonen under. kilde er ordren dataene faktisk hentes fra
+// (primærkjøretøyet hvis flåte, ellers ordren selv). kontekst er null for en
+// frittstående ordre, ellers {flate, primaer, medlemmer} fra vegvesenFlateKontext.
+// Når kontekst finnes deles Egenerklæring/Vektfordeling/Fabrikantattest/Melding om
+// registrering for hele flåten (bekreftet av Henrik 2026-09-21 - alle biler i en flåte
+// er samme modell), med "Se kjøretøyliste" i stedet for et enkelt chassisnummer, og en
+// egen Kjøretøyliste med det faktiske chassisnummeret for hver bil i flåten.
+async function vegvesenGenererOgLagre(kilde, kontekst) {
+  const visningsOrdre = kontekst ? { ...kilde, chassis: 'Se kjøretøyliste' } : kilde;
+  const malOrdreIder = kontekst ? kontekst.medlemmer.map(m => m.id) : [kilde.id];
+  const filnavnNokkel = kontekst ? (kontekst.flate.flatenummer || kontekst.flate.id) : (kilde.chassis || 'UKJENT');
+
+  const egenerklaeringBytes = await genEgenerklaeringPDF(visningsOrdre);
+  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
+
+  // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata.
+  const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdre);
+  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
+
+  const resultat = vegvesenBeregnOgSettEndring(kilde);
+  if (!resultat) {
+    return { status: 'delvis', melding: 'Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.' };
+  }
+  const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
+  const { bytes: vektfordelingBytes } = await genVektfordelingPDF(visningsOrdre, justertP, P1, P2, M, M1, M2, geom);
+  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Vektfordeling', filnavnNokkel), vektfordelingBytes);
+
+  const fabrikantattestBytes = await genFabrikantattestPDF(visningsOrdre, justertP, justertVogntog, M);
+  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Fabrikantattest', filnavnNokkel), fabrikantattestBytes);
+
+  if (kontekst) {
+    const kjoretoylisteBytes = await genKjoretoylistePDF(kontekst.flate, kontekst.primaer, kontekst.medlemmer);
+    await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Kjøretøyliste', filnavnNokkel), kjoretoylisteBytes);
+  }
+
+  return { status: 'ok', melding: kontekst ? 'Vegvesen-dokumenter generert og lagret for hele flåten (inkl. Kjøretøyliste)' : 'Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering generert og lagret' };
+}
+
+// Manuell knapp - tvinger fram en ny generering uansett om noe faktisk har endret seg
+// siden sist (i motsetning til vegvesenAutoGenererHvisKomplett under, som kun kjører
+// når fingerprinten er annerledes). Oppdaterer fingerprinten etterpå slik at
+// auto-triggeren ikke umiddelbart regenererer på nytt av seg selv.
 async function genererVegvesenDokumenter(ordreId) {
   const o = S.ordrer.find(x => x.id === ordreId); if (!o) return;
-  const geometri = vegvesenGeometri(o.merke, o.modell);
-  if (!geometri) { visToast('Ingen mal/geometri lagt inn for ' + (o.merke||'?') + ' ' + (o.modell||'?') + ' ennå'); return; }
+  const kontekst = vegvesenFlateKontext(o);
+  const kilde = kontekst ? kontekst.primaer : o;
+  const geometri = vegvesenGeometri(kilde.merke, kilde.modell);
+  if (!geometri) { visToast('Ingen mal/geometri lagt inn for ' + (kilde.merke||'?') + ' ' + (kilde.modell||'?') + ' ennå'); return; }
   visToast('Genererer dokumenter...', 'ok');
   try {
-    const egenerklaeringBytes = await genEgenerklaeringPDF(o);
-    await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Egenerklæring', o.chassis), egenerklaeringBytes);
-
-    // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata.
-    const meldingBytes = await genMeldingOmRegistreringPDF(o);
-    await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Melding om registrering', o.chassis), meldingBytes);
-
-    const resultat = vegvesenBeregnOgSettEndring(o);
-    if (!resultat) {
-      visToast('Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.', 'ok');
-      return;
-    }
-    const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
-    const { bytes: vektfordelingBytes } = await genVektfordelingPDF(o, justertP, P1, P2, M, M1, M2, geom);
-    await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Vektfordeling', o.chassis), vektfordelingBytes);
-
-    const fabrikantattestBytes = await genFabrikantattestPDF(o, justertP, justertVogntog, M);
-    await vegvesenLagreGenerertDokument(ordreId, vegvesenFilnavn('Fabrikantattest', o.chassis), fabrikantattestBytes);
-
-    visToast('Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering generert og lagret', 'ok');
+    const resultat = await vegvesenGenererOgLagre(kilde, kontekst);
+    vegvesenLagreFingerprint(kilde, kontekst);
+    visToast(resultat.melding, 'ok');
   } catch (e) {
     console.error('Feil ved generering av Vegvesen-dokumenter:', e);
     visToast('Feil ved generering: ' + e.message);
+  }
+}
+
+// Sjekker at alt som faktisk trengs for å generere dokumentene er fylt ut på kilde-
+// ordren (primærkjøretøyet hvis flåte, ellers ordren selv) - chassis, farge, forhandler
+// og alle 6 vektfeltene (Ved ankomst + Før visning for total/for/bak-aksel).
+function vegvesenErKomplett(o) {
+  const tall = v => parseFloat(String(v || '').replace(',', '.'));
+  const vekt = felt => o.vekter?.[felt]?.a && o.vekter?.[felt]?.v && !isNaN(tall(o.vekter[felt].a)) && !isNaN(tall(o.vekter[felt].v));
+  return !!(o.chassis && o.farge && o.kunde && o.forhandlerOrgnr && vekt('totalvekt') && vekt('foraksel') && vekt('bakaksel'));
+}
+
+// Fingerprint av alt som faktisk påvirker de genererte dokumentene. Endres ett av disse
+// feltene skal dokumentene regenereres, ellers ikke - billig strengsammenligning på
+// hver render i stedet for å bygge PDF-er på nytt hver gang buildOrdreDetail() kjører.
+// For en flåte inngår hele medlemslista (chassis/forhandler/org.nr per bil) også, siden
+// Kjøretøylisten skal oppdateres når noen legges til/fjernes fra flåten.
+function vegvesenFingerprint(kilde, kontekst) {
+  const felt = o => [o.merke, o.modell, o.type, o.variant, o.versjon, o.typegodkjenning, o.chassis, o.farge, o.kunde, o.forhandlerOrgnr, o.egenvektCoc, JSON.stringify(o.vekter)];
+  const deler = felt(kilde);
+  if (kontekst) deler.push(kontekst.flate.flatenummer, ...kontekst.medlemmer.map(m => `${m.id}:${m.chassis}:${m.kunde}:${m.forhandlerOrgnr}`));
+  return JSON.stringify(deler);
+}
+
+function vegvesenLagreFingerprint(kilde, kontekst) {
+  const fp = vegvesenFingerprint(kilde, kontekst);
+  if (kontekst) {
+    kontekst.flate.vegvesenFingerprint = fp;
+    if (db) db.from('flater').update({ vegvesen_fingerprint: fp }).eq('id', kontekst.flate.id)
+      .then(r => { if (r.error) console.error('Flåte-fingerprint feilet:', r.error.message); });
+  } else {
+    kilde.vegvesenFingerprint = fp;
+    if (db) db.from('ordrer').update({ vegvesen_fingerprint: fp }).eq('id', kilde.id)
+      .then(r => { if (r.error) console.error('Vegvesen-fingerprint feilet:', r.error.message); });
+  }
+}
+
+// Ordre/flåte-id-er med en genererings-jobb i gang akkurat nå - unngår at flere raske
+// re-render-kall (f.eks. Realtime-echo) starter samme jobb dobbelt før fingerprinten
+// er lagret. Samme mønster som ignorerRealtimeFor andre steder i appen.
+const vegvesenGenererer = new Set();
+
+// Selvhelbredende auto-trigger - kalt fra buildOrdreDetail() på hver render (se
+// ordre-detalj.js). Genererer automatisk Vegvesen-dokumentene så snart alt nødvendig
+// er fylt ut, og regenererer hvis noe som påvirker dem endres etterpå. Bekreftet av
+// Henrik 2026-09-21: automatikk fremfor manuell knapp, men brukeren må selv trykke
+// "Skriv ut" siden nettlesere ikke kan skrive ut helt stille uten et brukerklikk.
+async function vegvesenAutoGenererHvisKomplett(o) {
+  // Sjekker kilde.ombygging (primær hvis flåte), IKKE o.ombygging direkte - flate.js
+  // kopierer kun type/variant/versjon/vekter fra primær til resten av flåten, ikke
+  // ombygging-flaggene, så et sekundærkjøretøy kan mangle nyttKjoretoy=true på seg
+  // selv selv om flåten faktisk skal ha Vegvesen-dokumenter (funnet i test 2026-09-21).
+  const kontekst = vegvesenFlateKontext(o);
+  const kilde = kontekst ? kontekst.primaer : o;
+  if (!kilde.ombygging?.nyttKjoretoy) return;
+  if (!vegvesenGeometri(kilde.merke, kilde.modell)) return;
+  if (!vegvesenErKomplett(kilde)) return;
+
+  const id = kontekst ? 'flate:' + kontekst.flate.id : 'ordre:' + kilde.id;
+  if (vegvesenGenererer.has(id)) return;
+  const fp = vegvesenFingerprint(kilde, kontekst);
+  const lagretFp = kontekst ? kontekst.flate.vegvesenFingerprint : kilde.vegvesenFingerprint;
+  if (fp === lagretFp) return;
+
+  vegvesenGenererer.add(id);
+  try {
+    const resultat = await vegvesenGenererOgLagre(kilde, kontekst);
+    if (resultat.status === 'ok') {
+      vegvesenLagreFingerprint(kilde, kontekst);
+      visToast('📄 Vegvesen-dokumenter generert automatisk' + (kontekst ? ' for hele flåten' : '') + ' - husk å skrive ut', 'ok');
+    }
+    // status 'delvis' (mangler vekter) lagrer bevisst IKKE fingerprinten - da prøver
+    // auto-triggeren på nytt neste gang noe endres, helt til vektene også er fylt ut.
+  } catch (e) {
+    console.error('Automatisk generering av Vegvesen-dokumenter feilet:', e);
+  } finally {
+    vegvesenGenererer.delete(id);
+  }
+}
+
+// Slår sammen de genererte Vegvesen-PDF-ene (i lesbar rekkefølge) til ett dokument og
+// åpner det i en ny fane med utskriftsdialogen klar - nettlesere krever uansett at
+// brukeren selv klikker i den dialogen, det finnes ingen helt stille utskrift.
+async function vegvesenSkrivUt(ordreId) {
+  const o = S.ordrer.find(x => x.id === ordreId); if (!o) return;
+  const kontekst = vegvesenFlateKontext(o);
+  const kildeDok = (kontekst ? kontekst.primaer : o).dokumenter || [];
+  const REKKEFOLGE = ['Egenerklæring-', 'Vektfordeling-', 'Fabrikantattest-', 'Melding om registrering-', 'Kjøretøyliste-'];
+  const relevante = REKKEFOLGE.map(p => kildeDok.find(d => d.navn.startsWith(p))).filter(Boolean);
+  if (!relevante.length) { visToast('Ingen Vegvesen-dokumenter å skrive ut ennå'); return; }
+
+  visToast('Henter dokumenter for utskrift...', 'ok');
+  try {
+    const { PDFDocument } = PDFLib;
+    const samlet = await PDFDocument.create();
+    for (const d of relevante) {
+      const res = await fetch(d.url);
+      const bytes = await res.arrayBuffer();
+      const kildedoc = await PDFDocument.load(bytes);
+      const sider = await samlet.copyPages(kildedoc, kildedoc.getPageIndices());
+      sider.forEach(s => samlet.addPage(s));
+    }
+    const ferdig = await samlet.save();
+    const url = URL.createObjectURL(new Blob([ferdig], { type: 'application/pdf' }));
+    const vindu = window.open(url, '_blank');
+    if (vindu) vindu.onload = () => vindu.print();
+    else visToast('Kunne ikke åpne utskriftsvindu - sjekk om popup ble blokkert');
+  } catch (e) {
+    console.error('Feil ved sammenslåing/utskrift av Vegvesen-dokumenter:', e);
+    visToast('Feil ved utskrift: ' + e.message);
   }
 }
