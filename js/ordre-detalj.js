@@ -198,7 +198,9 @@ function buildOrdreDetail() {
           </div>
           <div class="felt-wrap">
             <label>Kontaktperson</label>
-            <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)">
+            <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)"
+              onfocus="visFeltDropdown('typeForslag_eier_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_eier_${o.id}'))">
+            <div id="typeForslag_eier_${o.id}" class="felt-dropdown">${feltForslagHTML('eierInput_'+o.id, kontaktpersonKontakterForslag())}</div>
           </div>
           <div class="felt-wrap">
             <label>Merke</label>
@@ -926,10 +928,26 @@ function versjonForslag(merke, modell, type) {
 // Forhandler henger ikke sammen med Type/Variant/Versjon (ulike forhandlere bestiller
 // gjerne samme Type), men henger som regel sammen med Merke+Modell - en forhandlernettverk
 // bestiller gjerne stort sett samme bilmerke/-modell om og om igjen. Kontaktperson hadde
-// tidligere samme slags forslag, men den er fjernet igjen (bedt om av Henrik 2026-09-18) -
-// selve feltverdien (o.eier) på eksisterende ordre er urørt, kun forslagslisten er borte.
+// tidligere samme slags forslag (basert på tidligere ordre), men den er fjernet igjen
+// (bedt om av Henrik 2026-09-18) - selve feltverdien (o.eier) på eksisterende ordre var
+// urørt, kun den forslagslisten var borte.
 function forhandlerForslag(merke, modell) {
   return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.kunde));
+}
+// Kontaktperson fikk et NYTT forslag igjen 2026-09-22 - denne gangen fra Kontakter-
+// registeret (S.kontakter), ikke fra tidligere ordre som den gamle (fjernede) varianten.
+// Formålet er et annet: gjøre det lettere å treffe eksakt samme skrivemåte som en
+// eksisterende Kontakt-oppføring, siden fraktbestilling/hentevarsel fra Admin-arket slår
+// opp e-post på nøyaktig navn (se adminArkFinnKontaktEpost i admin-ark.js) - en kontaktperson
+// skrevet inn litt annerledes enn i Kontakter gir "fant ingen e-post"-feil der.
+function kontaktpersonKontakterForslag() {
+  // Vanlig strengsammenligning (ikke localeCompare) med vilje - localeCompare() uten
+  // eksplisitt locale ga overraskende ikke-alfabetisk rekkefølge for repeterte bokstaver
+  // under nb-NO (oppdaget i js/vegvesen-dokumenter.js sin flåte-sortering 2026-09-21).
+  return [...new Set((S.kontakter||[]).map(k=>k.navn))].sort((a,b) => {
+    const na = a.toUpperCase(), nb = b.toUpperCase();
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
 }
 // Forhandler org.nr henger sammen med selve forhandler-NAVNET (samme forhandler har
 // alltid samme org.nr), ikke med Merke/Modell - filtrerer derfor på eksakt kunde-navn i

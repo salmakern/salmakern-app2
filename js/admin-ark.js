@@ -165,14 +165,91 @@ function adminArkFlateNavn(o) {
   return f ? (f.flatenummer || f.kunde || '') : '';
 }
 
-// ── Fraktselskap: nedtrekksliste, men beholder en eksisterende verdi som ikke matcher
-// listen (f.eks. gammel fritekst) som eget valg - samme mønster som fargeSelectOptions().
-const FRAKTSELSKAP_LISTE = ['BOS','Thune','NBT','Axess','Hente selv'];
+// ── Fraktselskap: nedtrekksliste hentet fra Kontakter (Type=Fraktselskap) i stedet for
+// en fast liste - lar hvert fraktselskap ha e-post registrert ett sted, gjenbrukt her og
+// av fraktEpostSendKnapp() (se lenger ned) for å bestille frakt på e-post. "Hente selv" er
+// ikke et ekte fraktselskap (forhandleren henter selv) og er derfor ikke i Kontakter, men
+// holdt som et fast tilleggsvalg. Beholder en eksisterende verdi som ikke matcher noen av
+// delene (f.eks. gammel fritekst fra før dette) som eget valg - samme mønster som
+// fargeSelectOptions().
+const FRAKTSELSKAP_HENTE_SELV = 'Hente selv';
+function adminArkFraktselskapListe() {
+  return (S.kontakter||[]).filter(k => k.type === 'Fraktselskap').map(k => k.navn).concat(FRAKTSELSKAP_HENTE_SELV);
+}
 function adminArkFraktselskapVerdier(gjeldende) {
+  const liste = adminArkFraktselskapListe();
   const verdier = {'':'– Velg –'};
-  FRAKTSELSKAP_LISTE.forEach(f => verdier[f] = f);
-  if (gjeldende && !FRAKTSELSKAP_LISTE.includes(gjeldende)) verdier[gjeldende] = gjeldende + ' (gammel verdi)';
+  liste.forEach(f => verdier[f] = f);
+  if (gjeldende && !liste.includes(gjeldende)) verdier[gjeldende] = gjeldende + ' (gammel verdi)';
   return verdier;
+}
+
+// ── Frakt-e-post ─────────────────────────────────────────────────────────────
+// Finner e-post for et navn i Kontakter - valgfritt begrenset til én type (fraktselskap
+// skal alltid være nøyaktig den fraktselskap-kontakten dropdownen tilbød, mens
+// kontaktperson kan stå under hvilken som helst type Henrik har lagt dem inn som, så det
+// søket er ikke type-begrenset).
+function adminArkFinnKontaktEpost(navn, type) {
+  if (!navn) return '';
+  const treff = (S.kontakter||[]).find(k =>
+    k.navn.trim().toLowerCase() === navn.trim().toLowerCase() && (!type || k.type === type));
+  return treff?.epost || '';
+}
+
+// Henter friske forhandler/kontaktperson/fraktselskap-verdier for et chassisnummer rett
+// fra kilden (ordre hvis raden tilhører en ekte ordre, ellers admin_ark-raden) i stedet
+// for å stole på en Tabulator-cellesnapshot tatt ved forrige rendering.
+function adminArkHentRadData(chassisNr) {
+  const o = S.ordrer.find(x => samsvarerChassis(x.chassis, chassisNr));
+  if (o) return { forhandler: o.kunde||'', kontaktperson: o.eier||'', fraktselskap: adminArkFinnRadForVisning(chassisNr)?.fraktselskap||'', chassisNr };
+  const ark = adminArkFinnRadForVisning(chassisNr);
+  return { forhandler: ark?.forhandler||'', kontaktperson: ark?.kontaktperson||'', fraktselskap: ark?.fraktselskap||'', chassisNr };
+}
+
+async function adminArkKallFraktEpost(payload) {
+  const res = await fetch(`${SUPA_URL}/functions/v1/send-frakt-epost`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY }, body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+// Bestiller frakt: e-post til fraktselskapet (forhandler/kontaktperson/chassis.nr i
+// innholdet), kontaktpersonen på kopi. Markerer "Bestilt frakt" automatisk ved suksess -
+// det ER det feltet betyr, ingen grunn til et eget trykk til for å huke det av selv.
+async function adminArkFraktBestill(chassisNr) {
+  const rad = adminArkHentRadData(chassisNr);
+  if (!rad.fraktselskap || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV) { visToast('Velg et fraktselskap først'); return; }
+  const fraktEpost = adminArkFinnKontaktEpost(rad.fraktselskap, 'Fraktselskap');
+  if (!fraktEpost) { visToast(`Fant ingen e-post for "${rad.fraktselskap}" i Kontakter - legg den til under Mer → Kontakter`); return; }
+  const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
+  if (!confirm(`Send bestilling til ${rad.fraktselskap} (${fraktEpost})${kontaktEpost?` med ${rad.kontaktperson} på kopi`:''}?`)) return;
+  try {
+    await adminArkKallFraktEpost({ type:'bestilling', fraktselskapEpost:fraktEpost, kontaktpersonEpost:kontaktEpost||undefined,
+      forhandler: rad.forhandler, kontaktperson: rad.kontaktperson, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
+    visToast('Fraktbestilling sendt til ' + rad.fraktselskap, 'ok');
+    const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
+    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
+    await adminArkLagreFelter(radData, { bestiltFrakt: true });
+    if (tabRad) tabRad.update({ bestiltFrakt: true });
+  } catch (e) {
+    visToast('Kunne ikke sende fraktbestilling: ' + e.message);
+  }
+}
+
+// Varsler kontaktpersonen om at bilen er hentet - kun chassis.nr i innholdet (bekreftet
+// av Henrik 2026-09-18: "til at bilen er hentet til kontaktpersonen så er det kun
+// chassis. nr").
+async function adminArkVarsleHentet(chassisNr) {
+  const rad = adminArkHentRadData(chassisNr);
+  const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
+  if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
+  if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om at bilen er hentet?`)) return;
+  try {
+    await adminArkKallFraktEpost({ type:'hentet', kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
+    visToast('Varsel om henting sendt til ' + rad.kontaktperson, 'ok');
+  } catch (e) {
+    visToast('Kunne ikke sende hentevarsel: ' + e.message);
+  }
 }
 
 // ── Felles hake-formattering (Papirer: tom/gul/grønn, Fullmakt: samme via
@@ -917,6 +994,21 @@ function renderAdminArk(scrollTilBunn) {
       editor: kanRedigere ? 'list' : false, editorParams: cell => ({values: adminArkFraktselskapVerdier(cell.getValue())}), rowHandle:true},
     {title:'Henteklar', field:'henteklarVis', minWidth:75, headerSort:false, editable:false, hozAlign:'center', formatter: adminArkTickFormatter, rowHandle:true},
     {title:'Bestilt frakt', field:'bestiltFrakt', minWidth:85, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
+    // Sender ekte e-post til eksterne mottakere (fraktselskap/kontaktperson) - kun
+    // admin kan trykke disse, og alltid med en bekreftelsesdialog før sending (se
+    // adminArkFraktBestill/adminArkVarsleHentet) siden det ikke kan angres.
+    {title:'Frakt-e-post', field:'_fraktKnapper', minWidth:150, headerSort:false, hozAlign:'center', editable:false, rowHandle:true,
+      formatter: cell => {
+        if (!(me && me.rolle==='admin')) return '';
+        const rad = cell.getRow().getData();
+        const chassis = esc(rad.chassisNr||'').replace(/'/g,"\\'");
+        if (!rad.chassisNr) return '';
+        const bestillDisabled = !rad.fraktselskap || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
+        return `<div style="display:flex;gap:4px;justify-content:center">
+          <button class="btn sm" style="padding:3px 7px;font-size:11px" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="Send fraktbestilling på e-post">📧 Bestill</button>
+          <button class="btn sm" style="padding:3px 7px;font-size:11px" onclick="adminArkVarsleHentet('${chassis}')" title="Varsle kontaktperson om at bilen er hentet">✔ Hentet</button>
+        </div>`;
+      }},
     {title:'Merknader', field:'merknader', width: adminArkMaalBredde(data,'merknader','Merknader',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
     {title:'Utstyr', field:'utstyr', width: adminArkMaalBredde(data,'utstyr','Utstyr',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true,
       formatter: cell => esc(cell.getValue()||'')},
