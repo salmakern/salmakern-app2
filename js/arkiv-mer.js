@@ -328,6 +328,7 @@ function renderMer() {
   }
 
   renderBeskjeder();
+  renderKontakter();
   renderFravarKalender();
   renderHMS();
   renderMoterListe();
