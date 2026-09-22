@@ -230,7 +230,14 @@ function apneNyOrdreModal() {
   renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');
   renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');
   renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag');
-  renderKontaktpersonForslag('n_merke','n_modell','n_eier','n_eier_forslag');
+  // renderKontaktpersonForslag() ble fjernet 2026-09-18 (urelatert kode fortsatte å
+  // kalle den herfra helt til Henrik meldte at "oppretting av ordre" var i stykker
+  // 2026-09-22 - denne oninput-kjeden var ikke fanget opp av grep-verifiseringen den
+  // gangen siden funksjonen fortsatt het likt, bare i en annen fil). Erstattet med
+  // samme Kontakter-baserte forslag som ordredetaljsiden fikk 2026-09-22 - trenger ikke
+  // re-populeres på hvert tastetrykk i Merke/Modell slik den gamle varianten gjorde,
+  // siden denne ikke er filtrert på merke/modell.
+  document.getElementById('n_eier_forslag').innerHTML = feltForslagHTML('n_eier', kontaktpersonKontakterForslag());
   openModal('nyOrdre');
 }
 
