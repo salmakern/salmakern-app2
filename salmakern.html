@@ -1243,9 +1243,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 <div class="modal" id="nyKontaktperson">
   <div class="modal-box">
-    <div class="h">Ny kontaktperson</div>
+    <div class="h" id="kpTittel">Ny kontaktperson</div>
     <div class="small muted" style="margin-top:4px" id="kpForhandlerNavn"></div>
     <input type="hidden" id="kpForhandlerId">
+    <input type="hidden" id="kpId">
     <div class="grid g2" style="margin-top:12px">
       <div><label>Navn *</label><input id="kpNavn"></div>
       <div><label>Telefon</label><input id="kpTlf" type="tel"></div>
@@ -1262,6 +1263,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div class="modal" id="forhandlerListe">
   <div class="modal-box">
     <div class="h">Forhandlere</div>
+    <input id="forhandlerSok" placeholder="Søk forhandler..." autocomplete="off" oninput="renderForhandlerListe()" style="margin-top:12px">
     <div id="forhandlerListeInnhold" style="margin-top:12px"></div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn" onclick="closeModal('forhandlerListe')">Lukk</button>

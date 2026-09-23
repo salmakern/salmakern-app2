@@ -81,14 +81,21 @@ function slettKontakt(id) {
 // kommer det opp en fane med alle forhandlerne også kan vi trykke inn på forhandlerne") -
 // åpnes via "Forhandlere"-knappen ved siden av "+ Ny kontakt".
 function apneForhandlerListe() {
+  const sokFelt = document.getElementById('forhandlerSok');
+  if (sokFelt) sokFelt.value = '';
   renderForhandlerListe();
   openModal('forhandlerListe');
 }
 
+// Bedt om av Henrik 2026-09-23: "det må være mulig å søke i forhandler fanen etter
+// forhandler" - med 49 forhandlere importert fra ordre-historikken er en flat, uskrollbar
+// liste upraktisk. Enkelt case-uavhengig delstreng-søk på navn, samme mønster som
+// feltForslagHTML/velgFeltForslag andre steder i appen bruker for autocomplete-forslag.
 function renderForhandlerListe() {
   const el = document.getElementById('forhandlerListeInnhold'); if (!el) return;
-  const forhandlere = S.kontakter.filter(k=>k.type==='Forhandler');
-  if (!forhandlere.length) { el.innerHTML = '<div class="small muted">Ingen forhandlere lagt til ennå</div>'; return; }
+  const sok = (document.getElementById('forhandlerSok')?.value||'').trim().toLowerCase();
+  const forhandlere = S.kontakter.filter(k=>k.type==='Forhandler' && (!sok || k.navn.toLowerCase().includes(sok)));
+  if (!forhandlere.length) { el.innerHTML = `<div class="small muted">${sok?'Ingen forhandlere matcher søket':'Ingen forhandlere lagt til ennå'}</div>`; return; }
   el.innerHTML = forhandlere.map(k=>{
     const antallKp = (k.kontaktpersoner||[]).length;
     return `
@@ -144,7 +151,10 @@ function renderForhandlerDetalj() {
             ${p.epost?`<div class="small">✉ <a href="mailto:${esc(p.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(p.epost)}</a></div>`:''}
             ${p.notat?`<div class="small muted" style="margin-top:2px">${esc(p.notat)}</div>`:''}
           </div>
-          ${erAdmin?`<button onclick="slettKontaktperson('${forhandler.id}','${p.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0">✕</button>`:''}
+          ${erAdmin?`<div style="display:flex;gap:8px;flex-shrink:0">
+            <button onclick="apneRedigerKontaktperson('${forhandler.id}','${p.id}')" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:14px;padding:0" title="Rediger">✏️</button>
+            <button onclick="slettKontaktperson('${forhandler.id}','${p.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0" title="Slett">✕</button>
+          </div>`:''}
         </div>`).join('') : '<div class="small muted" style="padding-left:10px">Ingen kontaktpersoner lagt til</div>'}
       ${erAdmin?`<button class="btn sm" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="apneNyKontaktperson('${forhandler.id}')">+ Legg til kontaktperson</button>`:''}
     </div>
@@ -152,15 +162,36 @@ function renderForhandlerDetalj() {
   `;
 }
 
-// Hopper midlertidig ut av forhandlerDetalj mens Ny kontaktperson-modalen er åpen (begge
-// er faste z-index-overlays i samme lag - uten dette ville forhandlerDetalj tegnet seg
-// oppå/under den på en uforutsigbar måte i stedet for at de veksler ryddig). Kalles fra
+// Hopper midlertidig ut av forhandlerDetalj mens Ny/Rediger kontaktperson-modalen er åpen
+// (begge er faste z-index-overlays i samme lag - uten dette ville forhandlerDetalj tegnet
+// seg oppå/under den på en uforutsigbar måte i stedet for at de veksler ryddig). Kalles fra
 // BÅDE Lagre og Avbryt i nyKontaktperson-modalen, se lagreKontaktperson()/salmakern.html.
+// Tomt kpId-felt betyr "ny kontaktperson" i lagreKontaktperson() - se der.
 function apneNyKontaktperson(forhandlerId) {
   const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
+  document.getElementById('kpTittel').textContent = 'Ny kontaktperson';
   document.getElementById('kpForhandlerId').value = forhandlerId;
+  document.getElementById('kpId').value = '';
   document.getElementById('kpForhandlerNavn').textContent = 'Under ' + forhandler.navn;
   ['kpNavn','kpTlf','kpEpost','kpNotat'].forEach(i=>document.getElementById(i).value='');
+  closeModal('forhandlerDetalj');
+  openModal('nyKontaktperson');
+}
+
+// Bedt om av Henrik 2026-09-23: "det må være mulig å redigere kontaktpersonene" - gjenbruker
+// samme modal som Ny kontaktperson, forhåndsutfylt, og lagreKontaktperson() oppdaterer i
+// stedet for å legge til når kpId er satt.
+function apneRedigerKontaktperson(forhandlerId, kpId) {
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
+  const p = (forhandler.kontaktpersoner||[]).find(x=>x.id===kpId); if (!p) return;
+  document.getElementById('kpTittel').textContent = 'Rediger kontaktperson';
+  document.getElementById('kpForhandlerId').value = forhandlerId;
+  document.getElementById('kpId').value = kpId;
+  document.getElementById('kpForhandlerNavn').textContent = 'Under ' + forhandler.navn;
+  document.getElementById('kpNavn').value = p.navn;
+  document.getElementById('kpTlf').value = p.tlf||'';
+  document.getElementById('kpEpost').value = p.epost||'';
+  document.getElementById('kpNotat').value = p.notat||'';
   closeModal('forhandlerDetalj');
   openModal('nyKontaktperson');
 }
@@ -180,14 +211,17 @@ function lagreKontaktperson() {
   const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
   const navn = document.getElementById('kpNavn').value.trim();
   if (!navn) { alert('Navn er påkrevd'); return; }
-  if (!forhandler.kontaktpersoner) forhandler.kontaktpersoner = [];
-  forhandler.kontaktpersoner.push({
-    id:'kp'+(++S.nextId),
+  const felter = {
     navn,
     tlf:document.getElementById('kpTlf').value.trim(),
     epost:document.getElementById('kpEpost').value.trim(),
     notat:document.getElementById('kpNotat').value.trim()
-  });
+  };
+  if (!forhandler.kontaktpersoner) forhandler.kontaktpersoner = [];
+  const kpId = document.getElementById('kpId').value;
+  const eksisterende = kpId ? forhandler.kontaktpersoner.find(p=>p.id===kpId) : null;
+  if (eksisterende) Object.assign(eksisterende, felter);
+  else forhandler.kontaktpersoner.push({ id:'kp'+(++S.nextId), ...felter });
   saveInnstillinger();
   renderKontakter();
   lukkNyKontaktperson();
