@@ -7,6 +7,36 @@ import { loadScript } from './helpers/load-script.js';
 // transkribert riktig, siden dette er tall som går videre til Statens vegvesen.
 const { beregnVektfordeling, finnJustertTotalvekt, vegvesenGeometri, vegvesenFinnModell } = loadScript('vegvesen-dokumenter.js');
 
+// Regresjonstest for feil funnet 2026-09-23: "🔄 Regenerer Vegvesen-dokumenter"-knappen
+// (genererVegvesenDokumenter) hadde INGEN sperre på o.ombygging.nyttKjoretoy, i motsetning
+// til den automatiske genereringen (vegvesenAutoGenererHvisKomplett) - en admin kunne derfor
+// trykke knappen på en ordre som faktisk var Brukt Kjøretøy og få genererte Nytt
+// Kjøretøy-utformede dokumenter (reelt skjedd på ordre SALEA7BW7T2506245).
+describe('genererVegvesenDokumenter - sperre på Nytt Kjøretøy', () => {
+  function nySandbox() {
+    const toasts = [];
+    const sandbox = loadScript('vegvesen-dokumenter.js', {
+      visToast: (msg) => toasts.push(msg),
+      db: null
+    });
+    return { sandbox, toasts };
+  }
+
+  it('nekter å generere for en ordre som er Brukt Kjøretøy (ikke Nytt Kjøretøy)', async () => {
+    const { sandbox, toasts } = nySandbox();
+    sandbox.S = { ordrer: [{ id: 'ord1', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: false, bruktKjoretoy: true } }] };
+    await sandbox.genererVegvesenDokumenter('ord1');
+    expect(toasts.some(t => /Nytt Kjøretøy/.test(t))).toBe(true);
+  });
+
+  it('nekter også når ombygging.nyttKjoretoy mangler helt (aldri satt)', async () => {
+    const { sandbox, toasts } = nySandbox();
+    sandbox.S = { ordrer: [{ id: 'ord1', merke: 'KIA', modell: 'EV9' }] };
+    await sandbox.genererVegvesenDokumenter('ord1');
+    expect(toasts.some(t => /Nytt Kjøretøy/.test(t))).toBe(true);
+  });
+});
+
 const KIA_EV9_GEOMETRI = { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 };
 
 describe('vegvesenGeometri', () => {
@@ -264,5 +294,26 @@ describe('Land Rover Defender - dynamisk særlig anmerkning og antall sitteplass
     const o = { utstyrSjekkliste: [{ punkt: '5-seter bak', ok: false }, { punkt: 'AD', ok: false }] };
     expect(defender.antallSitteplasser(o)).toEqual({ inn: '5', ut: '2' });
     expect(defender.saerligAnmerkning(o)).toBe('Støtdempertårn er merket med delenummer: TS 095866');
+  });
+});
+
+// Discovery 5 deler samme AD-avhengige støtdempertårn-logikk som Defender (bekreftet av
+// Henrik 2026-09-23: "ja samme der") - antallSitteplasser er UBERØRT (fast verdi), siden
+// Discovery 5 sin egen utstyr-mal ("Land Rover Discovery 5", u108) ikke har noen
+// tilsvarende sitteplass-avkrysninger.
+describe('Land Rover Discovery 5 - dynamisk særlig anmerkning', () => {
+  const discovery5 = vegvesenFinnModell('Land Rover', 'Discovery 5');
+  const ordreMed = (...punkter) => ({ utstyrSjekkliste: punkter.map(p => ({ punkt: p, ok: true })) });
+
+  it('bruker TS 095866 når AD ikke er huket av', () => {
+    expect(discovery5.saerligAnmerkning(ordreMed())).toBe('Støtdempertårn er merket med delenummer: TS 095866');
+  });
+
+  it('bruker TS 034244 L/R når AD er huket av', () => {
+    expect(discovery5.saerligAnmerkning(ordreMed('AD'))).toBe('Støtdempertårn er merket med delenummer: TS 034244 L/R');
+  });
+
+  it('antallSitteplasser er fortsatt en fast verdi, ikke en funksjon av utstyr', () => {
+    expect(discovery5.antallSitteplasser()).toEqual({ inn: '5/7', ut: '2' });
   });
 });

@@ -76,6 +76,17 @@ function egenerklaeringAvsnittRexton(chassis, merkeModell) {
   ];
 }
 
+// Delt mellom Land Rover Defender og Discovery 5 (bekreftet av Henrik 2026-09-23: "ja
+// samme der" da spurt om samme AD-avhengige støtdempertårn-logikk skal gjelde begge) -
+// se saerligAnmerkning-forklaringen på Defender-oppføringen under for hvor "AD" kommer
+// fra.
+function vegvesenStotdempertarnAnmerkning(o) {
+  const ad = (o.utstyrSjekkliste||[]).some(p => p.punkt === 'AD' && p.ok);
+  return ad
+    ? 'Støtdempertårn er merket med delenummer: TS 034244 L/R'
+    : 'Støtdempertårn er merket med delenummer: TS 095866';
+}
+
 const VEGVESEN_MODELLER = [
   {
     match: /\bev9\b/i, navn: 'KIA EV9',
@@ -136,17 +147,14 @@ const VEGVESEN_MODELLER = [
     // (unntak fra resten av modellene, som har faste verdier) - bekreftet av Henrik
     // 2026-09-23 ut fra hakene i Utstyr->Ved ankomst (o.utstyrSjekkliste, se
     // Land Rover Defender sin utstyr-mal "u104" for de eksakte punkt-tekstene):
-    // - "AD" avgjør hvilket støtdempertårn-delenummer som faktisk ble montert.
+    // - "AD" avgjør hvilket støtdempertårn-delenummer som faktisk ble montert (se også
+    //   vegvesenStotdempertarnAnmerkning under, gjenbrukt av Discovery 5 - samme logikk,
+    //   bekreftet av Henrik 2026-09-23).
     // - "3-seter foran"/"4-seter bak"/"5-seter bak" avgjør faktisk sitteplass-antall,
     //   i stedet for å alltid vise hele spennet 5/6/7 -> 2/3 slik det gjorde før.
     //   Antar disse tre er gjensidig utelukkende (kun ett faktisk montert per bil) -
     //   ikke bekreftet hva som skal skje om flere er huket av samtidig.
-    saerligAnmerkning: o => {
-      const ad = (o.utstyrSjekkliste||[]).some(p => p.punkt === 'AD' && p.ok);
-      return ad
-        ? 'Støtdempertårn er merket med delenummer: TS 034244 L/R'
-        : 'Støtdempertårn er merket med delenummer: TS 095866';
-    },
+    saerligAnmerkning: vegvesenStotdempertarnAnmerkning,
     antallSitteplasser: o => {
       const harPunkt = navn => (o.utstyrSjekkliste||[]).some(p => p.punkt === navn && p.ok);
       if (harPunkt('5-seter bak')) return { inn: '7', ut: '2' };
@@ -170,7 +178,7 @@ const VEGVESEN_MODELLER = [
       ['Støtdempertårn', '', '', 'Annex 5 og 6 / 7 og 8', 'No. 8124392177-LE', 'TÜV NORD'],
       ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-LE / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
     ],
-    saerligAnmerkning: 'Støtdempertårn er merket med delenummer: TS 095866/034244 L/R',
+    saerligAnmerkning: vegvesenStotdempertarnAnmerkning,
     antallSitteplasser: () => ({ inn: '5/7', ut: '2' }),
     egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittLandRover(chassis, merkeModell)
   },
@@ -1176,6 +1184,13 @@ async function genererVegvesenDokumenter(ordreId) {
   const o = S.ordrer.find(x => x.id === ordreId); if (!o) return;
   const kontekst = vegvesenFlateKontext(o);
   const kilde = kontekst ? kontekst.primaer : o;
+  // Samme sperre som vegvesenAutoGenererHvisKomplett - uten denne kunne "tvungen"
+  // regenerering via knappen lage Nytt Kjøretøy-utformede dokumenter på en ordre som
+  // faktisk er Brukt Kjøretøy (reell bug funnet 2026-09-23: ordre SALEA7BW7T2506245 fikk
+  // nye Fabrikantattest/Egenerklæring/Vektfordeling-dokumenter generert via denne knappen
+  // TIMER etter at ombygging-kategorien var byttet til Brukt Kjøretøy, siden knappen selv
+  // ikke sjekket nyttKjoretoy i det hele tatt - kun auto-triggeren gjorde det).
+  if (!kilde.ombygging?.nyttKjoretoy) { visToast('Vegvesen-dokumenter gjelder kun Nytt Kjøretøy-ombygginger - denne ordren er ikke det.'); return; }
   const geometri = vegvesenGeometri(kilde.merke, kilde.modell);
   if (!geometri) { visToast('Ingen mal/geometri lagt inn for ' + (kilde.merke||'?') + ' ' + (kilde.modell||'?') + ' ennå'); return; }
   visToast('Genererer dokumenter...', 'ok');
