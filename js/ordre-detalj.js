@@ -867,6 +867,10 @@ function sfOmbygging(id, felt, val) {
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
   synkroniserOmbyggingFikenLinjer(o);
+  // Rydder bort tidligere auto-genererte Vegvesen-dokumenter hvis Nytt Kjøretøy skrus av
+  // etter at de allerede er laget - ellers blir de stående og se gyldige ut for en
+  // kategori ordren ikke lenger tilhører (se vegvesen-dokumenter.js).
+  if (felt === 'nyttKjoretoy' && !val) vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o);
 }
 
 // ════════════════════════════════════════════════════

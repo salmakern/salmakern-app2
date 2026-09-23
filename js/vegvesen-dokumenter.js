@@ -940,6 +940,63 @@ function vegvesenBeregnOgSettEndring(o) {
   return { geometri, P, P1, P2, M, M1, M2, justertP, justertVogntog, beregning };
 }
 
+// De 5 dokumentnavn-prefiksene automatikken selv genererer - brukt til å identifisere
+// (og evt. fjerne igjen) tidligere auto-genererte Vegvesen-dokumenter uten å røre
+// manuelt opplastede dokumenter med andre navn. Samme rekkefølge som vegvesenSkrivUt().
+const VEGVESEN_DOKUMENTTYPER = ['Egenerklæring-', 'Vektfordeling-', 'Fabrikantattest-', 'Melding om registrering-', 'Kjøretøyliste-'];
+
+// Fjerner tidligere auto-genererte Vegvesen-dokumenter fra en ordre (og eventuelle
+// søsken-ordre i samme flåte som deler dem, samme fjerningsmønster som slettDokument()
+// i ordre-diverse.js) - kalt fra sfOmbygging() når nyttKjoretoy skrus AV. Uten dette blir
+// tidligere genererte dokumenter stående og se gyldige ut for en kategori ordren ikke
+// lenger tilhører (funnet via en ekte ordre 2026-09-23 - en "Brukt Kjøretøy"-ordre som
+// fortsatt viste "Nytt Kjøretøy"-papirer generert før kategorien ble rettet).
+// Sjekker kilde.ombygging (primær hvis flåte, ellers ordren selv) - samme kilde som
+// avgjør om automatikken genererer i utgangspunktet (se vegvesenAutoGenererHvisKomplett)
+// - rører ingenting hvis det er et SEKUNDÆRKJØRETØY i flåten som fikk sin egen,
+// funksjonsløse nyttKjoretoy-hake endret, ikke den som faktisk styrer generering.
+async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
+  const kontekst = vegvesenFlateKontext(o);
+  const kilde = kontekst ? kontekst.primaer : o;
+  if (kilde.ombygging?.nyttKjoretoy) return;
+
+  const gamle = (o.dokumenter || []).filter(d => VEGVESEN_DOKUMENTTYPER.some(p => d.navn.startsWith(p)));
+  if (!gamle.length) return;
+
+  for (const dok of gamle) {
+    const beroerte = kontekst
+      ? kontekst.medlemmer.filter(m => (m.dokumenter||[]).some(d => d.navn===dok.navn && d.url===dok.url))
+      : [o];
+    if (db && dok.url) {
+      const filnavn = dok.url.split('/ordre-dokumenter/')[1];
+      if (filnavn) await db.storage.from('ordre-dokumenter').remove([filnavn]);
+    }
+    beroerte.forEach(m => {
+      m.dokumenter = (m.dokumenter||[]).filter(d => !(d.navn===dok.navn && d.url===dok.url));
+      logChange(m, 'Fjernet utdatert Vegvesen-dokument (Nytt Kjøretøy fjernet): ' + dok.navn);
+    });
+    if (db) db.from('ordrer').upsert(beroerte.map(m=>({id:m.id, dokumenter:m.dokumenter})), {onConflict:'id'})
+      .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
+    beroerte.forEach(m => {
+      const listEl = document.getElementById('dokumenterListe_' + m.id);
+      if (listEl) listEl.innerHTML = dokumenterListeHTML(m);
+    });
+  }
+
+  // Nullstiller fingerprint slik at automatikken regenererer helt friskt igjen hvis
+  // "Nytt Kjøretøy" hukes av på nytt senere, i stedet for å tro alt fortsatt stemmer.
+  kilde.vegvesenFingerprint = null;
+  if (db) db.from('ordrer').update({vegvesen_fingerprint:null}).eq('id', kilde.id)
+    .then(r=>{if(r.error) console.error('Nullstilling av fingerprint feilet:', r.error.message);});
+  if (kontekst) {
+    kontekst.flate.vegvesenFingerprint = null;
+    if (db) db.from('flater').update({vegvesen_fingerprint:null}).eq('id', kontekst.flate.id)
+      .then(r=>{if(r.error) console.error('Nullstilling av flåte-fingerprint feilet:', r.error.message);});
+  }
+  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  visToast(`Fjernet ${gamle.length} utdatert${gamle.length===1?'':'e'} Vegvesen-dokument${gamle.length===1?'':'er'} siden "Nytt Kjøretøy" ble fjernet`, 'ok');
+}
+
 // ── Lagring i ordrens dokument-mappe ────────────────────────────────────────
 // Samme lagringsmekanikk (bucket, samme-filnavn-erstatter-forrige-versjon) som
 // lastOppDokument() i ordre-diverse.js bruker for manuelt opplastede filer - her bare
