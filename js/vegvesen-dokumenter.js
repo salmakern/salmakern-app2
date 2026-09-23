@@ -132,8 +132,28 @@ const VEGVESEN_MODELLER = [
       ['Støtdempertårn', '', '', 'Annex 5 og 6 / 7 og 8', 'No. 8124392177-LE', 'TÜV NORD'],
       ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-LE / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
     ],
-    saerligAnmerkning: 'Støtdempertårn er merket med delenummer: TS 095866/034244 L/R',
-    antallSitteplasser: () => ({ inn: '5/6/7', ut: '2/3' }),
+    // saerligAnmerkning og antallSitteplasser er begge funksjoner av o for Defender
+    // (unntak fra resten av modellene, som har faste verdier) - bekreftet av Henrik
+    // 2026-09-23 ut fra hakene i Utstyr->Ved ankomst (o.utstyrSjekkliste, se
+    // Land Rover Defender sin utstyr-mal "u104" for de eksakte punkt-tekstene):
+    // - "AD" avgjør hvilket støtdempertårn-delenummer som faktisk ble montert.
+    // - "3-seter foran"/"4-seter bak"/"5-seter bak" avgjør faktisk sitteplass-antall,
+    //   i stedet for å alltid vise hele spennet 5/6/7 -> 2/3 slik det gjorde før.
+    //   Antar disse tre er gjensidig utelukkende (kun ett faktisk montert per bil) -
+    //   ikke bekreftet hva som skal skje om flere er huket av samtidig.
+    saerligAnmerkning: o => {
+      const ad = (o.utstyrSjekkliste||[]).some(p => p.punkt === 'AD' && p.ok);
+      return ad
+        ? 'Støtdempertårn er merket med delenummer: TS 034244 L/R'
+        : 'Støtdempertårn er merket med delenummer: TS 095866';
+    },
+    antallSitteplasser: o => {
+      const harPunkt = navn => (o.utstyrSjekkliste||[]).some(p => p.punkt === navn && p.ok);
+      if (harPunkt('5-seter bak')) return { inn: '7', ut: '2' };
+      if (harPunkt('4-seter bak')) return { inn: '6', ut: '2' };
+      if (harPunkt('3-seter foran')) return { inn: '6', ut: '3' };
+      return { inn: '5', ut: '2' };
+    },
     egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittLandRover(chassis, merkeModell)
   },
   {
@@ -706,10 +726,15 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   page.drawText('Disse kravområdene bekreftes oppfylt i henhold til', { x: vX, y, size: 9, font }); y -= 12;
   page.drawText('Forskrift om godkjenning av bil og tilhenger til bil - FOR-2022-06-28-1233.', { x: vX, y, size: 9, font }); y -= 20;
 
-  if (vegvesenModell.saerligAnmerkning) {
+  // saerligAnmerkning er en fast streng for de fleste modeller, men en funksjon av o
+  // for Defender (avhenger av AD-huken i Utstyr->Ved ankomst, se VEGVESEN_MODELLER).
+  const saerligAnmerkningTekst = typeof vegvesenModell.saerligAnmerkning === 'function'
+    ? vegvesenModell.saerligAnmerkning(o)
+    : vegvesenModell.saerligAnmerkning;
+  if (saerligAnmerkningTekst) {
     page.drawText('Særlig anmerkninger', { x: vX, y, size: 9.5, font: fontBold });
     page.drawLine({ start:{x:vX,y:y-2}, end:{x:vX+90,y:y-2}, thickness:0.5, color: SORT }); y -= 13;
-    page.drawText(vegvesenModell.saerligAnmerkning, { x: vX, y, size: 9, font }); y -= 22;
+    page.drawText(saerligAnmerkningTekst, { x: vX, y, size: 9, font }); y -= 22;
   } else {
     y -= 14;
   }

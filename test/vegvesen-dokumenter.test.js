@@ -5,7 +5,7 @@ import { loadScript } from './helpers/load-script.js';
 // Vektfordeling-regneark (KIA EV9), ikke utledet på nytt - testene under bruker de
 // SAMME tallene som står i deres referanseeksempel for å bekrefte at formlene er
 // transkribert riktig, siden dette er tall som går videre til Statens vegvesen.
-const { beregnVektfordeling, finnJustertTotalvekt, vegvesenGeometri } = loadScript('vegvesen-dokumenter.js');
+const { beregnVektfordeling, finnJustertTotalvekt, vegvesenGeometri, vegvesenFinnModell } = loadScript('vegvesen-dokumenter.js');
 
 const KIA_EV9_GEOMETRI = { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 };
 
@@ -225,5 +225,44 @@ describe('vegvesenFlateKontext', () => {
 
     const kontekst = vegvesenFlateKontext(a);
     expect(kontekst.primaer.id).toBe('ord_a'); // sortert på chassis - "AAA" før "BBB"
+  });
+});
+
+// Defender sin saerligAnmerkning/antallSitteplasser er funksjoner av ordren (unntak fra
+// resten av modellene, som har faste verdier) - bekreftet av Henrik 2026-09-23 ut fra
+// hakene i Utstyr->Ved ankomst. Eksakte punkt-tekster hentet fra den ekte utstyr-malen
+// "Land Rover Defender" (u104) i databasen: "AD", "3-seter foran", "4-seter bak",
+// "5-seter bak" - feil skrivemåte her ville stille sluttet å virke.
+describe('Land Rover Defender - dynamisk særlig anmerkning og antall sitteplasser', () => {
+  const defender = vegvesenFinnModell('Land Rover', 'Defender 110');
+  const ordreMed = (...punkter) => ({ utstyrSjekkliste: punkter.map(p => ({ punkt: p, ok: true })) });
+
+  it('bruker TS 095866 og 5/2 seter når ingenting er huket av', () => {
+    const o = ordreMed();
+    expect(defender.saerligAnmerkning(o)).toBe('Støtdempertårn er merket med delenummer: TS 095866');
+    expect(defender.antallSitteplasser(o)).toEqual({ inn: '5', ut: '2' });
+  });
+
+  it('bruker TS 034244 L/R når AD er huket av', () => {
+    const o = ordreMed('AD');
+    expect(defender.saerligAnmerkning(o)).toBe('Støtdempertårn er merket med delenummer: TS 034244 L/R');
+  });
+
+  it('gir 6/2 seter for "4-seter bak"', () => {
+    expect(defender.antallSitteplasser(ordreMed('4-seter bak'))).toEqual({ inn: '6', ut: '2' });
+  });
+
+  it('gir 7/2 seter for "5-seter bak"', () => {
+    expect(defender.antallSitteplasser(ordreMed('5-seter bak'))).toEqual({ inn: '7', ut: '2' });
+  });
+
+  it('gir 6/3 seter for "3-seter foran"', () => {
+    expect(defender.antallSitteplasser(ordreMed('3-seter foran'))).toEqual({ inn: '6', ut: '3' });
+  });
+
+  it('ignorerer punkter som ikke er huket av', () => {
+    const o = { utstyrSjekkliste: [{ punkt: '5-seter bak', ok: false }, { punkt: 'AD', ok: false }] };
+    expect(defender.antallSitteplasser(o)).toEqual({ inn: '5', ut: '2' });
+    expect(defender.saerligAnmerkning(o)).toBe('Støtdempertårn er merket med delenummer: TS 095866');
   });
 });
