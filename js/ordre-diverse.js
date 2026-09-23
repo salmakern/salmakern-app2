@@ -237,7 +237,7 @@ function apneNyOrdreModal() {
   // samme Kontakter-baserte forslag som ordredetaljsiden fikk 2026-09-22 - trenger ikke
   // re-populeres på hvert tastetrykk i Merke/Modell slik den gamle varianten gjorde,
   // siden denne ikke er filtrert på merke/modell.
-  document.getElementById('n_eier_forslag').innerHTML = feltForslagHTML('n_eier', kontaktpersonKontakterForslag());
+  document.getElementById('n_eier_forslag').innerHTML = feltForslagHTML('n_eier', kontaktpersonKontakterForslag(feltVerdi('n_kunde')));
   openModal('nyOrdre');
 }
 

@@ -133,6 +133,12 @@ function buildOrdreDetail() {
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   synkroniserOmbyggingFikenLinjer(o);
   vegvesenAutoGenererHvisKomplett(o);
+  // Vegvesen-dokumenter (Fabrikantattest/Egenerklæring/Vektfordeling/Melding om
+  // registrering) gjelder KUN "Nytt Kjøretøy"-ombygginger (se vegvesen-dokumenter.js sin
+  // egen fil-header) - styrer om Regenerer/Skriv ut-knappene under vises. Bruker samme
+  // flåte-kilde-logikk som selve auto-genereringen (primærkjøretøyet hvis flåte).
+  const vegvesenKontekst = vegvesenFlateKontext(o);
+  const vegvesenGjelderDenneOrdren = !!(vegvesenKontekst ? vegvesenKontekst.primaer : o).ombygging?.nyttKjoretoy;
   const tf = tvangsflyt(o);
   const tvangsflytOk = tf.every(t=>t.ok);
   const erAdmin = me && me.rolle==='admin';
@@ -189,7 +195,7 @@ function buildOrdreDetail() {
             <label>Forhandler</label>
             <div style="display:flex;gap:6px">
               <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
-                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}')"
+                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}')"
                 onchange="sf('${o.id}','kunde',this.value)"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
@@ -200,7 +206,7 @@ function buildOrdreDetail() {
             <label>Kontaktperson</label>
             <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)"
               onfocus="visFeltDropdown('typeForslag_eier_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_eier_${o.id}'))">
-            <div id="typeForslag_eier_${o.id}" class="felt-dropdown">${feltForslagHTML('eierInput_'+o.id, kontaktpersonKontakterForslag())}</div>
+            <div id="typeForslag_eier_${o.id}" class="felt-dropdown">${feltForslagHTML('eierInput_'+o.id, kontaktpersonKontakterForslag(o.kunde))}</div>
           </div>
           <div class="felt-wrap">
             <label>Merke</label>
@@ -470,8 +476,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
           + Last opp dokument
           <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
         </label>`:''}
-        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" onclick="genererVegvesenDokumenter('${o.id}')" title="Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering">🔄 Regenerer Vegvesen-dokumenter</button>
-        <button class="btn sm" style="margin-top:6px;width:100%" onclick="vegvesenSkrivUt('${o.id}')">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="genererVegvesenDokumenter('${o.id}')" title="${vegvesenGjelderDenneOrdren?'Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy-ombygginger'}">🔄 Regenerer Vegvesen-dokumenter</button>
+        <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
       </div>
 
       ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
@@ -944,11 +950,21 @@ function forhandlerForslag(merke, modell) {
 // eksisterende Kontakt-oppføring, siden fraktbestilling/hentevarsel fra Admin-arket slår
 // opp e-post på nøyaktig navn (se adminArkFinnKontaktEpost i admin-ark.js) - en kontaktperson
 // skrevet inn litt annerledes enn i Kontakter gir "fant ingen e-post"-feil der.
-function kontaktpersonKontakterForslag() {
+// Filtrert på forhandler 2026-09-23 (bekreftet av Henrik): kontaktpersoner ligger nå
+// nøstet under sin forhandler (S.kontakter type "Forhandler", .kontaktpersoner-array, se
+// ansatte-utstyr.js) i stedet for som egne rader i Kontakter. Finnes en Forhandler-kontakt
+// med nøyaktig samme navn som ordrens Forhandler-felt (o.kunde), vis kun DENNE forhandlerens
+// kontaktpersoner. Finnes ingen match ennå (uregistrert forhandler, eller feltet er tomt),
+// fall tilbake til alle kontaktpersoner på tvers av alle forhandlere - samme
+// alltid-vis-noe-oppførsel som før denne endringen.
+function kontaktpersonKontakterForslag(kunde) {
+  const forhandlere = (S.kontakter||[]).filter(k => k.type === 'Forhandler');
+  const treff = forhandlere.find(k => (k.navn||'').trim().toLowerCase() === (kunde||'').trim().toLowerCase());
+  const navn = treff ? (treff.kontaktpersoner||[]).map(p=>p.navn) : forhandlere.flatMap(k=>(k.kontaktpersoner||[]).map(p=>p.navn));
   // Vanlig strengsammenligning (ikke localeCompare) med vilje - localeCompare() uten
   // eksplisitt locale ga overraskende ikke-alfabetisk rekkefølge for repeterte bokstaver
   // under nb-NO (oppdaget i js/vegvesen-dokumenter.js sin flåte-sortering 2026-09-21).
-  return [...new Set((S.kontakter||[]).map(k=>k.navn))].sort((a,b) => {
+  return [...new Set(navn)].sort((a,b) => {
     const na = a.toUpperCase(), nb = b.toUpperCase();
     return na < nb ? -1 : na > nb ? 1 : 0;
   });
@@ -1014,6 +1030,10 @@ function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, list
 function renderForhandlerOrgnrForslag(kundeInputId, orgnrInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
   el.innerHTML = feltForslagHTML(orgnrInputId, forhandlerOrgnrForslag(feltVerdi(kundeInputId)));
+}
+function renderEierForslag(kundeInputId, eierInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(eierInputId, kontaktpersonKontakterForslag(feltVerdi(kundeInputId)));
 }
 
 // Kjente modeller = biltype-feltet på utstyr-malene, pluss modell-feltet på lagervarer

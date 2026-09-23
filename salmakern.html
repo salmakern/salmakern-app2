@@ -1039,6 +1039,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="felt-wrap">
           <label>Forhandler</label>
           <input id="n_kunde" autocomplete="off"
+            oninput="renderEierForslag('n_kunde','n_eier','n_eier_forslag')"
             onfocus="visFeltDropdown('n_kunde_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_kunde_forslag'))">
           <div id="n_kunde_forslag" class="felt-dropdown"></div>
         </div>
@@ -1228,7 +1229,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="h">Ny kontakt</div>
     <div class="grid g2" style="margin-top:12px">
       <div><label>Navn *</label><input id="kNavn"></div>
-      <div><label>Type</label><select id="kType"><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Fraktselskap</option><option>Annet</option></select></div>
+      <div><label>Type</label><select id="kType"><option>Forhandler</option><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Fraktselskap</option><option>Annet</option></select></div>
       <div><label>Telefon</label><input id="kTlf" type="tel"></div>
       <div><label>E-post</label><input id="kEpost" type="email"></div>
     </div>
@@ -1236,6 +1237,45 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreKontakt()">Lagre</button>
       <button class="btn" onclick="closeModal('nyKontakt')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyKontaktperson">
+  <div class="modal-box">
+    <div class="h">Ny kontaktperson</div>
+    <div class="small muted" style="margin-top:4px" id="kpForhandlerNavn"></div>
+    <input type="hidden" id="kpForhandlerId">
+    <div class="grid g2" style="margin-top:12px">
+      <div><label>Navn *</label><input id="kpNavn"></div>
+      <div><label>Telefon</label><input id="kpTlf" type="tel"></div>
+      <div><label>E-post</label><input id="kpEpost" type="email"></div>
+    </div>
+    <label>Notat</label><textarea id="kpNotat" rows="2"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreKontaktperson()">Lagre</button>
+      <button class="btn" onclick="lukkNyKontaktperson()">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="forhandlerListe">
+  <div class="modal-box">
+    <div class="h">Forhandlere</div>
+    <div id="forhandlerListeInnhold" style="margin-top:12px"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn" onclick="closeModal('forhandlerListe')">Lukk</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="forhandlerDetalj">
+  <div class="modal-box">
+    <div class="h" id="forhandlerDetaljTittel">Forhandler</div>
+    <input type="hidden" id="fdForhandlerId">
+    <div id="forhandlerDetaljInnhold" style="margin-top:12px"></div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn" onclick="lukkForhandlerDetalj()">Lukk</button>
     </div>
   </div>
 </div>

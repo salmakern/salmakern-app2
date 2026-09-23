@@ -189,11 +189,24 @@ function adminArkFraktselskapVerdier(gjeldende) {
 // skal alltid være nøyaktig den fraktselskap-kontakten dropdownen tilbød, mens
 // kontaktperson kan stå under hvilken som helst type Henrik har lagt dem inn som, så det
 // søket er ikke type-begrenset).
+// Kontaktpersoner flyttet til å ligge nøstet under sin forhandler 2026-09-23 (se
+// ansatte-utstyr.js/lagreKontaktperson og ordre-detalj.js/kontaktpersonKontakterForslag)
+// - uten fallback-søket under ville frakt-e-post og hentet-varsel ikke funnet e-posten
+// til en kontaktperson lagt inn via den nye "+ Legg til kontaktperson"-flyten, siden de
+// ikke lenger finnes som egne toppnivå-rader i S.kontakter. Kun relevant for det
+// type-uavhengige kontaktperson-søket - et type-begrenset søk (Fraktselskap) er alltid
+// toppnivå og trenger ingen nøstet fallback.
 function adminArkFinnKontaktEpost(navn, type) {
   if (!navn) return '';
   const treff = (S.kontakter||[]).find(k =>
     k.navn.trim().toLowerCase() === navn.trim().toLowerCase() && (!type || k.type === type));
-  return treff?.epost || '';
+  if (treff) return treff.epost || '';
+  if (type) return '';
+  const nostetTreff = (S.kontakter||[])
+    .filter(k => k.type === 'Forhandler')
+    .flatMap(k => k.kontaktpersoner||[])
+    .find(p => p.navn.trim().toLowerCase() === navn.trim().toLowerCase());
+  return nostetTreff?.epost || '';
 }
 
 // Henter friske forhandler/kontaktperson/fraktselskap-verdier for et chassisnummer rett

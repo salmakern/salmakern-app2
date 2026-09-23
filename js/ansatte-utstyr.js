@@ -39,32 +39,181 @@ function renderBeskjeder() {
 function lagreKontakt() {
   const navn = document.getElementById('kNavn').value.trim();
   if (!navn) { alert('Navn er påkrevd'); return; }
-  S.kontakter.push({
+  const type = document.getElementById('kType').value;
+  const kontakt = {
     id:'k'+(++S.nextId),
-    navn, type:document.getElementById('kType').value,
+    navn, type,
     tlf:document.getElementById('kTlf').value.trim(),
     epost:document.getElementById('kEpost').value.trim(),
     notat:document.getElementById('kNotat').value.trim()
-  });
+  };
+  // Kontaktpersoner ligger nøstet under sin forhandler (se lagreKontaktperson under) -
+  // Forhandler-kontakter trenger derfor alltid et (evt. tomt) kontaktpersoner-array klart.
+  if (type === 'Forhandler') kontakt.kontaktpersoner = [];
+  S.kontakter.push(kontakt);
   saveInnstillinger();
   closeModal('nyKontakt');
   ['kNavn','kTlf','kEpost','kNotat'].forEach(i=>document.getElementById(i).value='');
   renderKontakter();
 }
 
+// Sletting av en Forhandler-kontakt tar med seg alle nøstede kontaktpersoner under den -
+// derfor et eget, tydeligere bekreftelsesspørsmål for den typen (bedt om av Henrik
+// 2026-09-23: "det må ikke være så enkelt å slette en forhandler... det må være et
+// sikkerhetsspørsmål på det å slette forhandler eller kontaktperson"). closeModal på en
+// modal som uansett ikke er åpen er en no-op (se lager.js), så det er trygt å alltid lukke
+// forhandlerDetalj her selv om sletting skjedde et annet sted enn den modalen.
 function slettKontakt(id) {
-  S.kontakter = S.kontakter.filter(k=>k.id!==id);
+  const k = S.kontakter.find(x=>x.id===id); if (!k) return;
+  const antallKp = (k.kontaktpersoner||[]).length;
+  const advarsel = k.type==='Forhandler' && antallKp
+    ? `Slette forhandleren "${k.navn}"? Dette sletter også alle ${antallKp} kontaktperson${antallKp===1?'':'er'} under den.`
+    : `Slette kontakten "${k.navn}"?`;
+  if (!confirm(advarsel)) return;
+  S.kontakter = S.kontakter.filter(x=>x.id!==id);
   saveInnstillinger();
+  if (k.type === 'Forhandler') { closeModal('forhandlerDetalj'); renderForhandlerListe(); openModal('forhandlerListe'); }
   renderKontakter();
 }
 
+// Forhandlere vises IKKE i den vanlige Kontakter-lista lenger, men i en egen fane/modal
+// (bedt om av Henrik 2026-09-23: "det må være egen knapp som henter se forhandlerne så
+// kommer det opp en fane med alle forhandlerne også kan vi trykke inn på forhandlerne") -
+// åpnes via "Forhandlere"-knappen ved siden av "+ Ny kontakt".
+function apneForhandlerListe() {
+  renderForhandlerListe();
+  openModal('forhandlerListe');
+}
+
+function renderForhandlerListe() {
+  const el = document.getElementById('forhandlerListeInnhold'); if (!el) return;
+  const forhandlere = S.kontakter.filter(k=>k.type==='Forhandler');
+  if (!forhandlere.length) { el.innerHTML = '<div class="small muted">Ingen forhandlere lagt til ennå</div>'; return; }
+  el.innerHTML = forhandlere.map(k=>{
+    const antallKp = (k.kontaktpersoner||[]).length;
+    return `
+      <div class="box" style="margin-bottom:8px;cursor:pointer" onclick="apneForhandlerDetalj('${k.id}')">
+        <div><b>${esc(k.navn)}</b></div>
+        <div class="small muted" style="margin-top:4px">${antallKp} kontaktperson${antallKp===1?'':'er'} →</div>
+      </div>`;
+  }).join('');
+}
+
+// Kontaktpersoner er IKKE egne rader i S.kontakter - de lever nøstet i .kontaktpersoner
+// på sin Forhandler-kontakt (bekreftet av Henrik 2026-09-23: "det skal være forhandler
+// og under hver forhandler så skal det være kontaktpersonene"). Administreres kun inne i
+// forhandlerDetalj-modalen ("man må trykke inn på forhandleren for å slette og opprette
+// nye kontaktpersoner" - bevisst friksjon, ikke direkte redigerbart fra hovedlisten).
+// Brukes også av kontaktpersonKontakterForslag() i ordre-detalj.js til å foreslå/filtrere
+// Kontaktperson-feltet på ordre ut fra hvilken forhandler som er valgt.
+function apneForhandlerDetalj(forhandlerId) {
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
+  document.getElementById('fdForhandlerId').value = forhandlerId;
+  renderForhandlerDetalj();
+  closeModal('forhandlerListe');
+  openModal('forhandlerDetalj');
+}
+
+// "Tilbake"-navigasjon til forhandler-lista (kalt fra Lukk-knappen på forhandlerDetalj) -
+// apneForhandlerDetalj() kalles i dag ALLTID fra forhandlerListe, så det er trygt å anta
+// det er dit man skal tilbake.
+function lukkForhandlerDetalj() {
+  closeModal('forhandlerDetalj');
+  renderForhandlerListe();
+  openModal('forhandlerListe');
+}
+
+function renderForhandlerDetalj() {
+  const forhandlerId = document.getElementById('fdForhandlerId')?.value;
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId);
+  const el = document.getElementById('forhandlerDetaljInnhold');
+  if (!forhandler || !el) return;
+  const erAdmin = me && me.rolle==='admin';
+  document.getElementById('forhandlerDetaljTittel').textContent = forhandler.navn;
+  el.innerHTML = `
+    ${forhandler.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${esc(forhandler.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(forhandler.tlf)}</a></div>`:''}
+    ${forhandler.epost?`<div class="small">✉ <a href="mailto:${esc(forhandler.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(forhandler.epost)}</a></div>`:''}
+    ${forhandler.notat?`<div class="small muted" style="margin-top:4px">${esc(forhandler.notat)}</div>`:''}
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #27272a">
+      <div class="small muted" style="margin-bottom:6px">Kontaktpersoner</div>
+      ${(forhandler.kontaktpersoner||[]).length ? forhandler.kontaktpersoner.map(p=>`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;padding:6px 0 6px 10px;border-left:2px solid #3f3f46;margin-bottom:4px">
+          <div>
+            <div>${esc(p.navn)}</div>
+            ${p.tlf?`<div class="small" style="margin-top:2px">📞 <a href="tel:${esc(p.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(p.tlf)}</a></div>`:''}
+            ${p.epost?`<div class="small">✉ <a href="mailto:${esc(p.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(p.epost)}</a></div>`:''}
+            ${p.notat?`<div class="small muted" style="margin-top:2px">${esc(p.notat)}</div>`:''}
+          </div>
+          ${erAdmin?`<button onclick="slettKontaktperson('${forhandler.id}','${p.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0">✕</button>`:''}
+        </div>`).join('') : '<div class="small muted" style="padding-left:10px">Ingen kontaktpersoner lagt til</div>'}
+      ${erAdmin?`<button class="btn sm" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="apneNyKontaktperson('${forhandler.id}')">+ Legg til kontaktperson</button>`:''}
+    </div>
+    ${erAdmin?`<button class="btn sm" style="margin-top:14px;padding:4px 10px;font-size:12px;color:#ef4444" onclick="slettKontakt('${forhandler.id}')">Slett forhandler</button>`:''}
+  `;
+}
+
+// Hopper midlertidig ut av forhandlerDetalj mens Ny kontaktperson-modalen er åpen (begge
+// er faste z-index-overlays i samme lag - uten dette ville forhandlerDetalj tegnet seg
+// oppå/under den på en uforutsigbar måte i stedet for at de veksler ryddig). Kalles fra
+// BÅDE Lagre og Avbryt i nyKontaktperson-modalen, se lagreKontaktperson()/salmakern.html.
+function apneNyKontaktperson(forhandlerId) {
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
+  document.getElementById('kpForhandlerId').value = forhandlerId;
+  document.getElementById('kpForhandlerNavn').textContent = 'Under ' + forhandler.navn;
+  ['kpNavn','kpTlf','kpEpost','kpNotat'].forEach(i=>document.getElementById(i).value='');
+  closeModal('forhandlerDetalj');
+  openModal('nyKontaktperson');
+}
+
+function lukkNyKontaktperson() {
+  const forhandlerId = document.getElementById('kpForhandlerId').value;
+  closeModal('nyKontaktperson');
+  if (forhandlerId && S.kontakter.some(k=>k.id===forhandlerId)) {
+    document.getElementById('fdForhandlerId').value = forhandlerId;
+    renderForhandlerDetalj();
+    openModal('forhandlerDetalj');
+  }
+}
+
+function lagreKontaktperson() {
+  const forhandlerId = document.getElementById('kpForhandlerId').value;
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
+  const navn = document.getElementById('kpNavn').value.trim();
+  if (!navn) { alert('Navn er påkrevd'); return; }
+  if (!forhandler.kontaktpersoner) forhandler.kontaktpersoner = [];
+  forhandler.kontaktpersoner.push({
+    id:'kp'+(++S.nextId),
+    navn,
+    tlf:document.getElementById('kpTlf').value.trim(),
+    epost:document.getElementById('kpEpost').value.trim(),
+    notat:document.getElementById('kpNotat').value.trim()
+  });
+  saveInnstillinger();
+  renderKontakter();
+  lukkNyKontaktperson();
+}
+
+function slettKontaktperson(forhandlerId, kpId) {
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
+  const p = (forhandler.kontaktpersoner||[]).find(x=>x.id===kpId); if (!p) return;
+  if (!confirm(`Slette kontaktpersonen "${p.navn}"?`)) return;
+  forhandler.kontaktpersoner = forhandler.kontaktpersoner.filter(x=>x.id!==kpId);
+  saveInnstillinger();
+  renderForhandlerDetalj();
+  renderKontakter();
+}
+
+// Forhandlere er bevisst utelatt fra denne lista (se apneForhandlerListe/renderForhandlerListe
+// over) - de har sin egen fane nå.
 function renderKontakter() {
   const erAdmin = me && me.rolle==='admin';
-  document.getElementById('merKontaktAdminBtn').innerHTML = erAdmin
-    ? '<button class="btn sm red" onclick="openModal(\'nyKontakt\')">+ Ny kontakt</button>' : '';
+  document.getElementById('merKontaktAdminBtn').innerHTML =
+    '<button class="btn sm" onclick="apneForhandlerListe()">Forhandlere</button>' +
+    (erAdmin ? ' <button class="btn sm red" onclick="openModal(\'nyKontakt\')">+ Ny kontakt</button>' : '');
   const el = document.getElementById('kontaktListe');
-  if (!S.kontakter.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
-  el.innerHTML = S.kontakter.map(k=>`
+  const andre = S.kontakter.filter(k=>k.type!=='Forhandler');
+  if (!andre.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
+  el.innerHTML = andre.map(k=>`
     <div class="box" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
         <div>
@@ -532,8 +681,9 @@ function applyUtstyrMal(ordreId, malIdx) {
   save(ordreId); buildOrdreDetail();
   // Alle punkter starter uhuket - har malen et panorama-punkt betyr det standard
   // (ikke-panorama) glasstak, som skal vises som "ikke 501" med en gang (se
-  // toggleUtstyrPunkt over for samme logikk ved manuell av/på-huking).
-  if (o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
+  // toggleUtstyrPunkt under for samme logikk ved manuell av/på-huking, inkl. hvorfor
+  // dette er begrenset til KIA EV9).
+  if (erKiaEv9(o) && o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
   }
 }
@@ -544,13 +694,21 @@ function applyUtstyrMal(ordreId, malIdx) {
 // Feltet skal ALLTID ha én av de to linjene, aldri ingen av dem - er panorama IKKE
 // huket av (standard-varianten) skal "ikke 501" stå der i stedet (bekreftet av Henrik
 // 2026-09-15), ikke bare fravær av "501".
+// "501"/"ikke 501" er KIA EV9-spesifikke Fiken-produktnumre (bekreftet av Henrik
+// 2026-09-23) - selv om flere andre modeller (Defender, Discovery 5, ID BUZZ) også har
+// et "Panorama glasstak"-punkt i sin egen utstyr-mal, skal denne auto-oppskriften KUN
+// trigges for EV9. Samme /\bev9\b/i-mønster som brukt for modell-matching ellers i
+// appen (se f.eks. FIKEN_OMBYGGING_MODELLER i ordre-detalj.js).
+function erKiaEv9(o) {
+  return /\bev9\b/i.test(`${o.merke||''} ${o.modell||''}`);
+}
 const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
 const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'ikke 501';
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
   punkt.ok = !punkt.ok;
-  if (/panorama/i.test(punkt.punkt || '')) {
+  if (erKiaEv9(o) && /panorama/i.test(punkt.punkt || '')) {
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
   }
