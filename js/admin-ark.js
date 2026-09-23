@@ -1002,11 +1002,18 @@ function renderAdminArk(scrollTilBunn) {
         if (!(me && me.rolle==='admin')) return '';
         const rad = cell.getRow().getData();
         const chassis = esc(rad.chassisNr||'').replace(/'/g,"\\'");
-        if (!rad.chassisNr) return '';
-        const bestillDisabled = !rad.fraktselskap || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
+        // Begge knappene grået ut (ikke skjult) når chassis.nr mangler - samme mønster
+        // som "Bestill" allerede bruker når fraktselskap ikke er valgt, i stedet for at
+        // knappene bare forsvinner uten forklaring (Henrik spurte 2026-09-22 hvorfor han
+        // ikke fikk trykket på dem for enkelte rader - årsaken var usynlige, ikke bare
+        // grå, knapper).
+        const manglerChassis = !rad.chassisNr;
+        const bestillDisabled = manglerChassis || !rad.fraktselskap || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
+        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (bestillDisabled ? 'Velg fraktselskap først' : 'Send fraktbestilling på e-post');
+        const hentetTitel = manglerChassis ? 'Krever chassis.nr' : 'Varsle kontaktperson om at bilen er hentet';
         return `<div style="display:flex;gap:4px;justify-content:center">
-          <button class="btn sm" style="padding:3px 7px;font-size:11px" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="Send fraktbestilling på e-post">📧 Bestill</button>
-          <button class="btn sm" style="padding:3px 7px;font-size:11px" onclick="adminArkVarsleHentet('${chassis}')" title="Varsle kontaktperson om at bilen er hentet">✔ Hentet</button>
+          <button class="btn sm" style="padding:3px 7px;font-size:11px" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">📧 Bestill</button>
+          <button class="btn sm" style="padding:3px 7px;font-size:11px" ${manglerChassis?'disabled':''} onclick="adminArkVarsleHentet('${chassis}')" title="${hentetTitel}">✔ Hentet</button>
         </div>`;
       }},
     {title:'Merknader', field:'merknader', width: adminArkMaalBredde(data,'merknader','Merknader',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},
