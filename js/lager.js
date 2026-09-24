@@ -1102,7 +1102,7 @@ function fyllOppskriftVareListe(forhaandsvalgt) {
             <span>${esc(kat)} — <span id="${ddId}_teller">${valgtIKat} av ${katVarer.length}</span> valgt</span>
             <span style="flex-shrink:0;color:#a1a1aa">▾</span>
           </div>
-          <div class="felt-dropdown" id="${ddId}">
+          <div class="oppskrift-dd-liste" id="${ddId}">
             ${katVarer.map(v => {
               const valgt = forhaandsvalgt[v.id] != null;
               return `<label style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid #ffffff08">
@@ -1304,7 +1304,7 @@ function renderOrdreLagerbruk() {
         <span>${valgt.length} av ${treff.length} valgt</span>
         <span style="flex-shrink:0;color:#a1a1aa">▾</span>
       </div>
-      <div class="felt-dropdown" id="${ddId}">${rader}</div>
+      <div class="oppskrift-dd-liste" id="${ddId}">${rader}</div>
     </div>`;
   };
 
