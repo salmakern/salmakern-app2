@@ -96,13 +96,13 @@ function su(id,f,val) {
   o.utstyr[f]=val; save(id);
 }
 // Velges Hengerfeste, skal artikkelnummeret til hengerfestet (521 - "Montering av
-// tillhengerfeste" i Fiken sin produktliste, rettet fra 526 til 521 2026-09-24 etter
-// Henriks beskjed om at nummeret var feil/utdatert) automatisk stå i "Utstyr - Skal ha
-// etter visning" - samme mønster som oppdaterSkalHaForOppskrift() bruker for Ekstra
-// utstyr-oppskrifter (legger til/fjerner én navngitt linje).
+// tillhengerfeste" i Fiken sin produktliste, rettet fra 526 til 521 2026-09-24) rett inn
+// i Fiken-faktureringen - IKKE i "Utstyr - Skal ha etter visning" som tidligere (bedt om
+// av Henrik 2026-09-24: fakturalinjen skal legges direkte i o.fikenLinjer, samme mønster
+// som oppdaterFikenLinjeForOppskrift() allerede bruker for Ekstra utstyr-oppskrifter).
 function settHengerfeste(id, val) {
   su(id, 'hengerfeste', val);
-  oppdaterSkalHaForOppskrift('521', val === 'hengerfeste');
+  oppdaterFikenLinjeForOppskrift('521', val === 'hengerfeste');
 }
 
 // ════════════════════════════════════════════════════
