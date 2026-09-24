@@ -91,3 +91,112 @@ describe('renderOrdreLagerbruk selv-synkroniserer oppskrift-baserte Fiken-linjer
     expect(o.fikenLinjer.length).toBe(0);
   });
 });
+
+// Regresjonstest for feil rapportert av Henrik 2026-09-24: en Ekstra utstyr-oppskrift
+// UTEN ingredienser (rent arbeid) forble ikke huket av - erOppskriftHuket() sjekket kun
+// lagerhistorikk, som trekkOppskriftForOrdre() aldri skriver til når ingredienser er tom.
+describe('erOppskriftHuket (via toggleOppskriftPaaOrdre) - oppskrift uten ingredienser', () => {
+  function nyEnvironmentUtenIngrediens() {
+    const fakeEl = { innerHTML: '' };
+    const sandbox = {
+      console, Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
+      document: {
+        addEventListener() {},
+        getElementById(id) { return id.startsWith('ordreLagerbruk_') || id.startsWith('skalHaInput_') ? fakeEl : null; },
+      },
+      window: { addEventListener() {} },
+      S: { ordrer: [], lagerOppskrifter: [], lagerhistorikk: [], lagervarer: [] },
+      activeOrdreId: null,
+      apneOppskriftDropdowns: new Set(),
+      esc: s => s,
+      fmtAntall: n => String(n),
+      merkeModell: o => `${o.merke||''} ${o.modell||''}`.trim(),
+      su(id, felt, val) { const ord = sandbox.S.ordrer.find(x=>x.id===id); if (ord) { ord.utstyr = ord.utstyr||{}; ord.utstyr[felt] = val; } },
+      save() {},
+      db: null,
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(readFileSync(path.resolve(__dirname, '../js/lager.js'), 'utf8'), sandbox, { filename: 'lager.js' });
+    return sandbox;
+  }
+
+  it('blir huket av og BLIR STÅENDE huket i selve HTML-en etter en ny render, selv uten noen lagerhistorikk-rad', () => {
+    const env = nyEnvironmentUtenIngrediens();
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', utstyr: { skalHa: '' }, fikenLinjer: [] };
+    env.S.ordrer = [o];
+    env.activeOrdreId = o.id;
+    env.S.lagerOppskrifter = [
+      { id: 'r1', navn: 'Montering av tilhengerfeste', type: 'ekstra_utstyr', biltype: 'EV9', fikenProduktnummer: null, ingredienser: [] },
+    ];
+
+    env.toggleOppskriftPaaOrdre('r1', true);
+    expect(env.S.lagerhistorikk.length).toBe(0); // ingen varer å trekke - bekrefter selve premisset
+    expect(o.utstyr.skalHa.split('\n')).toContain('Montering av tilhengerfeste');
+
+    // Simulerer en helt ny render av seksjonen (samme som ville skjedd om siden ble bygget
+    // om, f.eks. ved navigering) - selve avkrysningsboksen i HTML-en skal fortsatt vise
+    // "checked", IKKE hoppe tilbake til uhuket (dette var selve buggen - fikenLinjer/
+    // skalHa var riktige internt, men boksen så uhuket ut igjen).
+    env.renderOrdreLagerbruk();
+    const el = env.document.getElementById('ordreLagerbruk_' + o.id);
+    expect(el.innerHTML).toContain('checked');
+    expect(el.innerHTML).toContain('Montering av tilhengerfeste');
+  });
+});
+
+// Regresjonstest for race-condition rapportert av Henrik 2026-09-24: fjerning av en
+// oppskrift MED ingredienser (ekte lagertrekk, ekte lagerhistorikk-rad) fjernet ikke
+// linjen fra "Skal ha etter visning" med en gang. Root cause: angreLagerBatch() er async
+// og starter med en confirm()-dialog før den fjerner raden fra S.lagerhistorikk; kalleren
+// leste "faktiskHuket" FØR det var ferdig (manglende await), så den så fortsatt den gamle
+// (uslettede) lagerhistorikk-raden og trodde oppskriften fortsatt var valgt.
+describe('toggleOppskriftPaaOrdre - race condition ved fjerning av oppskrift MED ingredienser', () => {
+  function nyEnvironmentMedIngrediens() {
+    const fakeEl = { innerHTML: '' };
+    const sandbox = {
+      console, Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
+      document: {
+        addEventListener() {},
+        getElementById(id) { return id.startsWith('ordreLagerbruk_') || id.startsWith('skalHaInput_') || id === 'fikenLinjer_ord_1' ? fakeEl : null; },
+      },
+      window: { addEventListener() {} },
+      S: { ordrer: [], lagerOppskrifter: [], lagerhistorikk: [], lagervarer: [] },
+      activeOrdreId: null,
+      apneOppskriftDropdowns: new Set(),
+      esc: s => s,
+      fmtAntall: n => String(n),
+      merkeModell: o => `${o.merke||''} ${o.modell||''}`.trim(),
+      su(id, felt, val) { const ord = sandbox.S.ordrer.find(x=>x.id===id); if (ord) { ord.utstyr = ord.utstyr||{}; ord.utstyr[felt] = val; } },
+      save() {},
+      db: null,
+      me: null,
+      confirm: () => true,
+      fetch: () => Promise.reject(new Error('ikke brukt i test')),
+      SUPA_URL: '', SUPA_KEY: '',
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(readFileSync(path.resolve(__dirname, '../js/lager.js'), 'utf8'), sandbox, { filename: 'lager.js' });
+    return sandbox;
+  }
+
+  it('venter på angreLagerBatch() før "Skal ha etter visning"-linjen fjernes', async () => {
+    const env = nyEnvironmentMedIngrediens();
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', utstyr: { skalHa: '' }, fikenLinjer: [] };
+    env.S.ordrer = [o];
+    env.activeOrdreId = o.id;
+    env.S.lagervarer = [{ id: 'v1', navn: 'Skinnsete', antall: 10, minAntall: 0 }];
+    env.S.lagerOppskrifter = [
+      { id: 'r1', navn: 'Skinninteriør', type: 'ekstra_utstyr', biltype: 'EV9', fikenProduktnummer: null, ingredienser: [{ vareId: 'v1', antall: 1 }] },
+    ];
+
+    await env.toggleOppskriftPaaOrdre('r1', true);
+    expect(env.S.lagerhistorikk.length).toBe(1); // ekte lagertrekk denne gangen
+    expect(o.utstyr.skalHa.split('\n')).toContain('Skinninteriør');
+
+    await env.toggleOppskriftPaaOrdre('r1', false);
+    expect(env.S.lagerhistorikk.length).toBe(0);
+    // Uten await på angreLagerBatch() ville denne linjen fortsatt stå igjen her, siden
+    // faktiskHuket ville blitt lest før lagerhistorikk-raden faktisk ble fjernet.
+    expect(o.utstyr.skalHa.split('\n')).not.toContain('Skinninteriør');
+  });
+});

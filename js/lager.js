@@ -1265,7 +1265,20 @@ function renderOrdreLagerbruk() {
   // før den kolonnen fantes har ingen oppskriftId - de faller tilbake på navn-matching,
   // men mister koblingen hvis oppskriften byttes navn i ettertid (kjent, akseptert
   // begrensning for historiske rader - se migrasjonsfilens kommentar).
-  const erOppskriftHuket = r => ordreBatchRader.some(h => h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn);
+  // En oppskrift UTEN ingredienser (rent arbeid, f.eks. montering) rører aldri
+  // lagerhistorikk i det hele tatt når den hukes av (se trekkOppskriftForOrdre) -
+  // lagerhistorikk-sjekken alene ville derfor ALLTID gitt "ikke huket" for den, uansett
+  // hva brukeren nettopp trykket, og boksen hoppet rett tilbake til uhuket ved neste
+  // render (bug funnet og rapportert av Henrik 2026-09-24). Faller i så fall tilbake til
+  // om oppskriftens eget navn står som egen linje i "Utstyr - Skal ha etter visning" -
+  // nøyaktig det samme feltet toggleOppskriftPaaOrdre() allerede skriver til for akkurat
+  // denne typen oppskrift (kun "ekstra_utstyr" - "ombygging" skriver aldri dit, se der).
+  // Sjekker lagerhistorikk FØRST og alltid (ikke bare når ingredienser>0) - en oppskrift
+  // som IDAG har ingredienser:[] kan likevel ha en ekte, historisk batch-rad liggende fra
+  // før den ble redigert til å ikke ha noen lenger.
+  const erOppskriftHuket = r =>
+    ordreBatchRader.some(h => h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn)
+    || (!(r.ingredienser||[]).length && (o.utstyr?.skalHa||'').split('\n').map(l=>l.trim()).includes(r.navn));
 
   // Samme root-cause-fiks som synkroniserOmbyggingFikenLinjer i ordre-detalj.js: toggle-
   // handleren legger kun til/fjerner Fiken-linjen i selve avkrysningsøyeblikket, så en
@@ -1341,13 +1354,19 @@ function trekkOppskriftForOrdre(oppskriftId) {
 // angreLagerBatch() kan returnere tidlig via en confirm()-dialog brukeren avbryter, og da
 // må boksen tilbakestilles til riktig (fortsatt uendret) tilstand med en gang, ikke bare
 // stå igjen visuelt feil til noe annet tilfeldigvis rendrer siden på nytt.
-function toggleOppskriftPaaOrdre(oppskriftId, huket) {
+// MÅ vente på angreLagerBatch() (async, med en confirm()-dialog helt i starten) før
+// "Skal ha etter visning"-linjen sjekkes rett under - uten await der ville koden alltid
+// lest DEN GAMLE lagerhistorikk-raden (siden angreLagerBatch fortsatt hang på
+// confirm()-dialogen/sin egen DB-skriving), og dermed trodd oppskriften fortsatt var
+// huket av selv når brukeren bekreftet fjerning - linjen ble stående i Skal ha-teksten
+// i stedet for å forsvinne (bug rapportert av Henrik 2026-09-24).
+async function toggleOppskriftPaaOrdre(oppskriftId, huket) {
   const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId);
   if (huket) {
     trekkOppskriftForOrdre(oppskriftId);
   } else {
     const rad = r && (S.lagerhistorikk||[]).find(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn));
-    if (rad) angreLagerBatch(rad.batchId);
+    if (rad) await angreLagerBatch(rad.batchId);
   }
   // Kun Ekstra utstyr (ikke Ombygging) legges automatisk inn i "Utstyr – Skal ha etter
   // visning" - sjekker den FAKTISKE tilstanden i lagerhistorikk etterpå (ikke bare
