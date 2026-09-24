@@ -789,6 +789,17 @@ const GLS_PUNKT_PRODUKTNUMMER = {
   'DVD-Skjermer': '405',
 };
 
+// Samme mønster for VW ID BUZZ (bekreftet av Henrik 2026-09-24) - kun fikenLinjer, ikke
+// "Skal ha etter visning". Punkt-teksten er hentet direkte fra den ekte utstyr-malen
+// ("Volkswagen ID BUZZ", biltype "ID BUZZ") i databasen. Samme /id\.?\s*buzz/i-mønster som
+// brukt for modell-matching ellers i appen (se FIKEN_OMBYGGING_MODELLER i ordre-detalj.js).
+function erIdBuzz(o) {
+  return /id\.?\s*buzz/i.test(`${o.merke||''} ${o.modell||''}`);
+}
+const ID_BUZZ_PUNKT_PRODUKTNUMMER = {
+  'Lang Modell': '1801',
+};
+
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
@@ -812,6 +823,10 @@ function toggleUtstyrPunkt(ordreId, idx) {
   }
   if (erMercedesGls(o)) {
     const produktnr = GLS_PUNKT_PRODUKTNUMMER[punkt.punkt];
+    if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
+  }
+  if (erIdBuzz(o)) {
+    const produktnr = ID_BUZZ_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
   save(ordreId);

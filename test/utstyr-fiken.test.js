@@ -166,3 +166,41 @@ describe('toggleUtstyrPunkt - Mercedes-Benz GLS', () => {
     expect(fikenLinjeKall.some(k => k.produktnummer === '402')).toBe(false);
   });
 });
+
+describe('toggleUtstyrPunkt - VW ID BUZZ', () => {
+  let env, o, fikenLinjeKall, skalHaKall;
+  beforeEach(() => {
+    ({ env, fikenLinjeKall, skalHaKall } = nyEnvironment());
+    o = {
+      id: 'ord_1', merke: 'Volkswagen', modell: 'ID BUZZ',
+      utstyrSjekkliste: [
+        { punkt: 'Lang Modell', ok: false },
+        { punkt: 'Panorama glasstak', ok: false },
+      ],
+    };
+    env.S.ordrer = [o];
+  });
+
+  it('Lang Modell -> produktnummer 1801 i fiken, ikke i skal ha, huk av og fjern igjen', () => {
+    env.toggleUtstyrPunkt('ord_1', 0);
+    expect(o.utstyrSjekkliste[0].ok).toBe(true);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: '1801', skalStaa: true });
+    expect(skalHaKall.length).toBe(0);
+
+    env.toggleUtstyrPunkt('ord_1', 0);
+    expect(o.utstyrSjekkliste[0].ok).toBe(false);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: '1801', skalStaa: false });
+  });
+
+  it('punkter uten kjent kobling (Panorama glasstak - kun EV9 har den koblingen) rører ikke fiken', () => {
+    env.toggleUtstyrPunkt('ord_1', 1);
+    expect(fikenLinjeKall.length).toBe(0);
+  });
+
+  it('samme punkt-tekst på en annen modell rører ikke ID BUZZ-koblingen', () => {
+    o.merke = 'Mercedes-Benz'; o.modell = 'GLS';
+    o.utstyrSjekkliste = [{ punkt: 'Lang Modell', ok: false }];
+    env.toggleUtstyrPunkt('ord_1', 0);
+    expect(fikenLinjeKall.some(k => k.produktnummer === '1801')).toBe(false);
+  });
+});
