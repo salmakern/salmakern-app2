@@ -1,12 +1,29 @@
 // ════════════════════════════════════════════════════
 // VEGVESEN-DOKUMENTER — automatisk generering av Egenerklæring, Vektfordeling,
 // Fabrikantattest, Kjøretøyliste og Melding om registrering (trinn 2-lapp gjenstår).
-// Kun for ordre med o.ombygging.nyttKjoretoy=true, og kun for modeller det finnes
-// mal + geometri for (se VEGVESEN_MODELLER under). Når ordren er del av en flåte
-// (se vegvesenFlateKontext) deles Egenerklæring/Vektfordeling/Fabrikantattest/Melding
-// om registrering for hele flåten i stedet for én per bil, og Kjøretøyliste genereres
-// i tillegg med det faktiske chassisnummeret for hver bil (bekreftet av Henrik
-// 2026-09-21).
+// For ordre med o.ombygging.nyttKjoretoy=true ELLER o.ombygging.bruktKjoretoy=true, og
+// kun for modeller det finnes mal + geometri for (se VEGVESEN_MODELLER under). Når
+// ordren er del av en flåte (se vegvesenFlateKontext) deles Egenerklæring/
+// Vektfordeling/Fabrikantattest/Melding om registrering for hele flåten i stedet for
+// én per bil, og Kjøretøyliste genereres i tillegg med det faktiske chassisnummeret
+// for hver bil (bekreftet av Henrik 2026-09-21).
+//
+// Brukt Kjøretøy lagt til 2026-09-23, etter å ha lest Henriks egne referansedokumenter
+// i "Ombygging - Varebil - Brukt Kjøretøy"-undermappene for 6 av 7 modeller (Toyota
+// Land Cruiser 250 og VW ID.BUZZ mangler fortsatt ekte referansedokumenter der). Reelle
+// forskjeller fra Nytt Kjøretøy, bekreftet på tvers av alle 6 modeller (IKKE gjettet):
+// - Egenerklæring: utelater ALLTID setningen om merkeplate/fabrikasjonsplate for trinn
+//   2-påbygger (se vegvesenFjernMerkeplateSetning) - resten av teksten er ordrett lik.
+// - Fabrikantattest: utelater ALLTID krav-raden "F7 Fabrikasjonsplate" (samme grunn -
+//   ingen ny fabrikasjonsplate på en bil som allerede er registrert).
+// - "Melding om registrering" genereres IKKE for Brukt Kjøretøy (gjelder kun
+//   førstegangsregistrering, ikke ombygging av en allerede registrert bil).
+// - "Andre endringer"-tabellen i Fabrikantattest er ellers lik Nytt Kjøretøy, MED ETT
+//   UNNTAK: KGM Rexton sitt Brukt Kjøretøy-referansedokument har en egen "Høyde"-rad og
+//   MANGLER "Tillatt totalvekt"/"Tillatt vogntogvekt" - se
+//   andreEndringerBruktEkstra/Ekskluder på Rexton sin VEGVESEN_MODELLER-oppføring. Ikke
+//   bekreftet om dette også gjelder Rexton sin Nytt Kjøretøy-variant (urørt, utenfor
+//   scope for denne endringen).
 // ════════════════════════════════════════════════════
 
 // Per-modell data for Vegvesen-dokumentene - lagt inn etter hvert som Henrik gir
@@ -25,12 +42,22 @@
 // testrapport, testnr/kilde, utarbeidetAv] - alle modellers krav-tabeller er hentet
 // rad for rad fra deres egne Fabrikantattest-referanseark.
 //
+// Brukt Kjøretøy-Egenerklæringer utelater ALLTID denne ene setningen om
+// merkeplate/fabrikasjonsplate for trinn 2-påbygger - bekreftet ved å lese alle 6
+// modellenes egne Brukt Kjøretøy-referansedokumenter 2026-09-23 (ingen av dem har
+// den, resten av teksten er ordrett identisk med Nytt Kjøretøy-versjonen), siden det
+// ikke festes noen ny merkeplate på en bil som allerede er registrert.
+function vegvesenFjernMerkeplateSetning(avsnitt, erBruktKjoretoy) {
+  if (!erBruktKjoretoy) return avsnitt;
+  return avsnitt.filter(tekst => !/merket med (merkeplate|fabrikasjonsplate) for trinn 2 p.bygger/i.test(tekst));
+}
+
 // Land Rover-familien (Defender/Discovery 5) har en ekstra teknisk operasjon (bytte av
 // støtdempertårn) som ikke finnes i noen andre modellers tekst, og avslutter
 // skilleveggsetningen uten "tak"-prefikset på braketten - gjengitt eksakt fra
 // referansedokumentene (Defender 110 og Discovery 5 sine tekster er ord-for-ord like).
-function egenerklaeringAvsnittLandRover(chassis, merkeModell) {
-  return [
+function egenerklaeringAvsnittLandRover(chassis, merkeModell, erBruktKjoretoy) {
+  return vegvesenFjernMerkeplateSetning([
     `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften, og at det ikke er laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen. Det er kun tatt i bruk originale fester.',
     'I forbindelse med ombygging av denne bilen blir andre og eventuelt tredje seterad, med tilhørende braketter og deksler demontert og fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, så legges disse bak sidepanelene. Så blir de originale støtdempertårnene byttet ut med egentilvirkede støtdempertårn. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres to gulvplater på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer og nagler, og i egne braketter som festes i de originale festene til håndtakene i taket.',
@@ -39,13 +66,13 @@ function egenerklaeringAvsnittLandRover(chassis, merkeModell) {
     'Bilen er merket med merkeplate for trinn 2 påbygger i henhold til direktiv 2021/535.',
     'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
     'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
-  ];
+  ], erBruktKjoretoy);
 }
 // Mercedes-familien (Geländewagen/GLS) - generisk tekst uten klimakanal-setningen
 // (bekreftet bevisst av Henrik 2026-09-18: Mercedes-modellene har ingen slike
 // takkanaler å fjerne), gjengitt fra GLS/Geländewagen sine referansedokumenter.
-function egenerklaeringAvsnittMercedes(chassis, merkeModell) {
-  return [
+function egenerklaeringAvsnittMercedes(chassis, merkeModell, erBruktKjoretoy) {
+  return vegvesenFjernMerkeplateSetning([
     `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften. Det er ikke laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen, da det her kun er tatt i bruk originale fester.',
     'I forbindelse med ombygging av denne bilen blir andre og tredje seteradene, med tilhørende braketter og deksler demontert og fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres gulvplaten på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer og nagler, og i egne braketter som festes i originale fester i taket.',
@@ -54,15 +81,15 @@ function egenerklaeringAvsnittMercedes(chassis, merkeModell) {
     'Bilen er merket med merkeplate for trinn 2 påbygger i henhold til direktiv 2021/535.',
     'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
     'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
-  ];
+  ], erBruktKjoretoy);
 }
 // KGM Rexton - vesentlig avvikende fra alle andre (bekrefter et fysisk inngrep i
 // karosseriet gjort av et eksternt skadeverksted, kun andre seterad fjernes (ikke
 // tredje), og et eget avsnitt om at original sete-/beltefester ikke er rørt slik at
 // bilen kan bygges tilbake til personbil senere) - gjengitt fra Rexton sitt eget
 // referansedokument, IKKE forenklet til en av de andre malene.
-function egenerklaeringAvsnittRexton(chassis, merkeModell) {
-  return [
+function egenerklaeringAvsnittRexton(chassis, merkeModell, erBruktKjoretoy) {
+  return vegvesenFjernMerkeplateSetning([
     `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted nr. 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften. Det er under ombyggingen til varebil klasse 2 av denne bilen blitt gjort et inngrep i bilens karosseri, se vedlagt dokumentasjon. Det er ikke laget nye fester eller gjort andre inngrep i bilens karosseri ved monteringen av den resterende innredningen, da det her kun er tatt i bruk originale fester.',
     'I forbindelse med den resterende ombygging av denne bilen blir andre seteraden med tilhørende braketter og deksler fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet og disse blir festet ved bruk av originale skruer i de originale festene i gulvet, eller med montasje lim. Så monteres gulvplaten på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer, og i egne takbraketter som festes i de originale festene til håndtakene i taket.',
@@ -73,7 +100,7 @@ function egenerklaeringAvsnittRexton(chassis, merkeModell) {
     'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
     'Det er ikke gjort endringer på de originale festene til setene og sikkerhetsbeltene, slik at endringen ikke påvirker ombyggingen tilbake til personbil på et senere tidspunkt.',
     'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
-  ];
+  ], erBruktKjoretoy);
 }
 
 // Delt mellom Land Rover Defender og Discovery 5 (bekreftet av Henrik 2026-09-23: "ja
@@ -108,7 +135,7 @@ const VEGVESEN_MODELLER = [
     // egenerklaeringAvsnitt() er definert lenger ned i filen (Standard/Panorama-varianten
     // som allerede fantes for KIA EV9 - urørt) - function-deklarasjoner heises, så det er
     // trygt å referere til den herfra.
-    egenerklaering: (chassis, merkeModell, variant) => egenerklaeringAvsnitt(variant, chassis, merkeModell)
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnitt(variant, chassis, merkeModell, erBrukt)
   },
   {
     match: /\brexton\b/i, navn: 'KGM Rexton',
@@ -127,7 +154,14 @@ const VEGVESEN_MODELLER = [
     ],
     saerligAnmerkning: 'Bakre eksosanlegg er merket med delenummer: TS 2430036411',
     antallSitteplasser: () => ({ inn: '5', ut: '2' }),
-    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittRexton(chassis, merkeModell)
+    // "Andre endringer"-tabellen i Rexton sitt EGET Brukt Kjøretøy-referansedokument
+    // (Fabrikantattest - KGM Rexton - Varebil - Brukt Kjøretøy.xlsx, lest 2026-09-23)
+    // avviker fra standardoppsettet i genFabrikantattestPDF: har en egen "Høyde"-rad og
+    // mangler "Tillatt totalvekt"/"Tillatt vogntogvekt" helt. Ikke bekreftet om dette også
+    // gjelder Rexton sin Nytt Kjøretøy-variant - rører derfor ikke den.
+    andreEndringerBruktEkstra: [['Høyde', '1825mm', '1845mm', 'Egenerklæring', 'Telemark Salmakerverksted']],
+    andreEndringerBruktEkskluder: ['Tillatt totalvekt', 'Tillatt vogntogvekt'],
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnittRexton(chassis, merkeModell, erBrukt)
   },
   {
     match: /defender\b/i, navn: 'Land Rover Defender',
@@ -162,7 +196,7 @@ const VEGVESEN_MODELLER = [
       if (harPunkt('3-seter foran')) return { inn: '6', ut: '3' };
       return { inn: '5', ut: '2' };
     },
-    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittLandRover(chassis, merkeModell)
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnittLandRover(chassis, merkeModell, erBrukt)
   },
   {
     match: /discovery\s*5\b/i, navn: 'Land Rover Discovery 5',
@@ -180,7 +214,7 @@ const VEGVESEN_MODELLER = [
     ],
     saerligAnmerkning: vegvesenStotdempertarnAnmerkning,
     antallSitteplasser: () => ({ inn: '5/7', ut: '2' }),
-    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittLandRover(chassis, merkeModell)
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnittLandRover(chassis, merkeModell, erBrukt)
   },
   {
     match: /\bgls\b/i, navn: 'Mercedes-Benz GLS',
@@ -198,7 +232,7 @@ const VEGVESEN_MODELLER = [
     ],
     saerligAnmerkning: null,
     antallSitteplasser: () => ({ inn: '7', ut: '2' }),
-    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittMercedes(chassis, merkeModell)
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnittMercedes(chassis, merkeModell, erBrukt)
   },
   {
     match: /gel[aä]ndewagen/i, navn: 'Mercedes-Benz Geländewagen',
@@ -216,7 +250,7 @@ const VEGVESEN_MODELLER = [
     ],
     saerligAnmerkning: null,
     antallSitteplasser: () => ({ inn: '5', ut: '2' }),
-    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnittMercedes(chassis, merkeModell)
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnittMercedes(chassis, merkeModell, erBrukt)
   },
   {
     match: /id\.?\s*buzz/i, navn: 'Volkswagen ID.Buzz',
@@ -238,7 +272,7 @@ const VEGVESEN_MODELLER = [
     antallSitteplasser: () => ({ inn: '7', ut: '2' }),
     // Henrik 2026-09-18: bruk samme fulle "standard"-tekst som KIA EV9 (inkl.
     // klimakanal-setningen) - ingen egen Panorama-variant for VW.
-    egenerklaering: (chassis, merkeModell) => egenerklaeringAvsnitt('standard', chassis, merkeModell)
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnitt('standard', chassis, merkeModell, erBrukt)
   }
 ];
 function vegvesenFinnModell(merke, modell) {
@@ -369,11 +403,11 @@ async function vegvesenTegnBrevhode(page, font, fontBold, logoImg, bredde, toppY
 // Kun teksten om hva som demonteres/fjernes skiller Standard fra Panorama-varianten
 // (Panorama har i tillegg en bakre sjalusi på glasstaket som må fjernes).
 const EGENERKLAERING_AVSNITT3_FELLES_START = 'I forbindelse med ombygging av denne bilen blir andre og tredje seteradene med tilhørende braketter/deksler';
-function egenerklaeringAvsnitt(variant, chassis, merkeModell) {
+function egenerklaeringAvsnitt(variant, chassis, merkeModell, erBruktKjoretoy) {
   const demontering = variant === 'panorama'
     ? ', kanaler til klima i taket og bakre sjalusi på glasstak demontert og fjernet.'
     : ' og kanaler til klima i taket demontert og fjernet.';
-  return [
+  return vegvesenFjernMerkeplateSetning([
     `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted nr. 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften, og at det ikke er laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen, da det her kun er tatt i bruk originale fester.',
     `${EGENERKLAERING_AVSNITT3_FELLES_START}${demontering} Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres gulvplatene på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer, og i egne takbraketter som festes i de originale festene til håndtakene i taket.`,
@@ -382,7 +416,7 @@ function egenerklaeringAvsnitt(variant, chassis, merkeModell) {
     'Bilen er merket med merkeplate for trinn 2 påbygger i henhold til direktiv 2021/535.',
     'Se vedlagt Fabrikantattest for dokumentasjon av krav og endringer gjort på kjøretøyet.',
     'All vedlagt dokumentasjon inkludert denne egenerklæringen er som forretningshemmeligheter å regne og skal ikke utleveres til andre aktører.'
-  ];
+  ], erBruktKjoretoy);
 }
 
 // Avgjør Standard/Panorama ut fra ordrens utstyrsjekkliste (huket punkt som inneholder
@@ -430,9 +464,10 @@ async function genEgenerklaeringPDF(o) {
   // ingen modell er funnet (skal ikke skje i praksis, siden genererVegvesenDokumenter
   // allerede sjekker dette før noe genereres).
   const vegvesenModell = vegvesenFinnModell(o.merke, o.modell);
+  const erBrukt = !!o.ombygging?.bruktKjoretoy;
   const avsnitt = vegvesenModell
-    ? vegvesenModell.egenerklaering(o.chassis || '', merkeModell, variant)
-    : egenerklaeringAvsnitt(variant, o.chassis || '', merkeModell);
+    ? vegvesenModell.egenerklaering(o.chassis || '', merkeModell, variant, erBrukt)
+    : egenerklaeringAvsnitt(variant, o.chassis || '', merkeModell, erBrukt);
   const storrelse = 10.5, linjeHoyde = 14;
   avsnitt.forEach(tekst => {
     const linjer = vegvesenOmbrytTekst(tekst, font, storrelse, tekstBredde);
@@ -636,6 +671,7 @@ async function genVektfordelingPDF(o, P, P1, P2, M, M1, M2, geometri) {
 
 async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   const vegvesenModell = vegvesenFinnModell(o.merke, o.modell);
+  const erBrukt = !!o.ombygging?.bruktKjoretoy;
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -687,7 +723,11 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   });
   y -= hodeHoyde;
   const kravRadHoyde = 26;
-  vegvesenModell.kravRader.forEach(([l1a,l1b,kravniva,testrapp,testnr,utarbeidet]) => {
+  // "F7 Fabrikasjonsplate" utelates ALLTID for Brukt Kjøretøy - bekreftet på tvers av
+  // alle 6 modellene som har ekte Brukt Kjøretøy-referansedokumenter 2026-09-23 (ingen
+  // ny fabrikasjonsplate festes på en bil som allerede er registrert).
+  const kravRaderVises = erBrukt ? vegvesenModell.kravRader.filter(([kode]) => kode !== 'F7') : vegvesenModell.kravRader;
+  kravRaderVises.forEach(([l1a,l1b,kravniva,testrapp,testnr,utarbeidet]) => {
     ramme(vX, y-kravRadHoyde, tabellBredde, kravRadHoyde);
     kravKolBredder.forEach((b,i) => { if (i>0) ramme(kravKolX[i], y-kravRadHoyde, 0.01, kravRadHoyde); });
     tekstLinjer(kravKolX[0]+3, y-9, [l1a, l1b], 8, 10);
@@ -715,7 +755,7 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   const innVogntog = parseFloat(String(o.vekter?.vogntog?.a||'').replace(',','.')) || 0;
   const sitteplasser = vegvesenModell.antallSitteplasser(o);
   const varerommetUtMm = Math.round(vegvesenModell.geometri.d * 1000) + 'mm';
-  const endrRader = [
+  let endrRader = [
     ['Egenvekt', vegvesenFmtKg(o.egenvektCoc||0)+'kg', vegvesenFmtKg(egenvektUt)+'kg', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
     ['Tillatt totalvekt', vegvesenFmtKg(innTotalvekt)+'kg', vegvesenFmtKg(endringP)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Tillatt vogntogvekt', vegvesenFmtKg(innVogntog)+'kg', vegvesenFmtKg(endringVogntog)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
@@ -723,6 +763,14 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
     ['Antall sitteplasser', sitteplasser.inn, sitteplasser.ut, 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Varerommets lengde', '-', varerommetUtMm, 'Egenerklæring', 'Telemark Salmakerverksted']
   ];
+  // Modellspesifikt avvik for Brukt Kjøretøy (kun KGM Rexton pr. 2026-09-23, se
+  // andreEndringerBruktEkstra/Ekskluder på VEGVESEN_MODELLER) - de fleste modeller har
+  // ingen av feltene satt, og linjen under blir da en no-op.
+  if (erBrukt) {
+    const ekskluder = vegvesenModell.andreEndringerBruktEkskluder || [];
+    endrRader = endrRader.filter(([label]) => !ekskluder.includes(label));
+    if (vegvesenModell.andreEndringerBruktEkstra) endrRader = [...vegvesenModell.andreEndringerBruktEkstra, ...endrRader];
+  }
   const endrRadHoyde = 13.5;
   endrRader.forEach(rad => {
     ramme(vX, y-endrRadHoyde, tabellBredde, endrRadHoyde);
@@ -980,18 +1028,23 @@ const VEGVESEN_DOKUMENTTYPER = ['Egenerklæring-', 'Vektfordeling-', 'Fabrikanta
 
 // Fjerner tidligere auto-genererte Vegvesen-dokumenter fra en ordre (og eventuelle
 // søsken-ordre i samme flåte som deler dem, samme fjerningsmønster som slettDokument()
-// i ordre-diverse.js) - kalt fra sfOmbygging() når nyttKjoretoy skrus AV. Uten dette blir
-// tidligere genererte dokumenter stående og se gyldige ut for en kategori ordren ikke
-// lenger tilhører (funnet via en ekte ordre 2026-09-23 - en "Brukt Kjøretøy"-ordre som
-// fortsatt viste "Nytt Kjøretøy"-papirer generert før kategorien ble rettet).
+// i ordre-diverse.js) - kalt fra sfOmbygging() når nyttKjoretoy ELLER bruktKjoretoy skrus
+// AV. Uten dette blir tidligere genererte dokumenter stående og se gyldige ut for en
+// kategori ordren ikke lenger tilhører (funnet via en ekte ordre 2026-09-23 - en "Brukt
+// Kjøretøy"-ordre som fortsatt viste "Nytt Kjøretøy"-papirer generert før kategorien ble
+// rettet). Renser IKKE bare fordi man bytter FRA nytt TIL brukt (eller omvendt) - kun
+// hvis INGEN av de to kategoriene lenger er aktuelle (fingerprinten i
+// vegvesenAutoGenererHvisKomplett fanger opp selve kategoribyttet og regenererer med
+// riktig innhold automatisk).
 // Sjekker kilde.ombygging (primær hvis flåte, ellers ordren selv) - samme kilde som
 // avgjør om automatikken genererer i utgangspunktet (se vegvesenAutoGenererHvisKomplett)
 // - rører ingenting hvis det er et SEKUNDÆRKJØRETØY i flåten som fikk sin egen,
-// funksjonsløse nyttKjoretoy-hake endret, ikke den som faktisk styrer generering.
+// funksjonsløse nyttKjoretoy/bruktKjoretoy-hake endret, ikke den som faktisk styrer
+// generering.
 async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
   const kontekst = vegvesenFlateKontext(o);
   const kilde = kontekst ? kontekst.primaer : o;
-  if (kilde.ombygging?.nyttKjoretoy) return;
+  if (kilde.ombygging?.nyttKjoretoy || kilde.ombygging?.bruktKjoretoy) return;
 
   const gamle = (o.dokumenter || []).filter(d => VEGVESEN_DOKUMENTTYPER.some(p => d.navn.startsWith(p)));
   if (!gamle.length) return;
@@ -1006,7 +1059,7 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
     }
     beroerte.forEach(m => {
       m.dokumenter = (m.dokumenter||[]).filter(d => !(d.navn===dok.navn && d.url===dok.url));
-      logChange(m, 'Fjernet utdatert Vegvesen-dokument (Nytt Kjøretøy fjernet): ' + dok.navn);
+      logChange(m, 'Fjernet utdatert Vegvesen-dokument (verken Nytt eller Brukt Kjøretøy lenger valgt): ' + dok.navn);
     });
     if (db) db.from('ordrer').upsert(beroerte.map(m=>({id:m.id, dokumenter:m.dokumenter})), {onConflict:'id'})
       .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
@@ -1027,7 +1080,7 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
       .then(r=>{if(r.error) console.error('Nullstilling av flåte-fingerprint feilet:', r.error.message);});
   }
   try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
-  visToast(`Fjernet ${gamle.length} utdatert${gamle.length===1?'':'e'} Vegvesen-dokument${gamle.length===1?'':'er'} siden "Nytt Kjøretøy" ble fjernet`, 'ok');
+  visToast(`Fjernet ${gamle.length} utdatert${gamle.length===1?'':'e'} Vegvesen-dokument${gamle.length===1?'':'er'} siden verken Nytt eller Brukt Kjøretøy lenger er valgt`, 'ok');
 }
 
 // ── Lagring i ordrens dokument-mappe ────────────────────────────────────────
@@ -1149,17 +1202,24 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   const visningsOrdre = kontekst ? { ...kilde, chassis: 'Se kjøretøyliste' } : kilde;
   const malOrdreIder = kontekst ? kontekst.medlemmer.map(m => m.id) : [kilde.id];
   const filnavnNokkel = kontekst ? (kontekst.flate.flatenummer || kontekst.flate.id) : (kilde.chassis || 'UKJENT');
+  // "Melding om registrering" gjelder kun førstegangsregistrering av kjøretøyet - ikke
+  // aktuelt for en ombygging av en bil som allerede er registrert (Henriks egne
+  // referansedokumenter for Brukt Kjøretøy har ingen slik melding blant dem, bekreftet
+  // 2026-09-23).
+  const erBrukt = !!kilde.ombygging?.bruktKjoretoy;
 
   const egenerklaeringBytes = await genEgenerklaeringPDF(visningsOrdre);
   await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
 
-  // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata.
-  const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdre);
-  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
+  if (!erBrukt) {
+    // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata.
+    const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdre);
+    await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
+  }
 
   const resultat = vegvesenBeregnOgSettEndring(kilde);
   if (!resultat) {
-    return { status: 'delvis', melding: 'Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.' };
+    return { status: 'delvis', melding: `Egenerklæring${erBrukt?'':' og Melding om registrering'} generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
   }
   const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
   const { bytes: vektfordelingBytes } = await genVektfordelingPDF(visningsOrdre, justertP, P1, P2, M, M1, M2, geom);
@@ -1173,7 +1233,8 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
     await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Kjøretøyliste', filnavnNokkel), kjoretoylisteBytes);
   }
 
-  return { status: 'ok', melding: kontekst ? 'Vegvesen-dokumenter generert og lagret for hele flåten (inkl. Kjøretøyliste)' : 'Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering generert og lagret' };
+  const dokumentliste = `Egenerklæring, Vektfordeling, Fabrikantattest${erBrukt?'':' og Melding om registrering'}`;
+  return { status: 'ok', melding: kontekst ? 'Vegvesen-dokumenter generert og lagret for hele flåten (inkl. Kjøretøyliste)' : `${dokumentliste} generert og lagret` };
 }
 
 // Manuell knapp - tvinger fram en ny generering uansett om noe faktisk har endret seg
@@ -1189,8 +1250,10 @@ async function genererVegvesenDokumenter(ordreId) {
   // faktisk er Brukt Kjøretøy (reell bug funnet 2026-09-23: ordre SALEA7BW7T2506245 fikk
   // nye Fabrikantattest/Egenerklæring/Vektfordeling-dokumenter generert via denne knappen
   // TIMER etter at ombygging-kategorien var byttet til Brukt Kjøretøy, siden knappen selv
-  // ikke sjekket nyttKjoretoy i det hele tatt - kun auto-triggeren gjorde det).
-  if (!kilde.ombygging?.nyttKjoretoy) { visToast('Vegvesen-dokumenter gjelder kun Nytt Kjøretøy-ombygginger - denne ordren er ikke det.'); return; }
+  // ikke sjekket nyttKjoretoy i det hele tatt - kun auto-triggeren gjorde det). Brukt
+  // Kjøretøy lagt til som gyldig kategori 2026-09-23 - genFabrikantattestPDF/
+  // genEgenerklaeringPDF slår da om til riktig utforming selv (se erBrukt der).
+  if (!kilde.ombygging?.nyttKjoretoy && !kilde.ombygging?.bruktKjoretoy) { visToast('Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger - denne ordren er ikke det.'); return; }
   const geometri = vegvesenGeometri(kilde.merke, kilde.modell);
   if (!geometri) { visToast('Ingen mal/geometri lagt inn for ' + (kilde.merke||'?') + ' ' + (kilde.modell||'?') + ' ennå'); return; }
   visToast('Genererer dokumenter...', 'ok');
@@ -1218,8 +1281,13 @@ function vegvesenErKomplett(o) {
 // hver render i stedet for å bygge PDF-er på nytt hver gang buildOrdreDetail() kjører.
 // For en flåte inngår hele medlemslista (chassis/forhandler/org.nr per bil) også, siden
 // Kjøretøylisten skal oppdateres når noen legges til/fjernes fra flåten.
+// bruktKjoretoy er MED (nyttKjoretoy trengs ikke i tillegg - kun det ene kan være sant om
+// gangen for at auto-triggeren i det hele tatt skal kjøre, se vegvesenAutoGenererHvisKomplett)
+// slik at et kategoribytte Nytt<->Brukt alene (uten at noe annet felt endres) fanges opp
+// og trigger regenerering med riktig utforming - ellers ville fingerprinten stått uendret
+// og automatikken trodd alt fortsatt stemte.
 function vegvesenFingerprint(kilde, kontekst) {
-  const felt = o => [o.merke, o.modell, o.type, o.variant, o.versjon, o.typegodkjenning, o.chassis, o.farge, o.kunde, o.forhandlerOrgnr, o.egenvektCoc, JSON.stringify(o.vekter)];
+  const felt = o => [o.merke, o.modell, o.type, o.variant, o.versjon, o.typegodkjenning, o.chassis, o.farge, o.kunde, o.forhandlerOrgnr, o.egenvektCoc, JSON.stringify(o.vekter), !!o.ombygging?.bruktKjoretoy];
   const deler = felt(kilde);
   if (kontekst) deler.push(kontekst.flate.flatenummer, ...kontekst.medlemmer.map(m => `${m.id}:${m.chassis}:${m.kunde}:${m.forhandlerOrgnr}`));
   return JSON.stringify(deler);
@@ -1253,9 +1321,11 @@ async function vegvesenAutoGenererHvisKomplett(o) {
   // kopierer kun type/variant/versjon/vekter fra primær til resten av flåten, ikke
   // ombygging-flaggene, så et sekundærkjøretøy kan mangle nyttKjoretoy=true på seg
   // selv selv om flåten faktisk skal ha Vegvesen-dokumenter (funnet i test 2026-09-21).
+  // Brukt Kjøretøy lagt til som gyldig kategori 2026-09-23 (se vegvesenGenererOgLagre/
+  // genFabrikantattestPDF/genEgenerklaeringPDF for hvordan innholdet faktisk avviker).
   const kontekst = vegvesenFlateKontext(o);
   const kilde = kontekst ? kontekst.primaer : o;
-  if (!kilde.ombygging?.nyttKjoretoy) return;
+  if (!kilde.ombygging?.nyttKjoretoy && !kilde.ombygging?.bruktKjoretoy) return;
   if (!vegvesenGeometri(kilde.merke, kilde.modell)) return;
   if (!vegvesenErKomplett(kilde)) return;
 

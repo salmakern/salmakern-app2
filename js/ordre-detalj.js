@@ -133,12 +133,14 @@ function buildOrdreDetail() {
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   synkroniserOmbyggingFikenLinjer(o);
   vegvesenAutoGenererHvisKomplett(o);
-  // Vegvesen-dokumenter (Fabrikantattest/Egenerklæring/Vektfordeling/Melding om
-  // registrering) gjelder KUN "Nytt Kjøretøy"-ombygginger (se vegvesen-dokumenter.js sin
-  // egen fil-header) - styrer om Regenerer/Skriv ut-knappene under vises. Bruker samme
-  // flåte-kilde-logikk som selve auto-genereringen (primærkjøretøyet hvis flåte).
+  // Vegvesen-dokumenter (Fabrikantattest/Egenerklæring/Vektfordeling, + Melding om
+  // registrering for Nytt Kjøretøy) gjelder "Nytt Kjøretøy"- ELLER "Brukt
+  // Kjøretøy"-ombygginger (se vegvesen-dokumenter.js sin egen fil-header) - styrer om
+  // Regenerer/Skriv ut-knappene under vises. Bruker samme flåte-kilde-logikk som selve
+  // auto-genereringen (primærkjøretøyet hvis flåte).
   const vegvesenKontekst = vegvesenFlateKontext(o);
-  const vegvesenGjelderDenneOrdren = !!(vegvesenKontekst ? vegvesenKontekst.primaer : o).ombygging?.nyttKjoretoy;
+  const vegvesenKilde = (vegvesenKontekst ? vegvesenKontekst.primaer : o).ombygging;
+  const vegvesenGjelderDenneOrdren = !!(vegvesenKilde?.nyttKjoretoy || vegvesenKilde?.bruktKjoretoy);
   const tf = tvangsflyt(o);
   const tvangsflytOk = tf.every(t=>t.ok);
   const erAdmin = me && me.rolle==='admin';
@@ -476,8 +478,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
           + Last opp dokument
           <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
         </label>`:''}
-        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="genererVegvesenDokumenter('${o.id}')" title="${vegvesenGjelderDenneOrdren?'Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy-ombygginger'}">🔄 Regenerer Vegvesen-dokumenter</button>
-        <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="genererVegvesenDokumenter('${o.id}')" title="${vegvesenGjelderDenneOrdren?'Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🔄 Regenerer Vegvesen-dokumenter</button>
+        <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
       </div>
 
       ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
@@ -873,10 +875,12 @@ function sfOmbygging(id, felt, val) {
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
   synkroniserOmbyggingFikenLinjer(o);
-  // Rydder bort tidligere auto-genererte Vegvesen-dokumenter hvis Nytt Kjøretøy skrus av
-  // etter at de allerede er laget - ellers blir de stående og se gyldige ut for en
-  // kategori ordren ikke lenger tilhører (se vegvesen-dokumenter.js).
-  if (felt === 'nyttKjoretoy' && !val) vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o);
+  // Rydder bort tidligere auto-genererte Vegvesen-dokumenter hvis Nytt ELLER Brukt
+  // Kjøretøy skrus av etter at de allerede er laget - ellers blir de stående og se
+  // gyldige ut for en kategori ordren ikke lenger tilhører (se vegvesen-dokumenter.js -
+  // selve funksjonen rydder kun hvis INGEN av de to lenger er aktuelle, så dette er trygt
+  // å kalle på et rent kategoribytte Nytt<->Brukt også).
+  if ((felt === 'nyttKjoretoy' || felt === 'bruktKjoretoy') && !val) vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o);
 }
 
 // ════════════════════════════════════════════════════

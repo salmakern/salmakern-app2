@@ -5,14 +5,19 @@ import { loadScript } from './helpers/load-script.js';
 // Vektfordeling-regneark (KIA EV9), ikke utledet på nytt - testene under bruker de
 // SAMME tallene som står i deres referanseeksempel for å bekrefte at formlene er
 // transkribert riktig, siden dette er tall som går videre til Statens vegvesen.
-const { beregnVektfordeling, finnJustertTotalvekt, vegvesenGeometri, vegvesenFinnModell } = loadScript('vegvesen-dokumenter.js');
+const {
+  beregnVektfordeling, finnJustertTotalvekt, vegvesenGeometri, vegvesenFinnModell,
+  egenerklaeringAvsnitt, egenerklaeringAvsnittRexton, egenerklaeringAvsnittLandRover, egenerklaeringAvsnittMercedes
+} = loadScript('vegvesen-dokumenter.js');
 
 // Regresjonstest for feil funnet 2026-09-23: "🔄 Regenerer Vegvesen-dokumenter"-knappen
 // (genererVegvesenDokumenter) hadde INGEN sperre på o.ombygging.nyttKjoretoy, i motsetning
 // til den automatiske genereringen (vegvesenAutoGenererHvisKomplett) - en admin kunne derfor
 // trykke knappen på en ordre som faktisk var Brukt Kjøretøy og få genererte Nytt
-// Kjøretøy-utformede dokumenter (reelt skjedd på ordre SALEA7BW7T2506245).
-describe('genererVegvesenDokumenter - sperre på Nytt Kjøretøy', () => {
+// Kjøretøy-utformede dokumenter (reelt skjedd på ordre SALEA7BW7T2506245). Brukt Kjøretøy
+// ble en gyldig, støttet kategori samme dag - testen under er oppdatert til å reflektere
+// det (kun "verken/eller" skal nå avvises).
+describe('genererVegvesenDokumenter - sperre på Nytt/Brukt Kjøretøy', () => {
   function nySandbox() {
     const toasts = [];
     const sandbox = loadScript('vegvesen-dokumenter.js', {
@@ -22,14 +27,14 @@ describe('genererVegvesenDokumenter - sperre på Nytt Kjøretøy', () => {
     return { sandbox, toasts };
   }
 
-  it('nekter å generere for en ordre som er Brukt Kjøretøy (ikke Nytt Kjøretøy)', async () => {
+  it('slipper forbi sperren for en ordre som er Brukt Kjøretøy (ikke lenger avvist)', async () => {
     const { sandbox, toasts } = nySandbox();
     sandbox.S = { ordrer: [{ id: 'ord1', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: false, bruktKjoretoy: true } }] };
     await sandbox.genererVegvesenDokumenter('ord1');
-    expect(toasts.some(t => /Nytt Kjøretøy/.test(t))).toBe(true);
+    expect(toasts.some(t => /gjelder kun Nytt Kjøretøy/.test(t))).toBe(false);
   });
 
-  it('nekter også når ombygging.nyttKjoretoy mangler helt (aldri satt)', async () => {
+  it('nekter når verken nyttKjoretoy eller bruktKjoretoy er satt', async () => {
     const { sandbox, toasts } = nySandbox();
     sandbox.S = { ordrer: [{ id: 'ord1', merke: 'KIA', modell: 'EV9' }] };
     await sandbox.genererVegvesenDokumenter('ord1');
@@ -315,5 +320,79 @@ describe('Land Rover Discovery 5 - dynamisk særlig anmerkning', () => {
 
   it('antallSitteplasser er fortsatt en fast verdi, ikke en funksjon av utstyr', () => {
     expect(discovery5.antallSitteplasser()).toEqual({ inn: '5/7', ut: '2' });
+  });
+});
+
+// Brukt Kjøretøy lagt til 2026-09-23, etter å ha lest Henriks egne referansedokumenter for
+// 6 av 7 modeller. Bekreftet forskjell på tvers av ALLE 6: Egenerklæringen utelater alltid
+// setningen om merkeplate/fabrikasjonsplate for trinn 2-påbygger, resten er ordrett likt.
+describe('Egenerklæring - Brukt Kjøretøy utelater merkeplate/fabrikasjonsplate-setningen', () => {
+  it('egenerklaeringAvsnitt (KIA EV9/VW): setningen er med for Nytt, borte for Brukt', () => {
+    const nytt = egenerklaeringAvsnitt('standard', 'CHASSIS123', 'KIA EV9', false);
+    const brukt = egenerklaeringAvsnitt('standard', 'CHASSIS123', 'KIA EV9', true);
+    expect(nytt.some(t => /merket med merkeplate for trinn 2/.test(t))).toBe(true);
+    expect(brukt.some(t => /merket med merkeplate for trinn 2/.test(t))).toBe(false);
+    expect(brukt.length).toBe(nytt.length - 1);
+    // Alt annet skal være ordrett uendret, ikke bare kortere.
+    expect(brukt).toEqual(nytt.filter(t => !/merket med merkeplate for trinn 2/.test(t)));
+  });
+
+  it('egenerklaeringAvsnittRexton: bruker "fabrikasjonsplate", ikke "merkeplate"', () => {
+    const nytt = egenerklaeringAvsnittRexton('CHASSIS123', 'KGM Rexton', false);
+    const brukt = egenerklaeringAvsnittRexton('CHASSIS123', 'KGM Rexton', true);
+    expect(nytt.some(t => /merket med fabrikasjonsplate for trinn 2/.test(t))).toBe(true);
+    expect(brukt.some(t => /merket med fabrikasjonsplate for trinn 2/.test(t))).toBe(false);
+    expect(brukt).toEqual(nytt.filter(t => !/merket med fabrikasjonsplate for trinn 2/.test(t)));
+  });
+
+  it('egenerklaeringAvsnittLandRover (Defender/Discovery 5)', () => {
+    const nytt = egenerklaeringAvsnittLandRover('CHASSIS123', 'Land Rover Defender', false);
+    const brukt = egenerklaeringAvsnittLandRover('CHASSIS123', 'Land Rover Defender', true);
+    expect(brukt).toEqual(nytt.filter(t => !/merket med merkeplate for trinn 2/.test(t)));
+  });
+
+  it('egenerklaeringAvsnittMercedes (Geländewagen/GLS)', () => {
+    const nytt = egenerklaeringAvsnittMercedes('CHASSIS123', 'Mercedes-Benz GLS', false);
+    const brukt = egenerklaeringAvsnittMercedes('CHASSIS123', 'Mercedes-Benz GLS', true);
+    expect(brukt).toEqual(nytt.filter(t => !/merket med merkeplate for trinn 2/.test(t)));
+  });
+
+  it('erBruktKjoretoy=undefined oppfører seg som false (ikke krasje/fjerne noe)', () => {
+    const uten = egenerklaeringAvsnitt('standard', 'CHASSIS123', 'KIA EV9');
+    const eksplisittFalse = egenerklaeringAvsnitt('standard', 'CHASSIS123', 'KIA EV9', false);
+    expect(uten).toEqual(eksplisittFalse);
+  });
+});
+
+// F7 Fabrikasjonsplate-raden skal finnes i ALLE modellers kravRader for Nytt Kjøretøy
+// (selve F7-filtreringen for Brukt Kjøretøy skjer inline i genFabrikantattestPDF - dekket
+// av manuell PDF-verifisering, se commit - denne testen er en sikkerhetsnett-sjekk på at
+// F7-koden faktisk finnes å filtrere bort for hver modell som har ekte Fabrikantattest-data).
+describe('kravRader - F7 Fabrikasjonsplate finnes for alle modeller med Fabrikantattest-data', () => {
+  const modellerMedF7 = ['KIA EV9', 'KGM Rexton', 'Land Rover Defender 110', 'Land Rover Discovery 5', 'Mercedes-Benz GLS', 'Mercedes-Benz Geländewagen'];
+  it.each(modellerMedF7)('%s har en F7-kodet krav-rad', navn => {
+    const modell = vegvesenFinnModell('', navn);
+    expect(modell.kravRader.some(([kode]) => kode === 'F7')).toBe(true);
+  });
+});
+
+// KGM Rexton sitt Brukt Kjøretøy-referansedokument har en egen "Andre endringer"-tabell
+// (Høyde i stedet for Tillatt totalvekt/vogntogvekt) - bekreftet 2026-09-23, se
+// andreEndringerBruktEkstra/Ekskluder-forklaringen på selve VEGVESEN_MODELLER-oppføringen.
+describe('KGM Rexton - Andre endringer-overstyring for Brukt Kjøretøy', () => {
+  const rexton = vegvesenFinnModell('KGM', 'Rexton');
+
+  it('har en Høyde-rad definert for Brukt Kjøretøy', () => {
+    expect(rexton.andreEndringerBruktEkstra).toEqual([['Høyde', '1825mm', '1845mm', 'Egenerklæring', 'Telemark Salmakerverksted']]);
+  });
+
+  it('ekskluderer Tillatt totalvekt og Tillatt vogntogvekt for Brukt Kjøretøy', () => {
+    expect(rexton.andreEndringerBruktEkskluder).toEqual(['Tillatt totalvekt', 'Tillatt vogntogvekt']);
+  });
+
+  it('andre modeller har INGEN slik overstyring (standardoppsettet gjelder)', () => {
+    const ev9 = vegvesenFinnModell('KIA', 'EV9');
+    expect(ev9.andreEndringerBruktEkstra).toBeUndefined();
+    expect(ev9.andreEndringerBruktEkskluder).toBeUndefined();
   });
 });
