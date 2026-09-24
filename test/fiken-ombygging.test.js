@@ -58,6 +58,10 @@ describe('finnFikenOmbyggingModell (matcher merke/modell mot Fiken-produktnumre)
   it('gir ingen treff for en modell som ikke er i tabellen', () => {
     expect(env.finnFikenOmbyggingModell('Toyota', 'Yaris')).toBeNull();
   });
+
+  it('KGM Rexton har lafinto-koden 2401 satt', () => {
+    expect(env.finnFikenOmbyggingModell('KGM', 'Rexton').lafinto).toBe('2401');
+  });
 });
 
 describe('synkroniserOmbyggingFikenLinjer (regresjon: ordre med huket boks men manglende linje)', () => {
@@ -165,5 +169,67 @@ describe('synkroniserOmbyggingFikenLinjer - "305" MB-stjerne er felles for alle 
     o.ombygging.nyttKjoretoy = true;
     env.synkroniserOmbyggingFikenLinjer(o);
     expect(o.fikenLinjer.some(l => l.produktnummer === '305')).toBe(false);
+  });
+});
+
+// KGM Rexton "Lafinto": 2401 er en ALTERNATIV variant av samme ombygging som 2400
+// ("Varebilombygging av Rexton" vs. "...- Lafinto" i Fiken) - de to skal derfor aldri stå
+// samtidig i fakturering (bekreftet av Henrik 2026-09-24).
+describe('synkroniserOmbyggingFikenLinjer - KGM Rexton "Lafinto" (2401) erstatter standard ombygging (2400)', () => {
+  function lagRextonOrdre(env) {
+    const o = {
+      id: 'ord_1', merke: 'KGM', modell: 'Rexton',
+      ombygging: { nyttKjoretoy: false, bruktKjoretoy: false, lafinto: false, personbil: false },
+      fikenLinjer: [],
+    };
+    env.S.ordrer = [o];
+    env.activeOrdreId = o.id;
+    return o;
+  }
+
+  it('uten Lafinto huket av: kun 2400 (standard)', () => {
+    const env = nyEnvironment();
+    const o = lagRextonOrdre(env);
+    o.ombygging.nyttKjoretoy = true;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(true);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2401')).toBe(false);
+  });
+
+  it('med Lafinto huket av: kun 2401, IKKE 2400', () => {
+    const env = nyEnvironment();
+    const o = lagRextonOrdre(env);
+    o.ombygging.nyttKjoretoy = true;
+    o.ombygging.lafinto = true;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2401')).toBe(true);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(false);
+  });
+
+  it('bytter fra 2400 til 2401 når Lafinto hukes av i etterkant, og tilbake igjen', () => {
+    const env = nyEnvironment();
+    const o = lagRextonOrdre(env);
+    o.ombygging.bruktKjoretoy = true;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(true);
+
+    o.ombygging.lafinto = true;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(false);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2401')).toBe(true);
+
+    o.ombygging.lafinto = false;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(true);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2401')).toBe(false);
+  });
+
+  it('ingen av linjene står igjen hvis ingen ombygging-boks er huket av, selv med Lafinto huket', () => {
+    const env = nyEnvironment();
+    const o = lagRextonOrdre(env);
+    o.ombygging.lafinto = true;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(false);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2401')).toBe(false);
   });
 });

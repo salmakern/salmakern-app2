@@ -842,8 +842,11 @@ const FIKEN_OMBYGGING_MODELLER = [
   { match: /id\.?\s*buzz/i, ombygging: '1800', personbil: '1812' },
   // Rexton har ingen egen personbil-kode i Fiken (aldri fakturert, aldri opprettet) -
   // matcher derfor mønsteret til Vito/EQV/V-klasse (null) i stedet for tidligere feilaktig
-  // å dele EV9 sin kode "529".
-  { match: /rexton/i, ombygging: '2400', personbil: null },
+  // å dele EV9 sin kode "529". "lafinto": Lafinto-varianten (2401, "Varebilombyyging av
+  // KGM Rexton - Lafinto") ERSTATTER standard ombygging (2400, "Varebilombygging av
+  // Rexton") når "Lafinto"-boksen er huket av - det er to alternative Fiken-produkter for
+  // samme jobb, ikke et tillegg oppå (bekreftet av Henrik 2026-09-24).
+  { match: /rexton/i, ombygging: '2400', personbil: null, lafinto: '2401' },
   { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: '2508' },
 ];
 function finnFikenOmbyggingModell(merke, modell) {
@@ -872,7 +875,11 @@ function synkroniserOmbyggingFikenLinjer(o) {
   if (/mercedes/i.test(o.merke||'')) oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_MB_STJERNE, erOmbyggingValgt);
   const modell = finnFikenOmbyggingModell(o.merke, o.modell);
   if (!modell) return;
-  oppdaterFikenLinjeForOppskrift(modell.ombygging, erOmbyggingValgt);
+  // "lafinto" (kun Rexton per nå) er en ALTERNATIV variant av samme ombygging, ikke et
+  // tillegg - de to fakturalinjene er derfor gjensidig utelukkende.
+  const erLafinto = !!(modell.lafinto && o.ombygging.lafinto);
+  oppdaterFikenLinjeForOppskrift(modell.ombygging, erOmbyggingValgt && !erLafinto);
+  if (modell.lafinto) oppdaterFikenLinjeForOppskrift(modell.lafinto, erOmbyggingValgt && erLafinto);
   if (modell.personbil) oppdaterFikenLinjeForOppskrift(modell.personbil, !!o.ombygging.personbil);
 }
 
