@@ -214,7 +214,7 @@ function buildOrdreDetail() {
             <label>Merke</label>
             <input id="merkeInput_${o.id}" value="${esc(o.merke||'')}" autocomplete="off"
               oninput="renderModellForslag('merkeInput_${o.id}','modellInput_${o.id}','typeForslag_modell_${o.id}');renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}');renderForhandlerForslag('merkeInput_${o.id}','modellInput_${o.id}','kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
-              onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk()"
+              onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk();autoVelgUtstyrMal('${o.id}')"
               onfocus="visFeltDropdown('typeForslag_merke_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_merke_${o.id}'))">
             <div id="typeForslag_merke_${o.id}" class="felt-dropdown">${feltForslagHTML('merkeInput_'+o.id, merkeForslag())}</div>
           </div>
@@ -230,7 +230,7 @@ function buildOrdreDetail() {
             <label>Modell</label>
             <input id="modellInput_${o.id}" value="${esc(o.modell||'')}" autocomplete="off"
               oninput="renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}');renderForhandlerForslag('merkeInput_${o.id}','modellInput_${o.id}','kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
-              onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk()"
+              onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk();autoVelgUtstyrMal('${o.id}')"
               onfocus="visFeltDropdown('typeForslag_modell_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_modell_${o.id}'))">
             <div id="typeForslag_modell_${o.id}" class="felt-dropdown">${feltForslagHTML('modellInput_'+o.id, modellForslag(o.merke))}</div>
           </div>

@@ -704,6 +704,28 @@ function slettUtstyrMalIdx(i) {
   renderUtstyrMaler();
 }
 
+// Velger automatisk en matchende utstyr-mal når Merke/Modell endres (bedt om av Henrik
+// 2026-09-24) - samme to-veis delstreng-matching som oppskriftMatcherOrdre() i lager.js
+// allerede bruker for å koble Ombygging/Ekstra utstyr-oppskrifter til en ordre, slik at
+// begge stedene er enige om hva som teller som match. Overskriver ALDRI en allerede valgt
+// mal - kun hvis ordren ikke har noen fra før - for å unngå å nullstille avkrysset
+// fremgang på sjekklisten bare fordi noen retter en skrivefeil i Merke/Modell.
+function autoVelgUtstyrMal(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  if (o.utstyrMalNavn) return;
+  const mm = merkeModell(o).toLowerCase(); if (!mm) return;
+  const mal = (S.utstyrMaler||[]).find(m => m.biltype && (mm.includes(m.biltype.toLowerCase()) || m.biltype.toLowerCase().includes(mm)));
+  if (!mal) return;
+  o.utstyrSjekkliste = mal.punkter.map(p=>({punkt:p, ok:false}));
+  o.utstyrMalNavn = mal.navn;
+  logChange(o, 'Utstyr-mal (ankomst) automatisk valgt: '+mal.navn);
+  save(ordreId);
+  const container = document.getElementById('utstyrSjekkliste_' + ordreId);
+  if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');
+  const select = document.getElementById('uMalValgAnkomst');
+  if (select) select.value = String((S.utstyrMaler||[]).findIndex(m=>m===mal));
+}
+
 function applyUtstyrMal(ordreId, malIdx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const mal = S.utstyrMaler[parseInt(malIdx)];

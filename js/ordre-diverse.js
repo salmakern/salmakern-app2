@@ -297,6 +297,7 @@ function opprettOrdre() {
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
   oppdaterNyOrdreStatusFelt();
   openOrdre(id);
+  autoVelgUtstyrMal(id);
 }
 
 // Viser/skjuler Ankomstdato-feltet i "Ny ordre"-skjemaet basert på valgt status - feltet
