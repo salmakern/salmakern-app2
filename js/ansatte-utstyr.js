@@ -748,11 +748,10 @@ function toggleUtstyrPunkt(ordreId, idx) {
       oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
     }
-    // 4-seter bak 180 har IKKE noe "ikke 502"-motstykke (bekreftet av Henrik
-    // 2026-09-24) - ulikt panorama er standard-tilstanden (ikke huket av) ikke noe som
-    // trenger en egen påminnelseslinje, kun selve 502 skal vises/fjernes.
+    // 4-seter bak 180 skal, ulikt panorama, KUN i fikenLinjer - ikke i "Skal ha etter
+    // visning" i det hele tatt (bekreftet av Henrik 2026-09-24, samme mønster som
+    // hengerfeste).
     if (punkt.punkt === '4-seter bak 180') {
-      oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
     }
   }
