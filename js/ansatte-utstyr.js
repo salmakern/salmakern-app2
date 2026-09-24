@@ -738,7 +738,6 @@ function erKiaEv9(o) {
 const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
 const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'ikke 501';
 const FIKEN_PRODUKTNUMMER_4SETER_180 = '502';
-const FIKEN_PRODUKTNUMMER_IKKE_4SETER_180 = 'ikke 502';
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
@@ -749,9 +748,11 @@ function toggleUtstyrPunkt(ordreId, idx) {
       oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
     }
+    // 4-seter bak 180 har IKKE noe "ikke 502"-motstykke (bekreftet av Henrik
+    // 2026-09-24) - ulikt panorama er standard-tilstanden (ikke huket av) ikke noe som
+    // trenger en egen påminnelseslinje, kun selve 502 skal vises/fjernes.
     if (punkt.punkt === '4-seter bak 180') {
       oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
-      oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_4SETER_180, !punkt.ok);
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
     }
   }
