@@ -713,38 +713,33 @@ function applyUtstyrMal(ordreId, malIdx) {
   o.utstyrMalNavn = mal.navn;
   logChange(o, 'Utstyr-mal (ankomst) valgt: '+mal.navn);
   save(ordreId); buildOrdreDetail();
-  // Alle punkter starter uhuket - har malen et panorama-punkt betyr det standard
-  // (ikke-panorama) glasstak, som skal vises som "ikke 501" med en gang (se
-  // toggleUtstyrPunkt under for samme logikk ved manuell av/på-huking, inkl. hvorfor
-  // dette er begrenset til KIA EV9).
-  if (erKiaEv9(o) && o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
-    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
-  }
+  // Alle punkter starter uhuket rett etter at en mal er valgt, så det er ingenting å
+  // sende til fakturering ennå her (se toggleUtstyrPunkt under for selve av/på-logikken).
 }
 
-// Produktnummer for panorama glasstak i "Utstyr – Skal ha etter visning" (bekreftet
-// av Henrik) - samme /panorama/i-sjekk som allerede brukes i vegvesen-dokumenter.js
-// for å avgjøre Standard/Panorama-variant, så begge stedene er enige om hva som teller.
-// Feltet skal ALLTID ha én av de to linjene, aldri ingen av dem - er panorama IKKE
-// huket av (standard-varianten) skal "ikke 501" stå der i stedet (bekreftet av Henrik
-// 2026-09-15), ikke bare fravær av "501".
-// "501"/"ikke 501" er KIA EV9-spesifikke Fiken-produktnumre (bekreftet av Henrik
-// 2026-09-23) - selv om flere andre modeller (Defender, Discovery 5, ID BUZZ) også har
-// et "Panorama glasstak"-punkt i sin egen utstyr-mal, skal denne auto-oppskriften KUN
-// trigges for EV9. Samme /\bev9\b/i-mønster som brukt for modell-matching ellers i
-// appen (se f.eks. FIKEN_OMBYGGING_MODELLER i ordre-detalj.js).
+// "501" (panorama glasstak) og "502" (4-seter bak 180) er KIA EV9-spesifikke
+// Fiken-produktnumre som skal rett inn i fakturagrunnlaget når punktet hukes av (bedt om
+// av Henrik 2026-09-24 - tidligere ble "501"/"ikke 501" bare skrevet inn som fritekst i
+// "Utstyr - Skal ha etter visning", men "ikke 501" var aldri et ekte Fiken-produkt, kun
+// en påminnelse for den som fakturerte manuelt. Nå som fikenLinjer styrer fakturering
+// direkte trengs ikke den påminnelsen lenger - er panorama IKKE huket av fjernes "501"
+// fra fakturagrunnlaget igjen, ikke noen erstatningslinje).
+// Selv om flere andre modeller (Defender, Discovery 5, ID BUZZ) også har et "Panorama
+// glasstak"-punkt i sin egen utstyr-mal, skal disse to auto-oppskriftene KUN trigges for
+// EV9 - samme /\bev9\b/i-mønster som brukt for modell-matching ellers i appen (se f.eks.
+// FIKEN_OMBYGGING_MODELLER i ordre-detalj.js).
 function erKiaEv9(o) {
   return /\bev9\b/i.test(`${o.merke||''} ${o.modell||''}`);
 }
 const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
-const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'ikke 501';
+const FIKEN_PRODUKTNUMMER_4SETER_180 = '502';
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
   punkt.ok = !punkt.ok;
-  if (erKiaEv9(o) && /panorama/i.test(punkt.punkt || '')) {
-    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
-    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
+  if (erKiaEv9(o)) {
+    if (/panorama/i.test(punkt.punkt || '')) oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
+    if (punkt.punkt === '4-seter bak 180') oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
   }
   save(ordreId);
   // Oppdater kun sjekklisten - ikke bygg om hele ordresiden, det gir et lite
