@@ -202,7 +202,7 @@ function buildOrdreDetail() {
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
-            <div id="typeForslag_kunde_${o.id}" class="felt-dropdown">${feltForslagHTML('kundeInput_'+o.id, forhandlerForslag(o.merke, o.modell))}</div>
+            <div id="typeForslag_kunde_${o.id}" class="felt-dropdown">${feltForslagHTML('kundeInput_'+o.id, forhandlerForslag())}</div>
           </div>
           <div class="felt-wrap">
             <label>Kontaktperson</label>
@@ -939,14 +939,22 @@ function variantForslag(merke, modell, type) {
 function versjonForslag(merke, modell, type) {
   return frekvenssortert(kjedeFilter(merke, modell, type).map(o=>o.versjon));
 }
-// Forhandler henger ikke sammen med Type/Variant/Versjon (ulike forhandlere bestiller
-// gjerne samme Type), men henger som regel sammen med Merke+Modell - en forhandlernettverk
-// bestiller gjerne stort sett samme bilmerke/-modell om og om igjen. Kontaktperson hadde
-// tidligere samme slags forslag (basert på tidligere ordre), men den er fjernet igjen
-// (bedt om av Henrik 2026-09-18) - selve feltverdien (o.eier) på eksisterende ordre var
-// urørt, kun den forslagslisten var borte.
-function forhandlerForslag(merke, modell) {
-  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.kunde));
+// Forhandler-forslaget hentet tidligere fra tidligere ordres Forhandler-felt (frekvens-
+// sortert per Merke+Modell), men er byttet ut 2026-09-24 til å hentes fra Kontakter ->
+// Forhandlere i stedet (bedt om av Henrik, etter at 49 forhandlere fra ordre-historikken
+// ble importert dit) - samme kilde som kontaktpersonKontakterForslag() allerede bruker.
+// Rører IKKE eksisterende ordres o.kunde-verdi i det hele tatt - kun denne
+// forslagslisten er byttet ut (Henrik bekreftet eksplisitt: "enten ikke gjør noe med de
+// tidligere ordrene eller så må du endre der" - dette er det trygge alternativet, siden
+// forslag aldri overskriver noe automatisk).
+function forhandlerForslag() {
+  const navn = (S.kontakter||[]).filter(k=>k.type==='Forhandler').map(k=>k.navn);
+  // Vanlig strengsammenligning (ikke localeCompare) med vilje - se samme forklaring ved
+  // kontaktpersonKontakterForslag()/vegvesen-dokumenter.js sin flåte-sortering.
+  return [...new Set(navn)].sort((a,b) => {
+    const na = a.toUpperCase(), nb = b.toUpperCase();
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
 }
 // Kontaktperson fikk et NYTT forslag igjen 2026-09-22 - denne gangen fra Kontakter-
 // registeret (S.kontakter), ikke fra tidligere ordre som den gamle (fjernede) varianten.
@@ -1029,7 +1037,7 @@ function renderVersjonForslag(merkeInputId, modellInputId, typeInputId, versjonI
 }
 function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
-  el.innerHTML = feltForslagHTML(kundeInputId, forhandlerForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId)));
+  el.innerHTML = feltForslagHTML(kundeInputId, forhandlerForslag());
 }
 function renderForhandlerOrgnrForslag(kundeInputId, orgnrInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
