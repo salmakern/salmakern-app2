@@ -340,6 +340,29 @@ function apneNyVareIKategori() {
   if (aktivKategori && aktivKategori !== 'Uten kategori') document.getElementById('nyVareKategori').value = aktivKategori;
 }
 
+// Modell er, akkurat som kategori, bare et tekstfelt delt av flere varer - "å endre navn"
+// betyr å oppdatere modell-feltet på alle varene som har den, samlet sett. Ulikt kategori
+// finnes det ingen "Uten modell"-fallback å falle tilbake på (varer uten modell regnes som
+// felles for alle modeller, se renderLagerListe()) - et tomt navn ville derfor stille
+// flyttet alle varene ut av MODELLER-seksjonen og inn som delte deler, så det avbrytes i
+// stedet for å utføres.
+function redigerModellNavn() {
+  if (!aktivModell) return;
+  const nyttNavn = prompt('Nytt navn på modellen:', aktivModell);
+  if (nyttNavn === null) return;
+  const trimmet = nyttNavn.trim();
+  if (!trimmet) { alert('Modellnavnet kan ikke være tomt.'); return; }
+  const gammelModell = aktivModell;
+  const varer = (S.lagervarer||[]).filter(v => v.modell === gammelModell);
+  varer.forEach(v => { v.modell = trimmet; });
+  // Ett samlet kall for alle varene i modellen i stedet for ett update-kall per vare
+  // (samme upålitelighets-mønster som flyttVare()/registrerLagerEndring() løste likt).
+  if (db && varer.length) db.from('lagervarer').upsert(varer.map(v=>({id:v.id, modell:trimmet})), {onConflict:'id'})
+    .then(r=>{if(r.error) console.error('Modell-oppdatering feilet:', r.error.message);});
+  aktivModell = trimmet;
+  renderModellDetalj();
+}
+
 // Kategori er bare et tekstfelt delt av flere varer - "å endre navn" betyr å
 // oppdatere kategori-feltet på alle varene som har den, samlet sett.
 function redigerKategoriNavn() {

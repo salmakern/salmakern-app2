@@ -624,7 +624,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <div class="h" id="modellDetaljTittel">–</div>
               <div class="muted small" style="margin-top:4px">Underkategorier for denne modellen</div>
             </div>
-            <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn sm" onclick="redigerModellNavn()">✎ Rediger navn</button>
+              <button class="btn sm red" onclick="apneNyVareIKategori()">+ Ny vare</button>
+            </div>
           </div>
           <div style="margin-top:10px">
             <input id="modellDetaljSokInput" type="search" placeholder="Søk vare, kategori eller tegningsnummer..." oninput="renderModellDetalj()" style="width:100%;background:#0f0f12;color:#f4f4f5;border:1px solid #27272a;border-radius:12px;padding:9px 12px;font-size:14px">
