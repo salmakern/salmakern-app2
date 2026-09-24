@@ -760,6 +760,21 @@ function erKiaEv9(o) {
 const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
 const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'ikke 501';
 const FIKEN_PRODUKTNUMMER_4SETER_180 = '502';
+
+// Samme mønster for Mercedes-Benz Geländewagen (bekreftet av Henrik 2026-09-24) - kun
+// fikenLinjer, ikke "Skal ha etter visning" (som 4-seter bak 180, ikke som panorama).
+// Punkt-tekstene er hentet direkte fra den ekte utstyr-malen ("Mercedes-Benz
+// Geländewagen", biltype "Geländewagen") i databasen.
+function erMercedesGelandewagen(o) {
+  return /gel[aä]ndewagen/i.test(`${o.merke||''} ${o.modell||''}`);
+}
+const GELANDEWAGEN_PUNKT_PRODUKTNUMMER = {
+  'DVD - skjermer': '308',
+  'Airbag 2. seterad': '302',
+  'Takluke': '306',
+  'Taktrekk i skinn': '309',
+};
+
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
@@ -776,6 +791,10 @@ function toggleUtstyrPunkt(ordreId, idx) {
     if (punkt.punkt === '4-seter bak 180') {
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
     }
+  }
+  if (erMercedesGelandewagen(o)) {
+    const produktnr = GELANDEWAGEN_PUNKT_PRODUKTNUMMER[punkt.punkt];
+    if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
   save(ordreId);
   // Oppdater kun sjekklisten - ikke bygg om hele ordresiden, det gir et lite
