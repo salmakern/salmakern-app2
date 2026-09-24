@@ -775,6 +775,20 @@ const GELANDEWAGEN_PUNKT_PRODUKTNUMMER = {
   'Taktrekk i skinn': '309',
 };
 
+// Samme mønster for Mercedes-Benz GLS (bekreftet av Henrik 2026-09-24) - kun fikenLinjer,
+// ikke "Skal ha etter visning". Punkt-tekstene er hentet direkte fra den ekte utstyr-malen
+// ("Mercedes-Benz GLS", biltype "GLS") i databasen.
+function erMercedesGls(o) {
+  return /\bgls\b/i.test(`${o.merke||''} ${o.modell||''}`);
+}
+const GLS_PUNKT_PRODUKTNUMMER = {
+  'Klima i taket': '401',
+  'Airbag': '402',
+  'Koppholder i midt konsoll': '403',
+  'Subwoofer': '404',
+  'DVD-Skjermer': '405',
+};
+
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
@@ -794,6 +808,10 @@ function toggleUtstyrPunkt(ordreId, idx) {
   }
   if (erMercedesGelandewagen(o)) {
     const produktnr = GELANDEWAGEN_PUNKT_PRODUKTNUMMER[punkt.punkt];
+    if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
+  }
+  if (erMercedesGls(o)) {
+    const produktnr = GLS_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
   save(ordreId);

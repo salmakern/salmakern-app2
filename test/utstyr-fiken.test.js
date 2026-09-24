@@ -116,3 +116,53 @@ describe('toggleUtstyrPunkt - Mercedes-Benz Geländewagen', () => {
     expect(fikenLinjeKall.some(k => k.produktnummer === '306')).toBe(false);
   });
 });
+
+describe('toggleUtstyrPunkt - Mercedes-Benz GLS', () => {
+  let env, o, fikenLinjeKall, skalHaKall;
+  beforeEach(() => {
+    ({ env, fikenLinjeKall, skalHaKall } = nyEnvironment());
+    o = {
+      id: 'ord_1', merke: 'Mercedes-Benz', modell: 'GLS',
+      utstyrSjekkliste: [
+        { punkt: 'Klima i taket', ok: false },
+        { punkt: 'Airbag', ok: false },
+        { punkt: 'Koppholder i midt konsoll', ok: false },
+        { punkt: 'Subwoofer', ok: false },
+        { punkt: 'DVD-Skjermer', ok: false },
+        { punkt: 'Rollon', ok: false },
+      ],
+    };
+    env.S.ordrer = [o];
+  });
+
+  it.each([
+    ['Klima i taket', '401'],
+    ['Airbag', '402'],
+    ['Koppholder i midt konsoll', '403'],
+    ['Subwoofer', '404'],
+    ['DVD-Skjermer', '405'],
+  ])('%s -> produktnummer %s i fiken, huk av og fjern igjen', (punktTekst, produktnr) => {
+    const idx = o.utstyrSjekkliste.findIndex(p => p.punkt === punktTekst);
+    env.toggleUtstyrPunkt('ord_1', idx);
+    expect(o.utstyrSjekkliste[idx].ok).toBe(true);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: produktnr, skalStaa: true });
+    // Ingen av disse fem skal i "Skal ha etter visning" (bekreftet av Henrik 2026-09-24).
+    expect(skalHaKall.length).toBe(0);
+
+    env.toggleUtstyrPunkt('ord_1', idx);
+    expect(o.utstyrSjekkliste[idx].ok).toBe(false);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: produktnr, skalStaa: false });
+  });
+
+  it('punkter uten kjent kobling (Rollon) rører ikke fiken', () => {
+    env.toggleUtstyrPunkt('ord_1', 5);
+    expect(fikenLinjeKall.length).toBe(0);
+  });
+
+  it('samme punkt-tekst ("Airbag") på Geländewagen rører ikke GLS-koblingen', () => {
+    o.merke = 'Mercedes-Benz'; o.modell = 'Geländewagen';
+    o.utstyrSjekkliste = [{ punkt: 'Airbag', ok: false }];
+    env.toggleUtstyrPunkt('ord_1', 0);
+    expect(fikenLinjeKall.some(k => k.produktnummer === '402')).toBe(false);
+  });
+});
