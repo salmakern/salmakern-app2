@@ -359,6 +359,23 @@ function redigerModellNavn() {
   // (samme upålitelighets-mønster som flyttVare()/registrerLagerEndring() løste likt).
   if (db && varer.length) db.from('lagervarer').upsert(varer.map(v=>({id:v.id, modell:trimmet})), {onConflict:'id'})
     .then(r=>{if(r.error) console.error('Modell-oppdatering feilet:', r.error.message);});
+
+  // Oppskrifter (lagerOppskrifter) og utstyr-maler har HVER SIN EGEN "biltype"-tekst for
+  // samme modell - ingen fremmednøkkel til lagervarer.modell, bare vanligvis samme tekst.
+  // Uten denne oppdateringen ville de blitt stående igjen under det gamle navnet, usynlige
+  // fra det nye (reell bug rapportert av Henrik 2026-09-25: omdøpte ID BUZZ i Lager, ni
+  // oppskrifter forsvant fra visningen fordi biltype fortsatt sa det gamle navnet).
+  const oppskrifter = (S.lagerOppskrifter||[]).filter(o => o.biltype === gammelModell);
+  oppskrifter.forEach(o => { o.biltype = trimmet; });
+  if (db && oppskrifter.length) db.from('lager_oppskrifter').upsert(oppskrifter.map(o=>({id:o.id, biltype:trimmet})), {onConflict:'id'})
+    .then(r=>{if(r.error) console.error('Oppskrift-biltype-oppdatering feilet:', r.error.message);});
+
+  const maler = (S.utstyrMaler||[]).filter(m => m.biltype === gammelModell);
+  if (maler.length) {
+    maler.forEach(m => { m.biltype = trimmet; });
+    saveInnstillinger();
+  }
+
   aktivModell = trimmet;
   renderModellDetalj();
 }
