@@ -265,7 +265,7 @@ function buildOrdreDetail() {
               <label>Typegodkjenning</label>
               <input id="typegodkjenningInput_${o.id}" value="${esc(o.typegodkjenning||'')}" autocomplete="off" onchange="sf('${o.id}','typegodkjenning',this.value)" placeholder="f.eks. e4*2018/858*00178*04"
                 onfocus="visFeltDropdown('typeForslag_typegodkjenning_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_typegodkjenning_${o.id}'))">
-              <div id="typeForslag_typegodkjenning_${o.id}" class="felt-dropdown">${feltForslagHTML('typegodkjenningInput_'+o.id, typegodkjenningForslag())}</div>
+              <div id="typeForslag_typegodkjenning_${o.id}" class="felt-dropdown">${feltForslagHTML('typegodkjenningInput_'+o.id, typegodkjenningForslag(o.merke, o.modell))}</div>
             </div>
             <div><label>Egenvekt (fra COC)</label><input type="number" value="${o.egenvektCoc||''}" onchange="sf('${o.id}','egenvektCoc',this.value)" placeholder="kg"></div>
           </div>
@@ -950,8 +950,11 @@ function kjedeFilter(merke, modell, type) {
 function merkeForslag() {
   return frekvenssortert(S.ordrer.map(o=>o.merke));
 }
-function typegodkjenningForslag() {
-  return frekvenssortert(S.ordrer.map(o=>o.typegodkjenning));
+// Filtrert på Merke+Modell 2026-09-25 (bedt om av Henrik: "typegodkjenning må også være
+// forslag fra tidligere kia ev9") - samme mønster som typeForslag()/variantForslag()
+// rett under, i stedet for å foreslå typegodkjenninger på tvers av alle modeller.
+function typegodkjenningForslag(merke, modell) {
+  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.typegodkjenning));
 }
 function modellForslag(merke) {
   return frekvenssortert(kjedeFilter(merke).map(o=>o.modell));
