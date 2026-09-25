@@ -197,8 +197,8 @@ function buildOrdreDetail() {
             <label>Forhandler</label>
             <div style="display:flex;gap:6px">
               <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
-                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}')"
-                onchange="sf('${o.id}','kunde',this.value)"
+                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}')"
+                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}')"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
@@ -1071,6 +1071,24 @@ function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, list
 function renderForhandlerOrgnrForslag(kundeInputId, orgnrInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
   el.innerHTML = feltForslagHTML(orgnrInputId, forhandlerOrgnrForslag(feltVerdi(kundeInputId)));
+}
+function renderForhandlerNrForslag(kundeInputId, nrInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(nrInputId, forhandlerNrForslag(feltVerdi(kundeInputId)));
+}
+// Forhandler.nr henger sammen med forhandleren, ikke ordren isolert - når Forhandler-feltet
+// endres (skrevet inn på nytt eller valgt fra forslagslisten), fylles Forhandler.nr derfor
+// automatisk ut med samme nummer denne forhandleren er brukt med tidligere (bedt om av
+// Henrik 2026-09-25: "når det blir valgt forhandler i ordren så skal den automatisk legge
+// inn forhandler.nr"). Overskriver bevisst et evt. eksisterende nummer på ordren - stemmer
+// nummeret ikke lenger overens med den (nye) forhandleren, er det gamle uansett feil.
+function autoFyllForhandlerNr(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const forslag = forhandlerNrForslag(o.kunde);
+  if (!forslag.length) return;
+  su(id, 'forhandlerNr', forslag[0]);
+  const input = document.getElementById('forhandlerNrInput_'+id);
+  if (input) input.value = forslag[0];
 }
 function renderEierForslag(kundeInputId, eierInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
