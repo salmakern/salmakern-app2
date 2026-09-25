@@ -763,10 +763,9 @@ function dokumenterListeHTML(o) {
     </div>`).join('');
 }
 
-async function lastOppDokument(e, id) {
-  const file = e.target.files[0]; if (!file) return;
+async function lastOppEtDokument(file, id) {
   const ext = (file.name.split('.').pop()||'').toLowerCase();
-  if (!DOK_TILLATTE_EXT.includes(ext)) { alert('Filtype ikke tillatt. Godkjente typer: ' + DOK_TILLATTE_EXT.join(', ')); e.target.value=''; return; }
+  if (!DOK_TILLATTE_EXT.includes(ext)) { visToast(`"${file.name}" - filtype ikke tillatt`); return; }
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   if (!db) { visToast('Ikke koblet til Supabase'); return; }
   // Supabase Storage tillater ikke æøå/mellomrom/spesialtegn i selve filbanen -
@@ -777,7 +776,7 @@ async function lastOppDokument(e, id) {
     .replace(/[^a-zA-Z0-9.\-]/g, '_');
   const filnavn = `${id}/${Date.now()}_${tryggNavn}`;
   const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream', cacheControl:'31536000'});
-  if (error) { visToast('Feil ved opplasting: ' + error.message); return; }
+  if (error) { visToast(`Feil ved opplasting av "${file.name}": ` + error.message); return; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
   o.dokumenter = o.dokumenter || [];
   // Samme filnavn som et eksisterende dokument = ny versjon som erstatter den gamle,
@@ -796,10 +795,38 @@ async function lastOppDokument(e, id) {
   }
   db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
     .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
+}
+
+// Delt av både filvelgeren og dra-og-slipp-boksen - laster opp én fil om gangen (Supabase
+// Storage-kallet må gjøres sekvensielt uansett), lagrer/rerendrer kun ÉN gang til slutt.
+async function lastOppFlereDokumenter(files, id) {
+  for (const file of files) await lastOppEtDokument(file, id);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
-  e.target.value = '';
+  const o = S.ordrer.find(x=>x.id===id);
   const listEl = document.getElementById('dokumenterListe_'+id);
-  if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  if (listEl && o) listEl.innerHTML = dokumenterListeHTML(o);
+}
+
+async function lastOppDokument(e, id) {
+  const files = Array.from(e.target.files||[]);
+  if (!files.length) return;
+  await lastOppFlereDokumenter(files, id);
+  e.target.value = '';
+}
+
+function dokDragOver(e, id) {
+  e.preventDefault();
+  document.getElementById('dokDropzone_'+id)?.classList.add('dok-dropzone-over');
+}
+function dokDragLeave(e, id) {
+  document.getElementById('dokDropzone_'+id)?.classList.remove('dok-dropzone-over');
+}
+async function dokDrop(e, id) {
+  e.preventDefault();
+  document.getElementById('dokDropzone_'+id)?.classList.remove('dok-dropzone-over');
+  const files = Array.from(e.dataTransfer?.files || []);
+  if (!files.length) return;
+  await lastOppFlereDokumenter(files, id);
 }
 
 async function slettDokument(id, idx) {

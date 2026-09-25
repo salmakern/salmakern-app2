@@ -37,6 +37,31 @@ function initFeilovervaking() {
 }
 initFeilovervaking();
 
+// Skrur av nettleserens "husk det jeg skrev sist"-forslag (autofyll) på alle felt i
+// appen - både de som finnes ved sideinnlasting og de som lages dynamisk senere
+// (skjemaer, modaler, rad-redigering i f.eks. Kontakter/Admin-ark). Rører aldri et
+// felt som allerede har fått en bevisst autocomplete-verdi satt i markup.
+function skruAvAutofyll(rot) {
+  rot.querySelectorAll('input, textarea, select').forEach(el => {
+    if (!el.hasAttribute('autocomplete')) el.setAttribute('autocomplete', 'off');
+  });
+}
+// Guard mot testmiljøet (Node vm-sandbox i test/): document der er en enkel objekt-stub
+// uten ekte DOM-metoder (querySelectorAll/documentElement), og MutationObserver finnes
+// ikke i det hele tatt - uten denne sjekken feiler HVER test som laster core.js.
+if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function' && typeof MutationObserver !== 'undefined') {
+  skruAvAutofyll(document);
+  new MutationObserver(mutasjoner => {
+    for (const m of mutasjoner) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (node.matches?.('input, textarea, select')) node.setAttribute('autocomplete', 'off');
+        skruAvAutofyll(node);
+      }
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true });
+}
+
 // Gjør om 'YYYY-MM-DD' til 'DD.MM.YYYY' for visning. Lagret/redigert verdi er fortsatt ISO.
 function fmtDatoKort(iso) {
   if (!iso) return '';

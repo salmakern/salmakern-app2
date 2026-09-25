@@ -102,7 +102,31 @@ Deno.serve(async (req) => {
 
     const raw = await req.text()
     if (!raw) return jsonSvar({ error: 'Tom body' }, 400)
-    const { kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = JSON.parse(raw)
+    const body = JSON.parse(raw)
+
+    // Oppretter en NY kunde i Fiken (organisasjonsnummer bekreftet mot Brønnøysundregisteret
+    // av admin på forhånd, aldri gjettet her) - helt separat fra fakturaflyten under. Kun
+    // navn er påkrevd av Fiken sitt eget schema (bekreftet mot components.schemas.contact i
+    // https://github.com/bjerkio/fiken-js/blob/main/swagger.json), men vi sender alltid med
+    // organisasjonsnummer når vi har det siden det er nøkkelen til at kontakten faktisk
+    // representerer riktig juridisk enhet.
+    if (body.opprettKunde) {
+      const { navn, orgnr } = body.opprettKunde
+      if (!navn) return jsonSvar({ error: 'Mangler navn for ny kunde' }, 400)
+      const slug = await hentCompanySlug()
+      const opprettRes = await fikenFetch(`/companies/${slug}/contacts`, {
+        method: 'POST',
+        body: JSON.stringify({ name: navn, ...(orgnr ? { organizationNumber: String(orgnr) } : {}), customer: true }),
+      })
+      if (!opprettRes.ok) {
+        return jsonSvar({ error: `Fiken avviste ny kunde (${opprettRes.status}): ${await opprettRes.text()}` }, 502)
+      }
+      const location = opprettRes.headers.get('Location') || ''
+      const contactId = Number(location.split('/').filter(Boolean).pop())
+      return jsonSvar({ ok: true, contactId, navn }, 201)
+    }
+
+    const { kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
 

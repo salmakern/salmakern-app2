@@ -229,9 +229,25 @@ async function adminArkKallFraktEpost(payload) {
 // Bestiller frakt: e-post til fraktselskapet (forhandler/kontaktperson/chassis.nr i
 // innholdet), kontaktpersonen på kopi. Markerer "Bestilt frakt" automatisk ved suksess -
 // det ER det feltet betyr, ingen grunn til et eget trykk til for å huke det av selv.
+//
+// Når fraktselskap er satt til "Hente selv" er det ikke noe fraktselskap å bestille hos -
+// samme knapp åpner i stedet en liten dialog der man velger hvilken dato bilen er klar
+// for henting, og varsler kontaktpersonen med den datoen i e-posten (bekreftet av Henrik
+// 2026-09-25: skal trigges ved å trykke "Bestill", ikke automatisk ved valg i
+// nedtrekkslisten). Selve sendingen skjer i adminArkSendKlarForHenting() under, når
+// dialogens "Send"-knapp trykkes - det trykket ER bekreftelsen, samme mønster som appens
+// andre små modaler (f.eks. "Nytt møte"), ingen egen confirm() på toppen av det.
 async function adminArkFraktBestill(chassisNr) {
   const rad = adminArkHentRadData(chassisNr);
-  if (!rad.fraktselskap || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV) { visToast('Velg et fraktselskap først'); return; }
+  if (!rad.fraktselskap) { visToast('Velg et fraktselskap først'); return; }
+  if (rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV) {
+    const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
+    if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
+    document.getElementById('kfh_chassis').value = rad.chassisNr;
+    document.getElementById('kfh_dato').value = new Date().toISOString().split('T')[0];
+    openModal('klarForHenting');
+    return;
+  }
   const fraktEpost = adminArkFinnKontaktEpost(rad.fraktselskap, 'Fraktselskap');
   if (!fraktEpost) { visToast(`Fant ingen e-post for "${rad.fraktselskap}" i Kontakter - legg den til under Mer → Kontakter`); return; }
   const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
@@ -246,6 +262,30 @@ async function adminArkFraktBestill(chassisNr) {
     if (tabRad) tabRad.update({ bestiltFrakt: true });
   } catch (e) {
     visToast('Kunne ikke sende fraktbestilling: ' + e.message);
+  }
+}
+
+// Sender selve "klar for henting"-varselet fra dialogen åpnet i adminArkFraktBestill()
+// over. Datoen er kun tekst i e-posten (ikke koblet mot o.datoKlarHenting/ordreStatus -
+// det er en annen, mer omfattende statusovergang med egne sideeffekter i endreStatus(),
+// og denne dialogen sier ingenting om at HELE ordren skal bytte status).
+async function adminArkSendKlarForHenting() {
+  const chassisNr = document.getElementById('kfh_chassis').value;
+  const dato = document.getElementById('kfh_dato').value;
+  if (!dato) { visToast('Velg en dato'); return; }
+  const rad = adminArkHentRadData(chassisNr);
+  const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
+  if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
+  try {
+    await adminArkKallFraktEpost({ type:'klar_for_henting', kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, dato, avsenderNavn: me?.navn });
+    closeModal('klarForHenting');
+    visToast('Varsel om henting sendt til ' + rad.kontaktperson, 'ok');
+    const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
+    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
+    await adminArkLagreFelter(radData, { bestiltFrakt: true });
+    if (tabRad) tabRad.update({ bestiltFrakt: true });
+  } catch (e) {
+    visToast('Kunne ikke sende hentevarsel: ' + e.message);
   }
 }
 
@@ -1021,8 +1061,9 @@ function renderAdminArk(scrollTilBunn) {
         // ikke fikk trykket på dem for enkelte rader - årsaken var usynlige, ikke bare
         // grå, knapper).
         const manglerChassis = !rad.chassisNr;
-        const bestillDisabled = manglerChassis || !rad.fraktselskap || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
-        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (bestillDisabled ? 'Velg fraktselskap først' : 'Send fraktbestilling på e-post');
+        const bestillDisabled = manglerChassis || !rad.fraktselskap;
+        const erHenterSelv = rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
+        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (bestillDisabled ? 'Velg fraktselskap først' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post'));
         const hentetTitel = manglerChassis ? 'Krever chassis.nr' : 'Varsle kontaktperson om at bilen er hentet';
         return `<div style="display:flex;gap:4px;justify-content:center">
           <button class="btn sm" style="padding:3px 7px;font-size:11px" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">📧 Bestill</button>

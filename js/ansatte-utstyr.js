@@ -164,17 +164,30 @@ function apneForhandlerListe() {
 // forhandler" - med 49 forhandlere importert fra ordre-historikken er en flat, uskrollbar
 // liste upraktisk. Enkelt case-uavhengig delstreng-søk på navn, samme mønster som
 // feltForslagHTML/velgFeltForslag andre steder i appen bruker for autocomplete-forslag.
+// Utvidet 2026-09-25 (Henrik: "det må være mulig å søke opp kontaktpersonene der
+// oversikten over forhandlerne") til også å matche på navnet til en av forhandlerens
+// kontaktpersoner - ikke bare forhandlerens eget navn - siden man ofte husker selgerens
+// navn bedre enn hvilken forhandler vedkommende jobber hos.
 function renderForhandlerListe() {
   const el = document.getElementById('forhandlerListeInnhold'); if (!el) return;
   const sok = (document.getElementById('forhandlerSok')?.value||'').trim().toLowerCase();
-  const forhandlere = S.kontakter.filter(k=>k.type==='Forhandler' && (!sok || k.navn.toLowerCase().includes(sok)));
-  if (!forhandlere.length) { el.innerHTML = `<div class="small muted">${sok?'Ingen forhandlere matcher søket':'Ingen forhandlere lagt til ennå'}</div>`; return; }
-  el.innerHTML = forhandlere.map(k=>{
+  const forhandlere = S.kontakter
+    .filter(k=>k.type==='Forhandler')
+    .map(k=>({ k, kpTreff: sok ? (k.kontaktpersoner||[]).filter(kp=>(kp.navn||'').toLowerCase().includes(sok)) : [] }))
+    .filter(({k,kpTreff})=> !sok || k.navn.toLowerCase().includes(sok) || kpTreff.length);
+  if (!forhandlere.length) { el.innerHTML = `<div class="small muted">${sok?'Ingen forhandlere eller kontaktpersoner matcher søket':'Ingen forhandlere lagt til ennå'}</div>`; return; }
+  el.innerHTML = forhandlere.map(({k,kpTreff})=>{
     const antallKp = (k.kontaktpersoner||[]).length;
+    // Traff vi kun via en kontaktperson (forhandlerens eget navn matcher ikke søket) -
+    // vis hvilken person det var, så treffet er forklart i stedet for et tilsynelatende
+    // urelatert forhandlernavn i listen.
+    const visKpTreff = kpTreff.length && !k.navn.toLowerCase().includes(sok);
     return `
       <div class="box" style="margin-bottom:8px;cursor:pointer" onclick="apneForhandlerDetalj('${k.id}')">
         <div><b>${esc(k.navn)}</b></div>
-        <div class="small muted" style="margin-top:4px">${antallKp} kontaktperson${antallKp===1?'':'er'} →</div>
+        ${visKpTreff
+          ? `<div class="small" style="margin-top:4px;color:#ef4444">Treff: ${kpTreff.map(kp=>esc(kp.navn)).join(', ')} →</div>`
+          : `<div class="small muted" style="margin-top:4px">${antallKp} kontaktperson${antallKp===1?'':'er'} →</div>`}
       </div>`;
   }).join('');
 }

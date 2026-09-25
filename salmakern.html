@@ -124,6 +124,9 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 /* CARDS */
 .card{background:#18181b;border:1px solid #27272a;border-radius:22px;padding:16px;margin-bottom:12px}
 .box{background:#0f0f12;border:1px solid #27272a;border-radius:16px;padding:12px}
+.dok-dropzone{background:#0f0f12;border:2px dashed #27272a;border-radius:16px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color 0.15s,background 0.15s}
+.dok-dropzone:hover{border-color:#52525b}
+.dok-dropzone.dok-dropzone-over{border-color:#ef4444;background:#ef444415}
 
 /* MER-SIDEN: seksjonsoverskrifter som grupperer kortene tematisk */
 .mer-seksjon-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;margin:22px 0 10px;display:flex;align-items:center;gap:11px}
@@ -1144,6 +1147,22 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="opprettMote()">Lagre</button>
       <button class="btn" onclick="closeModal('nyttMote')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="klarForHenting">
+  <div class="modal-box">
+    <div class="h">Bilen er klar for henting</div>
+    <input type="hidden" id="kfh_chassis">
+    <div style="margin-top:12px">
+      <label>Klar for henting fra dato</label>
+      <input type="date" id="kfh_dato">
+    </div>
+    <div class="muted small" style="margin-top:8px">Sender e-post til kontaktpersonen med denne datoen.</div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="adminArkSendKlarForHenting()">Send</button>
+      <button class="btn" onclick="closeModal('klarForHenting')">Avbryt</button>
     </div>
   </div>
 </div>

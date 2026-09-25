@@ -481,11 +481,11 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Dokumenter</div>
-        <div class="muted small" style="margin-bottom:8px">Ordren fungerer som en mappe - last opp kontrakter, følgebrev og annet her. Samme filnavn erstatter forrige versjon.</div>
         <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
-        ${me&&(me.rolle==='admin'||me.rolle==='godkjenner')?`<label class="btn sm" style="margin-top:8px;width:100%;display:block;text-align:center;cursor:pointer">
-          + Last opp dokument
-          <input type="file" accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
+        ${me&&(me.rolle==='admin'||me.rolle==='godkjenner')?`<label id="dokDropzone_${o.id}" class="dok-dropzone small muted" style="margin-top:8px;display:block" title="Samme filnavn erstatter forrige versjon"
+            ondragover="dokDragOver(event,'${o.id}')" ondragleave="dokDragLeave(event,'${o.id}')" ondrop="dokDrop(event,'${o.id}')">
+          Dra dokumenter hit, eller klikk for å velge
+          <input type="file" multiple accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
         </label>`:''}
         ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="genererVegvesenDokumenter('${o.id}')" title="${vegvesenGjelderDenneOrdren?'Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🔄 Regenerer Vegvesen-dokumenter</button>
         <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}

@@ -1,10 +1,12 @@
-// Sender ekte e-post (via Resend) for to formål, begge utløst manuelt fra en knapp på
+// Sender ekte e-post (via Resend) for tre formål, alle utløst manuelt fra en knapp på
 // Admin-arket (js/admin-ark.js: adminArkFraktBestill/adminArkVarsleHentet) - ALDRI
 // automatisk, siden dette går til ekte eksterne mottakere og feil data er vanskeligere å
 // rette opp enn en intern PDF:
-//   type: "bestilling" - bestiller frakt hos fraktselskapet (forhandler/kontaktperson/
+//   type: "bestilling"       - bestiller frakt hos fraktselskapet (forhandler/kontaktperson/
 //         chassis.nr i innholdet), kontaktpersonen på kopi.
-//   type: "hentet"      - varsler kontaktpersonen om at bilen er hentet (kun chassis.nr).
+//   type: "hentet"           - varsler kontaktpersonen om at bilen er hentet (kun chassis.nr).
+//   type: "klar_for_henting" - varsler kontaktpersonen om at bilen er klar for å hentes,
+//         brukt når Fraktselskap er satt til "Hente selv" (kun chassis.nr).
 // Krever RESEND_API_KEY satt som secret (npx supabase secrets set RESEND_API_KEY=...).
 // FRAKT_EPOST_AVSENDER er valgfri (secret) - faller tilbake til post@salmaker.as, som må
 // være en verifisert avsenderadresse/domene i Resend-kontoen for at sending skal fungere.
@@ -136,6 +138,24 @@ Deno.serve(async (req) => {
         <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er nå hentet.</p>
         ${await signaturHtml(avsenderNavn)}`
       const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er nå hentet.\n\n`
+        + signaturTekst(avsenderNavn)
+      await sendEpost(kontaktpersonEpost, undefined, emne, html, tekst)
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
+
+    if (payload.type === 'klar_for_henting') {
+      const { kontaktpersonEpost, chassisNr, dato, avsenderNavn } = payload
+      if (!kontaktpersonEpost) return new Response('Mangler e-post for kontaktperson', { status: 400, headers: CORS_HEADERS })
+      // "dato" kommer som 'YYYY-MM-DD' fra <input type="date"> i admin-ark.js - formatert
+      // om til 'DD.MM.YYYY' for visning, samme konvensjon som fmtDatoKort() i frontend.
+      const datoVisning = /^\d{4}-\d{2}-\d{2}$/.test(dato || '') ? dato.split('-').reverse().join('.') : ''
+      const fraSetning = datoVisning ? ` fra ${datoVisning}` : ''
+      const emne = `Bilen er klar for henting${chassisNr ? ' - ' + chassisNr : ''}`
+      const html = `
+        <p style="margin:0 0 12px">Hei,</p>
+        <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er klar for å bli hentet${escHtml(fraSetning)}.</p>
+        ${await signaturHtml(avsenderNavn)}`
+      const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er klar for å bli hentet${fraSetning}.\n\n`
         + signaturTekst(avsenderNavn)
       await sendEpost(kontaktpersonEpost, undefined, emne, html, tekst)
       return new Response('ok', { status: 200, headers: CORS_HEADERS })
