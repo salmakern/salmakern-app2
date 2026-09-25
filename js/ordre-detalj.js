@@ -1077,21 +1077,19 @@ function renderForhandlerNrForslag(kundeInputId, nrInputId, listeId) {
   el.innerHTML = feltForslagHTML(nrInputId, forhandlerNrForslag(feltVerdi(kundeInputId)));
 }
 // Forhandler.nr henger sammen med forhandleren, ikke ordren isolert - når Forhandler-feltet
-// endres (skrevet inn på nytt eller valgt fra forslagslisten), fylles Forhandler.nr derfor
-// automatisk ut (bedt om av Henrik 2026-09-25: "når det blir valgt forhandler i ordren så
-// skal den automatisk legge inn forhandler.nr"). Overskriver bevisst et evt. eksisterende
-// nummer på ordren - stemmer nummeret ikke lenger overens med den (nye) forhandleren, er
-// det gamle uansett feil.
-// Kilde: forhandlerens EGET forhandlerNr-felt i Kontakter (satt via apneRedigerForhandler i
-// ansatte-utstyr.js) er nå autoritativ - lagt til 2026-09-25 etter beskjed fra Henrik ("jeg
-// tror vi skal gjøre det sånn at forhandler.nr blir lagt inn hos forhandler i kontakter") i
-// stedet for å gjette ut fra hvilket nummer andre ordre for samme forhandler tilfeldigvis
-// har brukt mest. forhandlerNrForslag(), som fortsatt gjetter fra ordre-historikk, brukes
-// bare som fallback for forhandlere som ennå ikke har fått satt et eget nummer i Kontakter.
+// endres, fylles Forhandler.nr derfor automatisk ut (bedt om av Henrik 2026-09-25: "når det
+// blir valgt forhandler i ordren så skal den automatisk legge inn forhandler.nr"). Overskriver
+// bevisst et evt. eksisterende nummer på ordren - stemmer nummeret ikke lenger overens med
+// den (nye) forhandleren, er det gamle uansett feil.
+// Kilde: KUN forhandlerens eget forhandlerNr-felt i Kontakter (satt via apneRedigerForhandler
+// i ansatte-utstyr.js) - IKKE lenger et gjett ut fra ordre-historikk (fjernet 2026-09-25 etter
+// beskjed fra Henrik: han venter fortsatt på de ekte numrene fra forhandlerne selv, og et
+// gjettet tall fra en tidligere, potensielt feilskrevet testverdi ville vært misvisende inntil
+// da). Blir stående tomt helt til et ekte nummer er registrert på forhandleren i Kontakter.
 function autoFyllForhandlerNr(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (o.kunde||'').trim().toLowerCase());
-  const nr = forhandlerKontakt?.forhandlerNr || forhandlerNrForslag(o.kunde)[0];
+  const nr = forhandlerKontakt?.forhandlerNr;
   if (!nr) return;
   su(id, 'forhandlerNr', nr);
   const input = document.getElementById('forhandlerNrInput_'+id);
