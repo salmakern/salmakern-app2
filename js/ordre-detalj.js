@@ -372,10 +372,11 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Forhandler.nr</div>
-        <select onchange="su('${o.id}','hengerfesteForhandler',this.value)" style="margin-top:8px">
-          <option value="">Velg forhandler...</option>
-          ${forhandlerForslag().map(navn=>`<option value="${esc(navn)}" ${o.utstyr?.hengerfesteForhandler===navn?'selected':''}>${esc(navn)}</option>`).join('')}
-        </select>
+        <div class="felt-wrap" style="margin-top:8px">
+          <input id="forhandlerNrInput_${o.id}" value="${esc(o.utstyr?.forhandlerNr||'')}" autocomplete="off" onchange="su('${o.id}','forhandlerNr',this.value)"
+            onfocus="visFeltDropdown('typeForslag_forhandlerNr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerNr_${o.id}'))">
+          <div id="typeForslag_forhandlerNr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerNrInput_'+o.id, forhandlerNrForslag(o.kunde))}</div>
+        </div>
       </div>
 
       <div class="card">
@@ -1013,6 +1014,15 @@ function kontaktpersonKontakterForslag(kunde) {
 function forhandlerOrgnrForslag(kunde) {
   if (!kunde) return [];
   return frekvenssortert(S.ordrer.filter(o => (o.kunde||'').toLowerCase()===kunde.toLowerCase()).map(o=>o.forhandlerOrgnr));
+}
+// Samme mønster som forhandlerOrgnrForslag() rett over - Forhandler.nr er et
+// referansenummer forhandleren selv oppgir, henger sammen med forhandler-NAVNET, ikke
+// Merke/Modell. Endret fra en nedtrekksliste med forhandlernavn til fritekst med
+// forslag 2026-09-25 etter tilbakemelding fra Henrik - han skal TASTE INN et tall, ikke
+// velge en forhandler fra Kontakter.
+function forhandlerNrForslag(kunde) {
+  if (!kunde) return [];
+  return frekvenssortert(S.ordrer.filter(o => (o.kunde||'').toLowerCase()===kunde.toLowerCase()).map(o=>o.utstyr?.forhandlerNr));
 }
 function feltForslagHTML(inputId, verdier) {
   if (!verdier.length) return '<div class="small muted" style="padding:9px 12px">Ingen tidligere verdier</div>';

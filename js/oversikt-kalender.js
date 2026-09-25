@@ -456,13 +456,13 @@ function settHengerfesteMontert(id, val) {
 }
 function hengerfesteKortHTML(o) {
   if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
-  // Forhandleren valgt i "Forhandler.nr"-feltet (ordre-detalj.js) vises her på kortet -
+  // Nummeret tastet inn i "Forhandler.nr"-feltet (ordre-detalj.js) vises her på kortet -
   // men KUN når hengerfeste faktisk er huket av (bedt om av Henrik 2026-09-25).
-  const forhandler = o.utstyr?.hengerfesteForhandler;
+  const forhandlerNr = o.utstyr?.forhandlerNr;
   return `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;flex-wrap:wrap">
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
-    ${forhandler?`<span class="small muted" style="font-size:11px">${esc(forhandler)}</span>`:''}
+    ${forhandlerNr?`<span class="small muted" style="font-size:11px">Forhandler.nr ${esc(forhandlerNr)}</span>`:''}
   </div>`;
 }
 // Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
