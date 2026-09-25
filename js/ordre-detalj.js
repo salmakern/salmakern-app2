@@ -870,18 +870,9 @@ function finnFikenOmbyggingModell(merke, modell) {
 // latt fakturagrunnlaget mangle selve ombyggingslinjen for godt. oppdaterFikenLinjeForOppskrift
 // er selv en no-op (ingen lagring) når linjen allerede står riktig, så dette er trygt å
 // kalle på hvert eneste render uten å skape unødvendige lagringer.
-// "305" (MB-stjerne montert på skillevegg) er FELLES for alle Mercedes-modeller - IKKE
-// modell-spesifikk slik resten av FIKEN_OMBYGGING_MODELLER er (bekreftet av Henrik
-// 2026-09-24: samme nummer på tvers av Geländewagen/GLS/Vito/EQV/V-klasse, selv om de
-// ellers har hver sin egen "hundre"-blokk - ingen av de andre fire har noe eget
-// tilsvarende produkt i sin egen blokk, kun Geländewagen sin blokk har "305" i det hele
-// tatt). Legges til/fjernes sammen med selve ombyggingslinjen, uansett Nytt eller Brukt
-// Kjøretøy.
-const FIKEN_PRODUKTNUMMER_MB_STJERNE = '305';
 function synkroniserOmbyggingFikenLinjer(o) {
   if (!o.ombygging) return;
   const erOmbyggingValgt = !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy);
-  if (/mercedes/i.test(o.merke||'')) oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_MB_STJERNE, erOmbyggingValgt);
   const modell = finnFikenOmbyggingModell(o.merke, o.modell);
   if (!modell) return;
   // "lafinto" (kun Rexton per nå) er en ALTERNATIV variant av samme ombygging, ikke et

@@ -121,52 +121,20 @@ describe('synkroniserOmbyggingFikenLinjer (regresjon: ordre med huket boks men m
   });
 });
 
-// "305" (MB-stjerne montert på skillevegg) er FELLES for alle Mercedes-modeller, ikke
-// modell-spesifikk som resten av FIKEN_OMBYGGING_MODELLER - bekreftet av Henrik
-// 2026-09-24. Egen describe-blokk siden dette gjelder på tvers av modeller, ikke bare én.
-describe('synkroniserOmbyggingFikenLinjer - "305" MB-stjerne er felles for alle Mercedes-modeller', () => {
-  function lagOrdre(env, merke, modell) {
+// "305" (MB-stjerne) ble kort en tid 2026-09-24 lagt til automatisk for ALLE
+// Mercedes-modeller ved Nytt/Brukt Kjøretøy - fjernet igjen 2026-09-25 etter beskjed fra
+// Henrik ("kvitte deg med 305 produkt.nr på alle mercedes kjøretøyene"). Testen under
+// dekker at den IKKE kommer tilbake ved en fremtidig regresjon.
+describe('synkroniserOmbyggingFikenLinjer - "305" skal IKKE lenger legges til automatisk', () => {
+  it.each(['Geländewagen', 'GLS', 'Vito', 'EQV', 'V-klasse'])('Mercedes-Benz %s: ingen 305-linje selv med Nytt Kjøretøy huket av', modell => {
+    const env = nyEnvironment();
     const o = {
-      id: 'ord_1', merke, modell,
-      ombygging: { nyttKjoretoy: false, bruktKjoretoy: false, lafinto: false, personbil: false },
+      id: 'ord_1', merke: 'Mercedes-Benz', modell,
+      ombygging: { nyttKjoretoy: true, bruktKjoretoy: false, lafinto: false, personbil: false },
       fikenLinjer: [],
     };
     env.S.ordrer = [o];
     env.activeOrdreId = o.id;
-    return o;
-  }
-
-  it.each(['Geländewagen', 'GLS', 'Vito', 'EQV', 'V-klasse'])('legges til for Mercedes-Benz %s når Nytt Kjøretøy hukes av', modell => {
-    const env = nyEnvironment();
-    const o = lagOrdre(env, 'Mercedes-Benz', modell);
-    o.ombygging.nyttKjoretoy = true;
-    env.synkroniserOmbyggingFikenLinjer(o);
-    expect(o.fikenLinjer.some(l => l.produktnummer === '305')).toBe(true);
-  });
-
-  it('legges til for Brukt Kjøretøy også, ikke bare Nytt', () => {
-    const env = nyEnvironment();
-    const o = lagOrdre(env, 'Mercedes-Benz', 'GLS');
-    o.ombygging.bruktKjoretoy = true;
-    env.synkroniserOmbyggingFikenLinjer(o);
-    expect(o.fikenLinjer.some(l => l.produktnummer === '305')).toBe(true);
-  });
-
-  it('fjernes igjen når ingen ombygging-boks lenger er huket av', () => {
-    const env = nyEnvironment();
-    const o = lagOrdre(env, 'Mercedes-Benz', 'Geländewagen');
-    o.ombygging.nyttKjoretoy = true;
-    env.synkroniserOmbyggingFikenLinjer(o);
-    expect(o.fikenLinjer.some(l => l.produktnummer === '305')).toBe(true);
-    o.ombygging.nyttKjoretoy = false;
-    env.synkroniserOmbyggingFikenLinjer(o);
-    expect(o.fikenLinjer.some(l => l.produktnummer === '305')).toBe(false);
-  });
-
-  it('legges IKKE til for ikke-Mercedes-modeller', () => {
-    const env = nyEnvironment();
-    const o = lagOrdre(env, 'KIA', 'EV9');
-    o.ombygging.nyttKjoretoy = true;
     env.synkroniserOmbyggingFikenLinjer(o);
     expect(o.fikenLinjer.some(l => l.produktnummer === '305')).toBe(false);
   });
