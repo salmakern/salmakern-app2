@@ -1078,17 +1078,24 @@ function renderForhandlerNrForslag(kundeInputId, nrInputId, listeId) {
 }
 // Forhandler.nr henger sammen med forhandleren, ikke ordren isolert - når Forhandler-feltet
 // endres (skrevet inn på nytt eller valgt fra forslagslisten), fylles Forhandler.nr derfor
-// automatisk ut med samme nummer denne forhandleren er brukt med tidligere (bedt om av
-// Henrik 2026-09-25: "når det blir valgt forhandler i ordren så skal den automatisk legge
-// inn forhandler.nr"). Overskriver bevisst et evt. eksisterende nummer på ordren - stemmer
-// nummeret ikke lenger overens med den (nye) forhandleren, er det gamle uansett feil.
+// automatisk ut (bedt om av Henrik 2026-09-25: "når det blir valgt forhandler i ordren så
+// skal den automatisk legge inn forhandler.nr"). Overskriver bevisst et evt. eksisterende
+// nummer på ordren - stemmer nummeret ikke lenger overens med den (nye) forhandleren, er
+// det gamle uansett feil.
+// Kilde: forhandlerens EGET forhandlerNr-felt i Kontakter (satt via apneRedigerForhandler i
+// ansatte-utstyr.js) er nå autoritativ - lagt til 2026-09-25 etter beskjed fra Henrik ("jeg
+// tror vi skal gjøre det sånn at forhandler.nr blir lagt inn hos forhandler i kontakter") i
+// stedet for å gjette ut fra hvilket nummer andre ordre for samme forhandler tilfeldigvis
+// har brukt mest. forhandlerNrForslag(), som fortsatt gjetter fra ordre-historikk, brukes
+// bare som fallback for forhandlere som ennå ikke har fått satt et eget nummer i Kontakter.
 function autoFyllForhandlerNr(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
-  const forslag = forhandlerNrForslag(o.kunde);
-  if (!forslag.length) return;
-  su(id, 'forhandlerNr', forslag[0]);
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (o.kunde||'').trim().toLowerCase());
+  const nr = forhandlerKontakt?.forhandlerNr || forhandlerNrForslag(o.kunde)[0];
+  if (!nr) return;
+  su(id, 'forhandlerNr', nr);
   const input = document.getElementById('forhandlerNrInput_'+id);
-  if (input) input.value = forslag[0];
+  if (input) input.value = nr;
 }
 function renderEierForslag(kundeInputId, eierInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;

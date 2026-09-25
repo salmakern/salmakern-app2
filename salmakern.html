@@ -1236,17 +1236,19 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 <div class="modal" id="nyKontakt">
   <div class="modal-box">
-    <div class="h">Ny kontakt</div>
+    <div class="h" id="nyKontaktTittel">Ny kontakt</div>
+    <input type="hidden" id="kId">
     <div class="grid g2" style="margin-top:12px">
       <div><label>Navn *</label><input id="kNavn"></div>
       <div><label>Type</label><select id="kType"><option>Forhandler</option><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Fraktselskap</option><option>Annet</option></select></div>
       <div><label>Telefon</label><input id="kTlf" type="tel"></div>
       <div><label>E-post</label><input id="kEpost" type="email"></div>
+      <div id="kForhandlerNrWrap"><label>Forhandler.nr</label><input id="kForhandlerNr"></div>
     </div>
     <label>Notat</label><textarea id="kNotat" rows="2"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreKontakt()">Lagre</button>
-      <button class="btn" onclick="closeModal('nyKontakt')">Avbryt</button>
+      <button class="btn" onclick="lukkNyKontakt()">Avbryt</button>
     </div>
   </div>
 </div>

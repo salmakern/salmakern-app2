@@ -36,25 +36,98 @@ function renderBeskjeder() {
 // ════════════════════════════════════════════════════
 // KONTAKTER
 // ════════════════════════════════════════════════════
+// Håndterer BÅDE oppretting av en helt ny kontakt OG redigering av en eksisterende
+// (kId satt av apneRedigerForhandler() - se der). Ved redigering av en Forhandler sitt
+// navn: alle ordre som i dag har nøyaktig dette navnet i Forhandler-feltet (o.kunde)
+// oppdateres til det nye navnet samtidig, samlet i ETT upsert-kall - ellers ville ordre
+// blitt stående igjen under det gamle (usynlige) navnet, akkurat samme root-cause-bug
+// som redigerModellNavn() i lager.js hadde for lagerOppskrifter/utstyrMaler (fikset
+// 2026-09-25, se der for det opprinnelige mønsteret).
 function lagreKontakt() {
   const navn = document.getElementById('kNavn').value.trim();
   if (!navn) { alert('Navn er påkrevd'); return; }
   const type = document.getElementById('kType').value;
-  const kontakt = {
-    id:'k'+(++S.nextId),
-    navn, type,
-    tlf:document.getElementById('kTlf').value.trim(),
-    epost:document.getElementById('kEpost').value.trim(),
-    notat:document.getElementById('kNotat').value.trim()
-  };
-  // Kontaktpersoner ligger nøstet under sin forhandler (se lagreKontaktperson under) -
-  // Forhandler-kontakter trenger derfor alltid et (evt. tomt) kontaktpersoner-array klart.
-  if (type === 'Forhandler') kontakt.kontaktpersoner = [];
-  S.kontakter.push(kontakt);
+  const tlf = document.getElementById('kTlf').value.trim();
+  const epost = document.getElementById('kEpost').value.trim();
+  const notat = document.getElementById('kNotat').value.trim();
+  const forhandlerNr = document.getElementById('kForhandlerNr').value.trim();
+  const kId = document.getElementById('kId').value;
+  const eksisterende = kId ? S.kontakter.find(k=>k.id===kId) : null;
+
+  if (eksisterende) {
+    const gammeltNavn = eksisterende.navn;
+    Object.assign(eksisterende, {navn, tlf, epost, notat});
+    if (eksisterende.type === 'Forhandler') eksisterende.forhandlerNr = forhandlerNr;
+    if (gammeltNavn !== navn) {
+      const beroerteOrdre = (S.ordrer||[]).filter(o => o.kunde === gammeltNavn);
+      beroerteOrdre.forEach(o => { o.kunde = navn; });
+      if (db && beroerteOrdre.length) db.from('ordrer').upsert(beroerteOrdre.map(o=>({id:o.id, kunde:navn})), {onConflict:'id'})
+        .then(r=>{if(r.error) console.error('Ordre-kunde-oppdatering feilet:', r.error.message);});
+    }
+  } else {
+    const kontakt = {id:'k'+(++S.nextId), navn, type, tlf, epost, notat};
+    // Kontaktpersoner ligger nøstet under sin forhandler (se lagreKontaktperson under) -
+    // Forhandler-kontakter trenger derfor alltid et (evt. tomt) kontaktpersoner-array klart.
+    if (type === 'Forhandler') { kontakt.kontaktpersoner = []; kontakt.forhandlerNr = forhandlerNr; }
+    S.kontakter.push(kontakt);
+  }
   saveInnstillinger();
   closeModal('nyKontakt');
-  ['kNavn','kTlf','kEpost','kNotat'].forEach(i=>document.getElementById(i).value='');
-  renderKontakter();
+  ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('kId').value = '';
+  document.getElementById('kType').disabled = false;
+  if (eksisterende && eksisterende.type === 'Forhandler') {
+    document.getElementById('fdForhandlerId').value = eksisterende.id;
+    renderForhandlerDetalj();
+    openModal('forhandlerDetalj');
+  } else {
+    renderKontakter();
+  }
+}
+
+// Nullstiller modalen til "ny kontakt"-tilstand - trengs siden samme modal/felter
+// gjenbrukes til redigering (apneRedigerForhandler), som ellers ville latt gamle
+// verdier/låst Type-felt henge igjen neste gang noen oppretter en helt ny kontakt.
+function apneNyKontakt() {
+  document.getElementById('nyKontaktTittel').textContent = 'Ny kontakt';
+  document.getElementById('kId').value = '';
+  ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('kType').value = 'Forhandler';
+  document.getElementById('kType').disabled = false;
+  openModal('nyKontakt');
+}
+
+// Speiler lukkNyKontaktperson() sitt mønster: gikk vi hit fra forhandlerDetalj (kId satt
+// til en Forhandler-kontakt), går vi tilbake dit ved Avbryt - ellers bare lukk.
+function lukkNyKontakt() {
+  const kId = document.getElementById('kId').value;
+  const kontakt = kId ? S.kontakter.find(k=>k.id===kId) : null;
+  closeModal('nyKontakt');
+  document.getElementById('kType').disabled = false;
+  if (kontakt && kontakt.type === 'Forhandler') {
+    document.getElementById('fdForhandlerId').value = kontakt.id;
+    renderForhandlerDetalj();
+    openModal('forhandlerDetalj');
+  }
+}
+
+// Åpner "Ny kontakt"-modalen forhåndsutfylt for redigering av en eksisterende forhandler -
+// Type låses (kan ikke endres bort fra Forhandler her, siden nøstede kontaktpersoner og
+// forhandlerNr da ville blitt stående på feil type). Bedt om av Henrik 2026-09-25: "det må
+// være mulig for meg å endre navnene på forhandlerne".
+function apneRedigerForhandler(id) {
+  const forhandler = S.kontakter.find(k=>k.id===id); if (!forhandler) return;
+  document.getElementById('nyKontaktTittel').textContent = 'Rediger forhandler';
+  document.getElementById('kId').value = id;
+  document.getElementById('kNavn').value = forhandler.navn;
+  document.getElementById('kType').value = forhandler.type;
+  document.getElementById('kType').disabled = true;
+  document.getElementById('kTlf').value = forhandler.tlf||'';
+  document.getElementById('kEpost').value = forhandler.epost||'';
+  document.getElementById('kNotat').value = forhandler.notat||'';
+  document.getElementById('kForhandlerNr').value = forhandler.forhandlerNr||'';
+  closeModal('forhandlerDetalj');
+  openModal('nyKontakt');
 }
 
 // Sletting av en Forhandler-kontakt tar med seg alle nøstede kontaktpersoner under den -
@@ -138,6 +211,8 @@ function renderForhandlerDetalj() {
   const erAdmin = me && me.rolle==='admin';
   document.getElementById('forhandlerDetaljTittel').textContent = forhandler.navn;
   el.innerHTML = `
+    ${erAdmin?`<button class="btn sm" style="padding:4px 10px;font-size:12px" onclick="apneRedigerForhandler('${forhandler.id}')">✎ Rediger</button>`:''}
+    ${forhandler.forhandlerNr?`<div class="small" style="margin-top:6px">Forhandler.nr: <b>${esc(forhandler.forhandlerNr)}</b></div>`:''}
     ${forhandler.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${esc(forhandler.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(forhandler.tlf)}</a></div>`:''}
     ${forhandler.epost?`<div class="small">✉ <a href="mailto:${esc(forhandler.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(forhandler.epost)}</a></div>`:''}
     ${forhandler.notat?`<div class="small muted" style="margin-top:4px">${esc(forhandler.notat)}</div>`:''}
@@ -243,7 +318,7 @@ function renderKontakter() {
   const erAdmin = me && me.rolle==='admin';
   document.getElementById('merKontaktAdminBtn').innerHTML =
     '<button class="btn sm" onclick="apneForhandlerListe()">Forhandlere</button>' +
-    (erAdmin ? ' <button class="btn sm red" onclick="openModal(\'nyKontakt\')">+ Ny kontakt</button>' : '');
+    (erAdmin ? ' <button class="btn sm red" onclick="apneNyKontakt()">+ Ny kontakt</button>' : '');
   const el = document.getElementById('kontaktListe');
   const andre = S.kontakter.filter(k=>k.type!=='Forhandler');
   if (!andre.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
