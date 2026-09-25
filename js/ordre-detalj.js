@@ -371,6 +371,14 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       </div>
 
       <div class="card">
+        <div class="h">Forhandler.nr</div>
+        <select onchange="su('${o.id}','hengerfesteForhandler',this.value)" style="margin-top:8px">
+          <option value="">Velg forhandler...</option>
+          ${forhandlerForslag().map(navn=>`<option value="${esc(navn)}" ${o.utstyr?.hengerfesteForhandler===navn?'selected':''}>${esc(navn)}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="card">
         <div class="h">Hengerfeste</div>
         <select onchange="settHengerfeste('${o.id}',this.value)" style="margin-top:8px;background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
           <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>

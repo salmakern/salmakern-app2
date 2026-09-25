@@ -84,6 +84,7 @@ function renderOrdreList() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1">
           <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;overflow-wrap:break-word">${ordreLabelFull(o)}</b>
+          ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:7px 11px;max-width:132px')}
@@ -91,10 +92,7 @@ function renderOrdreList() {
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
         ${dokStatusKortHTML(o)}
-        <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">
-          ${flateKortHTML(o)}
-          ${hengerfesteKortHTML(o)}
-        </div>
+        ${hengerfesteKortHTML(o)?`<div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${hengerfesteKortHTML(o)}</div>`:''}
         <div style="padding-bottom:9px;border-bottom:1px solid #27272a">${tvangsflytBarHTML(o)}</div>
         <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
@@ -457,10 +455,15 @@ function settHengerfesteMontert(id, val) {
   save(id); renderAll();
 }
 function hengerfesteKortHTML(o) {
-  return o.utstyr?.hengerfeste==='hengerfeste' ? `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+  if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
+  // Forhandleren valgt i "Forhandler.nr"-feltet (ordre-detalj.js) vises her på kortet -
+  // men KUN når hengerfeste faktisk er huket av (bedt om av Henrik 2026-09-25).
+  const forhandler = o.utstyr?.hengerfesteForhandler;
+  return `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;flex-wrap:wrap">
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
-  </div>` : '';
+    ${forhandler?`<span class="small muted" style="font-size:11px">${esc(forhandler)}</span>`:''}
+  </div>`;
 }
 // Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
 // bare inne i ordredetaljen), bedt om av Henrik 2026-09-17 for bedre oversikt i listene.
@@ -491,8 +494,11 @@ function dokStatusPillHTML(label, verdi) {
   const kort = verdi==='har_ikke' ? 'Mangler' : (verdi==='etterspurt' ? 'Etterspurt' : 'OK');
   return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${f.bg};color:${f.txt};border:1px solid ${f.border};white-space:nowrap">${label}: ${kort}</span>`;
 }
+// Flåte-pillen vises i SAMME rad som COC/Fullmakt (flyttet opp hit av Henrik 2026-09-25,
+// tidligere egen rad sammen med Hengerfeste) - naturlig plassering siden alle tre er
+// kompakte status-piller for ordren, ikke fordi Flåte er en "dokumentstatus" i seg selv.
 function dokStatusKortHTML(o) {
-  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}</div>`;
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}${flateKortHTML(o)}</div>`;
 }
 // Kompakt fremdriftsindikator for tvangsflyt-kravene på ordrekortene - samme
 // krav som tvangsflyt(o) i ordre-detalj.js, bare vist som en rad segmenter i
