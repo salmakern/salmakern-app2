@@ -128,12 +128,16 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 .dok-dropzone:hover{border-color:#52525b}
 .dok-dropzone.dok-dropzone-over{border-color:#ef4444;background:#ef444415}
 
-/* MER-SIDEN: seksjonsoverskrifter som grupperer kortene tematisk */
-.mer-seksjon-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;margin:22px 0 10px;display:flex;align-items:center;gap:11px}
+/* MER-SIDEN: seksjonsoverskrifter som grupperer kortene tematisk - klikkbare for å
+   folde ut/inn (bedt om av Henrik 2026-09-26: siden føltes for full av innhold på
+   én gang, selv etter at kortene var gruppert ryddigere). */
+.mer-seksjon-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#71717a;margin:22px 0 10px;display:flex;align-items:center;gap:11px;cursor:pointer;user-select:none}
 .mer-seksjon-label:first-child{margin-top:0}
 .mer-seksjon-label::after{content:'';flex:1;height:1px;background:#27272a}
 .mer-seksjon-label.mer-har-badge::after{order:1}
 .mer-seksjon-label.mer-har-badge .mer-kun-admin{order:2}
+.mer-seksjon-chevron{display:inline-block;transition:transform .15s ease;font-size:10px}
+.mer-seksjon-label.mer-lukket .mer-seksjon-chevron{transform:rotate(-90deg)}
 
 /* LAGER: autofyll i stedet for faste kolonner - tre kort på brede skjermer, men fire
    modeller blir 2+2 heller enn 3+1, og én kategori blir ett kort i normal bredde. */
@@ -735,8 +739,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <section id="mer" class="page">
       <div id="merHovedView">
 
-      <div class="mer-seksjon-label">Daglig</div>
-      <div class="grid g3">
+      <div class="mer-seksjon-label" onclick="toggleMerSeksjon(this,'merGruppeDaglig')"><span class="mer-seksjon-chevron">▾</span>Daglig</div>
+      <div class="grid g3" id="merGruppeDaglig">
         <div class="card" id="merVarselKort">
           <div class="h">Varsler</div>
           <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
@@ -744,10 +748,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
         </div>
         <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
-      </div>
-
-      <div class="mer-seksjon-label">Kontakter og forhandlere</div>
-      <div class="grid g3">
         <div class="card" id="merKontakter">
           <div class="row">
             <div class="h">Kontakter</div>
@@ -757,8 +757,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
       </div>
 
-      <div class="mer-seksjon-label">Tid og fravær</div>
-      <div class="grid g2">
+      <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeTid')"><span class="mer-seksjon-chevron">▾</span>Tid og rapporter</div>
+      <div class="grid g2" id="merGruppeTid" style="display:none">
       <div class="card" id="merTimerOversikt" style="display:none;grid-column:1/-1">
         <div class="row" style="flex-wrap:wrap;gap:8px">
           <div class="h">Timer og overtid – alle ansatte</div>
@@ -793,27 +793,23 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="muted small" style="margin-top:4px">Alles fravær denne måneden.</div>
         <div id="fravarKalender" style="margin-top:10px"></div>
       </div>
-      </div>
-
-      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonAnsatte" style="display:none">Rapporter <span class="mer-kun-admin">Kun admin</span></div>
-      <div class="grid g2" id="merGruppeAnsatte" style="display:none">
-        <div class="card" id="merOrdreRapport" style="display:none;grid-column:1/-1">
-          <div class="row" style="flex-wrap:wrap;gap:8px">
-            <div class="h">Ordrerapport <span class="kort-admin-merke">ADMIN</span></div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button class="btn sm" onclick="rapportNaviger(-1)">◀ Forrige år</button>
-              <span id="rapportLbl" style="min-width:60px;text-align:center;font-weight:700"></span>
-              <button class="btn sm" onclick="rapportNaviger(1)">Neste år ▶</button>
-            </div>
+      <div class="card" id="merOrdreRapport" style="display:none;grid-column:1/-1">
+        <div class="row" style="flex-wrap:wrap;gap:8px">
+          <div class="h">Ordrerapport <span class="kort-admin-merke">ADMIN</span></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn sm" onclick="rapportNaviger(-1)">◀ Forrige år</button>
+            <span id="rapportLbl" style="min-width:60px;text-align:center;font-weight:700"></span>
+            <button class="btn sm" onclick="rapportNaviger(1)">Neste år ▶</button>
           </div>
-          <div id="ordreRapportInnhold" style="margin-top:10px"></div>
-          <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
-          <button class="btn sm" style="margin-top:14px" onclick="visDetaljertOrdrerapport()">📊 Detaljert ordrerapport</button>
         </div>
+        <div id="ordreRapportInnhold" style="margin-top:10px"></div>
+        <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
+        <button class="btn sm" style="margin-top:14px" onclick="visDetaljertOrdrerapport()">📊 Detaljert ordrerapport</button>
+      </div>
       </div>
 
-      <div class="mer-seksjon-label">Drift og avvik</div>
-      <div class="grid g3">
+      <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeDrift')"><span class="mer-seksjon-chevron">▾</span>Drift og avvik</div>
+      <div class="grid g3" id="merGruppeDrift" style="display:none">
         <div class="card">
           <div class="row">
             <div class="h">HMS-logg</div>
@@ -829,8 +825,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
       </div>
 
-      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none">Administrasjon <span class="mer-kun-admin">Kun admin</span></div>
-      <div id="merGruppeOppsett" class="grid g3" style="display:none">
+      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none" onclick="toggleMerSeksjon(this,'merGruppeOppsett')"><span class="mer-seksjon-chevron">▾</span>Administrasjon <span class="mer-kun-admin">Kun admin</span></div>
+      <div id="merGruppeOppsett" class="grid g3">
         <div class="card" id="merPINKort" style="display:none">
           <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
           <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">

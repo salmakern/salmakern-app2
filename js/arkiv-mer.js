@@ -235,6 +235,17 @@ async function gjenopprett(id) {
 // ════════════════════════════════════════════════════
 // MER
 // ════════════════════════════════════════════════════
+// Fold ut/inn en seksjon på Mer-siden (bedt om av Henrik 2026-09-26: siden føltes for
+// full av innhold samtidig, selv med ryddigere grupperte kort). Rent DOM-tilstand, ikke
+// lagret noe sted - alle seksjoner starter i sin HTML-definerte standardtilstand
+// (display:none i markup = lukket) hver gang siden lastes på nytt.
+function toggleMerSeksjon(labelEl, gridId) {
+  const grid = document.getElementById(gridId);
+  const lukkerNaa = grid.style.display !== 'none';
+  grid.style.display = lukkerNaa ? 'none' : '';
+  labelEl.classList.toggle('mer-lukket', lukkerNaa);
+}
+
 function renderMer() {
   const erAdmin = me && me.rolle === 'admin';
   const erGodkjenner = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
@@ -244,12 +255,13 @@ function renderMer() {
   document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
   document.getElementById('merHelsesjekkKort').style.display = erAdmin ? 'block' : 'none';
-  // Seksjonsoverskrift+gruppe for "Rapporter" og "Oppsett og verktøy" vises kun
-  // hvis minst ett kort inni faktisk er synlig - begge grupperingene er 100% admin-only.
-  document.getElementById('merSeksjonAnsatte').style.display = erAdmin ? 'block' : 'none';
-  document.getElementById('merGruppeAnsatte').style.display  = erAdmin ? 'grid'  : 'none';
+  // Kun selve seksjonsoverskriften styres av rolle her - "Administrasjon"-gruppen er
+  // 100% admin-only, og hvert kort inni (PIN, Ansatte, Drivstoff-satser, Utstyr-maler)
+  // skjuler seg allerede selv når man ikke er admin. Selve grid-en sin synlighet eies nå
+  // utelukkende av fold-ut/inn-mekanismen (toggleMerSeksjon) i stedet for å bli overstyrt
+  // her hver gang renderMer() kjører - ellers ville et lukket admin bare bli tvunget åpent
+  // igjen ved neste sanntidsoppdatering.
   document.getElementById('merSeksjonOppsett').style.display = erAdmin ? 'block' : 'none';
-  document.getElementById('merGruppeOppsett').style.display  = erAdmin ? 'block' : 'none';
 
   if (erAdmin) {
     const ukoblet = finnUkobledeAdminArkRader();
