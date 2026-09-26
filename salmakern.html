@@ -1259,9 +1259,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <input type="hidden" id="kId">
     <div class="grid g2" style="margin-top:12px">
       <div><label>Navn *</label><input id="kNavn"></div>
-      <div><label>Type</label><select id="kType"><option>Forhandler</option><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Fraktselskap</option><option>Annet</option></select></div>
+      <div><label>Type</label><select id="kType" onchange="oppdaterKForhandlerNrSynlighet()"><option>Forhandler</option><option>Leverandør</option><option>Biltilsyn</option><option>Kunde</option><option>Fraktselskap</option><option>Annet</option></select></div>
       <div><label>Telefon</label><input id="kTlf" type="tel"></div>
-      <div><label>E-post</label><input id="kEpost" type="email"></div>
+      <div><label>E-post (kommaseparert hvis flere)</label><input id="kEpost" type="email" multiple></div>
       <div id="kForhandlerNrWrap"><label>Forhandler.nr</label><input id="kForhandlerNr"></div>
     </div>
     <label>Notat</label><textarea id="kNotat" rows="2"></textarea>

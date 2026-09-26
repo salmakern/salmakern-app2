@@ -85,12 +85,22 @@ function signaturTekst(avsenderNavn: string | undefined) {
     + `Email: post@salmaker.as | Internet: www.salmaker.as`
 }
 
+// En Kontakt kan nå ha flere e-postadresser kommaseparert i ett felt (bedt om av Henrik
+// 2026-09-26, kom opp for fraktselskaper med flere mottakere) - splittes til en ekte liste
+// her, siden Resend sitt API krever adskilte strenger i to/cc-arrayen, ikke én streng med
+// komma i midten (som ville blitt tolket som én, ugyldig mottaker-adresse).
+function splittEposter(felt: string | undefined): string[] {
+  return (felt || '').split(',').map(e => e.trim()).filter(Boolean)
+}
+
 async function sendEpost(til: string, cc: string | undefined, emne: string, html: string, tekst: string) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY er ikke satt - kontakt Henrik for å fullføre oppsettet')
+  const tilListe = splittEposter(til)
+  const ccListe = splittEposter(cc)
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FRA_EPOST, to: [til], cc: cc ? [cc] : undefined, subject: emne, html, text: tekst }),
+    body: JSON.stringify({ from: FRA_EPOST, to: tilListe, cc: ccListe.length ? ccListe : undefined, subject: emne, html, text: tekst }),
   })
   if (!res.ok) {
     const feiltekst = await res.text()

@@ -1097,10 +1097,19 @@ function renderForhandlerNrForslag(kundeInputId, nrInputId, listeId) {
 // beskjed fra Henrik: han venter fortsatt på de ekte numrene fra forhandlerne selv, og et
 // gjettet tall fra en tidligere, potensielt feilskrevet testverdi ville vært misvisende inntil
 // da). Blir stående tomt helt til et ekte nummer er registrert på forhandleren i Kontakter.
+// Delt av autoFyllForhandlerNr() (eksisterende ordre) og opprettOrdre() i ordre-diverse.js
+// (helt NY ordre) - sistnevnte hadde ingen tilsvarende oppslag i det hele tatt, så
+// Forhandler.nr sto alltid tomt på en fersk ordre helt til noen tilfeldigvis rørte
+// Forhandler-feltet på nytt på detaljsiden (rapportert av Henrik 2026-09-26: "har du gjort
+// sånn at det blir hentet automatisk etter at jeg har valgt forhandler?" - svaret var nei,
+// kun for eksisterende ordre, ikke ved selve opprettelsen).
+function finnForhandlerNr(kundeNavn) {
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (kundeNavn||'').trim().toLowerCase());
+  return forhandlerKontakt?.forhandlerNr || '';
+}
 function autoFyllForhandlerNr(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
-  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (o.kunde||'').trim().toLowerCase());
-  const nr = forhandlerKontakt?.forhandlerNr;
+  const nr = finnForhandlerNr(o.kunde);
   if (!nr) return;
   su(id, 'forhandlerNr', nr);
   const input = document.getElementById('forhandlerNrInput_'+id);

@@ -285,6 +285,10 @@ function opprettOrdre() {
   ny.farge   = document.getElementById('n_farge').value.trim();
   ny.chassis = chassis;
   ny._localAt = Date.now();
+  // Samme oppslag som autoFyllForhandlerNr() bruker på detaljsiden - uten dette sto
+  // Forhandler.nr alltid tomt på en fersk ordre inntil Forhandler-feltet ble rørt på nytt.
+  const forhandlerNr = finnForhandlerNr(ny.kunde);
+  if (forhandlerNr) ny.utstyr.forhandlerNr = forhandlerNr;
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}

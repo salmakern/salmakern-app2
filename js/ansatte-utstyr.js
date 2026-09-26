@@ -43,7 +43,13 @@ function renderBeskjeder() {
 // blitt stående igjen under det gamle (usynlige) navnet, akkurat samme root-cause-bug
 // som redigerModellNavn() i lager.js hadde for lagerOppskrifter/utstyrMaler (fikset
 // 2026-09-25, se der for det opprinnelige mønsteret).
-function lagreKontakt() {
+// Lagrer via kontakter_upsert() i databasen (se migrasjon
+// 20260926120000_kontakter_sikker_sletting_og_databeskyttelse.sql) i stedet for
+// saveInnstillinger() sin blinde full-overskriving av HELE kontakter-kolonnen - samme
+// rotårsak-fiks som slettKontakt() under. Bygger det KOMPLETTE kontakt-objektet (inkl.
+// eksisterende, urørte felt som kontaktpersoner) FØR det sendes, siden upsert erstatter
+// hele kontakten med akkurat det som sendes inn.
+async function lagreKontakt() {
   const navn = document.getElementById('kNavn').value.trim();
   if (!navn) { alert('Navn er påkrevd'); return; }
   const type = document.getElementById('kType').value;
@@ -54,30 +60,42 @@ function lagreKontakt() {
   const kId = document.getElementById('kId').value;
   const eksisterende = kId ? S.kontakter.find(k=>k.id===kId) : null;
 
+  let kontakt, gammeltNavn = null;
   if (eksisterende) {
-    const gammeltNavn = eksisterende.navn;
-    Object.assign(eksisterende, {navn, tlf, epost, notat});
-    if (eksisterende.type === 'Forhandler') eksisterende.forhandlerNr = forhandlerNr;
-    if (gammeltNavn !== navn) {
-      const beroerteOrdre = (S.ordrer||[]).filter(o => o.kunde === gammeltNavn);
-      beroerteOrdre.forEach(o => { o.kunde = navn; });
-      if (db && beroerteOrdre.length) db.from('ordrer').upsert(beroerteOrdre.map(o=>({id:o.id, kunde:navn})), {onConflict:'id'})
-        .then(r=>{if(r.error) console.error('Ordre-kunde-oppdatering feilet:', r.error.message);});
-    }
+    gammeltNavn = eksisterende.navn;
+    kontakt = { ...eksisterende, navn, tlf, epost, notat };
+    if (kontakt.type === 'Forhandler') kontakt.forhandlerNr = forhandlerNr;
   } else {
-    const kontakt = {id:'k'+(++S.nextId), navn, type, tlf, epost, notat};
+    kontakt = {id:'k'+(++S.nextId), navn, type, tlf, epost, notat};
     // Kontaktpersoner ligger nøstet under sin forhandler (se lagreKontaktperson under) -
     // Forhandler-kontakter trenger derfor alltid et (evt. tomt) kontaktpersoner-array klart.
     if (type === 'Forhandler') { kontakt.kontaktpersoner = []; kontakt.forhandlerNr = forhandlerNr; }
+  }
+
+  if (db) {
+    const { data, error } = await db.rpc('kontakter_upsert', { p_kontakt: kontakt });
+    if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
+    S.kontakter = data || [];
+  } else if (eksisterende) {
+    Object.assign(eksisterende, kontakt);
+  } else {
     S.kontakter.push(kontakt);
   }
-  saveInnstillinger();
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+
+  if (gammeltNavn !== null && gammeltNavn !== navn) {
+    const beroerteOrdre = (S.ordrer||[]).filter(o => o.kunde === gammeltNavn);
+    beroerteOrdre.forEach(o => { o.kunde = navn; });
+    if (db && beroerteOrdre.length) db.from('ordrer').upsert(beroerteOrdre.map(o=>({id:o.id, kunde:navn})), {onConflict:'id'})
+      .then(r=>{if(r.error) console.error('Ordre-kunde-oppdatering feilet:', r.error.message);});
+  }
+
   closeModal('nyKontakt');
   ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('kId').value = '';
   document.getElementById('kType').disabled = false;
-  if (eksisterende && eksisterende.type === 'Forhandler') {
-    document.getElementById('fdForhandlerId').value = eksisterende.id;
+  if (kontakt.type === 'Forhandler' && eksisterende) {
+    document.getElementById('fdForhandlerId').value = kontakt.id;
     renderForhandlerDetalj();
     openModal('forhandlerDetalj');
   } else {
@@ -94,7 +112,14 @@ function apneNyKontakt() {
   ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('kType').value = 'Forhandler';
   document.getElementById('kType').disabled = false;
+  document.getElementById('kForhandlerNrWrap').style.display = '';
   openModal('nyKontakt');
+}
+// Forhandler.nr gir ingen mening for andre kontakttyper - skjuler feltet med en gang
+// admin bytter Type i "Ny/Rediger kontakt"-modalen, i stedet for å la det henge igjen
+// synlig (eller motsatt) fra forrige gang modalen ble åpnet.
+function oppdaterKForhandlerNrSynlighet() {
+  document.getElementById('kForhandlerNrWrap').style.display = document.getElementById('kType').value === 'Forhandler' ? '' : 'none';
 }
 
 // Speiler lukkNyKontaktperson() sitt mønster: gikk vi hit fra forhandlerDetalj (kId satt
@@ -126,7 +151,27 @@ function apneRedigerForhandler(id) {
   document.getElementById('kEpost').value = forhandler.epost||'';
   document.getElementById('kNotat').value = forhandler.notat||'';
   document.getElementById('kForhandlerNr').value = forhandler.forhandlerNr||'';
+  document.getElementById('kForhandlerNrWrap').style.display = '';
   closeModal('forhandlerDetalj');
+  openModal('nyKontakt');
+}
+
+// Samme modal som apneRedigerForhandler(), for de ANDRE kontakttypene (Fraktselskap,
+// Leverandør, Biltilsyn, Kunde, Annet) - disse hadde ingen rediger-knapp i det hele tatt
+// fra før, kun slett (bedt om av Henrik 2026-09-26: "det må være mulig å redigere de").
+// Type LÅSES ikke her, i motsetning til Forhandler - en ren Fraktselskap-kontakt har ingen
+// nøstede kontaktpersoner/forhandlerNr som ville blitt stående feil ved et typebytte.
+function apneRedigerKontakt(id) {
+  const k = S.kontakter.find(x=>x.id===id); if (!k) return;
+  document.getElementById('nyKontaktTittel').textContent = 'Rediger kontakt';
+  document.getElementById('kId').value = id;
+  document.getElementById('kNavn').value = k.navn;
+  document.getElementById('kType').value = k.type;
+  document.getElementById('kType').disabled = false;
+  document.getElementById('kTlf').value = k.tlf||'';
+  document.getElementById('kEpost').value = k.epost||'';
+  document.getElementById('kNotat').value = k.notat||'';
+  document.getElementById('kForhandlerNrWrap').style.display = 'none';
   openModal('nyKontakt');
 }
 
@@ -136,15 +181,28 @@ function apneRedigerForhandler(id) {
 // sikkerhetsspørsmål på det å slette forhandler eller kontaktperson"). closeModal på en
 // modal som uansett ikke er åpen er en no-op (se lager.js), så det er trygt å alltid lukke
 // forhandlerDetalj her selv om sletting skjedde et annet sted enn den modalen.
-function slettKontakt(id) {
+// Sletter via kontakter_slett()-funksjonen i databasen (se migrasjon
+// 20260926120000_kontakter_sikker_sletting_og_databeskyttelse.sql) i stedet for den
+// gamle "filtrer lokalt og lagre HELE S.kontakter over igjen"-tilnærmingen - den siste
+// slettet EN gang alle 82+ kontakter samtidig (rapportert av Henrik 2026-09-26), fordi
+// denne fanens lokale kopi av S.kontakter var foreldet (se migrasjonens kommentar for full
+// forklaring). Databasefunksjonen regner alltid ut fra kontakter sin FERSKE verdi i
+// databasen, uansett hvor foreldet denne fanen måtte være.
+async function slettKontakt(id) {
   const k = S.kontakter.find(x=>x.id===id); if (!k) return;
   const antallKp = (k.kontaktpersoner||[]).length;
   const advarsel = k.type==='Forhandler' && antallKp
     ? `Slette forhandleren "${k.navn}"? Dette sletter også alle ${antallKp} kontaktperson${antallKp===1?'':'er'} under den.`
     : `Slette kontakten "${k.navn}"?`;
   if (!confirm(advarsel)) return;
-  S.kontakter = S.kontakter.filter(x=>x.id!==id);
-  saveInnstillinger();
+  if (db) {
+    const { data, error } = await db.rpc('kontakter_slett', { p_kontakt_id: id });
+    if (error) { visToast('Kunne ikke slette: ' + error.message); return; }
+    S.kontakter = data || [];
+  } else {
+    S.kontakter = S.kontakter.filter(x=>x.id!==id);
+  }
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
   if (k.type === 'Forhandler') { closeModal('forhandlerDetalj'); renderForhandlerListe(); openModal('forhandlerListe'); }
   renderKontakter();
 }
@@ -341,12 +399,25 @@ function renderKontakter() {
         <div>
           <div><b>${esc(k.navn)}</b> <span class="pill" style="font-size:11px;padding:2px 8px">${esc(k.type)}</span></div>
           ${k.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${esc(k.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(k.tlf)}</a></div>`:''}
-          ${k.epost?`<div class="small">✉ <a href="mailto:${esc(k.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(k.epost)}</a></div>`:''}
+          ${kontaktEpostVisningHTML(k.epost)}
           ${k.notat?`<div class="small muted" style="margin-top:4px">${esc(k.notat)}</div>`:''}
         </div>
-        ${erAdmin?`<button onclick="slettKontakt('${k.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>`:''}
+        ${erAdmin?`<div style="display:flex;gap:10px;flex-shrink:0">
+          <button onclick="apneRedigerKontakt('${k.id}')" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:15px;padding:0">✎</button>
+          <button onclick="slettKontakt('${k.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:0">✕</button>
+        </div>`:''}
       </div>
     </div>`).join('');
+}
+
+// Kontakter kan nå ha flere e-postadresser, kommaseparert i samme felt (bedt om av Henrik
+// 2026-09-26: "det må være mulig at de kan ha flere e mailer" - kom opp da han la til
+// fraktselskaper med flere mottakere). Viser hver som sin egen mailto-lenke i stedet for
+// én lenke med et komma i midten (som ville sendt til feil/udefinert adresse).
+function kontaktEpostVisningHTML(epost) {
+  const adresser = (epost||'').split(',').map(e=>e.trim()).filter(Boolean);
+  if (!adresser.length) return '';
+  return `<div class="small">✉ ${adresser.map(a=>`<a href="mailto:${esc(a)}" style="color:#a1a1aa;text-decoration:none">${esc(a)}</a>`).join(', ')}</div>`;
 }
 
 // ════════════════════════════════════════════════════
