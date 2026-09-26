@@ -373,7 +373,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card">
         <div class="h">Forhandler.nr</div>
         <div class="felt-wrap" style="margin-top:8px">
-          <input id="forhandlerNrInput_${o.id}" value="${esc(o.utstyr?.forhandlerNr||'')}" autocomplete="off" onchange="su('${o.id}','forhandlerNr',this.value)"
+          <input id="forhandlerNrInput_${o.id}" value="${esc(o.utstyr?.forhandlerNr||'')}" autocomplete="off" onchange="su('${o.id}','forhandlerNr',this.value);oppdaterHengerfesteNrVisning('${o.id}')"
             onfocus="visFeltDropdown('typeForslag_forhandlerNr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerNr_${o.id}'))">
           <div id="typeForslag_forhandlerNr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerNrInput_'+o.id, forhandlerNrForslag(o.kunde))}</div>
         </div>
@@ -381,10 +381,13 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
       <div class="card">
         <div class="h">Hengerfeste</div>
-        <select onchange="settHengerfeste('${o.id}',this.value)" style="margin-top:8px;background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
-          <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>
-          <option value="hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'selected':''}>Hengerfeste</option>
-        </select>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <select onchange="settHengerfeste('${o.id}',this.value)" style="background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
+            <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>
+            <option value="hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'selected':''}>Hengerfeste</option>
+          </select>
+          <span id="hengerfesteNrVisning_${o.id}" class="small muted">${hengerfesteNrVisningHTML(o)}</span>
+        </div>
       </div>
 
       ${fotoSeksjonHTML(o, 'a', 'Bilder – Ankomst')}
@@ -1094,6 +1097,28 @@ function autoFyllForhandlerNr(id) {
   su(id, 'forhandlerNr', nr);
   const input = document.getElementById('forhandlerNrInput_'+id);
   if (input) input.value = nr;
+  oppdaterHengerfesteNrVisning(id);
+}
+
+// Selve nummeret fra "Forhandler.nr"-feltet, vist rett ved siden av Hengerfeste-valget -
+// men KUN når hengerfeste faktisk er huket av (bedt om av Henrik 2026-09-26: "når man
+// velger forhandler så kommer forhandler.nr rett ved siden av hengerfeste hvis det er
+// valgt"). Samme betingelse/format som hengerfesteKortHTML() i oversikt-kalender.js bruker
+// på det kompakte ordrekortet - to atskilte visninger av samme regel, siden de lever på
+// hver sin side (ordre-detalj her, oversikten der).
+function hengerfesteNrVisningHTML(o) {
+  if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
+  const nr = o.utstyr?.forhandlerNr;
+  return nr ? esc(nr) : '';
+}
+// Kalles etter ALT som kan endre enten hengerfeste-valget eller forhandler.nr på denne
+// ordren (settHengerfeste, forhandlerNrInput sin onchange, autoFyllForhandlerNr over) -
+// ingen av disse gjør en full re-rendering av siden (su()/sf() lagrer bare), så denne
+// cellen må oppdateres direkte for at verdien skal vises med en gang uten omlasting.
+function oppdaterHengerfesteNrVisning(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const el = document.getElementById('hengerfesteNrVisning_'+id);
+  if (el) el.textContent = hengerfesteNrVisningHTML(o);
 }
 function renderEierForslag(kundeInputId, eierInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;

@@ -103,6 +103,7 @@ function su(id,f,val) {
 function settHengerfeste(id, val) {
   su(id, 'hengerfeste', val);
   oppdaterFikenLinjeForOppskrift('521', val === 'hengerfeste');
+  oppdaterHengerfesteNrVisning(id);
 }
 
 // ════════════════════════════════════════════════════
