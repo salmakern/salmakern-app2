@@ -243,7 +243,6 @@ function renderMer() {
   // Vis/skjul admin-only kort
   document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
-  document.getElementById('merGodkjKort').style.display   = erGodkjenner ? 'block' : 'none';
   document.getElementById('merHelsesjekkKort').style.display = erAdmin ? 'block' : 'none';
   // Seksjonsoverskrift+gruppe for "Rapporter" og "Oppsett og verktøy" vises kun
   // hvis minst ett kort inni faktisk er synlig - begge grupperingene er 100% admin-only.
@@ -290,11 +289,29 @@ function renderMer() {
     </div></div>`).join('');
   }
 
+  // "Til godkjenning" flyttet fra Mer-siden til en knapp med tall-badge ved siden av
+  // "+ Ny ordre" på selve Ordre-siden (bedt om av Henrik 2026-09-26) - men beregningen
+  // skjer fortsatt her i renderMer(), siden renderAll() kaller denne uansett hvilken side
+  // som faktisk er åpen, og badgen/modal-innholdet dermed alltid er ferske.
+  const tilGodkjBtn = document.getElementById('tilGodkjBtn');
   if (erGodkjenner) {
-    const klar=S.ordrer.filter(o=>tvangsflyt(o).every(t=>t.ok)&&!o.godkjent&&o.status==='aktiv');
-    document.getElementById('tilGodkj').innerHTML=klar.length
-      ?klar.map(o=>`<div class="box" style="margin-bottom:6px"><b>${ordreLabel(o)}</b> er klar for godkjenner. <button class="btn sm" style="margin-left:8px" onclick="openOrdre('${o.id}')">Åpne</button></div>`).join('')
-      :'<div class="muted small">Ingen ordrer venter på godkjenning</div>';
+    const klar=S.ordrer.filter(o=>tvangsflyt(o).every(t=>t.ok)&&!o.godkjent&&o.status==='aktiv')
+      .sort((a,b)=>(a.ankomstdato||'').localeCompare(b.ankomstdato||''));
+    tilGodkjBtn.style.display = 'inline-flex';
+    const badge = document.getElementById('tilGodkjBadge');
+    badge.style.display = klar.length ? 'flex' : 'none';
+    badge.textContent = klar.length;
+    document.getElementById('tilGodkjenningInnhold').innerHTML = klar.length
+      ? klar.map(o=>`<div class="box" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div>
+            <div><b>${ordreLabelFull(o)}</b></div>
+            <div class="small muted" style="margin-top:2px">${esc(o.kunde||'–')} · ${esc(o.merke||'')} ${esc(o.modell||'')}${o.ankomstdato?' · Ankomst '+fmtDatoKort(o.ankomstdato):''}</div>
+          </div>
+          <button class="btn sm" onclick="closeModal('tilGodkjenningModal');openOrdre('${o.id}')">Åpne</button>
+        </div>`).join('')
+      : '<div class="muted small">Ingen ordrer venter på godkjenning</div>';
+  } else if (tilGodkjBtn) {
+    tilGodkjBtn.style.display = 'none';
   }
 
   const fravarIDag=S.timer.filter(t=>{
@@ -341,6 +358,12 @@ function renderMer() {
     const umEl = document.getElementById('utstyrMalAntall');
     if (umEl) { const n = (S.utstyrMaler||[]).length; umEl.textContent = `${n} mal${n===1?'':'er'}`; }
   }
+}
+
+// Innholdet holdes ferskt av renderMer() (kjøres uansett hvilken side som er åpen, se
+// renderAll()) - denne trenger bare å åpne modalen.
+function apneTilGodkjenningModal() {
+  openModal('tilGodkjenningModal');
 }
 
 // Drivstoff-satser og Utstyr-maler var før inline lister direkte på Mer-siden - flyttet

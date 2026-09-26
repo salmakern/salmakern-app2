@@ -156,6 +156,7 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 
 /* PILLS */
 .pill{display:inline-block;border-radius:999px;border:1px solid #27272a;padding:4px 10px;font-size:12px;margin:2px}
+.knapp-tall-badge{position:absolute;top:-8px;right:-8px;background:#ef4444;color:#fff;border-radius:999px;min-width:19px;height:19px;padding:0 5px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1;border:2px solid #09090b}
 .pill.ok{background:#16a34a20;color:#86efac;border-color:#16a34a60}
 .pill.bad{background:#ef444420;color:#fca5a5;border-color:#ef444460}
 .pill.warn{background:#ca8a0420;color:#fde68a;border-color:#ca8a0460}
@@ -422,7 +423,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="card">
           <div class="row">
             <div><div class="h">Alle ordrer</div><div class="muted small" id="ordreListAntall">0 ordrer · Klikk for å åpne</div></div>
-            <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" id="tilGodkjBtn" style="display:none;position:relative" onclick="apneTilGodkjenningModal()">
+                ✅ Til godkjenning<span class="knapp-tall-badge" id="tilGodkjBadge" style="display:none">0</span>
+              </button>
+              <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
+            </div>
           </div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype, utstyr..." oninput="renderOrdreList()" style="flex:1;min-width:180px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
@@ -729,6 +735,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div id="beskjedListe" style="margin-top:10px"></div>
         </div>
+        <div class="card" id="merVarselKort">
+          <div class="h">Varsler</div>
+          <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
+          <div id="varselStatus" class="small" style="margin-bottom:10px"></div>
+          <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
+        </div>
+        <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
+      </div>
+
+      <div class="mer-seksjon-label">Kontakter og forhandlere</div>
+      <div class="grid g3">
         <div class="card" id="merKontakter">
           <div class="row">
             <div class="h">Kontakter</div>
@@ -736,39 +753,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div id="kontaktListe" style="margin-top:10px"></div>
         </div>
-        <div class="card" id="merVarselKort">
-          <div class="h">Varsler</div>
-          <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
-          <div id="varselStatus" class="small" style="margin-bottom:10px"></div>
-          <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
-        </div>
-        <div class="card" id="merPINKort" style="display:none">
-          <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
-          <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">
-            <div class="muted small" style="letter-spacing:1.3px;margin-bottom:8px">DAGENS PIN</div>
-            <div id="dagensPINVal" style="display:flex;gap:10px;justify-content:center"></div>
-            <div class="muted small" style="margin:10px auto 0;max-width:260px">Overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
-            <button class="btn sm" onclick="genPIN()" style="margin-top:10px">Generer ny PIN</button>
-          </div>
-          <div class="box" style="margin-top:12px">
-            <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
-            <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-              <label style="margin:0;white-space:nowrap">Radius (m):</label>
-              <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
-                onchange="endreGPSRadius(this.value)">
-            </div>
-            <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
-          </div>
-        </div>
-        <div class="card" id="merGodkjKort" style="display:none"><div class="h">Til godkjenning</div><div id="tilGodkj" style="margin-top:8px"></div></div>
-        <div class="card" id="merAnsatteKort" style="display:none">
-          <div class="h">Ansatte</div>
-          <div class="muted small" style="margin-bottom:10px">Admin oppretter og deaktiverer.</div>
-          <div id="ansatteListe"></div>
-          <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
-        </div>
-        <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
       </div>
 
       <div class="mer-seksjon-label">Tid og fravær</div>
@@ -843,8 +827,33 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
       </div>
 
-      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none">Oppsett og verktøy <span class="mer-kun-admin">Kun admin</span></div>
+      <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none">Administrasjon <span class="mer-kun-admin">Kun admin</span></div>
       <div id="merGruppeOppsett" class="grid g3" style="display:none">
+        <div class="card" id="merPINKort" style="display:none">
+          <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
+          <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">
+            <div class="muted small" style="letter-spacing:1.3px;margin-bottom:8px">DAGENS PIN</div>
+            <div id="dagensPINVal" style="display:flex;gap:10px;justify-content:center"></div>
+            <div class="muted small" style="margin:10px auto 0;max-width:260px">Overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
+            <button class="btn sm" onclick="genPIN()" style="margin-top:10px">Generer ny PIN</button>
+          </div>
+          <div class="box" style="margin-top:12px">
+            <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
+            <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+              <label style="margin:0;white-space:nowrap">Radius (m):</label>
+              <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
+                onchange="endreGPSRadius(this.value)">
+            </div>
+            <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
+          </div>
+        </div>
+        <div class="card" id="merAnsatteKort" style="display:none">
+          <div class="h">Ansatte</div>
+          <div class="muted small" style="margin-bottom:10px">Admin oppretter og deaktiverer.</div>
+          <div id="ansatteListe"></div>
+          <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
+        </div>
         <div class="card dempet" id="merDrivstoffSatser" style="display:none;cursor:pointer" onclick="visMerDrivstoffSatser()">
           <div class="row">
             <div class="h">Drivstoff-satser</div>
@@ -979,6 +988,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="h" id="kundeHistorikkTittel">Kundehistorikk</div>
     <div id="kundeHistorikkInnhold" style="margin-top:12px;max-height:60vh;overflow-y:auto"></div>
     <button class="btn" style="margin-top:14px;width:100%" onclick="closeModal('kundeHistorikk')">Lukk</button>
+  </div>
+</div>
+
+<div class="modal" id="tilGodkjenningModal">
+  <div class="modal-box">
+    <div class="h">Til godkjenning</div>
+    <div class="muted small" style="margin-top:4px">Ordrer som har bestått tvangsflyt og venter på at en godkjenner lukker dem.</div>
+    <div id="tilGodkjenningInnhold" style="margin-top:12px;max-height:65vh;overflow-y:auto"></div>
+    <button class="btn" style="margin-top:14px;width:100%" onclick="closeModal('tilGodkjenningModal')">Lukk</button>
   </div>
 </div>
 
