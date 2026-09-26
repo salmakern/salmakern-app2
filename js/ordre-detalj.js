@@ -386,7 +386,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
             <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>
             <option value="hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'selected':''}>Hengerfeste</option>
           </select>
-          <span id="hengerfesteNrVisning_${o.id}" class="small muted">${hengerfesteNrVisningHTML(o)}</span>
+          <span id="hengerfesteNrVisning_${o.id}" style="font-size:13px;font-weight:700;color:#f4f4f5">${hengerfesteNrVisningHTML(o)}</span>
         </div>
       </div>
 
