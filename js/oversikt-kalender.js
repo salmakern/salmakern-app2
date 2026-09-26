@@ -260,7 +260,12 @@ function renderWeek() {
 
     const slotEls = slots30.map(s => {
       const tid = `${String(s.h).padStart(2,'0')}:${s.m===0?'00':'30'}`;
-      return `<div class="cal-slot${s.m===0?' cal-hel-time':''}" data-dato="${ds}" data-tid="${tid}" style="height:${SLOT_PX}px"></div>`;
+      // Klikk i en tom rute for å skrive en rask oppgave rett inn i kalenderen, uten å
+      // åpne "+ Nytt møte"-dialogen (bedt om av Henrik 2026-09-26: "kanskje klikker rett
+      // inn på en rute og skriver"). Hendelser (ordre/møter/oppgaver) ligger som egne,
+      // absolutt-posisjonerte lag OVER disse rutene - et klikk på en hendelse treffer
+      // aldri ruten under, så dette trigger kun når ruten faktisk er tom.
+      return `<div class="cal-slot${s.m===0?' cal-hel-time':''}" data-dato="${ds}" data-tid="${tid}" onclick="apneHurtigOppgaveInput(this)" style="height:${SLOT_PX}px;cursor:text"></div>`;
     }).join('');
 
     const nowLine = (isToday && nowFrac >= START_H && nowFrac <= END_H)
@@ -292,16 +297,22 @@ function renderWeek() {
         </div>` };
       }),
       ...moter.map(m => {
+        const erOppgave = m.type === 'oppgave';
         const [mh, mm] = (m.tid || '09:00').split(':').map(Number);
         const beregnetTop = Math.max(0, (mh + mm / 60 - (START_H + 0.5)) * HOUR_PX);
         const height = Math.max(42, SLOT_PX);
-        return { top: beregnetTop, height, html: (top) => `<div class="cal-event" style="top:${top}px;height:${height}px;background:#2e1065cc;border-color:#a78bfa">
+        // Oppgaver får en annen farge enn møter (teal/grønn i stedet for lilla) så de er
+        // lette å skille fra hverandre i kalenderen ved et raskt blikk.
+        const bg = erOppgave ? '#0f3d3acc' : '#2e1065cc';
+        const border = erOppgave ? '#2dd4bf' : '#a78bfa';
+        const txt = erOppgave ? '#99f6e4' : '#ddd6fe';
+        return { top: beregnetTop, height, html: (top) => `<div class="cal-event" style="top:${top}px;height:${height}px;background:${bg};border-color:${border}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
             <div style="flex:1;min-width:0">
-              <div class="cal-event-regnr" style="color:#ddd6fe">📅 ${m.tittel}</div>
-              <div class="cal-event-info" style="color:#ddd6fe;opacity:0.8">${m.tid} · Møte</div>
+              <div class="cal-event-regnr" style="color:${txt}">${erOppgave?'📝':'📅'} ${esc(m.tittel)}</div>
+              <div class="cal-event-info" style="color:${txt};opacity:0.8">${m.tid} · ${erOppgave?'Oppgave':'Møte'}</div>
             </div>
-            <button onclick="event.stopPropagation();slettMote('${m.id}')" style="background:none;border:none;color:#ddd6fe;font-size:16px;line-height:1;padding:0 2px;cursor:pointer" title="Slett møte">✕</button>
+            <button onclick="event.stopPropagation();slettMote('${m.id}')" style="background:none;border:none;color:${txt};font-size:16px;line-height:1;padding:0 2px;cursor:pointer" title="${erOppgave?'Slett oppgave':'Slett møte'}">✕</button>
           </div>
         </div>` };
       })
@@ -340,6 +351,35 @@ function renderWeek() {
       </div>
     </div>
   </div>`;
+}
+
+// Klikk i en tom kalenderrute -> vis et lite autofokusert tekstfelt rett i ruten i
+// stedet for å måtte åpne en egen dialogboks (bedt om av Henrik 2026-09-26). Enter ELLER
+// å klikke bort (blur) lagrer som en hurtig-oppgave hvis det faktisk står noe der, Escape
+// avbryter uten å lagre. "handtert"-vakten er nødvendig fordi Enter sin egen
+// renderOversikt() fjerner input-elementet fra DOM-en, som i seg selv trigger et blur-
+// event på et element som allerede er håndtert - uten vakten ville det forsøkt å lagre
+// den samme teksten to ganger.
+function apneHurtigOppgaveInput(el) {
+  if (el.querySelector('input')) return; // allerede åpen (dobbeltklikk e.l.)
+  const dato = el.dataset.dato, tid = el.dataset.tid;
+  el.innerHTML = `<input type="text" placeholder="Skriv oppgave, Enter for å lagre..." style="width:100%;height:100%;box-sizing:border-box;background:#0f3d3a;border:1px solid #2dd4bf;border-radius:4px;color:#f4f4f5;font-size:12px;padding:2px 6px">`;
+  const input = el.querySelector('input');
+  let handtert = false;
+  const lagreOgLukk = () => {
+    if (handtert) return;
+    handtert = true;
+    const tekst = input.value.trim();
+    if (tekst) opprettHurtigOppgave(dato, tid, tekst);
+    renderOversikt();
+  };
+  input.focus();
+  input.addEventListener('click', e => e.stopPropagation());
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') lagreOgLukk();
+    else if (e.key === 'Escape') { handtert = true; renderOversikt(); }
+  });
+  input.addEventListener('blur', lagreOgLukk);
 }
 
 async function endreStatus(id, nyStatus) {

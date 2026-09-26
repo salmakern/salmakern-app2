@@ -456,10 +456,10 @@ async function opprettMote() {
   const tid = document.getElementById('mote_tid').value;
   if (!tittel || !dato || !tid) { alert('Fyll inn tittel, dato og tid'); return; }
   const deltakerIder = [...document.querySelectorAll('.mote-deltaker-cb:checked')].map(cb => Number(cb.value));
-  const mote = { id:'mote_'+Date.now(), tittel, dato, tid, opprettetAv: me?.navn||'', varslet:false, deltakerIder };
+  const mote = { id:'mote_'+Date.now(), tittel, dato, tid, opprettetAv: me?.navn||'', varslet:false, deltakerIder, type:'møte' };
   S.moter = [...(S.moter||[]), mote];
   if (db) {
-    const { error } = await db.from('moter').insert({ id:mote.id, tittel:mote.tittel, dato:mote.dato, tid:mote.tid, opprettet_av:mote.opprettetAv, varslet:false, deltaker_ider:deltakerIder });
+    const { error } = await db.from('moter').insert({ id:mote.id, tittel:mote.tittel, dato:mote.dato, tid:mote.tid, opprettet_av:mote.opprettetAv, varslet:false, deltaker_ider:deltakerIder, type:'møte' });
     if (error) { visToast('Kunne ikke lagre møtet: ' + error.message); S.moter = S.moter.filter(m => m.id !== mote.id); return; }
   }
   fetch(SUPA_URL + '/functions/v1/send-push', {
@@ -473,6 +473,22 @@ async function opprettMote() {
   document.getElementById('mote_tid').value = '09:00';
   renderMoterListe();
   renderOversikt();
+}
+
+// Hurtig-oppgave: klikk rett i en tom rute i ukekalenderen og skriv, i stedet for å måtte
+// åpne "+ Nytt møte"-dialogen for en rask "ting som skal gjøres"-lapp (bedt om av Henrik
+// 2026-09-26). Teknisk sett bare et møte med type='oppgave' og ingen deltakere - se
+// migrasjon 20260926140000_moter_type_oppgave.sql for hvorfor det gjenbruker møter-
+// tabellen i stedet for et helt eget system. Ingen push-varsel (i motsetning til møter) -
+// bevisst holdt lett/uformell.
+async function opprettHurtigOppgave(dato, tid, tekst) {
+  const oppgave = { id:'mote_'+Date.now(), tittel: tekst, dato, tid, opprettetAv: me?.navn||'', varslet:true, deltakerIder:[], type:'oppgave' };
+  S.moter = [...(S.moter||[]), oppgave];
+  renderOversikt();
+  if (db) {
+    const { error } = await db.from('moter').insert({ id:oppgave.id, tittel:oppgave.tittel, dato:oppgave.dato, tid:oppgave.tid, opprettet_av:oppgave.opprettetAv, varslet:true, deltaker_ider:[], type:'oppgave' });
+    if (error) { visToast('Kunne ikke lagre oppgaven: ' + error.message); S.moter = S.moter.filter(m => m.id !== oppgave.id); renderOversikt(); }
+  }
 }
 
 // ════════════════════════════════════════════════════

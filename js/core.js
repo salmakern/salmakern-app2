@@ -448,7 +448,7 @@ function dbToAdminArkRad(r) {
     merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', timeBekreftetSted:r.time_bekreftet_sted||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToMote(r) {
-  return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet, deltakerIder:r.deltaker_ider||[] };
+  return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet, deltakerIder:r.deltaker_ider||[], type:r.type||'møte' };
 }
 function dbToGodkjennerMelding(r) {
   return { id:r.id, avsenderId:r.avsender_id, avsenderNavn:r.avsender_navn||'', tekst:r.tekst||'', createdAt:r.created_at||'' };
