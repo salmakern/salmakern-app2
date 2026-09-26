@@ -1052,7 +1052,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="felt-wrap">
           <label>Forhandler</label>
           <input id="n_kunde" autocomplete="off"
-            oninput="renderEierForslag('n_kunde','n_eier','n_eier_forslag')"
+            oninput="renderEierForslag('n_kunde','n_eier','n_eier_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
             onfocus="visFeltDropdown('n_kunde_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_kunde_forslag'))">
           <div id="n_kunde_forslag" class="felt-dropdown"></div>
         </div>

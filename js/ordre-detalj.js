@@ -197,7 +197,7 @@ function buildOrdreDetail() {
             <label>Forhandler</label>
             <div style="display:flex;gap:6px">
               <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
-                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}')"
+                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}');renderForhandlerForslag(null,null,'kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
                 onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}')"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
@@ -1067,9 +1067,17 @@ function renderVersjonForslag(merkeInputId, modellInputId, typeInputId, versjonI
   const el = document.getElementById(listeId); if (!el) return;
   el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId), feltVerdi(typeInputId)));
 }
+// Filtrert på det som faktisk er skrevet i selve Forhandler-feltet (ikke bare en statisk
+// topp-20-liste som før) - med 83+ forhandlere i Kontakter ville de aller fleste aldri
+// vært synlige i forslagslisten uten dette (rapportert av Henrik 2026-09-26: "hvorfor får
+// jeg ikke sett alle forhandlerne når jeg skal velge forhandler i opprett ordre").
+// merkeInputId/modellInputId brukes ikke her (forhandlerlisten er ikke merke-/
+// modellavhengig) - beholdt i signaturen siden begge kallstedene allerede sender dem inn.
 function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
-  el.innerHTML = feltForslagHTML(kundeInputId, forhandlerForslag());
+  const sok = feltVerdi(kundeInputId).trim().toLowerCase();
+  const alle = forhandlerForslag();
+  el.innerHTML = feltForslagHTML(kundeInputId, sok ? alle.filter(n => n.toLowerCase().includes(sok)) : alle);
 }
 function renderForhandlerOrgnrForslag(kundeInputId, orgnrInputId, listeId) {
   const el = document.getElementById(listeId); if (!el) return;
