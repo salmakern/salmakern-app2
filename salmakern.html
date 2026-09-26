@@ -375,13 +375,22 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <!-- ── OVERSIKT ── -->
     <section id="oversikt" class="page active">
-      <div class="card" id="merMoterKort" style="margin-bottom:12px;display:none">
-        <div class="row">
-          <div class="h">Sett møter <span class="kort-admin-merke">ADMIN</span></div>
-          <button class="btn sm" onclick="apneNyttMoteModal()">+ Nytt møte</button>
+      <div class="grid g2" style="margin-bottom:12px">
+        <div class="card" id="merMoterKort" style="margin-bottom:0;display:none">
+          <div class="row">
+            <div class="h">Sett møter <span class="kort-admin-merke">ADMIN</span></div>
+            <button class="btn sm" onclick="apneNyttMoteModal()">+ Nytt møte</button>
+          </div>
+          <div class="muted small" style="margin-top:6px">Møter vises i kalenderen under, og gir et varsel til alle kl. 18:00 kvelden før.</div>
+          <div id="moterListe" style="margin-top:10px"></div>
         </div>
-        <div class="muted small" style="margin-top:6px">Møter vises i kalenderen under, og gir et varsel til alle kl. 18:00 kvelden før.</div>
-        <div id="moterListe" style="margin-top:10px"></div>
+        <div class="card" id="merBeskjeder" style="margin-bottom:0">
+          <div class="row">
+            <div class="h">Beskjeder</div>
+            <div id="merBeskjedAdminBtn"></div>
+          </div>
+          <div id="beskjedListe" style="margin-top:10px"></div>
+        </div>
       </div>
       <div class="card" style="margin-bottom:12px">
         <div class="row">
@@ -728,13 +737,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
       <div class="mer-seksjon-label">Daglig</div>
       <div class="grid g3">
-        <div class="card" id="merBeskjeder">
-          <div class="row">
-            <div class="h">Beskjeder</div>
-            <div id="merBeskjedAdminBtn"></div>
-          </div>
-          <div id="beskjedListe" style="margin-top:10px"></div>
-        </div>
         <div class="card" id="merVarselKort">
           <div class="h">Varsler</div>
           <div class="muted small" style="margin-bottom:10px">Få varsel på låsskjermen når status endres eller bil er veid.</div>
