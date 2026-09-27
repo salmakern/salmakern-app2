@@ -759,6 +759,16 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div id="kontaktListe" style="margin-top:10px"></div>
         </div>
+        <div class="card" id="merGPSKort" style="display:none">
+          <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon <span class="kort-admin-merke">ADMIN</span></div>
+          <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+            <label style="margin:0;white-space:nowrap">Radius (m):</label>
+            <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
+              onchange="endreGPSRadius(this.value)">
+          </div>
+          <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
+        </div>
       </div>
 
       <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeTid')"><span class="mer-seksjon-chevron">▾</span>Tid og rapporter</div>
@@ -781,16 +791,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
       <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none" onclick="toggleMerSeksjon(this,'merGruppeOppsett')"><span class="mer-seksjon-chevron">▾</span>Administrasjon <span class="mer-kun-admin">Kun admin</span></div>
       <div id="merGruppeOppsett" class="grid g3">
-        <div class="card">
-          <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
-          <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-            <label style="margin:0;white-space:nowrap">Radius (m):</label>
-            <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
-              onchange="endreGPSRadius(this.value)">
-          </div>
-          <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
-        </div>
         <button class="btn" id="merAnsatteBtn" style="display:none" onclick="visMerAnsatte()">Vis ansatte</button>
         <button class="btn" id="merDrivstoffSatser" style="display:none" onclick="visMerDrivstoffSatser()">Drivstoff-satser</button>
         <button class="btn" id="merUtstyrMaler" style="display:none" onclick="visMerUtstyrMaler()">Utstyr-maler (ankomst)</button>

@@ -254,6 +254,7 @@ function renderMer() {
   // Vis/skjul admin-only kort/knapper
   document.getElementById('merAnsatteBtn').style.display = erAdmin ? '' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
+  document.getElementById('merGPSKort').style.display     = erAdmin ? 'block' : 'none';
   // Helsesjekk-kortet flyttet til Admin-ark-siden (bedt om av Henrik 2026-09-27) - se
   // visAdminHelsesjekk()/renderAdminHelsesjekk() nederst i denne filen.
   // Kun selve seksjonsoverskriften styres av rolle her - "Administrasjon"-gruppen er
