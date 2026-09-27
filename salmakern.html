@@ -774,6 +774,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeTid')"><span class="mer-seksjon-chevron">▾</span>Tid og rapporter</div>
       <div class="grid g3" id="merGruppeTid" style="display:none">
         <button class="btn" id="merTimerBtn" style="display:none" onclick="visMerTimer()">⏱ Timer og overtid</button>
+        <button class="btn" onclick="visMerFravarKalender()">📅 Se fraværskalender</button>
         <button class="btn" id="merOrdreRapportBtn" style="display:none" onclick="visMerOrdreRapport()">📊 Ordrerapport</button>
       </div>
 
@@ -862,6 +863,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             </div>
           </div>
           <div id="adminStatInnhold" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div id="merFravarKalenderView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
+        <div class="card">
+          <div class="h">Fraværskalender</div>
+          <div class="muted small" style="margin-top:4px">Alles fravær denne måneden.</div>
+          <div id="fravarKalender" style="margin-top:10px"></div>
         </div>
       </div>
 

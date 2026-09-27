@@ -382,8 +382,17 @@ function visMerOrdreRapport() {
   renderOrdreRapport();
   window.scrollTo(0, 0);
 }
+// Gjenopprettet 2026-09-27 (Henrik: "en knapp som heter se fravær kalender også åpner den
+// en fane til den kalenderen som lå i mer siden tidligere") - samme mønster som de andre
+// visMerX()-funksjonene, se renderFravarKalender() i js/ansatte-utstyr.js.
+function visMerFravarKalender() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merFravarKalenderView').style.display = 'block';
+  renderFravarKalender();
+  window.scrollTo(0, 0);
+}
 function tilbakeFraMerDetalj() {
-  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView']
+  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView']
     .forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('merHovedView').style.display = 'block';
 }
