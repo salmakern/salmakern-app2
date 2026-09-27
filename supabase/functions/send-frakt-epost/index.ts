@@ -7,6 +7,8 @@
 //   type: "hentet"           - varsler kontaktpersonen om at bilen er hentet (kun chassis.nr).
 //   type: "klar_for_henting" - varsler kontaktpersonen om at bilen er klar for å hentes,
 //         brukt når Fraktselskap er satt til "Hente selv" (kun chassis.nr).
+//   type: "paa_vei"          - varsler kontaktpersonen om at bilen er på vei til dem, brukt
+//         når Fraktselskap er satt til "Levering av oss" (kun chassis.nr).
 // Krever RESEND_API_KEY satt som secret (npx supabase secrets set RESEND_API_KEY=...).
 // FRAKT_EPOST_AVSENDER er valgfri (secret) - faller tilbake til post@salmaker.as, som må
 // være en verifisert avsenderadresse/domene i Resend-kontoen for at sending skal fungere.
@@ -148,6 +150,20 @@ Deno.serve(async (req) => {
         <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er nå hentet.</p>
         ${await signaturHtml(avsenderNavn)}`
       const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er nå hentet.\n\n`
+        + signaturTekst(avsenderNavn)
+      await sendEpost(kontaktpersonEpost, undefined, emne, html, tekst)
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
+
+    if (payload.type === 'paa_vei') {
+      const { kontaktpersonEpost, chassisNr, avsenderNavn } = payload
+      if (!kontaktpersonEpost) return new Response('Mangler e-post for kontaktperson', { status: 400, headers: CORS_HEADERS })
+      const emne = `Bilen er på vei til dere${chassisNr ? ' - ' + chassisNr : ''}`
+      const html = `
+        <p style="margin:0 0 12px">Hei,</p>
+        <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er nå på vei til dere.</p>
+        ${await signaturHtml(avsenderNavn)}`
+      const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er nå på vei til dere.\n\n`
         + signaturTekst(avsenderNavn)
       await sendEpost(kontaktpersonEpost, undefined, emne, html, tekst)
       return new Response('ok', { status: 200, headers: CORS_HEADERS })

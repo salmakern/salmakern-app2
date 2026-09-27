@@ -167,14 +167,15 @@ function adminArkFlateNavn(o) {
 
 // ── Fraktselskap: nedtrekksliste hentet fra Kontakter (Type=Fraktselskap) i stedet for
 // en fast liste - lar hvert fraktselskap ha e-post registrert ett sted, gjenbrukt her og
-// av fraktEpostSendKnapp() (se lenger ned) for å bestille frakt på e-post. "Hente selv" er
-// ikke et ekte fraktselskap (forhandleren henter selv) og er derfor ikke i Kontakter, men
-// holdt som et fast tilleggsvalg. Beholder en eksisterende verdi som ikke matcher noen av
-// delene (f.eks. gammel fritekst fra før dette) som eget valg - samme mønster som
-// fargeSelectOptions().
+// av fraktEpostSendKnapp() (se lenger ned) for å bestille frakt på e-post. "Hente selv" og
+// "Levering av oss" er ikke ekte fraktselskap (henholdsvis forhandleren henter selv, og
+// Salmakern kjører den selv) og er derfor ikke i Kontakter, men holdt som faste
+// tilleggsvalg. Beholder en eksisterende verdi som ikke matcher noen av delene (f.eks.
+// gammel fritekst fra før dette) som eget valg - samme mønster som fargeSelectOptions().
 const FRAKTSELSKAP_HENTE_SELV = 'Hente selv';
+const FRAKTSELSKAP_LEVERING_AV_OSS = 'Levering av oss';
 function adminArkFraktselskapListe() {
-  return (S.kontakter||[]).filter(k => k.type === 'Fraktselskap').map(k => k.navn).concat(FRAKTSELSKAP_HENTE_SELV);
+  return (S.kontakter||[]).filter(k => k.type === 'Fraktselskap').map(k => k.navn).concat(FRAKTSELSKAP_HENTE_SELV, FRAKTSELSKAP_LEVERING_AV_OSS);
 }
 function adminArkFraktselskapVerdier(gjeldende) {
   const liste = adminArkFraktselskapListe();
@@ -240,6 +241,12 @@ async function adminArkKallFraktEpost(payload) {
 async function adminArkFraktBestill(chassisNr) {
   const rad = adminArkHentRadData(chassisNr);
   if (!rad.fraktselskap) { visToast('Velg et fraktselskap først'); return; }
+  if (rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS) {
+    // Ingen bestilling å sende - Salmakern kjører den selv. Bruk "✔ Hentet"-knappen når
+    // bilen faktisk kjøres av gårde, den sender varselet "på vei til dere" i stedet.
+    visToast('Salmakern leverer selv - ingen bestilling nødvendig. Trykk "✔ Hentet" når bilen kjøres av gårde.');
+    return;
+  }
   if (rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV) {
     const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
     if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
@@ -291,17 +298,22 @@ async function adminArkSendKlarForHenting() {
 
 // Varsler kontaktpersonen om at bilen er hentet - kun chassis.nr i innholdet (bekreftet
 // av Henrik 2026-09-18: "til at bilen er hentet til kontaktpersonen så er det kun
-// chassis. nr").
+// chassis. nr"). Når fraktselskap er "Levering av oss" sendes i stedet et "på vei til
+// dere"-varsel (bedt om av Henrik 2026-09-27) - samme knapp/trigger-punkt (henting), bare
+// annen ordlyd siden Salmakern selv kjører bilen ut i stedet for at et fraktselskap henter.
 async function adminArkVarsleHentet(chassisNr) {
   const rad = adminArkHentRadData(chassisNr);
   const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
   if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
-  if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om at bilen er hentet?`)) return;
+  const erLeveringAvOss = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS;
+  const type = erLeveringAvOss ? 'paa_vei' : 'hentet';
+  const sporsmal = erLeveringAvOss ? 'at bilen er på vei til dere' : 'at bilen er hentet';
+  if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om ${sporsmal}?`)) return;
   try {
-    await adminArkKallFraktEpost({ type:'hentet', kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
-    visToast('Varsel om henting sendt til ' + rad.kontaktperson, 'ok');
+    await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
+    visToast('Varsel sendt til ' + rad.kontaktperson, 'ok');
   } catch (e) {
-    visToast('Kunne ikke sende hentevarsel: ' + e.message);
+    visToast('Kunne ikke sende varsel: ' + e.message);
   }
 }
 
@@ -1061,10 +1073,11 @@ function renderAdminArk(scrollTilBunn) {
         // ikke fikk trykket på dem for enkelte rader - årsaken var usynlige, ikke bare
         // grå, knapper).
         const manglerChassis = !rad.chassisNr;
-        const bestillDisabled = manglerChassis || !rad.fraktselskap;
         const erHenterSelv = rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
-        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (bestillDisabled ? 'Velg fraktselskap først' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post'));
-        const hentetTitel = manglerChassis ? 'Krever chassis.nr' : 'Varsle kontaktperson om at bilen er hentet';
+        const erLeveringAvOss = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS;
+        const bestillDisabled = manglerChassis || !rad.fraktselskap || erLeveringAvOss;
+        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Ingen bestilling nødvendig - Salmakern leverer selv' : (!rad.fraktselskap ? 'Velg fraktselskap først' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post')));
+        const hentetTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Varsle kontaktperson om at bilen er på vei til dere' : 'Varsle kontaktperson om at bilen er hentet');
         return `<div style="display:flex;gap:4px;justify-content:center">
           <button class="btn sm" style="padding:3px 7px;font-size:11px" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">📧 Bestill</button>
           <button class="btn sm" style="padding:3px 7px;font-size:11px" ${manglerChassis?'disabled':''} onclick="adminArkVarsleHentet('${chassis}')" title="${hentetTitel}">✔ Hentet</button>

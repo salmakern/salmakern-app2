@@ -198,7 +198,7 @@ function buildOrdreDetail() {
             <div style="display:flex;gap:6px">
               <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
                 oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}');renderForhandlerForslag(null,null,'kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
-                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}')"
+                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}');autoFyllForhandlerOrgnr('${o.id}')"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
@@ -1115,6 +1115,23 @@ function autoFyllForhandlerNr(id) {
   const input = document.getElementById('forhandlerNrInput_'+id);
   if (input) input.value = nr;
   oppdaterHengerfesteNrVisning(id);
+}
+// Samme mønster som finnForhandlerNr/autoFyllForhandlerNr rett over, for det juridiske
+// org.nr-et (hentet fra Brønnøysundregistrene og lagret på forhandleren i Kontakter, se
+// hentOrgnrForAlleForhandlere() i js/ansatte-utstyr.js) i stedet for et referansenummer
+// forhandleren selv oppgir - bedt om av Henrik 2026-09-27: "gjør sånn at ordren henter den
+// infoen automatisk inn så vi slipper å skrive inn org.,nr oss selv".
+function finnForhandlerOrgnr(kundeNavn) {
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (kundeNavn||'').trim().toLowerCase());
+  return forhandlerKontakt?.orgnr || '';
+}
+function autoFyllForhandlerOrgnr(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const orgnr = finnForhandlerOrgnr(o.kunde);
+  if (!orgnr) return;
+  sf(id, 'forhandlerOrgnr', orgnr);
+  const input = document.getElementById('forhandlerOrgnrInput_'+id);
+  if (input) input.value = orgnr;
 }
 
 // Selve nummeret fra "Forhandler.nr"-feltet, vist rett ved siden av Hengerfeste-valget -

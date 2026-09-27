@@ -239,6 +239,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 .cal-day-name{font-size:10px;color:#71717a;text-transform:uppercase;letter-spacing:.8px}
 .cal-day-num{font-size:19px;font-weight:700;width:32px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;margin:3px auto 0;color:#f4f4f5}
 .cal-day-num.cal-today-num{background:#ef4444;color:#fff}
+.cal-day-fravar{font-size:10px;margin:4px auto 0;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-body-scroll{overflow-y:auto;max-height:520px;background:#0f0f12}
 .cal-body{display:flex}
 @media(max-width:700px){
@@ -358,6 +359,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="muted small" id="headerUser"></div>
         <div class="row" style="gap:8px">
           <span class="ok-text small" id="lagreStatusBadge">✔ Lagret</span>
+          <button class="btn sm" id="varselHeaderBtn" style="font-size:16px;padding:9px 12px" onclick="togglePushVarsler()" title="Varsler">🔔</button>
           <button class="btn sm" id="godkjennerChatBtn" style="display:none;font-size:16px;padding:9px 12px" onclick="apneGodkjennerChat()" title="Chat med godkjennere">💬</button>
           <button class="btn sm" onclick="doLogout()">Logg ut</button>
         </div>
@@ -747,7 +749,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div id="varselStatus" class="small" style="margin-bottom:10px"></div>
           <button class="btn" id="varselKnapp" onclick="togglePushVarsler()" style="width:100%">Sjekker...</button>
         </div>
-        <div class="card"><div class="h">Fravær i dag</div><div id="fravarIDag" style="margin-top:8px"></div></div>
+        <div class="card" id="merPINKort" style="display:none">
+          <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
+          <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">
+            <div class="muted small" style="letter-spacing:1.3px;margin-bottom:8px">DAGENS PIN</div>
+            <div id="dagensPINVal" style="display:flex;gap:10px;justify-content:center"></div>
+            <div class="muted small" style="margin:10px auto 0;max-width:260px">Overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
+            <button class="btn sm" onclick="genPIN()" style="margin-top:10px">Generer ny PIN</button>
+          </div>
+        </div>
         <div class="card" id="merKontakter">
           <div class="row">
             <div class="h">Kontakter</div>
@@ -758,54 +768,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
 
       <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeTid')"><span class="mer-seksjon-chevron">▾</span>Tid og rapporter</div>
-      <div class="grid g2" id="merGruppeTid" style="display:none">
-      <div class="card" id="merTimerOversikt" style="display:none;grid-column:1/-1">
-        <div class="row" style="flex-wrap:wrap;gap:8px">
-          <div class="h">Timer og overtid – alle ansatte</div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-
-            <div style="display:flex;gap:6px;align-items:center;background:#0f0f12;border:1px solid #27272a;border-radius:999px;padding:4px">
-              <button class="btn sm" id="statVisBtn" onclick="toggleStatVis()" style="min-width:78px;border:none;background:none">📅 Måned</button>
-              <button class="btn sm" onclick="adminStatNaviger(-1)" id="statNavBack" style="border:none;background:none;padding:5px 9px">◀</button>
-              <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700;font-size:13px"></span>
-              <button class="btn sm" onclick="adminStatNaviger(1)" id="statNavFwd" style="border:none;background:none;padding:5px 9px">▶</button>
-            </div>
-
-            <button class="btn sm" id="stempelkortBtn" onclick="toggleStempelkort()">🕐 Stempelkort</button>
-
-            <div class="eksport-gruppe" style="display:flex;gap:8px;margin-left:auto">
-              <button class="btn sm" onclick="eksportFiken()" style="text-align:left;line-height:1.25;padding:9px 13px">
-                <span style="display:block">📥 Fiken</span>
-                <span class="muted" style="display:block;font-size:10px;font-weight:400">CSV · én rad per ansatt</span>
-              </button>
-              <button class="btn sm" onclick="eksportExcel()" style="text-align:left;line-height:1.25;padding:9px 13px">
-                <span style="display:block">📊 Excel</span>
-                <span class="muted" style="display:block;font-size:10px;font-weight:400">CSV · alle dager per ansatt</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-        <div id="adminStatInnhold" style="margin-top:12px"></div>
-      </div>
-      <div class="card">
-        <div class="h">Fraværskalender</div>
-        <div class="muted small" style="margin-top:4px">Alles fravær denne måneden.</div>
-        <div id="fravarKalender" style="margin-top:10px"></div>
-      </div>
-      <div class="card" id="merOrdreRapport" style="display:none;grid-column:1/-1">
-        <div class="row" style="flex-wrap:wrap;gap:8px">
-          <div class="h">Ordrerapport <span class="kort-admin-merke">ADMIN</span></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn sm" onclick="rapportNaviger(-1)">◀ Forrige år</button>
-            <span id="rapportLbl" style="min-width:60px;text-align:center;font-weight:700"></span>
-            <button class="btn sm" onclick="rapportNaviger(1)">Neste år ▶</button>
-          </div>
-        </div>
-        <div id="ordreRapportInnhold" style="margin-top:10px"></div>
-        <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
-        <button class="btn sm" style="margin-top:14px" onclick="visDetaljertOrdrerapport()">📊 Detaljert ordrerapport</button>
-      </div>
+      <div class="grid g3" id="merGruppeTid" style="display:none">
+        <button class="btn" id="merTimerBtn" style="display:none" onclick="visMerTimer()">⏱ Timer og overtid</button>
+        <button class="btn" id="merOrdreRapportBtn" style="display:none" onclick="visMerOrdreRapport()">📊 Ordrerapport</button>
       </div>
 
       <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeDrift')"><span class="mer-seksjon-chevron">▾</span>Drift og avvik</div>
@@ -818,54 +783,23 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div class="muted small" style="margin-top:4px">Registrerte avvik og tiltak.</div>
           <div id="hmsListe" style="margin-top:10px"></div>
         </div>
-        <div class="card" id="merHelsesjekkKort" style="display:none">
-          <div class="h">Helsesjekk <span class="kort-admin-merke">ADMIN</span></div>
-          <div class="muted small" style="margin-top:6px">Admin-ark-rader med et chassis-nr som ikke matcher noen ordre - typisk en skrivefeil ved inntasting.</div>
-          <div id="helsesjekkUkoblet" style="margin-top:8px"></div>
-        </div>
       </div>
 
       <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none" onclick="toggleMerSeksjon(this,'merGruppeOppsett')"><span class="mer-seksjon-chevron">▾</span>Administrasjon <span class="mer-kun-admin">Kun admin</span></div>
       <div id="merGruppeOppsett" class="grid g3">
-        <div class="card" id="merPINKort" style="display:none">
-          <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
-          <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">
-            <div class="muted small" style="letter-spacing:1.3px;margin-bottom:8px">DAGENS PIN</div>
-            <div id="dagensPINVal" style="display:flex;gap:10px;justify-content:center"></div>
-            <div class="muted small" style="margin:10px auto 0;max-width:260px">Overstyring når ansatte ikke er på lokasjonen, eller glemte å starte klokka.</div>
-            <button class="btn sm" onclick="genPIN()" style="margin-top:10px">Generer ny PIN</button>
+        <div class="card">
+          <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
+          <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+            <label style="margin:0;white-space:nowrap">Radius (m):</label>
+            <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
+              onchange="endreGPSRadius(this.value)">
           </div>
-          <div class="box" style="margin-top:12px">
-            <div class="h" style="font-size:14px;margin-bottom:6px">GPS-lokasjon</div>
-            <div id="gpsStatus" class="small muted" style="margin-bottom:8px"></div>
-            <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
-              <label style="margin:0;white-space:nowrap">Radius (m):</label>
-              <input type="number" id="gpsRadius" min="50" max="2000" style="width:80px;padding:5px 8px"
-                onchange="endreGPSRadius(this.value)">
-            </div>
-            <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
-          </div>
+          <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
         </div>
-        <div class="card" id="merAnsatteKort" style="display:none">
-          <div class="h">Ansatte</div>
-          <div class="muted small" style="margin-bottom:10px">Admin oppretter og deaktiverer.</div>
-          <div id="ansatteListe"></div>
-          <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
-        </div>
-        <div class="card dempet" id="merDrivstoffSatser" style="display:none;cursor:pointer" onclick="visMerDrivstoffSatser()">
-          <div class="row">
-            <div class="h">Drivstoff-satser</div>
-            <span style="color:#a1a1aa">›</span>
-          </div>
-          <div class="muted small" style="margin-top:4px" id="drivstoffSatsAntall">–</div>
-        </div>
-        <div class="card dempet" id="merUtstyrMaler" style="display:none;cursor:pointer" onclick="visMerUtstyrMaler()">
-          <div class="row">
-            <div class="h">Utstyr-maler (ankomst)</div>
-            <span style="color:#a1a1aa">›</span>
-          </div>
-          <div class="muted small" style="margin-top:4px" id="utstyrMalAntall">–</div>
-        </div>
+        <button class="btn" id="merAnsatteBtn" style="display:none" onclick="visMerAnsatte()">Vis ansatte</button>
+        <button class="btn" id="merDrivstoffSatser" style="display:none" onclick="visMerDrivstoffSatser()">Drivstoff-satser</button>
+        <button class="btn" id="merUtstyrMaler" style="display:none" onclick="visMerUtstyrMaler()">Utstyr-maler (ankomst)</button>
       </div>
 
       </div>
@@ -891,6 +825,66 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div class="muted small" style="margin-bottom:8px">Maler for hva som skal sjekkes ved ankomst av bil. Knyttes til biltype.</div>
           <div id="utstyrMalListe" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="merAnsatteView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
+        <div class="card">
+          <div class="h">Ansatte</div>
+          <div class="muted small" style="margin-bottom:10px">Admin oppretter og deaktiverer.</div>
+          <div id="ansatteListe"></div>
+          <button class="btn" style="margin-top:10px;width:100%" onclick="openModal('nyAnsatt')">+ Ny ansatt</button>
+        </div>
+      </div>
+
+      <div id="merTimerView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
+        <div class="card" id="merTimerOversikt">
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <div class="h">Timer og overtid – alle ansatte</div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+
+              <div style="display:flex;gap:6px;align-items:center;background:#0f0f12;border:1px solid #27272a;border-radius:999px;padding:4px">
+                <button class="btn sm" id="statVisBtn" onclick="toggleStatVis()" style="min-width:78px;border:none;background:none">📅 Måned</button>
+                <button class="btn sm" onclick="adminStatNaviger(-1)" id="statNavBack" style="border:none;background:none;padding:5px 9px">◀</button>
+                <span id="adminStatLbl" style="min-width:130px;text-align:center;font-weight:700;font-size:13px"></span>
+                <button class="btn sm" onclick="adminStatNaviger(1)" id="statNavFwd" style="border:none;background:none;padding:5px 9px">▶</button>
+              </div>
+
+              <button class="btn sm" id="stempelkortBtn" onclick="toggleStempelkort()">🕐 Stempelkort</button>
+
+              <div class="eksport-gruppe" style="display:flex;gap:8px;margin-left:auto">
+                <button class="btn sm" onclick="eksportFiken()" style="text-align:left;line-height:1.25;padding:9px 13px">
+                  <span style="display:block">📥 Fiken</span>
+                  <span class="muted" style="display:block;font-size:10px;font-weight:400">CSV · én rad per ansatt</span>
+                </button>
+                <button class="btn sm" onclick="eksportExcel()" style="text-align:left;line-height:1.25;padding:9px 13px">
+                  <span style="display:block">📊 Excel</span>
+                  <span class="muted" style="display:block;font-size:10px;font-weight:400">CSV · alle dager per ansatt</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+          <div id="adminStatInnhold" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div id="merOrdreRapportView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
+        <div class="card">
+          <div class="row" style="flex-wrap:wrap;gap:8px">
+            <div class="h">Ordrerapport <span class="kort-admin-merke">ADMIN</span></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="btn sm" onclick="rapportNaviger(-1)">◀ Forrige år</button>
+              <span id="rapportLbl" style="min-width:60px;text-align:center;font-weight:700"></span>
+              <button class="btn sm" onclick="rapportNaviger(1)">Neste år ▶</button>
+            </div>
+          </div>
+          <div id="ordreRapportInnhold" style="margin-top:10px"></div>
+          <div id="ordreRapportAarTotal" style="margin-top:14px;padding-top:10px;border-top:1px solid #27272a"></div>
+          <button class="btn sm" style="margin-top:14px" onclick="visDetaljertOrdrerapport()">📊 Detaljert ordrerapport</button>
         </div>
       </div>
 
@@ -926,7 +920,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <!-- ── ADMIN ── -->
     <section id="admin" class="page">
-      <div class="card" style="padding:4px">
+      <div class="card" style="padding:4px" id="adminArkHovedView">
         <div class="row" style="flex-wrap:wrap;gap:8px;padding:2px 4px">
           <div style="display:flex;align-items:center;gap:10px">
             <button class="btn sm" onclick="adminArkNaviger(-1)">◀</button>
@@ -936,9 +930,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div id="adminArkStatus" class="small muted"></div>
           <input id="adminArkSokFelt" type="search" placeholder="Søk chassis, forhandler, merknader, flåte..." oninput="adminArkSok(this.value)" style="background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px 10px;font-size:13px;min-width:160px">
           <button class="btn sm" onclick="visFlaterModal()">🚚 Flåtegodkjenning</button>
+          <button class="btn sm" onclick="visAdminHelsesjekk()">🩺 Helsesjekk</button>
           <button class="btn sm red" id="adminArkArkiverBtn" onclick="arkiverAdminArk()">Arkiver dette arket</button>
         </div>
         <div id="adminArkTabell" style="height:70vh;margin-top:4px;resize:both;overflow:auto"></div>
+      </div>
+      <div id="adminHelsesjekkView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraAdminHelsesjekk()">← Tilbake</button>
+        <div class="card">
+          <div class="h">Helsesjekk</div>
+          <div class="muted small" style="margin-top:6px">Admin-ark-rader med et chassis-nr som ikke matcher noen ordre - typisk en skrivefeil ved inntasting.</div>
+          <div id="helsesjekkUkoblet" style="margin-top:8px"></div>
+        </div>
       </div>
     </section>
 
@@ -1272,6 +1275,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div><label>Telefon</label><input id="kTlf" type="tel"></div>
       <div><label>E-post (kommaseparert hvis flere)</label><input id="kEpost" type="email" multiple></div>
       <div id="kForhandlerNrWrap"><label>Forhandler.nr</label><input id="kForhandlerNr"></div>
+      <div id="kOrgnrWrap">
+        <label>Org.nr</label>
+        <div style="display:flex;gap:6px">
+          <input id="kOrgnr" placeholder="9 siffer">
+          <button type="button" class="btn sm" style="flex-shrink:0" onclick="hentOrgnrForKontaktModal()" title="Slå opp i Brønnøysundregistrene">🔍</button>
+        </div>
+        <div id="kOrgnrStatus" class="small muted" style="margin-top:4px"></div>
+      </div>
     </div>
     <label>Notat</label><textarea id="kNotat" rows="2"></textarea>
     <div style="margin-top:14px;display:flex;gap:8px">
@@ -1304,6 +1315,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h">Forhandlere</div>
     <input id="forhandlerSok" placeholder="Søk forhandler..." autocomplete="off" oninput="renderForhandlerListe()" style="margin-top:12px">
+    <div id="forhandlerOrgnrBatchWrap" style="display:none;margin-top:10px">
+      <button class="btn sm" id="forhandlerOrgnrBatchBtn" onclick="hentOrgnrForAlleForhandlere()">🔍 Hent org.nr for alle forhandlere</button>
+      <div id="forhandlerOrgnrBatchStatus" class="small muted" style="margin-top:6px"></div>
+    </div>
     <div id="forhandlerListeInnhold" style="margin-top:12px"></div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn" onclick="closeModal('forhandlerListe')">Lukk</button>

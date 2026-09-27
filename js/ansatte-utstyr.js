@@ -57,6 +57,7 @@ async function lagreKontakt() {
   const epost = document.getElementById('kEpost').value.trim();
   const notat = document.getElementById('kNotat').value.trim();
   const forhandlerNr = document.getElementById('kForhandlerNr').value.trim();
+  const orgnr = document.getElementById('kOrgnr').value.trim();
   const kId = document.getElementById('kId').value;
   const eksisterende = kId ? S.kontakter.find(k=>k.id===kId) : null;
 
@@ -64,12 +65,12 @@ async function lagreKontakt() {
   if (eksisterende) {
     gammeltNavn = eksisterende.navn;
     kontakt = { ...eksisterende, navn, tlf, epost, notat };
-    if (kontakt.type === 'Forhandler') kontakt.forhandlerNr = forhandlerNr;
+    if (kontakt.type === 'Forhandler') { kontakt.forhandlerNr = forhandlerNr; kontakt.orgnr = orgnr; }
   } else {
     kontakt = {id:'k'+(++S.nextId), navn, type, tlf, epost, notat};
     // Kontaktpersoner ligger nøstet under sin forhandler (se lagreKontaktperson under) -
     // Forhandler-kontakter trenger derfor alltid et (evt. tomt) kontaktpersoner-array klart.
-    if (type === 'Forhandler') { kontakt.kontaktpersoner = []; kontakt.forhandlerNr = forhandlerNr; }
+    if (type === 'Forhandler') { kontakt.kontaktpersoner = []; kontakt.forhandlerNr = forhandlerNr; kontakt.orgnr = orgnr; }
   }
 
   if (db) {
@@ -91,7 +92,8 @@ async function lagreKontakt() {
   }
 
   closeModal('nyKontakt');
-  ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr'].forEach(i=>document.getElementById(i).value='');
+  ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr','kOrgnr'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('kOrgnrStatus').textContent = '';
   document.getElementById('kId').value = '';
   document.getElementById('kType').disabled = false;
   if (kontakt.type === 'Forhandler' && eksisterende) {
@@ -109,17 +111,21 @@ async function lagreKontakt() {
 function apneNyKontakt() {
   document.getElementById('nyKontaktTittel').textContent = 'Ny kontakt';
   document.getElementById('kId').value = '';
-  ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr'].forEach(i=>document.getElementById(i).value='');
+  ['kNavn','kTlf','kEpost','kNotat','kForhandlerNr','kOrgnr'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('kOrgnrStatus').textContent = '';
   document.getElementById('kType').value = 'Forhandler';
   document.getElementById('kType').disabled = false;
   document.getElementById('kForhandlerNrWrap').style.display = '';
+  document.getElementById('kOrgnrWrap').style.display = '';
   openModal('nyKontakt');
 }
-// Forhandler.nr gir ingen mening for andre kontakttyper - skjuler feltet med en gang
-// admin bytter Type i "Ny/Rediger kontakt"-modalen, i stedet for å la det henge igjen
+// Forhandler.nr/Org.nr gir ingen mening for andre kontakttyper - skjuler feltene med en
+// gang admin bytter Type i "Ny/Rediger kontakt"-modalen, i stedet for å la dem henge igjen
 // synlig (eller motsatt) fra forrige gang modalen ble åpnet.
 function oppdaterKForhandlerNrSynlighet() {
-  document.getElementById('kForhandlerNrWrap').style.display = document.getElementById('kType').value === 'Forhandler' ? '' : 'none';
+  const visFelt = document.getElementById('kType').value === 'Forhandler' ? '' : 'none';
+  document.getElementById('kForhandlerNrWrap').style.display = visFelt;
+  document.getElementById('kOrgnrWrap').style.display = visFelt;
 }
 
 // Speiler lukkNyKontaktperson() sitt mønster: gikk vi hit fra forhandlerDetalj (kId satt
@@ -151,7 +157,10 @@ function apneRedigerForhandler(id) {
   document.getElementById('kEpost').value = forhandler.epost||'';
   document.getElementById('kNotat').value = forhandler.notat||'';
   document.getElementById('kForhandlerNr').value = forhandler.forhandlerNr||'';
+  document.getElementById('kOrgnr').value = forhandler.orgnr||'';
+  document.getElementById('kOrgnrStatus').textContent = '';
   document.getElementById('kForhandlerNrWrap').style.display = '';
+  document.getElementById('kOrgnrWrap').style.display = '';
   closeModal('forhandlerDetalj');
   openModal('nyKontakt');
 }
@@ -172,6 +181,7 @@ function apneRedigerKontakt(id) {
   document.getElementById('kEpost').value = k.epost||'';
   document.getElementById('kNotat').value = k.notat||'';
   document.getElementById('kForhandlerNrWrap').style.display = 'none';
+  document.getElementById('kOrgnrWrap').style.display = 'none';
   openModal('nyKontakt');
 }
 
@@ -228,6 +238,8 @@ function apneForhandlerListe() {
 // navn bedre enn hvilken forhandler vedkommende jobber hos.
 function renderForhandlerListe() {
   const el = document.getElementById('forhandlerListeInnhold'); if (!el) return;
+  const batchWrap = document.getElementById('forhandlerOrgnrBatchWrap');
+  if (batchWrap) batchWrap.style.display = (me && me.rolle==='admin') ? 'block' : 'none';
   const sok = (document.getElementById('forhandlerSok')?.value||'').trim().toLowerCase();
   const forhandlere = S.kontakter
     .filter(k=>k.type==='Forhandler')
@@ -248,6 +260,102 @@ function renderForhandlerListe() {
           : `<div class="small muted" style="margin-top:4px">${antallKp} kontaktperson${antallKp===1?'':'er'} →</div>`}
       </div>`;
   }).join('');
+}
+
+// ── Org.nr fra Brønnøysundregistrenes åpne API ──────────────────────────────
+// Henter det juridiske organisasjonsnummeret til en forhandler automatisk i stedet for at
+// noen skriver det inn selv (bedt om av Henrik 2026-09-27: "hent ut det juridiske org.nr
+// til de ulike forhandlerne... så vi slipper å skrive inn org.,nr oss selv"). Åpent,
+// nøkkelfritt API (data.brreg.no) med CORS-støtte (access-control-allow-origin: *,
+// bekreftet 2026-09-27) - ingen egen Supabase-funksjon trengs for selve oppslaget.
+// Kun EKSAKT (normalisert) navnetreff aksepteres automatisk - dette tallet ender opp på
+// ekte Vegvesen-dokumenter (se vegvesenFormaterOrgnr i js/vegvesen-dokumenter.js), så et
+// feilgjettet org.nr fra et likelydende, men FEIL selskap ville vært verre enn å la feltet
+// stå tomt til noen sjekker manuelt.
+const BRREG_API = 'https://data.brreg.no/enhetsregisteret/api/enheter';
+function brregNormaliserNavn(navn) {
+  return (navn||'').toUpperCase().replace(/\./g,'').replace(/\s+/g,' ').trim();
+}
+async function brregSokEnheter(navn) {
+  const res = await fetch(`${BRREG_API}?navn=${encodeURIComponent(navn)}&size=5`);
+  if (!res.ok) throw new Error('Brreg svarte ' + res.status);
+  const data = await res.json();
+  return (data._embedded?.enheter || []).map(e => ({navn: e.navn, orgnr: e.organisasjonsnummer}));
+}
+// Returnerer orgnr KUN ved eksakt (normalisert) navnetreff, ellers null - se begrunnelse
+// i kommentaren over BRREG_API.
+async function brregEksaktTreff(navn) {
+  const treff = await brregSokEnheter(navn);
+  const maal = brregNormaliserNavn(navn);
+  const eksakt = treff.find(t => brregNormaliserNavn(t.navn) === maal);
+  return eksakt ? eksakt.orgnr : null;
+}
+
+// Manuelt oppslag for ÉN kontakt fra "Ny/Rediger kontakt"-modalen (🔍-knappen ved siden
+// av Org.nr-feltet) - dekker både engangstilfellet og forhandlere som batch-oppslaget
+// under ikke fant et eksakt treff for.
+async function hentOrgnrForKontaktModal() {
+  const navn = document.getElementById('kNavn').value.trim();
+  const statusEl = document.getElementById('kOrgnrStatus');
+  if (!navn) { statusEl.textContent = 'Skriv inn navnet først'; return; }
+  statusEl.textContent = 'Slår opp...';
+  try {
+    const treff = await brregSokEnheter(navn);
+    const maal = brregNormaliserNavn(navn);
+    const eksakt = treff.find(t => brregNormaliserNavn(t.navn) === maal);
+    if (eksakt) {
+      document.getElementById('kOrgnr').value = eksakt.orgnr;
+      statusEl.innerHTML = `<span style="color:#4ade80">✔ Funnet: ${esc(eksakt.navn)} (${esc(eksakt.orgnr)})</span>`;
+    } else if (treff.length) {
+      statusEl.innerHTML = 'Ingen eksakt treff. Mulige treff: ' + treff.map(t =>
+        `<span style="text-decoration:underline;cursor:pointer" onclick="document.getElementById('kOrgnr').value='${t.orgnr}';document.getElementById('kOrgnrStatus').textContent='Valgt: ${esc(t.navn).replace(/'/g,"\\'")}'">${esc(t.navn)} (${esc(t.orgnr)})</span>`
+      ).join(', ');
+    } else {
+      statusEl.textContent = 'Ingen treff i Brønnøysundregistrene for dette navnet';
+    }
+  } catch (e) {
+    statusEl.textContent = 'Oppslag feilet: ' + e.message;
+  }
+}
+
+// Batch-oppslag for ALLE forhandlere som mangler org.nr ennå (🔍-knappen i forhandlerListe-
+// modalen) - ETT samlet databasekall til slutt (kontakter_orgnr_batch_oppdater), aldri ett
+// kall per forhandler i løkka (samme regel som lagerBatchFlush() i lager.js). Et lite
+// mellomrom mellom hvert brreg-kall for å ikke storme et gratis offentlig API unødig.
+async function hentOrgnrForAlleForhandlere() {
+  const btn = document.getElementById('forhandlerOrgnrBatchBtn');
+  const statusEl = document.getElementById('forhandlerOrgnrBatchStatus');
+  const manglerOrgnr = S.kontakter.filter(k => k.type==='Forhandler' && !k.orgnr);
+  if (!manglerOrgnr.length) { statusEl.textContent = 'Alle forhandlere har allerede org.nr registrert'; return; }
+  btn.disabled = true;
+  const treff = [];
+  const ikkeFunnet = [];
+  for (let i = 0; i < manglerOrgnr.length; i++) {
+    const k = manglerOrgnr[i];
+    statusEl.textContent = `Slår opp ${i+1} av ${manglerOrgnr.length}: ${k.navn}...`;
+    try {
+      const orgnr = await brregEksaktTreff(k.navn);
+      if (orgnr) treff.push({id: k.id, orgnr}); else ikkeFunnet.push(k.navn);
+    } catch (e) {
+      console.error('Brreg-oppslag feilet for ' + k.navn + ':', e);
+      ikkeFunnet.push(k.navn);
+    }
+    if (i < manglerOrgnr.length - 1) await new Promise(r => setTimeout(r, 150));
+  }
+  if (treff.length) {
+    if (db) {
+      const { data, error } = await db.rpc('kontakter_orgnr_batch_oppdater', { p_oppdateringer: treff });
+      if (error) { statusEl.textContent = 'Fant treff, men lagring feilet: ' + error.message; btn.disabled = false; return; }
+      S.kontakter = data || [];
+    } else {
+      treff.forEach(({id, orgnr}) => { const k = S.kontakter.find(x=>x.id===id); if (k) k.orgnr = orgnr; });
+    }
+    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  }
+  statusEl.innerHTML = `Fant org.nr for ${treff.length} av ${manglerOrgnr.length} forhandlere.` +
+    (ikkeFunnet.length ? `<br>Ikke funnet (sjekk navn/skrivemåte manuelt): ${esc(ikkeFunnet.join(', '))}` : '');
+  btn.disabled = false;
+  renderForhandlerListe();
 }
 
 // Kontaktpersoner er IKKE egne rader i S.kontakter - de lever nøstet i .kontaktpersoner
@@ -284,6 +392,7 @@ function renderForhandlerDetalj() {
   el.innerHTML = `
     ${erAdmin?`<button class="btn sm" style="padding:4px 10px;font-size:12px" onclick="apneRedigerForhandler('${forhandler.id}')">✎ Rediger</button>`:''}
     ${forhandler.forhandlerNr?`<div class="small" style="margin-top:6px">Forhandler.nr: <b>${esc(forhandler.forhandlerNr)}</b></div>`:''}
+    ${forhandler.orgnr?`<div class="small" style="margin-top:4px">Org.nr: <b>${esc(forhandler.orgnr)}</b></div>`:''}
     ${forhandler.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${esc(forhandler.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(forhandler.tlf)}</a></div>`:''}
     ${forhandler.epost?`<div class="small">✉ <a href="mailto:${esc(forhandler.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(forhandler.epost)}</a></div>`:''}
     ${forhandler.notat?`<div class="small muted" style="margin-top:4px">${esc(forhandler.notat)}</div>`:''}
@@ -420,87 +529,9 @@ function kontaktEpostVisningHTML(epost) {
   return `<div class="small">✉ ${adresser.map(a=>`<a href="mailto:${esc(a)}" style="color:#a1a1aa;text-decoration:none">${esc(a)}</a>`).join(', ')}</div>`;
 }
 
-// ════════════════════════════════════════════════════
-// FRAVÆRSKALENDER
-// ════════════════════════════════════════════════════
-let fravarKalOffset = 0;
-function fravarKalNaviger(dir) { fravarKalOffset += dir; renderFravarKalender(); }
-
-function renderFravarKalender() {
-  const el = document.getElementById('fravarKalender');
-  if (!el) return;
-
-  const FARGE = { syk:'#ef4444', egenmelding:'#ef4444', ferie:'#22c55e', permisjon:'#a1a1aa' };
-  const maanedNavn = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
-
-  const now = new Date();
-  const forste = new Date(now.getFullYear(), now.getMonth() + fravarKalOffset, 1);
-  const aar = forste.getFullYear(), mnd = forste.getMonth();
-  const antallDager = new Date(aar, mnd+1, 0).getDate();
-  const prefix = `${aar}-${String(mnd+1).padStart(2,'0')}`;
-  const idag = new Date().toISOString().split('T')[0];
-
-  // Fravær per dato: { '2026-09-08': [{navn, type}] }
-  const perDag = {};
-  S.timer.filter(t => t.dato?.startsWith(prefix) && FARGE[t.type])
-    .forEach(t => { (perDag[t.dato] = perDag[t.dato] || []).push(t); });
-
-  // Mandag som første ukedag
-  const forsteUkedag = (forste.getDay() + 6) % 7;
-  const celler = [];
-  for (let i=0; i<forsteUkedag; i++) celler.push('<div></div>');
-
-  for (let d=1; d<=antallDager; d++) {
-    const ds = `${prefix}-${String(d).padStart(2,'0')}`;
-    const fravar = perDag[ds] || [];
-    const dow = new Date(aar, mnd, d).getDay();
-    const helg = dow===0 || dow===6;
-    const erIdag = ds === idag;
-    const hovedType = fravar[0]?.type;
-    const kant = fravar.length ? FARGE[hovedType] : (erIdag ? '#ef4444' : '#27272a');
-    const tittel = fravar.length ? fravar.map(t=>`${t.ansatt} – ${t.type}`).join('\n') : '';
-
-    // Én prikk per person som er borte, maks fire synlige
-    const prikker = fravar.slice(0,4).map(t =>
-      `<span style="width:5px;height:5px;border-radius:999px;background:${FARGE[t.type]}"></span>`).join('');
-
-    celler.push(`<div title="${esc(tittel)}" style="aspect-ratio:1;border-radius:10px;border:1px solid ${kant};background:${fravar.length?'#ffffff08':(helg?'#0c0c0e':'#0f0f12')};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px">
-      <span style="font-size:11px;color:${fravar.length||erIdag?'#f4f4f5':(helg?'#3f3f46':'#52525b')};font-weight:${erIdag?'700':'400'}">${d}</span>
-      <span style="display:flex;gap:2px;height:5px">${prikker}</span>
-    </div>`);
-  }
-
-  // Hvem er borte denne måneden, oppsummert
-  const perPerson = {};
-  Object.values(perDag).flat().forEach(t => {
-    const k = t.ansatt + '|' + t.type;
-    perPerson[k] = (perPerson[k] || 0) + 1;
-  });
-  const sammendrag = Object.entries(perPerson)
-    .sort((a,b) => b[1]-a[1])
-    .map(([k,n]) => {
-      const [navn, type] = k.split('|');
-      return `<span class="pill" style="margin:0;font-size:11px;padding:3px 10px;border-color:${FARGE[type]}55;color:${FARGE[type]}">${esc(navn)} · ${n}d ${type}</span>`;
-    }).join('');
-
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">
-      <button class="btn sm" onclick="fravarKalNaviger(-1)">◀</button>
-      <span style="font-weight:700;font-size:13.5px">${maanedNavn[mnd]} ${aar}</span>
-      <button class="btn sm" onclick="fravarKalNaviger(1)">▶</button>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">
-      ${['M','T','O','T','F','L','S'].map(d=>`<div class="small muted" style="text-align:center;font-size:10px">${d}</div>`).join('')}
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celler.join('')}</div>
-    ${sammendrag?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid #27272a">${sammendrag}</div>`
-      :'<div class="muted small" style="margin-top:12px">Ingen fravær registrert denne måneden</div>'}
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11.5px" class="muted">
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#ef4444"></span>Syk</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#22c55e"></span>Ferie</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#a1a1aa"></span>Permisjon</span>
-    </div>`;
-}
+// Den frittstående Fraværskalenderen (månedsvisning) er slått sammen inn i selve
+// ukekalenderen på Oversikt-siden (bedt om av Henrik 2026-09-27) - se FRAVAR_FARGE og
+// headCols i js/oversikt-kalender.js sin renderWeek().
 
 
 // ════════════════════════════════════════════════════

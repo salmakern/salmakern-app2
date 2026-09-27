@@ -251,10 +251,11 @@ function renderMer() {
   const erGodkjenner = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
   oppdaterVarselKnapp();
 
-  // Vis/skjul admin-only kort
-  document.getElementById('merAnsatteKort').style.display = erAdmin ? 'block' : 'none';
+  // Vis/skjul admin-only kort/knapper
+  document.getElementById('merAnsatteBtn').style.display = erAdmin ? '' : 'none';
   document.getElementById('merPINKort').style.display     = erAdmin ? 'block' : 'none';
-  document.getElementById('merHelsesjekkKort').style.display = erAdmin ? 'block' : 'none';
+  // Helsesjekk-kortet flyttet til Admin-ark-siden (bedt om av Henrik 2026-09-27) - se
+  // visAdminHelsesjekk()/renderAdminHelsesjekk() nederst i denne filen.
   // Kun selve seksjonsoverskriften styres av rolle her - "Administrasjon"-gruppen er
   // 100% admin-only, og hvert kort inni (PIN, Ansatte, Drivstoff-satser, Utstyr-maler)
   // skjuler seg allerede selv når man ikke er admin. Selve grid-en sin synlighet eies nå
@@ -264,13 +265,6 @@ function renderMer() {
   document.getElementById('merSeksjonOppsett').style.display = erAdmin ? 'block' : 'none';
 
   if (erAdmin) {
-    const ukoblet = finnUkobledeAdminArkRader();
-    document.getElementById('helsesjekkUkoblet').innerHTML = ukoblet.length
-      ? ukoblet.map(r=>`<div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div><b>${esc(r.chassisNr)}</b> <span class="small muted">(${r.aar}${r.forhandler?' · '+esc(r.forhandler):''})</span></div>
-          <button class="btn sm" onclick="apneUkobletAdminArkRad(${r.aar})">Åpne i Admin-ark</button>
-        </div>`).join('')
-      : '<div class="muted small">Ingen ukoblede rader funnet</div>';
     const pinEl = document.getElementById('dagensPINVal');
     if (pinEl) {
       const pin = (S.dagensPIN || '----').padEnd(4, '-').slice(0, 4);
@@ -326,37 +320,26 @@ function renderMer() {
     tilGodkjBtn.style.display = 'none';
   }
 
-  const fravarIDag=S.timer.filter(t=>{
-    const d=new Date().toISOString().split('T')[0];
-    return t.dato===d&&['syk','egenmelding','ferie','permisjon'].includes(t.type);
-  });
-  document.getElementById('fravarIDag').innerHTML=fravarIDag.length
-    ?fravarIDag.map(t=>`<div class="box" style="margin-bottom:6px"><b>${t.ansatt}</b> – ${t.type}</div>`).join('')
-    :'<div class="muted small">Ingen fravær registrert i dag</div>';
+  // "Fravær i dag" fjernet herfra (bedt om av Henrik 2026-09-27) - fraværet vises nå som
+  // egen linje per dato direkte i ukekalenderen på Oversikt-siden, se renderOversikt() i
+  // js/oversikt-kalender.js.
 
-  // Rollebasert synlighet
-  // Ansatt: Beskjeder, Kontakter, Fraværskalender, HMS-logg
+  // Rollebasert synlighet for knappene i "Tid og rapporter"/"Administrasjon"
+  // Ansatt: Beskjeder, Kontakter, HMS-logg
   // Godkjenner: + Timer og overtid
   // Admin: alt
-  document.getElementById('merTimerOversikt').style.display = erGodkjenner ? 'block' : 'none';
-  document.getElementById('merOrdreRapport').style.display    = erAdmin ? 'block' : 'none';
-  document.getElementById('merDrivstoffSatser').style.display = erAdmin ? 'block' : 'none';
-  document.getElementById('merUtstyrMaler').style.display     = erAdmin ? 'block' : 'none';
+  document.getElementById('merTimerBtn').style.display        = erGodkjenner ? '' : 'none';
+  document.getElementById('merOrdreRapportBtn').style.display  = erAdmin ? '' : 'none';
+  document.getElementById('merDrivstoffSatser').style.display = erAdmin ? '' : 'none';
+  document.getElementById('merUtstyrMaler').style.display     = erAdmin ? '' : 'none';
 
   renderBeskjeder();
   renderKontakter();
-  renderFravarKalender();
   renderHMS();
   renderMoterListe();
   renderGodkjennerChat();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
-  if (erAdmin) {
-    renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler();
-    const dsEl = document.getElementById('drivstoffSatsAntall');
-    if (dsEl) { const n = (S.drivstoffSatser||[]).length; dsEl.textContent = `${n} sats${n===1?'':'er'}`; }
-    const umEl = document.getElementById('utstyrMalAntall');
-    if (umEl) { const n = (S.utstyrMaler||[]).length; umEl.textContent = `${n} mal${n===1?'':'er'}`; }
-  }
+  if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
 }
 
 // Innholdet holdes ferskt av renderMer() (kjøres uansett hvilken side som er åpen, se
@@ -365,9 +348,10 @@ function apneTilGodkjenningModal() {
   openModal('tilGodkjenningModal');
 }
 
-// Drivstoff-satser og Utstyr-maler var før inline lister direkte på Mer-siden - flyttet
-// til egne visninger (samme "klikk inn i detalj"-mønster som Lager) siden Mer-siden ble
-// for full av innhold man sjelden trenger å se med det samme.
+// Drivstoff-satser, Utstyr-maler, Ansatte, Timer og overtid, og Ordrerapport var før
+// inline kort/lister direkte på Mer-siden - flyttet til egne visninger (samme
+// "klikk inn i detalj"-mønster som Lager) siden Mer-siden ble for full av innhold man
+// sjelden trenger å se med det samme (bedt om av Henrik 2026-09-27).
 function visMerDrivstoffSatser() {
   document.getElementById('merHovedView').style.display = 'none';
   document.getElementById('merDrivstoffSatserView').style.display = 'block';
@@ -380,9 +364,26 @@ function visMerUtstyrMaler() {
   renderUtstyrMaler();
   window.scrollTo(0, 0);
 }
+function visMerAnsatte() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merAnsatteView').style.display = 'block';
+  window.scrollTo(0, 0);
+}
+function visMerTimer() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merTimerView').style.display = 'block';
+  renderTimerOversikt();
+  window.scrollTo(0, 0);
+}
+function visMerOrdreRapport() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merOrdreRapportView').style.display = 'block';
+  renderOrdreRapport();
+  window.scrollTo(0, 0);
+}
 function tilbakeFraMerDetalj() {
-  document.getElementById('merDrivstoffSatserView').style.display = 'none';
-  document.getElementById('merUtstyrMalerView').style.display = 'none';
+  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView']
+    .forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('merHovedView').style.display = 'block';
 }
 
@@ -401,6 +402,28 @@ function finnUkobledeAdminArkRader() {
 function apneUkobletAdminArkRad(aar) {
   adminArkAar = aar;
   showPage('admin', document.getElementById('adminTab'));
+}
+
+// Helsesjekk flyttet fra Mer-siden til Admin-ark-siden (bedt om av Henrik 2026-09-27) -
+// egen knapp ved siden av "Arkiver dette arket", åpner en full oversikt over ukoblede rader.
+function visAdminHelsesjekk() {
+  document.getElementById('adminArkHovedView').style.display = 'none';
+  document.getElementById('adminHelsesjekkView').style.display = 'block';
+  renderAdminHelsesjekk();
+  window.scrollTo(0, 0);
+}
+function tilbakeFraAdminHelsesjekk() {
+  document.getElementById('adminHelsesjekkView').style.display = 'none';
+  document.getElementById('adminArkHovedView').style.display = 'block';
+}
+function renderAdminHelsesjekk() {
+  const ukoblet = finnUkobledeAdminArkRader();
+  document.getElementById('helsesjekkUkoblet').innerHTML = ukoblet.length
+    ? ukoblet.map(r=>`<div class="box" style="margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div><b>${esc(r.chassisNr)}</b> <span class="small muted">(${r.aar}${r.forhandler?' · '+esc(r.forhandler):''})</span></div>
+        <button class="btn sm" onclick="apneUkobletAdminArkRad(${r.aar})">Åpne i Admin-ark</button>
+      </div>`).join('')
+    : '<div class="muted small">Ingen ukoblede rader funnet</div>';
 }
 
 // ════════════════════════════════════════════════════

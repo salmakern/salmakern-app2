@@ -15,7 +15,7 @@ function showPage(id, btn) {
   if (id==='arkiv')    renderArkiv();
   if (id==='lager')    { aktivKategori=null; oppskriftAktivModell=null; document.getElementById('lagerListeView').style.display='block'; document.getElementById('kategoriDetaljView').style.display='none'; document.getElementById('vareDetaljView').style.display='none'; document.getElementById('oppskriftModellerView').style.display='none'; document.getElementById('oppskriftModellDetaljView').style.display='none'; renderLagerListe(); }
   if (id==='mer')      renderMer();
-  if (id==='admin')    renderAdminArk(true);
+  if (id==='admin')    { document.getElementById('adminArkHovedView').style.display='block'; document.getElementById('adminHelsesjekkView').style.display='none'; renderAdminArk(true); }
   renderGlobalLavLagerVarsel();
 }
 function renderAll() {
@@ -211,6 +211,8 @@ function plasserKalenderHendelser(items) {
   });
 }
 
+const FRAVAR_FARGE = { syk:'#ef4444', egenmelding:'#ef4444', ferie:'#22c55e', permisjon:'#a1a1aa' };
+
 function renderWeek() {
   const el = document.getElementById('weekCal');
   const DAY_NAMES = ['Mandag','Tirsdag','Onsdag','Torsdag','Fredag'];
@@ -322,12 +324,20 @@ function renderWeek() {
     return `<div class="cal-day-col${isToday?' cal-today-col':''}">${slotEls}${nowLine}${events}</div>`;
   }).join('');
 
+  // Fravær vist som egen linje i kalenderhodet, rett under datotallet og over selve
+  // tidsrutene (bedt om av Henrik 2026-09-27: slått sammen med den tidligere separate
+  // Fraværskalender-visningen på Mer-siden, som nå er fjernet derfra).
   const headCols = dates.map((dt, i) => {
     const ds      = dt.toISOString().split('T')[0];
     const isToday = ds === todayStr;
+    const fravar  = S.timer.filter(t => t.dato === ds && FRAVAR_FARGE[t.type]);
+    const fravarLinje = fravar.length
+      ? `<div class="cal-day-fravar" style="color:${FRAVAR_FARGE[fravar[0].type]}" title="${esc(fravar.map(t=>`${t.ansatt} – ${t.type}`).join('\n'))}">${esc(fravar.map(t=>t.ansatt).join(', '))}</div>`
+      : '';
     return `<div class="cal-col-head${isToday?' cal-today':''}">
       <div class="cal-day-name">${DAY_NAMES[i]}</div>
       <div class="cal-day-num${isToday?' cal-today-num':''}">${dt.getDate()}</div>
+      ${fravarLinje}
     </div>`;
   }).join('');
 
