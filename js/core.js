@@ -958,39 +958,30 @@ async function lagrePushAbonnement(sub) {
 }
 
 // headerKnapp er en kompakt 🔔/🔕-ikonknapp i selve toppmenyen (bedt om av Henrik
-// 2026-09-27: "det må være i toppen ved siden av meldinger og logg ut") - i tillegg til,
-// ikke i stedet for, det fulle Varsler-kortet i Daglig-seksjonen på Mer-siden, som
-// fortsatt har plass til forklaringsteksten. Begge speiler samme på/av-tilstand.
+// 2026-09-27: "det må være i toppen ved siden av meldinger og logg ut"). Erstattet det
+// tidligere Varsler-kortet i Daglig-seksjonen på Mer-siden, som ble fjernet samme dag etter
+// ønske fra Henrik siden knappen her dekker det samme.
 async function oppdaterVarselKnapp() {
-  const knapp = document.getElementById('varselKnapp');
-  const statusEl = document.getElementById('varselStatus');
   const headerKnapp = document.getElementById('varselHeaderBtn');
-  if (!knapp && !headerKnapp) return;
+  if (!headerKnapp) return;
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-    if (knapp) { knapp.textContent = 'Varsler støttes ikke på denne enheten'; knapp.disabled = true; }
-    if (headerKnapp) { headerKnapp.disabled = true; headerKnapp.title = 'Varsler støttes ikke på denne enheten'; }
+    headerKnapp.disabled = true; headerKnapp.title = 'Varsler støttes ikke på denne enheten';
     return;
   }
   const perm = Notification.permission;
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
   if (perm === 'denied') {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#f87171">Varsler er blokkert – åpne telefoninnstillinger for å tillate.</span>';
-    if (knapp) { knapp.textContent = 'Varsler blokkert'; knapp.disabled = true; }
-    if (headerKnapp) { headerKnapp.textContent = '🔕'; headerKnapp.disabled = true; headerKnapp.title = 'Varsler er blokkert'; }
+    headerKnapp.textContent = '🔕'; headerKnapp.disabled = true; headerKnapp.title = 'Varsler er blokkert - åpne telefoninnstillinger for å tillate';
   } else if (sub) {
     // Sjekk om endepunktet har rotert siden sist (f.eks. iOS i bakgrunnen)
     // og rydd opp den gamle raden hvis så, slik at vi ikke får dupliserte varsler.
     if (sub.endpoint !== localStorage.getItem(PUSH_ENDPOINT_LS_KEY)) {
       await lagrePushAbonnement(sub);
     }
-    if (statusEl) statusEl.innerHTML = '<span style="color:#4ade80">✔ Varsler er aktivert på denne enheten</span>';
-    if (knapp) { knapp.textContent = 'Deaktiver varsler'; knapp.disabled = false; }
-    if (headerKnapp) { headerKnapp.textContent = '🔔'; headerKnapp.disabled = false; headerKnapp.title = 'Varsler er på - trykk for å skru av'; }
+    headerKnapp.textContent = '🔔'; headerKnapp.disabled = false; headerKnapp.title = 'Varsler er på - trykk for å skru av';
   } else {
-    if (statusEl) statusEl.textContent = 'Varsler er ikke aktivert.';
-    if (knapp) { knapp.textContent = 'Aktiver varsler'; knapp.disabled = false; }
-    if (headerKnapp) { headerKnapp.textContent = '🔕'; headerKnapp.disabled = false; headerKnapp.title = 'Varsler er av - trykk for å skru på'; }
+    headerKnapp.textContent = '🔕'; headerKnapp.disabled = false; headerKnapp.title = 'Varsler er av - trykk for å skru på';
   }
 }
 
