@@ -212,6 +212,7 @@ function plasserKalenderHendelser(items) {
 }
 
 const FRAVAR_FARGE = { syk:'#ef4444', egenmelding:'#ef4444', ferie:'#22c55e', permisjon:'#a1a1aa' };
+const FRAVAR_LABEL = { syk:'Syk', egenmelding:'Egenmelding', ferie:'Ferie', permisjon:'Permisjon' };
 
 function renderWeek() {
   const el = document.getElementById('weekCal');
@@ -332,7 +333,7 @@ function renderWeek() {
     const isToday = ds === todayStr;
     const fravar  = S.timer.filter(t => t.dato === ds && FRAVAR_FARGE[t.type]);
     const fravarLinje = fravar.length
-      ? `<div class="cal-day-fravar" style="color:${FRAVAR_FARGE[fravar[0].type]}" title="${esc(fravar.map(t=>`${t.ansatt} – ${t.type}`).join('\n'))}">${esc(fravar.map(t=>t.ansatt).join(', '))}</div>`
+      ? `<div class="cal-day-fravar" style="color:${FRAVAR_FARGE[fravar[0].type]}" title="${esc(fravar.map(t=>`${t.ansatt} – ${FRAVAR_LABEL[t.type]}`).join('\n'))}">${esc(fravar.map(t=>`${t.ansatt} (${FRAVAR_LABEL[t.type]})`).join(', '))}</div>`
       : '';
     return `<div class="cal-col-head${isToday?' cal-today':''}">
       <div class="cal-day-name">${DAY_NAMES[i]}</div>
