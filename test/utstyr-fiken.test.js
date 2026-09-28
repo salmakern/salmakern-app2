@@ -204,3 +204,57 @@ describe('toggleUtstyrPunkt - VW ID BUZZ', () => {
     expect(fikenLinjeKall.some(k => k.produktnummer === '1801')).toBe(false);
   });
 });
+
+describe('toggleUtstyrPunkt - Land Rover Discovery 5', () => {
+  let env, o, fikenLinjeKall, skalHaKall;
+  beforeEach(() => {
+    ({ env, fikenLinjeKall, skalHaKall } = nyEnvironment());
+    o = {
+      id: 'ord_1', merke: 'Land Rover', modell: 'Discovery 5',
+      utstyrSjekkliste: [
+        { punkt: '5- seter bak', ok: false },
+        { punkt: 'Klima i taket', ok: false },
+        { punkt: 'AD', ok: false },
+        { punkt: 'Reservehjul', ok: false },
+        { punkt: 'Panorama glasstak', ok: false },
+      ],
+    };
+    env.S.ordrer = [o];
+  });
+
+  it.each([
+    ['5- seter bak', '201'],
+    ['Klima i taket', '202'],
+    ['AD', '204'],
+    ['Reservehjul', '205'],
+  ])('%s -> produktnummer %s i fiken, ikke i skal ha, huk av og fjern igjen', (punktTekst, produktnr) => {
+    const idx = o.utstyrSjekkliste.findIndex(p => p.punkt === punktTekst);
+    env.toggleUtstyrPunkt('ord_1', idx);
+    expect(o.utstyrSjekkliste[idx].ok).toBe(true);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: produktnr, skalStaa: true });
+    expect(skalHaKall.length).toBe(0);
+
+    env.toggleUtstyrPunkt('ord_1', idx);
+    expect(o.utstyrSjekkliste[idx].ok).toBe(false);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: produktnr, skalStaa: false });
+  });
+
+  it('punkter uten kjent kobling (Panorama glasstak - kun EV9 har den koblingen) rører ikke fiken', () => {
+    env.toggleUtstyrPunkt('ord_1', 4);
+    expect(fikenLinjeKall.length).toBe(0);
+  });
+
+  it('samme punkt-tekst ("AD") på en annen modell rører ikke Discovery 5-koblingen', () => {
+    o.merke = 'Mercedes-Benz'; o.modell = 'GLS';
+    o.utstyrSjekkliste = [{ punkt: 'AD', ok: false }];
+    env.toggleUtstyrPunkt('ord_1', 0);
+    expect(fikenLinjeKall.some(k => k.produktnummer === '204')).toBe(false);
+  });
+
+  it('"Klima i taket" finnes i BÅDE Discovery 5 (202) og GLS (401) - hver modell bruker kun sitt eget produktnummer', () => {
+    const idx = o.utstyrSjekkliste.findIndex(p => p.punkt === 'Klima i taket');
+    env.toggleUtstyrPunkt('ord_1', idx);
+    expect(fikenLinjeKall).toContainEqual({ produktnummer: '202', skalStaa: true });
+    expect(fikenLinjeKall.some(k => k.produktnummer === '401')).toBe(false);
+  });
+});

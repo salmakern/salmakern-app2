@@ -1075,6 +1075,22 @@ const ID_BUZZ_PUNKT_PRODUKTNUMMER = {
   'Lang Modell': '1801',
 };
 
+// Samme mønster for Land Rover Discovery 5 (bedt om av Henrik 2026-09-28) - kun
+// fikenLinjer, ikke "Skal ha etter visning". Punkt-tekstene er hentet direkte fra den ekte
+// utstyr-malen ("Land Rover Discovery 5", biltype "Discovery 5") i databasen - "5- seter
+// bak" er skrevet nøyaktig sånn (mellomrom før "seter") i den ekte malen. Samme
+// /discovery\s*5\b/i-mønster som brukt for modell-matching ellers i appen (se
+// FIKEN_OMBYGGING_MODELLER i ordre-detalj.js).
+function erDiscovery5(o) {
+  return /discovery\s*5\b/i.test(`${o.merke||''} ${o.modell||''}`);
+}
+const DISCOVERY5_PUNKT_PRODUKTNUMMER = {
+  '5- seter bak': '201',
+  'Klima i taket': '202',
+  'AD': '204',
+  'Reservehjul': '205',
+};
+
 function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
@@ -1102,6 +1118,10 @@ function toggleUtstyrPunkt(ordreId, idx) {
   }
   if (erIdBuzz(o)) {
     const produktnr = ID_BUZZ_PUNKT_PRODUKTNUMMER[punkt.punkt];
+    if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
+  }
+  if (erDiscovery5(o)) {
+    const produktnr = DISCOVERY5_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
   save(ordreId);
