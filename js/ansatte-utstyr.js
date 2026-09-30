@@ -995,6 +995,14 @@ function autoVelgUtstyrMal(ordreId) {
   o.utstyrMalNavn = mal.navn;
   logChange(o, 'Utstyr-mal (ankomst) automatisk valgt: '+mal.navn);
   save(ordreId);
+  // Samme "ikke 501"-initiering som applyUtstyrMal() (manuelt valgt mal) gjør - uten
+  // dette sto "ikke 501" aldri i Skal ha etter visning for en EV9-ordre der malen ble
+  // valgt HER (automatisk ved opprettelse) i stedet for manuelt, siden ingen noen gang
+  // faktisk trykket på Panorama-punktet (bekreftet av Henrik 2026-09-30: "det må stå
+  // ikke 501 på de ordrene som ikke får panorama huket av på").
+  if (erKiaEv9(o) && o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
+  }
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);
   if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');
   const select = document.getElementById('uMalValgAnkomst');

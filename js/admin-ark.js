@@ -110,7 +110,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
       if (!rad.chassisNr) return;
       ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
         forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-        serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
+        serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
       S.adminArk = [...(S.adminArk||[]), ark];
     } else {
       ark.rekkefolge = idx;
@@ -119,7 +119,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
     oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
       forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
       serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
-      fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, utstyr: ark.utstyr||'',
+      fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, hentet_varslet: !!ark.hentetVarslet, utstyr: ark.utstyr||'',
       merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
       time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
   });
@@ -230,14 +230,38 @@ async function adminArkKallFraktEpost(payload) {
 // Bestiller frakt: e-post til fraktselskapet (forhandler/kontaktperson/chassis.nr i
 // innholdet), kontaktpersonen på kopi. Markerer "Bestilt frakt" automatisk ved suksess -
 // det ER det feltet betyr, ingen grunn til et eget trykk til for å huke det av selv.
+// Fra 2026-09-30 åpnes alltid en liten dialog først der man (valgfritt for ekte
+// fraktselskap, påkrevd for "Hente selv") kan velge en henteklar-dato - se
+// adminArkSendFraktBestilling() under for selve sendingen.
 //
 // Når fraktselskap er satt til "Hente selv" er det ikke noe fraktselskap å bestille hos -
 // samme knapp åpner i stedet en liten dialog der man velger hvilken dato bilen er klar
 // for henting, og varsler kontaktpersonen med den datoen i e-posten (bekreftet av Henrik
 // 2026-09-25: skal trigges ved å trykke "Bestill", ikke automatisk ved valg i
-// nedtrekkslisten). Selve sendingen skjer i adminArkSendKlarForHenting() under, når
+// nedtrekkslisten). Selve sendingen skjer i adminArkSendFraktBestilling() under, når
 // dialogens "Send"-knapp trykkes - det trykket ER bekreftelsen, samme mønster som appens
 // andre små modaler (f.eks. "Nytt møte"), ingen egen confirm() på toppen av det.
+// Speiler bestiltFrakt/henteKlarDato over på selve ordren (finnes den) - dette er det som
+// driver kantlinje-merket på ordrekortet i Oversikt/Ordre-lista (se bestiltFraktBadgeHTML()/
+// sorterOrdre() i core.js), UAVHENGIG av admin_ark-raden sin egen bestiltFrakt-kolonne som
+// fortsatt oppdateres via adminArkLagreFelter() som før (bedt om av Henrik 2026-09-30).
+async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato) {
+  const o = S.ordrer.find(x => samsvarerChassis(x.chassis, chassisNr)); if (!o) return;
+  o.bestiltFrakt = true;
+  o.henteKlarDato = dato || '';
+  logChange(o, dato ? `Bestilt frakt, henteklar ${fmtDatoKort(dato)}` : 'Bestilt frakt');
+  if (db) {
+    const { error } = await db.from('ordrer').update({ bestilt_frakt: true, hente_klar_dato: dato || null, endringer: o.endringer }).eq('id', o.id);
+    if (error) console.error('Kunne ikke oppdatere bestilt_frakt/hente_klar_dato på ordre:', error.message);
+  }
+  renderAll();
+}
+
+// Åpner dialogen for å (valgfritt, for Hente selv PÅKREVD) velge en henteklar-dato FØR
+// selve fraktbestillingen/-varselet sendes - bedt om av Henrik 2026-09-30: "det må være
+// mulig å bestemme dato når ordren er henteklar når man bestiller frakt via e-post
+// knappen". Selve sendingen (og bestiltFrakt-markeringen) skjer i
+// adminArkSendFraktBestilling() under, når dialogens "Send"-knapp trykkes.
 async function adminArkFraktBestill(chassisNr) {
   const rad = adminArkHentRadData(chassisNr);
   if (!rad.fraktselskap) { visToast('Velg et fraktselskap først'); return; }
@@ -247,53 +271,57 @@ async function adminArkFraktBestill(chassisNr) {
     visToast('Salmakern leverer selv - ingen bestilling nødvendig. Trykk "✔ Hentet" når bilen kjøres av gårde.');
     return;
   }
-  if (rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV) {
-    const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
-    if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
-    document.getElementById('kfh_chassis').value = rad.chassisNr;
-    document.getElementById('kfh_dato').value = new Date().toISOString().split('T')[0];
-    openModal('klarForHenting');
-    return;
-  }
-  const fraktEpost = adminArkFinnKontaktEpost(rad.fraktselskap, 'Fraktselskap');
-  if (!fraktEpost) { visToast(`Fant ingen e-post for "${rad.fraktselskap}" i Kontakter - legg den til under Mer → Kontakter`); return; }
-  const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
-  if (!confirm(`Send bestilling til ${rad.fraktselskap} (${fraktEpost})${kontaktEpost?` med ${rad.kontaktperson} på kopi`:''}?`)) return;
-  try {
-    await adminArkKallFraktEpost({ type:'bestilling', fraktselskapEpost:fraktEpost, kontaktpersonEpost:kontaktEpost||undefined,
-      forhandler: rad.forhandler, kontaktperson: rad.kontaktperson, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
-    visToast('Fraktbestilling sendt til ' + rad.fraktselskap, 'ok');
-    const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
-    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
-    await adminArkLagreFelter(radData, { bestiltFrakt: true });
-    if (tabRad) tabRad.update({ bestiltFrakt: true });
-  } catch (e) {
-    visToast('Kunne ikke sende fraktbestilling: ' + e.message);
-  }
-}
-
-// Sender selve "klar for henting"-varselet fra dialogen åpnet i adminArkFraktBestill()
-// over. Datoen er kun tekst i e-posten (ikke koblet mot o.datoKlarHenting/ordreStatus -
-// det er en annen, mer omfattende statusovergang med egne sideeffekter i endreStatus(),
-// og denne dialogen sier ingenting om at HELE ordren skal bytte status).
-async function adminArkSendKlarForHenting() {
-  const chassisNr = document.getElementById('kfh_chassis').value;
-  const dato = document.getElementById('kfh_dato').value;
-  if (!dato) { visToast('Velg en dato'); return; }
-  const rad = adminArkHentRadData(chassisNr);
   const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
   if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
+  const erHenterSelv = rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
+  let fraktEpost = '';
+  if (!erHenterSelv) {
+    fraktEpost = adminArkFinnKontaktEpost(rad.fraktselskap, 'Fraktselskap');
+    if (!fraktEpost) { visToast(`Fant ingen e-post for "${rad.fraktselskap}" i Kontakter - legg den til under Mer → Kontakter`); return; }
+  }
+  adminArkFraktBestillKontekst = { erHenterSelv, fraktEpost, kontaktEpost, forhandler: rad.forhandler, kontaktperson: rad.kontaktperson, fraktselskap: rad.fraktselskap, chassisNr: rad.chassisNr };
+  document.getElementById('kfh_chassis').value = rad.chassisNr;
+  document.getElementById('kfh_dato').value = erHenterSelv ? new Date().toISOString().split('T')[0] : '';
+  document.getElementById('klarForHentingTittel').textContent = erHenterSelv ? 'Bilen er klar for henting' : 'Bestill frakt hos ' + rad.fraktselskap;
+  document.getElementById('kfh_datoLabel').textContent = erHenterSelv ? 'Klar for henting fra dato' : 'Henteklar dato (valgfritt)';
+  document.getElementById('klarForHentingBeskrivelse').textContent = erHenterSelv
+    ? 'Sender e-post til kontaktpersonen med denne datoen.'
+    : `Sender bestilling til ${rad.fraktselskap} (${fraktEpost})${kontaktEpost?`, med ${rad.kontaktperson} på kopi`:''}. Datoen brukes kun internt (vises på ordrekortet), ikke i selve bestillingen.`;
+  openModal('klarForHenting');
+}
+
+// Sender selve frakt-bestillingen/hentevarselet fra dialogen åpnet i adminArkFraktBestill()
+// over - dekker BÅDE "Hente selv" (krever dato, samme "klar_for_henting"-e-post som før)
+// OG ekte fraktselskap (dato valgfri, samme "bestilling"-e-post som før - datoen sendes
+// IKKE med i den, kun lagret internt, se adminArkSpeilBestiltFraktPaaOrdre()). Datoen er
+// ikke koblet mot o.datoKlarHenting/ordreStatus - det er en annen, mer omfattende
+// statusovergang med egne sideeffekter i endreStatus(), og denne dialogen sier ingenting
+// om at HELE ordren skal bytte status.
+let adminArkFraktBestillKontekst = null;
+async function adminArkSendFraktBestilling() {
+  const ctx = adminArkFraktBestillKontekst; if (!ctx) return;
+  const chassisNr = document.getElementById('kfh_chassis').value;
+  const dato = document.getElementById('kfh_dato').value;
+  if (ctx.erHenterSelv && !dato) { visToast('Velg en dato'); return; }
   try {
-    await adminArkKallFraktEpost({ type:'klar_for_henting', kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, dato, avsenderNavn: me?.navn });
+    if (ctx.erHenterSelv) {
+      await adminArkKallFraktEpost({ type:'klar_for_henting', kontaktpersonEpost:ctx.kontaktEpost, chassisNr, dato, avsenderNavn: me?.navn });
+      visToast('Varsel om henting sendt til ' + ctx.kontaktperson, 'ok');
+    } else {
+      await adminArkKallFraktEpost({ type:'bestilling', fraktselskapEpost:ctx.fraktEpost, kontaktpersonEpost:ctx.kontaktEpost||undefined,
+        forhandler: ctx.forhandler, kontaktperson: ctx.kontaktperson, chassisNr, avsenderNavn: me?.navn });
+      visToast('Fraktbestilling sendt til ' + ctx.fraktselskap, 'ok');
+    }
     closeModal('klarForHenting');
-    visToast('Varsel om henting sendt til ' + rad.kontaktperson, 'ok');
     const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
     const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
     await adminArkLagreFelter(radData, { bestiltFrakt: true });
     if (tabRad) tabRad.update({ bestiltFrakt: true });
+    await adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato);
   } catch (e) {
-    visToast('Kunne ikke sende hentevarsel: ' + e.message);
+    visToast('Kunne ikke sende: ' + e.message);
   }
+  adminArkFraktBestillKontekst = null;
 }
 
 // Varsler kontaktpersonen om at bilen er hentet - kun chassis.nr i innholdet (bekreftet
@@ -301,6 +329,9 @@ async function adminArkSendKlarForHenting() {
 // chassis. nr"). Når fraktselskap er "Levering av oss" sendes i stedet et "på vei til
 // dere"-varsel (bedt om av Henrik 2026-09-27) - samme knapp/trigger-punkt (henting), bare
 // annen ordlyd siden Salmakern selv kjører bilen ut i stedet for at et fraktselskap henter.
+// Markerer hentetVarslet ved suksess (bedt om av Henrik 2026-09-30) - det ER det knappen
+// betyr, samme "automatisk ved suksess"-mønster som bestiltFrakt på "Bestill" allerede
+// bruker. Driver den røde/grønne kantlinjen på selve knappen, se _fraktKnapper-kolonnen.
 async function adminArkVarsleHentet(chassisNr) {
   const rad = adminArkHentRadData(chassisNr);
   const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
@@ -312,6 +343,10 @@ async function adminArkVarsleHentet(chassisNr) {
   try {
     await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
     visToast('Varsel sendt til ' + rad.kontaktperson, 'ok');
+    const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
+    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
+    await adminArkLagreFelter(radData, { hentetVarslet: true });
+    if (tabRad) tabRad.update({ hentetVarslet: true });
   } catch (e) {
     visToast('Kunne ikke sende varsel: ' + e.message);
   }
@@ -483,6 +518,7 @@ function adminArkByggRader() {
       fraktselskap: ark?.fraktselskap || '',
       fullmaktVis: o.fullmakt || 'har_ikke',
       bestiltFrakt: ark?.bestiltFrakt || false,
+      hentetVarslet: ark?.hentetVarslet || false,
       utstyr: ark?.utstyr || '',
       vedtakVis: o.godkjentBiltilsyn ? 'gronn' : 'rod',
       // Viser datoen ordren ble satt til Klar for henting (satt av endreStatus() i
@@ -523,6 +559,7 @@ function adminArkByggRader() {
       fraktselskap: r.fraktselskap || '',
       fullmaktVis: null,
       bestiltFrakt: r.bestiltFrakt || false,
+      hentetVarslet: r.hentetVarslet || false,
       utstyr: r.utstyr || '',
       vedtakVis: null,
       henteklarVis: '',
@@ -568,7 +605,7 @@ async function adminArkLagreFelter(rad, endringer) {
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: adminArkNesteRekkefolge(),
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-      serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
+      serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer:'', arkivert:false };
     S.adminArk = [...(S.adminArk||[]), ark];
   }
   Object.assign(ark, endringer);
@@ -577,7 +614,7 @@ async function adminArkLagreFelter(rad, endringer) {
   const payload = { id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: ark.rekkefolge,
     forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
     serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
-    fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, utstyr: ark.utstyr||'',
+    fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, hentet_varslet: !!ark.hentetVarslet, utstyr: ark.utstyr||'',
     merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
     time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
   // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig re-rendering av
@@ -928,21 +965,21 @@ if (!window._adminArkResizeBundet) {
 // som allerede ligger klare nederst i arket.
 function adminArkErTomRad(r) {
   return !r.chassisNr && !r.forhandler && !r.kontaktperson && !r.serienummer &&
-         !r.mottatt && !r.papirer && !r.dokumenter && !r.fraktselskap && !r.bestiltFrakt && !r.utstyr && !r.merknader &&
+         !r.mottatt && !r.papirer && !r.dokumenter && !r.fraktselskap && !r.bestiltFrakt && !r.hentetVarslet && !r.utstyr && !r.merknader &&
          !r.flateHypotetisk && !r.timeBekreftet && !r.ventendeTimer;
 }
 
 // Lager én tom, ikke-lagret admin_ark-rad (S.adminArk-form) for gitt år.
 function adminArkNyTomRadObjekt() {
   return { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr:'', aar: adminArkAar, rekkefolge: ADMIN_ARK_REKKEFOLGE_BUNN,
-    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
+    forhandler:'', kontaktperson:'', serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', ventendeTimer:'', arkivert:false };
 }
 // Samme rad, men i visnings-formen Tabulator/adminArkByggRader() bruker (se loseRader
 // lenger ned) - trengs for å legge raden rett inn i den LEVENDE tabellen (addData) uten
 // en full re-rendring, se adminArkLeggTilFlereReserveRader().
 function adminArkTomRadTilVisning(r) {
   return { _ordreId:null, _arkId:r.id, _erOrdre:false, forhandler:'', kontaktperson:'', chassisNr:'', serienummer:'',
-    mottatt:false, dato:'', papirer:'', dokumenter:false, fakturertVis:'', fraktselskap:'', bestiltFrakt:false, utstyr:'', fullmaktVis:null, vedtakVis:null, henteklarVis:'',
+    mottatt:false, dato:'', papirer:'', dokumenter:false, fakturertVis:'', fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', fullmaktVis:null, vedtakVis:null, henteklarVis:'',
     merknader:'', flateVis:'', _flateErEkte:false, timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'',
     timeBekreftetVis:'', ventendeTimer:'', rekkefolge:r.rekkefolge, _arkivert:false, _ordreStatus:null };
 }
@@ -1078,9 +1115,13 @@ function renderAdminArk(scrollTilBunn) {
         const bestillDisabled = manglerChassis || !rad.fraktselskap || erLeveringAvOss;
         const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Ingen bestilling nødvendig - Salmakern leverer selv' : (!rad.fraktselskap ? 'Velg fraktselskap først' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post')));
         const hentetTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Varsle kontaktperson om at bilen er på vei til dere' : 'Varsle kontaktperson om at bilen er hentet');
+        // Rødt rundt knappen før den er trykket, grønt etter - bedt om av Henrik
+        // 2026-09-30, samme farger som resten av appen bruker for av/på-tilstander
+        // (STATUSER sine egne grønn/rød-par i core.js).
+        const knappFarge = trykket => trykket ? 'border-color:#22c55e;color:#86efac' : 'border-color:#ef4444;color:#fca5a5';
         return `<div style="display:flex;gap:4px;justify-content:center">
-          <button class="btn sm" style="padding:3px 7px;font-size:11px" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">📧 Bestill</button>
-          <button class="btn sm" style="padding:3px 7px;font-size:11px" ${manglerChassis?'disabled':''} onclick="adminArkVarsleHentet('${chassis}')" title="${hentetTitel}">✔ Hentet</button>
+          <button class="btn sm" style="padding:3px 7px;font-size:11px;${knappFarge(rad.bestiltFrakt)}" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">📧 Bestill</button>
+          <button class="btn sm" style="padding:3px 7px;font-size:11px;${knappFarge(rad.hentetVarslet)}" ${manglerChassis?'disabled':''} onclick="adminArkVarsleHentet('${chassis}')" title="${hentetTitel}">✔ Hentet</button>
         </div>`;
       }},
     {title:'Merknader', field:'merknader', width: adminArkMaalBredde(data,'merknader','Merknader',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},

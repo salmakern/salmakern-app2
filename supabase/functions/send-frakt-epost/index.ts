@@ -9,12 +9,17 @@
 //         brukt når Fraktselskap er satt til "Hente selv" (kun chassis.nr).
 //   type: "paa_vei"          - varsler kontaktpersonen om at bilen er på vei til dem, brukt
 //         når Fraktselskap er satt til "Levering av oss" (kun chassis.nr).
+// ALLE fire typene sendes med Salmakern selv på blindkopi (BCC_EPOST under).
 // Krever RESEND_API_KEY satt som secret (npx supabase secrets set RESEND_API_KEY=...).
 // FRAKT_EPOST_AVSENDER er valgfri (secret) - faller tilbake til post@salmaker.as, som må
 // være en verifisert avsenderadresse/domene i Resend-kontoen for at sending skal fungere.
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const FRA_EPOST = Deno.env.get('FRAKT_EPOST_AVSENDER') || 'post@salmaker.as'
+// Blindkopi til Salmakern selv på ALLE e-poster herfra (bedt om av Henrik 2026-09-30:
+// "sett oss på blindkopi som blir sendt ut ifra admin arket") - egen valgfri secret hvis
+// en annen adresse enn avsenderadressen ønskes senere, faller ellers tilbake til samme.
+const BCC_EPOST = Deno.env.get('FRAKT_EPOST_BCC') || FRA_EPOST
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -99,10 +104,11 @@ async function sendEpost(til: string, cc: string | undefined, emne: string, html
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY er ikke satt - kontakt Henrik for å fullføre oppsettet')
   const tilListe = splittEposter(til)
   const ccListe = splittEposter(cc)
+  const bccListe = splittEposter(BCC_EPOST)
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FRA_EPOST, to: tilListe, cc: ccListe.length ? ccListe : undefined, subject: emne, html, text: tekst }),
+    body: JSON.stringify({ from: FRA_EPOST, to: tilListe, cc: ccListe.length ? ccListe : undefined, bcc: bccListe.length ? bccListe : undefined, subject: emne, html, text: tekst }),
   })
   if (!res.ok) {
     const feiltekst = await res.text()
@@ -179,9 +185,9 @@ Deno.serve(async (req) => {
       const emne = `Bilen er klar for henting${chassisNr ? ' - ' + chassisNr : ''}`
       const html = `
         <p style="margin:0 0 12px">Hei,</p>
-        <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er klar for å bli hentet${escHtml(fraSetning)}.</p>
+        <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er klar for å bli hentet${escHtml(fraSetning)}. Som avtalt henter dere selv.</p>
         ${await signaturHtml(avsenderNavn)}`
-      const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er klar for å bli hentet${fraSetning}.\n\n`
+      const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er klar for å bli hentet${fraSetning}. Som avtalt henter dere selv.\n\n`
         + signaturTekst(avsenderNavn)
       await sendEpost(kontaktpersonEpost, undefined, emne, html, tekst)
       return new Response('ok', { status: 200, headers: CORS_HEADERS })

@@ -1169,15 +1169,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
 <div class="modal" id="klarForHenting">
   <div class="modal-box">
-    <div class="h">Bilen er klar for henting</div>
+    <div class="h" id="klarForHentingTittel">Bilen er klar for henting</div>
     <input type="hidden" id="kfh_chassis">
     <div style="margin-top:12px">
-      <label>Klar for henting fra dato</label>
+      <label id="kfh_datoLabel">Klar for henting fra dato</label>
       <input type="date" id="kfh_dato">
     </div>
-    <div class="muted small" style="margin-top:8px">Sender e-post til kontaktpersonen med denne datoen.</div>
+    <div class="muted small" style="margin-top:8px" id="klarForHentingBeskrivelse">Sender e-post til kontaktpersonen med denne datoen.</div>
     <div style="margin-top:14px;display:flex;gap:8px">
-      <button class="btn red" onclick="adminArkSendKlarForHenting()">Send</button>
+      <button class="btn red" onclick="adminArkSendFraktBestilling()">Send</button>
       <button class="btn" onclick="closeModal('klarForHenting')">Avbryt</button>
     </div>
   </div>

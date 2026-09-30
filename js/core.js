@@ -103,17 +103,36 @@ const STATUSER = [
   {id:'klar_visning',   lbl:'Klar for visning',     border:'#22c55e', bg:'#052e1688', txt:'#86efac'},
   {id:'vist_biltilsyn', lbl:'Vist på biltilsynet',  border:'#f97316', bg:'#43140788', txt:'#fed7aa'},
   {id:'klar_henting',   lbl:'Klar for henting',     border:'#a1a1aa', bg:'#09090b88', txt:'#e4e4e7'},
-  {id:'bestilt_frakt',  lbl:'Bestilt frakt',        border:'#a78bfa', bg:'#2e106688', txt:'#ddd6fe'},
   {id:'hentet',         lbl:'Hentet',               border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
 ];
 function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
 // rolle lagres/sammenlignes alltid med små bokstaver (ansatt/godkjenner/admin) - denne
 // er KUN for visning, rører aldri selve verdien noe sted den brukes i logikk/sammenligning.
 function rolleVis(rolle) { return rolle ? rolle.charAt(0).toUpperCase() + rolle.slice(1) : ''; }
-const STATUS_SORT = {hentet:0,bestilt_frakt:1,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8};
+const STATUS_SORT = {hentet:0,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8};
+// "Bestilt frakt" er ikke lenger en verdi i ordreStatus-nedtrekkslisten (bedt om av Henrik
+// 2026-09-30: den krevde et manuelt valg som lett ble glemt, og "stjal" plassen til den
+// faktiske statusen). I stedet en uavhengig markering PÅ ordren - samme mønster som
+// `prioritert` (kantlinje+merkelapp på ordrekortet, se BESTILT_FRAKT_BADGE_FARGE/
+// bestiltFraktBadgeHTML() og oversikt-kalender.js) - satt automatisk når frakt bestilles
+// på e-post fra Admin-ark (js/admin-ark.js). henteKlarDato er en valgfri dato valgt i
+// samme dialog, brukt i badge-teksten OG til å sortere listene under (mest hastverk øverst).
+const BESTILT_FRAKT_BADGE_FARGE = '#a78bfa';
+function bestiltFraktBadgeHTML(o, offsetCss) {
+  if (!o.bestiltFrakt) return '';
+  const tekst = o.henteKlarDato ? `HENTEKLAR ${fmtDatoKort(o.henteKlarDato)}` : 'BESTILT FRAKT';
+  return `<span style="position:absolute;top:-9px;${offsetCss};background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:${BESTILT_FRAKT_BADGE_FARGE};letter-spacing:.03em">${tekst}</span>`;
+}
 function sorterOrdre(a,b) {
   const pd = (b.prioritert?1:0) - (a.prioritert?1:0);
   if (pd !== 0) return pd;
+  // Henteklar-dato (valgt ved fraktbestilling) sorteres nærmeste dato først - mest
+  // hastverk øverst. Ordre uten dato havner etter de som har en.
+  if (a.henteKlarDato && b.henteKlarDato) {
+    const hd = a.henteKlarDato.localeCompare(b.henteKlarDato);
+    if (hd !== 0) return hd;
+  } else if (a.henteKlarDato && !b.henteKlarDato) return -1;
+  else if (!a.henteKlarDato && b.henteKlarDato) return 1;
   const sd=(STATUS_SORT[a.ordreStatus]??99)-(STATUS_SORT[b.ordreStatus]??99);
   if(sd!==0) return sd;
   return (a.ankomstdato||'').localeCompare(b.ankomstdato||'');
@@ -399,7 +418,8 @@ function dbToOrdre(r) {
     tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||'', tidBiltilsynetSted:r.tid_biltilsynet_sted||'',
     datoKlarHenting:r.dato_klar_henting||'',
     typegodkjenning:r.typegodkjenning||'', egenvektCoc:r.egenvekt_coc||'', forhandlerOrgnr:r.forhandler_orgnr||'',
-    vegvesenFingerprint:r.vegvesen_fingerprint||null
+    vegvesenFingerprint:r.vegvesen_fingerprint||null,
+    bestiltFrakt:!!r.bestilt_frakt, henteKlarDato:r.hente_klar_dato||''
   };
 }
 function ordreToDb(o) {
@@ -444,7 +464,7 @@ function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,
     forhandler:r.forhandler||'', kontaktperson:r.kontaktperson||'',
     serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:r.papirer||'', dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
-    bestiltFrakt:!!r.bestilt_frakt, utstyr:r.utstyr||'',
+    bestiltFrakt:!!r.bestilt_frakt, hentetVarslet:!!r.hentet_varslet, utstyr:r.utstyr||'',
     merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', timeBekreftetSted:r.time_bekreftet_sted||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
 }
 function dbToMote(r) {
@@ -747,7 +767,8 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa,
     fikenLinjer:[],
     notater:'', endringer:[],
     utstyrSjekkliste:[], utstyrMalNavn:'',
-    visningsSjekkliste:[], visningsMalNavn:'', prioritert:false
+    visningsSjekkliste:[], visningsMalNavn:'', prioritert:false,
+    bestiltFrakt:false, henteKlarDato:''
   };
 }
 

@@ -19,11 +19,14 @@ function nyEnvironment() {
     console, Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
     document: { addEventListener() {}, getElementById() { return null; } },
     window: { addEventListener() {} },
-    S: { ordrer: [], kontakter: [] },
+    S: { ordrer: [], kontakter: [], utstyrMaler: [] },
     db: null, me: null,
     esc: s => s,
     save() {},
     saveInnstillinger() {},
+    logChange(o, txt) { o.endringer = o.endringer || []; o.endringer.push({ txt }); },
+    merkeModell: o => `${o.merke||''} ${o.modell||''}`.trim(),
+    utstyrSjekklisteHTML: () => '',
     oppdaterSkalHaForOppskrift(navn, skalStaa) { skalHaKall.push({ navn, skalStaa }); },
     oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa) { fikenLinjeKall.push({ produktnummer, skalStaa }); },
   };
@@ -256,5 +259,41 @@ describe('toggleUtstyrPunkt - Land Rover Discovery 5', () => {
     env.toggleUtstyrPunkt('ord_1', idx);
     expect(fikenLinjeKall).toContainEqual({ produktnummer: '202', skalStaa: true });
     expect(fikenLinjeKall.some(k => k.produktnummer === '401')).toBe(false);
+  });
+});
+
+describe('autoVelgUtstyrMal() - KIA EV9 "ikke 501" ved AUTOMATISK malvalg (regresjon)', () => {
+  // Bedt om av Henrik 2026-09-30: "det må stå ikke 501 på de ordrene som ikke får
+  // panorama huket av på" - applyUtstyrMal() (manuelt valgt mal) satte allerede "ikke 501"
+  // med en gang malen ble valgt, men autoVelgUtstyrMal() (kalt automatisk fra
+  // opprettOrdre()/synkroniserFraPrimaer() når Merke/Modell matcher en mal) gjorde det
+  // IKKE - en fersk EV9-ordre der ingen noensinne faktisk trykket på Panorama-punktet
+  // manglet derfor "ikke 501" i Skal ha etter visning helt til noen tilfeldigvis rørte
+  // punktet. Se toggleUtstyrPunkt()-testene over for selve av/på-huke-logikken.
+  let env, o, skalHaKall;
+  beforeEach(() => {
+    ({ env, skalHaKall } = nyEnvironment());
+    o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', utstyrSjekkliste: [], utstyrMalNavn: '', endringer: [] };
+    env.S.ordrer = [o];
+    env.S.utstyrMaler = [{ navn: 'KIA EV9', biltype: 'EV9', punkter: ['Panorama glasstak', '4-seter bak 180', 'Airbag'] }];
+  });
+
+  it('setter "ikke 501" automatisk når malen velges, uten at noen trykker på Panorama-punktet', () => {
+    env.autoVelgUtstyrMal('ord_1');
+    expect(o.utstyrMalNavn).toBe('KIA EV9');
+    expect(skalHaKall).toContainEqual({ navn: 'ikke 501', skalStaa: true });
+  });
+
+  it('rører ikke "ikke 501" for en modell uten Panorama-punkt i malen', () => {
+    env.S.utstyrMaler = [{ navn: 'Uten panorama', biltype: 'EV9', punkter: ['Airbag'] }];
+    env.autoVelgUtstyrMal('ord_1');
+    expect(skalHaKall.length).toBe(0);
+  });
+
+  it('rører ikke "ikke 501" for en annen modell enn EV9, selv med et Panorama-punkt i malen', () => {
+    o.merke = 'Land Rover'; o.modell = 'Discovery 5';
+    env.S.utstyrMaler = [{ navn: 'Land Rover Discovery 5', biltype: 'Discovery 5', punkter: ['Panorama glasstak'] }];
+    env.autoVelgUtstyrMal('ord_1');
+    expect(skalHaKall.length).toBe(0);
   });
 });
