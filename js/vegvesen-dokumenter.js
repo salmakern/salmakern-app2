@@ -1212,14 +1212,26 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
 
   if (!erBrukt) {
-    // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata.
+    // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata. Generert
+    // for ALLE modeller (ikke bare de med mal+geometri, se geometri-sjekken under) - bedt
+    // om av Henrik 2026-09-30: "Melding skal brukes på alle nytt kjøretøy på alle
+    // modellene", og skjemaet krever uansett ingen modell-spesifikk geometridata.
     const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdre);
     await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
   }
 
+  // Vektfordeling/Fabrikantattest krever modell-spesifikk geometridata (akselavstand osv,
+  // se VEGVESEN_MODELLER) - i motsetning til Egenerklæring/Melding om registrering over,
+  // som er identiske uansett modell. Skiller "mangler geometri" (permanent til Henrik/jeg
+  // legger inn mal for modellen - se egen status under) fra "mangler vekter" (løses av
+  // seg selv når noen fyller inn Vekter-feltene) siden vegvesenAutoGenererHvisKomplett()
+  // trenger å vite hvilket for å avgjøre om den skal fortsette å prøve på nytt.
+  if (!vegvesenGeometri(kilde.merke, kilde.modell)) {
+    return { status: 'delvis_geometri_mangler', melding: `Egenerklæring${erBrukt?'':' og Melding om registrering'} generert. Ingen mal/geometri lagt inn for ${kilde.merke||'?'} ${kilde.modell||'?'} ennå - Vektfordeling/Fabrikantattest kan ikke genereres.` };
+  }
   const resultat = vegvesenBeregnOgSettEndring(kilde);
   if (!resultat) {
-    return { status: 'delvis', melding: `Egenerklæring${erBrukt?'':' og Melding om registrering'} generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
+    return { status: 'delvis_vekt_mangler', melding: `Egenerklæring${erBrukt?'':' og Melding om registrering'} generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
   }
   const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
   const { bytes: vektfordelingBytes } = await genVektfordelingPDF(visningsOrdre, justertP, P1, P2, M, M1, M2, geom);
@@ -1254,8 +1266,11 @@ async function genererVegvesenDokumenter(ordreId) {
   // Kjøretøy lagt til som gyldig kategori 2026-09-23 - genFabrikantattestPDF/
   // genEgenerklaeringPDF slår da om til riktig utforming selv (se erBrukt der).
   if (!kilde.ombygging?.nyttKjoretoy && !kilde.ombygging?.bruktKjoretoy) { visToast('Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger - denne ordren er ikke det.'); return; }
-  const geometri = vegvesenGeometri(kilde.merke, kilde.modell);
-  if (!geometri) { visToast('Ingen mal/geometri lagt inn for ' + (kilde.merke||'?') + ' ' + (kilde.modell||'?') + ' ennå'); return; }
+  // Geometri-sjekken som lå her tidligere er fjernet (bedt om av Henrik 2026-09-30) -
+  // manglende mal/geometri for modellen blokkerte FØR genereringen av Egenerklæring og
+  // Melding om registrering også, selv om ingen av dem faktisk trenger geometridata (kun
+  // Vektfordeling/Fabrikantattest gjør). vegvesenGenererOgLagre() genererer nå det som er
+  // mulig og gir en forklarende delvis-melding tilbake i stedet.
   visToast('Genererer dokumenter...', 'ok');
   try {
     const resultat = await vegvesenGenererOgLagre(kilde, kontekst);
@@ -1326,7 +1341,11 @@ async function vegvesenAutoGenererHvisKomplett(o) {
   const kontekst = vegvesenFlateKontext(o);
   const kilde = kontekst ? kontekst.primaer : o;
   if (!kilde.ombygging?.nyttKjoretoy && !kilde.ombygging?.bruktKjoretoy) return;
-  if (!vegvesenGeometri(kilde.merke, kilde.modell)) return;
+  // Geometri-sjekken som lå her tidligere er fjernet (bedt om av Henrik 2026-09-30: se
+  // vegvesenGenererOgLagre() sin kommentar om Egenerklæring/Melding om registrering) -
+  // fingerprint-lagringen under skiller nå på om resultatet var 'delvis_geometri_mangler'
+  // (permanent til geometri legges inn - lagres likevel, ellers ville denne prøvd på nytt
+  // for alltid) eller 'delvis_vekt_mangler' (løses av seg selv - lagres bevisst IKKE).
   if (!vegvesenErKomplett(kilde)) return;
 
   const id = kontekst ? 'flate:' + kontekst.flate.id : 'ordre:' + kilde.id;
@@ -1338,11 +1357,19 @@ async function vegvesenAutoGenererHvisKomplett(o) {
   vegvesenGenererer.add(id);
   try {
     const resultat = await vegvesenGenererOgLagre(kilde, kontekst);
-    if (resultat.status === 'ok') {
+    if (resultat.status === 'ok' || resultat.status === 'delvis_geometri_mangler') {
+      // 'delvis_geometri_mangler' lagres også - modellen mangler mal/geometri, noe som
+      // ikke løser seg av at brukeren fyller ut mer på ordren, så det er ikke noe vits i
+      // å prøve på nytt ved hver eneste render (det ville regenerert og lagret
+      // Egenerklæring/Melding om registrering på nytt kontinuerlig, se advarselen under).
       vegvesenLagreFingerprint(kilde, kontekst);
-      visToast('📄 Vegvesen-dokumenter generert automatisk' + (kontekst ? ' for hele flåten' : '') + ' - husk å skrive ut', 'ok');
+      if (resultat.status === 'ok') {
+        visToast('📄 Vegvesen-dokumenter generert automatisk' + (kontekst ? ' for hele flåten' : '') + ' - husk å skrive ut', 'ok');
+      } else {
+        visToast('📄 ' + resultat.melding + ' - husk å skrive ut', 'ok');
+      }
     }
-    // status 'delvis' (mangler vekter) lagrer bevisst IKKE fingerprinten - da prøver
+    // status 'delvis_vekt_mangler' lagrer bevisst IKKE fingerprinten - da prøver
     // auto-triggeren på nytt neste gang noe endres, helt til vektene også er fylt ut.
   } catch (e) {
     console.error('Automatisk generering av Vegvesen-dokumenter feilet:', e);
