@@ -916,7 +916,13 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 // Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
 // regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.
 function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
-function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · Chassis: '+esc(o.chassis) : ordreLabel(o); }
+// "Chassis: <nr>" pakket i en white-space:nowrap-span - uten den brøt et 17-tegns
+// chassisnummer midt i seg selv på smale mobilskjermer (rapportert av Henrik 2026-09-30:
+// "chassis.nr blir for lange på mobilen så de deler seg opp"). Med nowrap velger
+// nettleseren i stedet mellomrommet FØR "Chassis:" som bruddpunkt når det ikke er plass
+// til alt på én linje - selve nummeret havner da helt og uskadd på sin egen linje, i
+// stedet for å bli splittet midt i.
+function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · <span style="white-space:nowrap">Chassis: '+esc(o.chassis)+'</span>' : ordreLabel(o); }
 
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
 // tidligere ordre, sortert etter hvor ofte de forekommer (mest brukt først). Hvert felt
