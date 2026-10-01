@@ -599,9 +599,16 @@ async function genVektfordelingPDF(o, P, P1, P2, M, M1, M2, geometri) {
   page.drawText('NA', { x: vX+330, y, size: 8.5, font: fontBold });
   page.drawText('Tilfredsstilt', { x: vX+360, y, size: 8.5, font: fontBold });
   y -= 13.5;
+  // n/Belastning/NA var tidligere limt sammen til ÉN tekststreng ("96,73 kg  <= 330") i
+  // stedet for egne kolonner - siden kg-verdien har ulikt antall tegn fra rad til rad,
+  // hoppet "<= 330"-delen frem og tilbake i stedet for å stå rett under hverandre som i
+  // referansearket (rapportert av Henrik 2026-10-01: "kolonnene er feil"). Hver verdi får
+  // nå sin egen faste x, rett under kolonneoverskriften over.
   beregning.rader.forEach(r => {
-    page.drawText(`Antall passasjerer "n" ${r.n}`, { x: vX, y, size: 8.5, font });
-    page.drawText(vegvesenFmtKg(r.front) + ' kg  <= ' + vegvesenFmtKg(beregning.frontMaks), { x: vX+230, y, size: 8.5, font });
+    page.drawText('Antall passasjerer "n"', { x: vX, y, size: 8.5, font });
+    page.drawText(String(r.n), { x: vX+230, y, size: 8.5, font });
+    page.drawText(vegvesenFmtKg(r.front) + ' kg', { x: vX+255, y, size: 8.5, font });
+    page.drawText('<= ' + vegvesenFmtKg(beregning.frontMaks), { x: vX+330, y, size: 8.5, font });
     fylturRad(vX+360, y+3, 40, sannBg(r.frontOk));
     page.drawText(sannTekst(r.frontOk), { x: vX+362, y, size: 8.5, font: fontBold });
     y -= 11.5;
@@ -613,8 +620,10 @@ async function genVektfordelingPDF(o, P, P1, P2, M, M1, M2, geometri) {
   page.drawText('n', { x: vX+230, y, size: 8.5, font: fontBold });
   y -= 13.5;
   beregning.rader.forEach(r => {
-    page.drawText(`Antall passasjerer "n" ${r.n}`, { x: vX, y, size: 8.5, font });
-    page.drawText(vegvesenFmtKg(r.bak) + ' kg  <= ' + vegvesenFmtKg(beregning.bakMaks), { x: vX+230, y, size: 8.5, font });
+    page.drawText('Antall passasjerer "n"', { x: vX, y, size: 8.5, font });
+    page.drawText(String(r.n), { x: vX+230, y, size: 8.5, font });
+    page.drawText(vegvesenFmtKg(r.bak) + ' kg', { x: vX+255, y, size: 8.5, font });
+    page.drawText('<= ' + vegvesenFmtKg(beregning.bakMaks), { x: vX+330, y, size: 8.5, font });
     fylturRad(vX+360, y+3, 40, sannBg(r.bakOk));
     page.drawText(sannTekst(r.bakOk), { x: vX+362, y, size: 8.5, font: fontBold });
     y -= 11.5;
