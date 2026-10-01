@@ -1087,34 +1087,45 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
 // Samme lagringsmekanikk (bucket, samme-filnavn-erstatter-forrige-versjon) som
 // lastOppDokument() i ordre-diverse.js bruker for manuelt opplastede filer - her bare
 // fra genererte PDF-byte i stedet for en fil valgt i en input.
+// Returnerer true/false for om dokumentet faktisk endte opp trygt lagret i databasen -
+// kalleren (vegvesenGenererOgLagre) bruker dette til å avgjøre om genereringen som helhet
+// faktisk lyktes (bekreftet av Henrik 2026-10-01: en ordre hadde en lagret fingerprint
+// som om alt var i orden, men TOMT dokumenter-felt i databasen - selve PDF-opplastingen
+// til Storage lyktes, men den etterfølgende lagringen av selve dokumentlisten på ordren
+// feilet stille i bakgrunnen (fire-and-forget .then(), aldri awaitet) uten at noe fanget
+// det opp eller hindret fingerprinten i å bli lagret som om alt var ferdig).
 async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
-  const o = S.ordrer.find(x => x.id === ordreId); if (!o) return;
-  if (!db) { visToast('Ikke koblet til Supabase'); return; }
+  const o = S.ordrer.find(x => x.id === ordreId); if (!o) return false;
+  if (!db) { visToast('Ikke koblet til Supabase'); return false; }
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
   const tryggNavn = filnavn.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-]/g, '_');
   const lagringsnavn = `${ordreId}/${Date.now()}_${tryggNavn}`;
   const { error } = await db.storage.from('ordre-dokumenter').upload(lagringsnavn, blob, { contentType: 'application/pdf', cacheControl: '31536000' });
-  if (error) { visToast('Feil ved lagring av ' + filnavn + ': ' + error.message); return; }
+  if (error) { visToast('Feil ved lagring av ' + filnavn + ': ' + error.message); return false; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(lagringsnavn);
-  o.dokumenter = o.dokumenter || [];
-  const gammelIdx = o.dokumenter.findIndex(d => d.navn === filnavn);
+  const eksisterende = o.dokumenter || [];
+  const gammelIdx = eksisterende.findIndex(d => d.navn === filnavn);
   const nyttDok = { navn: filnavn, url: data.publicUrl, lastetOppAv: me?.navn || 'Automatisk', dato: new Date().toISOString() };
+  const nyeDokumenter = gammelIdx !== -1
+    ? eksisterende.map((d, i) => i === gammelIdx ? nyttDok : d)
+    : [...eksisterende, nyttDok];
+  // Lagre dokumentlisten og VENT på bekreftelse FØR vi sier fra oss at dette lyktes -
+  // den gamle filen slettes først etterpå, når vi er sikre på at referansen til den nye
+  // faktisk er trygt lagret (i stedet for potensielt å stå igjen uten noen av dem).
+  const { error: dbError } = await db.from('ordrer').update({ dokumenter: nyeDokumenter }).eq('id', ordreId);
+  if (dbError) { visToast('Kunne ikke lagre dokumentlisten for ' + filnavn + ': ' + dbError.message); return false; }
+  o.dokumenter = nyeDokumenter;
   if (gammelIdx !== -1) {
-    const gammel = o.dokumenter[gammelIdx];
-    const gammeltFilnavn = gammel.url.split('/ordre-dokumenter/')[1];
+    const gammeltFilnavn = eksisterende[gammelIdx].url.split('/ordre-dokumenter/')[1];
     if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
-    o.dokumenter[gammelIdx] = nyttDok;
-    o.dokumenter = [...o.dokumenter];
     logChange(o, 'Erstattet dokument med ny versjon: ' + filnavn);
   } else {
-    o.dokumenter = [...o.dokumenter, nyttDok];
     logChange(o, 'Generert dokument: ' + filnavn);
   }
-  db.from('ordrer').update({ dokumenter: o.dokumenter }).eq('id', ordreId)
-    .then(r => { if (r.error) console.error('Dokument-oppdatering feilet:', r.error.message); });
   try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
   const listEl = document.getElementById('dokumenterListe_' + ordreId);
   if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  return true;
 }
 
 // Alle genererte dokumentnavn følger mønsteret "<Dokumenttype>-<chassis>.pdf" - eller
@@ -1153,7 +1164,7 @@ function vegvesenFlateKontext(o) {
 // tilbake til den vanlige enkelt-ordre-varianten når det bare er én ordreId.
 async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) {
   if (ordreIder.length === 1) return vegvesenLagreGenerertDokument(ordreIder[0], filnavn, pdfBytes);
-  if (!db) { visToast('Ikke koblet til Supabase'); return; }
+  if (!db) { visToast('Ikke koblet til Supabase'); return false; }
   const forsteOrdre = S.ordrer.find(x => x.id === ordreIder[0]);
   const forrige = forsteOrdre && (forsteOrdre.dokumenter || []).find(d => d.navn === filnavn);
 
@@ -1161,33 +1172,42 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
   const tryggNavn = filnavn.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-]/g, '_');
   const lagringsnavn = `${ordreIder[0]}/${Date.now()}_${tryggNavn}`;
   const { error } = await db.storage.from('ordre-dokumenter').upload(lagringsnavn, blob, { contentType: 'application/pdf', cacheControl: '31536000' });
-  if (error) { visToast('Feil ved lagring av ' + filnavn + ': ' + error.message); return; }
+  if (error) { visToast('Feil ved lagring av ' + filnavn + ': ' + error.message); return false; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(lagringsnavn);
   const nyttDok = { navn: filnavn, url: data.publicUrl, lastetOppAv: me?.navn || 'Automatisk', dato: new Date().toISOString() };
-
-  if (forrige) {
-    const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
-    if (gammeltFilnavn) db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]).then(() => {});
-  }
 
   const oppdaterte = [];
   ordreIder.forEach(id => {
     const o = S.ordrer.find(x => x.id === id); if (!o) return;
-    o.dokumenter = o.dokumenter || [];
-    const gammelIdx = o.dokumenter.findIndex(d => d.navn === filnavn);
-    o.dokumenter = gammelIdx !== -1 ? o.dokumenter.map((d, i) => i === gammelIdx ? nyttDok : d) : [...o.dokumenter, nyttDok];
-    logChange(o, 'Generert dokument (flåte): ' + filnavn);
+    const eksisterende = o.dokumenter || [];
+    const gammelIdx = eksisterende.findIndex(d => d.navn === filnavn);
+    o._nyeDokumenter = gammelIdx !== -1 ? eksisterende.map((d, i) => i === gammelIdx ? nyttDok : d) : [...eksisterende, nyttDok];
     oppdaterte.push(o);
   });
-  if (db && oppdaterte.length) {
-    db.from('ordrer').upsert(oppdaterte.map(o => ({ id: o.id, dokumenter: o.dokumenter })), { onConflict: 'id' })
-      .then(r => { if (r.error) console.error('Dokument-oppdatering (flåte) feilet:', r.error.message); });
+  // Lagre og VENT på bekreftelse FØR vi sier fra oss at dette lyktes og sletter den gamle
+  // filen - samme root-cause-fiks som vegvesenLagreGenerertDokument() (bekreftet av
+  // Henrik 2026-10-01), bare for flåte-varianten av samme lagrings-steg.
+  const { error: dbError } = await db.from('ordrer').upsert(oppdaterte.map(o => ({ id: o.id, dokumenter: o._nyeDokumenter })), { onConflict: 'id' });
+  if (dbError) {
+    oppdaterte.forEach(o => { delete o._nyeDokumenter; });
+    visToast('Kunne ikke lagre dokumentlisten (flåte) for ' + filnavn + ': ' + dbError.message);
+    return false;
+  }
+  oppdaterte.forEach(o => {
+    o.dokumenter = o._nyeDokumenter;
+    delete o._nyeDokumenter;
+    logChange(o, 'Generert dokument (flåte): ' + filnavn);
+  });
+  if (forrige) {
+    const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
+    if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
   }
   try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
   oppdaterte.forEach(o => {
     const listEl = document.getElementById('dokumenterListe_' + o.id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
   });
+  return true;
 }
 
 // Selve genererings-kjernen, delt mellom det manuelle "Regenerer"-trykket og den
@@ -1209,15 +1229,23 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   const erBrukt = !!kilde.ombygging?.bruktKjoretoy;
 
   const egenerklaeringBytes = await genEgenerklaeringPDF(visningsOrdre);
-  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
+  const egenerklaeringOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
 
+  let meldingOk = true;
   if (!erBrukt) {
     // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata. Generert
     // for ALLE modeller (ikke bare de med mal+geometri, se geometri-sjekken under) - bedt
     // om av Henrik 2026-09-30: "Melding skal brukes på alle nytt kjøretøy på alle
     // modellene", og skjemaet krever uansett ingen modell-spesifikk geometridata.
     const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdre);
-    await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
+    meldingOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
+  }
+  // Stopper her (i stedet for å fortsette til Vektfordeling/Fabrikantattest) hvis selve
+  // lagringen feilet - en 'feil'-status lagrer IKKE fingerprinten hos kalleren, slik at
+  // neste forsøk (auto-trigger eller et nytt knappetrykk) prøver på nytt i stedet for å
+  // tro jobben er unnagjort (se kommentaren på vegvesenLagreGenerertDokument).
+  if (!egenerklaeringOk || !meldingOk) {
+    return { status: 'feil', melding: 'Kunne ikke lagre ett eller flere dokumenter - prøv igjen.' };
   }
 
   // Vektfordeling/Fabrikantattest krever modell-spesifikk geometridata (akselavstand osv,
@@ -1235,14 +1263,18 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   }
   const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
   const { bytes: vektfordelingBytes } = await genVektfordelingPDF(visningsOrdre, justertP, P1, P2, M, M1, M2, geom);
-  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Vektfordeling', filnavnNokkel), vektfordelingBytes);
+  const vektfordelingOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Vektfordeling', filnavnNokkel), vektfordelingBytes);
 
   const fabrikantattestBytes = await genFabrikantattestPDF(visningsOrdre, justertP, justertVogntog, M);
-  await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Fabrikantattest', filnavnNokkel), fabrikantattestBytes);
+  const fabrikantattestOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Fabrikantattest', filnavnNokkel), fabrikantattestBytes);
+  if (!vektfordelingOk || !fabrikantattestOk) {
+    return { status: 'feil', melding: 'Kunne ikke lagre ett eller flere dokumenter - prøv igjen.' };
+  }
 
   if (kontekst) {
     const kjoretoylisteBytes = await genKjoretoylistePDF(kontekst.flate, kontekst.primaer, kontekst.medlemmer);
-    await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Kjøretøyliste', filnavnNokkel), kjoretoylisteBytes);
+    const kjoretoylisteOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Kjøretøyliste', filnavnNokkel), kjoretoylisteBytes);
+    if (!kjoretoylisteOk) return { status: 'feil', melding: 'Kunne ikke lagre Kjøretøyliste - prøv igjen.' };
   }
 
   const dokumentliste = `Egenerklæring, Vektfordeling, Fabrikantattest${erBrukt?'':' og Melding om registrering'}`;
@@ -1274,7 +1306,8 @@ async function genererVegvesenDokumenter(ordreId) {
   visToast('Genererer dokumenter...', 'ok');
   try {
     const resultat = await vegvesenGenererOgLagre(kilde, kontekst);
-    vegvesenLagreFingerprint(kilde, kontekst);
+    if (resultat.status === 'feil') { visToast(resultat.melding); return; }
+    await vegvesenLagreFingerprint(kilde, kontekst);
     visToast(resultat.melding, 'ok');
   } catch (e) {
     console.error('Feil ved generering av Vegvesen-dokumenter:', e);
@@ -1308,16 +1341,25 @@ function vegvesenFingerprint(kilde, kontekst) {
   return JSON.stringify(deler);
 }
 
-function vegvesenLagreFingerprint(kilde, kontekst) {
+// Awaitet (ikke lenger fire-and-forget) av samme grunn som dokument-lagringen over -
+// en fingerprint som ser ut til å ha lagret seg selv om DB-skrivingen faktisk feilet,
+// ville latt denne fanen tro jobben er gjort (den lokale kopien er jo satt), mens en
+// FRISK fane/innlasting fortsatt har den gamle fingerprinten liggende og prøver på nytt -
+// ufarlig i seg selv, men villedende at kallerens egen feilhåndtering ikke fikk vite om det.
+async function vegvesenLagreFingerprint(kilde, kontekst) {
   const fp = vegvesenFingerprint(kilde, kontekst);
   if (kontekst) {
     kontekst.flate.vegvesenFingerprint = fp;
-    if (db) db.from('flater').update({ vegvesen_fingerprint: fp }).eq('id', kontekst.flate.id)
-      .then(r => { if (r.error) console.error('Flåte-fingerprint feilet:', r.error.message); });
+    if (db) {
+      const { error } = await db.from('flater').update({ vegvesen_fingerprint: fp }).eq('id', kontekst.flate.id);
+      if (error) console.error('Flåte-fingerprint feilet:', error.message);
+    }
   } else {
     kilde.vegvesenFingerprint = fp;
-    if (db) db.from('ordrer').update({ vegvesen_fingerprint: fp }).eq('id', kilde.id)
-      .then(r => { if (r.error) console.error('Vegvesen-fingerprint feilet:', r.error.message); });
+    if (db) {
+      const { error } = await db.from('ordrer').update({ vegvesen_fingerprint: fp }).eq('id', kilde.id);
+      if (error) console.error('Vegvesen-fingerprint feilet:', error.message);
+    }
   }
 }
 
@@ -1362,12 +1404,17 @@ async function vegvesenAutoGenererHvisKomplett(o) {
       // ikke løser seg av at brukeren fyller ut mer på ordren, så det er ikke noe vits i
       // å prøve på nytt ved hver eneste render (det ville regenerert og lagret
       // Egenerklæring/Melding om registrering på nytt kontinuerlig, se advarselen under).
-      vegvesenLagreFingerprint(kilde, kontekst);
+      await vegvesenLagreFingerprint(kilde, kontekst);
       if (resultat.status === 'ok') {
         visToast('📄 Vegvesen-dokumenter generert automatisk' + (kontekst ? ' for hele flåten' : '') + ' - husk å skrive ut', 'ok');
       } else {
         visToast('📄 ' + resultat.melding + ' - husk å skrive ut', 'ok');
       }
+    } else if (resultat.status === 'feil') {
+      // Lagrer bevisst IKKE fingerprinten - neste render prøver automatisk på nytt.
+      // Ingen toast her (ville spammet brukeren på hver mislykkede stille bakgrunns-
+      // retry) - men logget til konsollen for feilsøking.
+      console.error('Automatisk generering av Vegvesen-dokumenter: ' + resultat.melding);
     }
     // status 'delvis_vekt_mangler' lagrer bevisst IKKE fingerprinten - da prøver
     // auto-triggeren på nytt neste gang noe endres, helt til vektene også er fylt ut.
@@ -1381,6 +1428,14 @@ async function vegvesenAutoGenererHvisKomplett(o) {
 // Slår sammen de genererte Vegvesen-PDF-ene (i lesbar rekkefølge) til ett dokument og
 // åpner det i en ny fane med utskriftsdialogen klar - nettlesere krever uansett at
 // brukeren selv klikker i den dialogen, det finnes ingen helt stille utskrift.
+//
+// window.open() MÅ kalles synkront, FØR noen "await" i det hele tatt (bekreftet av Henrik
+// 2026-10-01: "får ikke skrevet ut dokumentene") - henting av flere PDF-er fra Supabase
+// Storage tar reell tid, og moderne nettlesere trekker tilbake lov til å åpne en ny fane
+// (popup-blokkering) så snart klikket sitt "ferske brukerhandling"-vindu har rukket å gå
+// ut før window.open() faktisk kjører. Løsningen er å åpne fanen med en gang (med en enkel
+// "laster"-melding), og heller navigere DEN samme fanen til PDF-en når den er ferdig
+// sammenslått - fanen er allerede åpen innen noe asynkront skjer, så den blokkeres aldri.
 async function vegvesenSkrivUt(ordreId) {
   const o = S.ordrer.find(x => x.id === ordreId); if (!o) return;
   const kontekst = vegvesenFlateKontext(o);
@@ -1388,6 +1443,10 @@ async function vegvesenSkrivUt(ordreId) {
   const REKKEFOLGE = ['Egenerklæring-', 'Vektfordeling-', 'Fabrikantattest-', 'Melding om registrering-', 'Kjøretøyliste-'];
   const relevante = REKKEFOLGE.map(p => kildeDok.find(d => d.navn.startsWith(p))).filter(Boolean);
   if (!relevante.length) { visToast('Ingen Vegvesen-dokumenter å skrive ut ennå'); return; }
+
+  const vindu = window.open('', '_blank');
+  if (!vindu) { visToast('Kunne ikke åpne utskriftsvindu - sjekk om popup ble blokkert'); return; }
+  vindu.document.write('<p style="font:14px sans-serif;padding:20px">Henter dokumenter for utskrift …</p>');
 
   visToast('Henter dokumenter for utskrift...', 'ok');
   try {
@@ -1402,11 +1461,11 @@ async function vegvesenSkrivUt(ordreId) {
     }
     const ferdig = await samlet.save();
     const url = URL.createObjectURL(new Blob([ferdig], { type: 'application/pdf' }));
-    const vindu = window.open(url, '_blank');
-    if (vindu) vindu.onload = () => vindu.print();
-    else visToast('Kunne ikke åpne utskriftsvindu - sjekk om popup ble blokkert');
+    vindu.onload = () => vindu.print();
+    vindu.location.href = url;
   } catch (e) {
     console.error('Feil ved sammenslåing/utskrift av Vegvesen-dokumenter:', e);
     visToast('Feil ved utskrift: ' + e.message);
+    vindu.close();
   }
 }
