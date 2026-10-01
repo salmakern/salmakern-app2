@@ -354,11 +354,15 @@ async function loadFromSupabase() {
       saveInnstillinger();
     }
   }
-  // Flåter hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
+  // Flåter hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett).
+  // Feil logges (men sluker ikke unntaket) - disse tabellene finnes i produksjon nå, så en
+  // feil her er ikke lenger "forventet", og ble tidligere helt usynlig (rapportert av
+  // Henrik 2026-10-01: Admin-ark tomt for én spesifikk admin, ingen feil å se noe sted).
   try {
     const fR = await db.from('flater').select('*').order('created_at');
     if (!fR.error) S.flater = (fR.data||[]).map(dbToFlate);
-  } catch(_) {}
+    else console.error('Feil ved henting av flater:', fR.error);
+  } catch(e) { console.error('Feil ved henting av flater:', e); }
   // Varelager hentes for seg selv - tabellene finnes kanskje ikke ennå (krever eget SQL-oppsett)
   try {
     const [lvR, lhR, loR] = await Promise.all([
@@ -367,19 +371,24 @@ async function loadFromSupabase() {
       db.from('lager_oppskrifter').select('*').order('navn')
     ]);
     if (!lvR.error) S.lagervarer = (lvR.data||[]).map(dbToLagervare);
+    else console.error('Feil ved henting av lagervarer:', lvR.error);
     if (!lhR.error) S.lagerhistorikk = (lhR.data||[]).map(dbToLagerhistorikk);
+    else console.error('Feil ved henting av lagerhistorikk:', lhR.error);
     if (!loR.error) S.lagerOppskrifter = (loR.data||[]).map(dbToLagerOppskrift);
-  } catch(_) {}
+    else console.error('Feil ved henting av lager_oppskrifter:', loR.error);
+  } catch(e) { console.error('Feil ved henting av varelager:', e); }
   // Admin-ark hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
   try {
     const aaR = await db.from('admin_ark').select('*');
     if (!aaR.error) S.adminArk = (aaR.data||[]).map(dbToAdminArkRad);
-  } catch(_) {}
+    else console.error('Feil ved henting av admin_ark:', aaR.error);
+  } catch(e) { console.error('Feil ved henting av admin_ark:', e); }
   // Møter hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
   try {
     const mR = await db.from('moter').select('*').order('dato').order('tid');
     if (!mR.error) S.moter = (mR.data||[]).map(dbToMote);
-  } catch(_) {}
+    else console.error('Feil ved henting av moter:', mR.error);
+  } catch(e) { console.error('Feil ved henting av moter:', e); }
   // Chat mellom admin/godkjennere - RLS skjuler raden helt for andre roller, så et
   // avslag her er normalt (ikke logges som feil) hvis innlogget ansatt er vanlig ansatt.
   try {
