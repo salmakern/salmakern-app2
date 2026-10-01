@@ -748,7 +748,12 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
 
   // "Andre endringer"-tabellen - Egenvekt/Tillatt totalvekt/Tillatt vogntogvekt/Karosserikode/
   // Antall sitteplasser/Varerommets lengde er fast tekst per modell, kun selve tallene varierer.
-  const endrKolBredder = [140, 70, 70, 120, 115];
+  // Bruker SAMME kolonnebredder som Krav-tabellen over (kravKolBredder) - hadde tidligere
+  // sin egen, avvikende [140,70,70,120,115]-fordeling, som gjorde at de to tabellenes
+  // kolonner (og de oransje overskriftsfeltene) ikke stod rett under hverandre (rapportert
+  // av Henrik 2026-10-01: "fargene er ikke på linje... kolonnene er ikke rett under
+  // hverandre") - i Henriks egen referanse-Excel er dette alltid de SAMME kolonnene (A-E).
+  const endrKolBredder = kravKolBredder;
   const endrKolX = [vX]; endrKolBredder.forEach(b => endrKolX.push(endrKolX[endrKolX.length-1]+b));
   page.drawRectangle({ x: vX, y: y-hodeHoyde+3, width: tabellBredde, height: hodeHoyde, color: ORANSJE });
   ['Andre endringer','Inn','Ut','Testrapport','Utarbeidet av'].forEach((t,i) => {
