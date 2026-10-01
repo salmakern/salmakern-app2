@@ -118,6 +118,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /\bev9\b/i, navn: 'KIA EV9',
     geometri: { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 },
+    varerommetInnMm: 1200,
     fabrikant1: { navn: 'KIA Coporation', adresse: ['12, Heolleung-ro, Seocho-gu', 'Seoul', 'Korea'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177', 'TÜV NORD'],
@@ -140,6 +141,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /\brexton\b/i, navn: 'KGM Rexton',
     geometri: { a: 2.865, b: 1.430, d: 2.061, cOffset: 1.75 },
+    varerommetInnMm: null,
     fabrikant1: { navn: 'KGM Mobility Corp.', adresse: ['455-12, Dongsak-ro, Pyeongtaek-21', 'Gyeonggi-do', 'Korea'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8123999128-YK', 'TÜV NORD'],
@@ -166,6 +168,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /defender\b/i, navn: 'Land Rover Defender',
     geometri: { a: 3.022, b: 1.600, d: 1.600, cOffset: 1.94 },
+    varerommetInnMm: 924,
     fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LE', 'TÜV NORD'],
@@ -201,6 +204,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /discovery\s*5\b/i, navn: 'Land Rover Discovery 5',
     geometri: { a: 2.923, b: 1.550, d: 1.860, cOffset: 1.97 },
+    varerommetInnMm: null,
     fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LR', 'TÜV NORD'],
@@ -219,6 +223,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /\bgls\b/i, navn: 'Mercedes-Benz GLS',
     geometri: { a: 3.135, b: 1.510, d: 2.080, cOffset: 1.88 },
+    varerommetInnMm: null,
     fabrikant1: { navn: 'Mercedes-Benz AG', adresse: ['DE-70372 Stuttgart', 'Germany'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_M-GLS', 'TÜV NORD'],
@@ -237,6 +242,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /gel[aä]ndewagen/i, navn: 'Mercedes-Benz Geländewagen',
     geometri: { a: 2.890, b: 1.490, d: 1.620, cOffset: 1.87 },
+    varerommetInnMm: 822,
     fabrikant1: { navn: 'Mercedes-Benz AG', adresse: ['DE-70372 Stuttgart', 'Germany'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_M-G', 'TÜV NORD'],
@@ -255,6 +261,7 @@ const VEGVESEN_MODELLER = [
   {
     match: /id\.?\s*buzz/i, navn: 'Volkswagen ID.Buzz',
     geometri: { a: 3.239, b: 1.180, d: 2.416, cOffset: 1.55 },
+    varerommetInnMm: null,
     fabrikant1: { navn: 'Volkswagen AG', adresse: ['Berliner Ring 2', '38 440 Wolfsburg', 'Germany'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-EB', 'TÜV NORD'],
@@ -755,13 +762,20 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   const innVogntog = parseFloat(String(o.vekter?.vogntog?.a||'').replace(',','.')) || 0;
   const sitteplasser = vegvesenModell.antallSitteplasser(o);
   const varerommetUtMm = Math.round(vegvesenModell.geometri.d * 1000) + 'mm';
+  // Varerommets lengde FØR ombygging er en fast per-modell måling (ikke ordre-data) -
+  // enkelte modeller har ingen varerom i det hele tatt før ombygging (vist som "-" i
+  // Henriks egne referansedokumenter), mens andre (EV9/Defender/Geländewagen) har en ekte
+  // målt verdi. Stod tidligere alltid som en hardkodet strek for ALLE modeller (rapportert
+  // av Henrik 2026-10-01, sammenlignet mot referanse-Excelarket for KIA EV9: "1200mm" der,
+  // ikke "-").
+  const varerommetInnMm = vegvesenModell.varerommetInnMm ? vegvesenModell.varerommetInnMm + 'mm' : '-';
   let endrRader = [
     ['Egenvekt', vegvesenFmtKg(o.egenvektCoc||0)+'kg', vegvesenFmtKg(egenvektUt)+'kg', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
     ['Tillatt totalvekt', vegvesenFmtKg(innTotalvekt)+'kg', vegvesenFmtKg(endringP)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Tillatt vogntogvekt', vegvesenFmtKg(innVogntog)+'kg', vegvesenFmtKg(endringVogntog)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Karosserikode', 'AC', 'BB', 'Egenerklæring', 'Telemark Salmakerverksted'],
     ['Antall sitteplasser', sitteplasser.inn, sitteplasser.ut, 'Egenerklæring', 'Telemark Salmakerverksted'],
-    ['Varerommets lengde', '-', varerommetUtMm, 'Egenerklæring', 'Telemark Salmakerverksted']
+    ['Varerommets lengde', varerommetInnMm, varerommetUtMm, 'Egenerklæring', 'Telemark Salmakerverksted']
   ];
   // Modellspesifikt avvik for Brukt Kjøretøy (kun KGM Rexton pr. 2026-09-23, se
   // andreEndringerBruktEkstra/Ekskluder på VEGVESEN_MODELLER) - de fleste modeller har

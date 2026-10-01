@@ -376,6 +376,26 @@ describe('kravRader - F7 Fabrikasjonsplate finnes for alle modeller med Fabrikan
   });
 });
 
+// "Varerommets lengde" (Inn, dvs. FØR ombygging) i Fabrikantattest sin "Andre endringer"-
+// tabell viste tidligere alltid en hardkodet strek for ALLE modeller (rapportert av Henrik
+// 2026-10-01, sammenlignet mot referanse-Excelarket for KIA EV9 som hadde en ekte 1200mm-
+// verdi der) - verdiene under er lest direkte fra Henriks egne referanse-Fabrikantattester
+// for hver modell (noen har ingen varerom før ombygging i det hele tatt, derav null).
+describe('VEGVESEN_MODELLER - varerommetInnMm (Fabrikantattest "Andre endringer")', () => {
+  it.each([
+    ['KIA', 'EV9', 1200],
+    ['KGM', 'Rexton', null],
+    ['Land Rover', 'Defender 110', 924],
+    ['Land Rover', 'Discovery 5', null],
+    ['Mercedes-Benz', 'GLS', null],
+    ['Mercedes-Benz', 'Geländewagen', 822],
+    ['Volkswagen', 'ID.Buzz', null],
+  ])('%s %s -> %s', (merke, modell, forventet) => {
+    const m = vegvesenFinnModell(merke, modell);
+    expect(m.varerommetInnMm).toBe(forventet);
+  });
+});
+
 // KGM Rexton sitt Brukt Kjøretøy-referansedokument har en egen "Andre endringer"-tabell
 // (Høyde i stedet for Tillatt totalvekt/vogntogvekt) - bekreftet 2026-09-23, se
 // andreEndringerBruktEkstra/Ekskluder-forklaringen på selve VEGVESEN_MODELLER-oppføringen.
