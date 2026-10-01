@@ -496,8 +496,12 @@ async function genEgenerklaeringPDF(o) {
   const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
   const sigImg = await pdfDoc.embedPng(sigBytes);
   const sigBredde = 110, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
-  page.drawImage(sigImg, { x: venstreMarg - 5, y: y - sigHoyde + 20, width: sigBredde, height: sigHoyde });
   y -= 5;
+  // Signaturen skal ligge i gapet MELLOM sted/dato-linjen og navnet under, ikke overlappe
+  // navnet (rapportert av Henrik 2026-10-01: streken gikk rett gjennom "Jan"). +10 gir et
+  // par punkter klaring over navnets overhøyde, regnet ut fra signaturbildets ekte
+  // pikselmål (431x107).
+  page.drawImage(sigImg, { x: venstreMarg - 5, y: y + 10, width: sigBredde, height: sigHoyde });
   ['Jan Børre Sigurdsen', 'Teknisk leder', 'Telemark Salmakerverksted'].forEach(linje => {
     page.drawText(linje, { x: venstreMarg, y, size: 10.5, font });
     y -= 14;
@@ -668,8 +672,10 @@ async function genVektfordelingPDF(o, P, P1, P2, M, M1, M2, geometri) {
   const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
   const sigImg = await pdfDoc.embedPng(sigBytes);
   const sigBredde = 90, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
-  page.drawImage(sigImg, { x: hX-5, y: hy - sigHoyde + 16, width: sigBredde, height: sigHoyde });
   hy -= 4;
+  // Se samme fiks i genEgenerklaeringPDF - signaturen skal ligge mellom dato og navn,
+  // ikke overlappe navnet.
+  page.drawImage(sigImg, { x: hX-5, y: hy + 9, width: sigBredde, height: sigHoyde });
   ['Jan Børre Sigurdsen', 'Teknisk leder', 'Telemark Salmakerverksted'].forEach(linje => {
     page.drawText(linje, { x: hX, y: hy, size: 9.5, font });
     hy -= 12;
@@ -838,8 +844,10 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
   const sigImg = await pdfDoc.embedPng(sigBytes);
   const sigBredde = 90, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
-  page.drawImage(sigImg, { x: vX-5, y: y - sigHoyde + 16, width: sigBredde, height: sigHoyde });
   y -= 4;
+  // Se samme fiks i genEgenerklaeringPDF - signaturen skal ligge mellom dato og navn,
+  // ikke overlappe navnet.
+  page.drawImage(sigImg, { x: vX-5, y: y + 9, width: sigBredde, height: sigHoyde });
   ['Jan Børre Sigurdsen', 'Teknisk leder', 'Telemark Salmakerverksted'].forEach(linje => {
     page.drawText(linje, { x: vX, y, size: 9.5, font });
     y -= 12;
@@ -1023,8 +1031,10 @@ async function genKjoretoylistePDF(flate, primaer, medlemmer) {
   const sigBytes = await vegvesenLastAsset('assets/signatur-jbs.png');
   const sigImg = await pdfDoc.embedPng(sigBytes);
   const sigBredde = 110, sigHoyde = sigImg.height * (sigBredde / sigImg.width);
-  page.drawImage(sigImg, { x: venstreMarg - 5, y: y - sigHoyde + 20, width: sigBredde, height: sigHoyde });
   y -= 5;
+  // Se samme fiks i genEgenerklaeringPDF - signaturen skal ligge mellom dato og navn,
+  // ikke overlappe navnet.
+  page.drawImage(sigImg, { x: venstreMarg - 5, y: y + 10, width: sigBredde, height: sigHoyde });
   ['Jan Børre Sigurdsen', 'Teknisk leder', 'Telemark Salmakerverksted'].forEach(linje => {
     page.drawText(linje, { x: venstreMarg, y, size: 9.5, font });
     y -= 12;
