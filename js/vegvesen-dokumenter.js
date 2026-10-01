@@ -951,17 +951,21 @@ async function genKjoretoylistePDF(flate, primaer, medlemmer) {
   page.drawText(`${merkeModell} — Flåte ${flate.flatenummer||''}`, { x: venstreMarg, y, size: 10.5, font });
   y -= 28;
 
-  const kolX = [venstreMarg, venstreMarg+180, venstreMarg+360];
+  // Rekkefølge/kolonner matcher Henriks egen referanse-Kjøretøyliste (Excel) - Farge
+  // manglet her tidligere (rapportert av Henrik 2026-10-01: "hvis du ser på
+  // kjøretøyliste så skal det være farge med også").
+  const kolX = [venstreMarg, venstreMarg+110, venstreMarg+170, venstreMarg+380];
   function seksjonshode(tittel) {
     page.drawText(tittel, { x: venstreMarg, y, size: 10.5, font: fontBold });
     y -= 15;
-    ['Chassis-nr', 'Forhandler', 'Org.nr'].forEach((t,i) => page.drawText(t, { x: kolX[i], y, size: 8.5, font: fontBold }));
+    ['Chassis-nr', 'Farge', 'Forhandler', 'Org.nr'].forEach((t,i) => page.drawText(t, { x: kolX[i], y, size: 8.5, font: fontBold }));
     y -= 12;
   }
   function kjoretoyRad(m) {
     page.drawText(m.chassis||'', { x: kolX[0], y, size: 9.5, font });
-    page.drawText(m.kunde||'', { x: kolX[1], y, size: 9.5, font });
-    page.drawText(vegvesenFormaterOrgnr(m.forhandlerOrgnr), { x: kolX[2], y, size: 9.5, font });
+    page.drawText(m.farge||'', { x: kolX[1], y, size: 9.5, font });
+    page.drawText(m.kunde||'', { x: kolX[2], y, size: 9.5, font });
+    page.drawText(vegvesenFormaterOrgnr(m.forhandlerOrgnr), { x: kolX[3], y, size: 9.5, font });
     y -= 14;
   }
 
@@ -1237,7 +1241,14 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
     // for ALLE modeller (ikke bare de med mal+geometri, se geometri-sjekken under) - bedt
     // om av Henrik 2026-09-30: "Melding skal brukes på alle nytt kjøretøy på alle
     // modellene", og skjemaet krever uansett ingen modell-spesifikk geometridata.
-    const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdre);
+    // Farge/eier/org.nr varierer per bil i en flåte (ulikt Merke/Modell, som er likt for
+    // alle) - viser derfor "Se kjøretøyliste" på disse feltene også, akkurat som Chassis
+    // allerede gjorde (bedt om av Henrik 2026-10-01: "skal det være Se kjøretøyliste på
+    // farge og navn eier" + "og samme på org.nr over").
+    const visningsOrdreForMelding = kontekst
+      ? { ...visningsOrdre, farge: 'Se kjøretøyliste', kunde: 'Se kjøretøyliste', forhandlerOrgnr: 'Se kjøretøyliste' }
+      : visningsOrdre;
+    const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdreForMelding);
     meldingOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
   }
   // Stopper her (i stedet for å fortsette til Vektfordeling/Fabrikantattest) hvis selve
