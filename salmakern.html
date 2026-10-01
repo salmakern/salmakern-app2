@@ -1473,7 +1473,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div id="flaterListeView">
       <div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <button class="btn sm" id="flaterVisningBtn" onclick="toggleFlaterVisning()">Aktive flåter</button>
-        <button class="btn sm red" onclick="apneNyFlate()">+ Ny flåte</button>
+        <button class="btn sm red" id="flateNyBtn" onclick="apneNyFlate()">+ Ny flåte</button>
       </div>
       <div id="flaterListe"></div>
     </div>
@@ -1485,12 +1485,12 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <label>Flåtenummer</label>
           <input id="flateDetaljTittel" onchange="sfFlate('flatenummer',this.value)">
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
+        <div id="flateAdminKnapper" style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn sm" id="flateArkiverBtn" onclick="toggleArkiverFlate()">Arkiver flåte</button>
           <button class="btn sm red" onclick="slettFlate()">🗑 Slett flåte</button>
         </div>
       </div>
-      <div style="margin-bottom:12px">
+      <div id="flateLeggTilSeksjon" style="margin-bottom:12px">
         <label>Legg til ordre (søk reg.nr, chassis eller kunde)</label>
         <input id="flateSokInput" placeholder="Bla eller søk..." oninput="renderFlateSok(this.value)">
         <div id="flateSokResultat" style="margin-top:6px;max-height:180px;overflow-y:auto"></div>

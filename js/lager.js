@@ -985,6 +985,12 @@ function gaaTilVareFraVarsel(vareId) {
 // ════════════════════════════════════════════════════
 // LAGER-OPPSKRIFTER
 // ════════════════════════════════════════════════════
+// Admin skal IKKE kunne opprette/redigere/slette oppskrifter (bedt om av Henrik
+// 2026-10-01 - motsatt av det vanlige mønsteret, men eksplisitt ønsket sånn). Ansatt og
+// godkjenner beholder tilgangen uendret. Sjekkes BÅDE i UI (knapper skjules) og inni hver
+// funksjon (reell sperre).
+function oppskriftKanEndre() { return !!(me && me.rolle !== 'admin'); }
+
 let oppskriftAktivModell = null;
 
 function refreshOppskriftVisning() {
@@ -1068,8 +1074,8 @@ function renderOppskriftModellDetalj() {
         <b>${esc(o.navn)}</b>
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
           <span class="pill" style="margin:0;font-size:11px;padding:3px 10px">${(o.ingredienser||[]).length} deler</span>
-          <button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎</button>
-          <button class="btn sm red" onclick="slettOppskrift('${o.id}')">🗑</button>
+          ${oppskriftKanEndre() ? `<button class="btn sm" onclick="apneRedigerOppskrift('${o.id}')">✎</button>
+          <button class="btn sm red" onclick="slettOppskrift('${o.id}')">🗑</button>` : ''}
         </div>
       </div>
       ${deler.length
@@ -1085,7 +1091,7 @@ function renderOppskriftModellDetalj() {
     return `<div class="card" style="margin-top:12px">
       <div class="row">
         <div class="h">${TYPE_LABEL[type]}</div>
-        <button class="btn sm red" onclick="apneNyOppskrift('${modellEsc}','${type}')">+ Ny oppskrift</button>
+        ${oppskriftKanEndre() ? `<button class="btn sm red" onclick="apneNyOppskrift('${modellEsc}','${type}')">+ Ny oppskrift</button>` : ''}
       </div>
       ${treff.length
         ? treff.map(oppskriftBoksHTML).join('')
@@ -1182,6 +1188,7 @@ function lesOppskriftIngredienser() {
 }
 
 function apneNyOppskrift(forhaandsvalgtModell, forhaandsvalgtType) {
+  if (!oppskriftKanEndre()) return;
   if (!(S.lagervarer||[]).length) { alert('Legg til minst én vare i lageret først'); return; }
   document.getElementById('oppskriftModalTittel').textContent = 'Ny oppskrift';
   document.getElementById('redigerOppskriftId').value = '';
@@ -1196,6 +1203,7 @@ function apneNyOppskrift(forhaandsvalgtModell, forhaandsvalgtType) {
 }
 
 function apneRedigerOppskrift(id) {
+  if (!oppskriftKanEndre()) return;
   const o = (S.lagerOppskrifter||[]).find(x=>x.id===id); if (!o) return;
   document.getElementById('oppskriftModalTittel').textContent = 'Rediger oppskrift';
   document.getElementById('redigerOppskriftId').value = o.id;
@@ -1212,6 +1220,7 @@ function apneRedigerOppskrift(id) {
 }
 
 function lagreOppskrift() {
+  if (!oppskriftKanEndre()) return;
   const navn = document.getElementById('oppskriftNavn').value.trim();
   if (!navn) { alert('Skriv inn et navn på oppskriften'); return; }
   const biltype = document.getElementById('oppskriftBiltype').value.trim();
@@ -1244,6 +1253,7 @@ function lagreOppskrift() {
 }
 
 function slettOppskrift(id) {
+  if (!oppskriftKanEndre()) return;
   const o = (S.lagerOppskrifter||[]).find(x=>x.id===id); if (!o) return;
   if (!confirm(`Slette oppskriften "${o.navn}"?`)) return;
   S.lagerOppskrifter = (S.lagerOppskrifter||[]).filter(x=>x.id!==id);

@@ -4,10 +4,19 @@
 let flaterVisning = 'aktiv'; // 'aktiv' | 'arkivert'
 let aktivFlateId  = null;
 
+// Ansatt kan se og åpne flåter, men ikke opprette/redigere/arkivere/slette dem eller endre
+// hvilke ordrer som er i en flåte (bedt om av Henrik 2026-10-01). Godkjenner og admin
+// beholder full tilgang. Sjekkes BÅDE i UI (knapper skjules) og inni hver funksjon
+// (reell sperre, ikke bare skjult knapp - samme mønster som fakturerViaFiken i
+// ordre-detalj.js).
+function flateKanEndre() { return !!(me && me.rolle !== 'ansatt'); }
+
 function visFlaterModal() {
   aktivFlateId = null;
   document.getElementById('flaterListeView').style.display = 'block';
   document.getElementById('flateDetaljView').style.display = 'none';
+  const nyBtn = document.getElementById('flateNyBtn');
+  if (nyBtn) nyBtn.style.display = flateKanEndre() ? '' : 'none';
   renderFlaterListe();
   openModal('flaterModal');
 }
@@ -38,6 +47,7 @@ function renderFlaterListe() {
 }
 
 function apneNyFlate() {
+  if (!flateKanEndre()) return;
   document.getElementById('nyFlateNummer').value = '';
   document.getElementById('nyFlatePrimaerSok').value = '';
   document.getElementById('nyFlatePrimaerResultat').innerHTML = '';
@@ -70,6 +80,7 @@ function velgNyFlatePrimaer(ordreId) {
 }
 
 function lagreNyFlate() {
+  if (!flateKanEndre()) return;
   const nr = document.getElementById('nyFlateNummer').value.trim();
   if (!nr) { alert('Skriv inn et flåtenummer'); return; }
   const primaerId = document.getElementById('nyFlatePrimaerId').value || null;
@@ -105,8 +116,13 @@ function tilbakeFlaterListe() {
 
 function renderFlateDetalj() {
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
-  document.getElementById('flateDetaljTittel').value = f.flatenummer || '';
+  const kanEndre = flateKanEndre();
+  const tittelInput = document.getElementById('flateDetaljTittel');
+  tittelInput.value = f.flatenummer || '';
+  tittelInput.readOnly = !kanEndre;
   document.getElementById('flateArkiverBtn').textContent = f.status === 'aktiv' ? 'Arkiver flåte' : 'Gjenopprett flåte';
+  document.getElementById('flateAdminKnapper').style.display = kanEndre ? '' : 'none';
+  document.getElementById('flateLeggTilSeksjon').style.display = kanEndre ? '' : 'none';
 
   const ordrer = (S.ordrer||[]).filter(o=>o.flateId===f.id).sort(sorterOrdre);
   const el = document.getElementById('flateOrdreListe');
@@ -123,10 +139,10 @@ function renderFlateDetalj() {
         ${erPrimaer?'<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Rolle</span><span style="color:#facc15">Primær – kilde for type/variant/versjon/vekter</span></div>':''}
         ${o.status==='arkivert'?'<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Status</span><span class="err-text">Arkivert</span></div>':''}
       </div>
-      <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      ${kanEndre ? `<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
         ${erPrimaer?'':`<button class="btn sm" onclick="settFlatePrimaer('${o.id}')">☆ Gjør til primær</button>`}
         <button class="btn sm" onclick="fjernOrdreFraFlate('${o.id}')">✕ Fjern fra flåte</button>
-      </div>
+      </div>` : ''}
     </div>`;
   }).join('') : '<div class="muted small">Ingen ordrer i denne flåten ennå</div>';
 }
@@ -147,6 +163,7 @@ function renderFlateSok(q) {
 }
 
 function leggOrdreIFlate(ordreId) {
+  if (!flateKanEndre()) return;
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   o.flateId = aktivFlateId;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId);
@@ -165,6 +182,7 @@ function leggOrdreIFlate(ordreId) {
 }
 
 function fjernOrdreFraFlate(ordreId) {
+  if (!flateKanEndre()) return;
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   o.flateId = null;
   logChange(o, 'Fjernet fra flåte');
@@ -173,6 +191,7 @@ function fjernOrdreFraFlate(ordreId) {
 }
 
 function sfFlate(field, val) {
+  if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   val = val.trim();
   if (field === 'flatenummer' && !val) { alert('Flåtenummer kan ikke være tomt'); renderFlateDetalj(); return; }
@@ -183,6 +202,7 @@ function sfFlate(field, val) {
 }
 
 function toggleArkiverFlate() {
+  if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   f.status = f.status === 'aktiv' ? 'arkivert' : 'aktiv';
   if (db) db.from('flater').update({status:f.status}).eq('id', f.id)
@@ -191,6 +211,7 @@ function toggleArkiverFlate() {
 }
 
 function settFlatePrimaer(ordreId) {
+  if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   f.primaerOrdreId = ordreId;
   if (db) db.from('flater').update({primaer_ordre_id:ordreId}).eq('id', f.id)
@@ -200,6 +221,7 @@ function settFlatePrimaer(ordreId) {
 }
 
 function slettFlate() {
+  if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   if (!confirm(`Slette flåten "${f.flatenummer}" helt? Ordrene i den blir ikke slettet, bare koblet fra flåten.`)) return;
   const medlemmer = (S.ordrer||[]).filter(o=>o.flateId===f.id);

@@ -204,6 +204,8 @@ function stoppOrdreTimer(id, felt) {
   if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
 }
 async function arkiver(id) {
+  // Ansatt skal ikke kunne arkivere ordre (bedt om av Henrik 2026-10-01) - kun godkjenner/admin.
+  if (!me || !(me.rolle==='godkjenner'||me.rolle==='admin')) return;
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
   o.status='arkivert';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Arkivert'};
@@ -763,11 +765,12 @@ function dokIkon(navn) {
 function dokumenterListeHTML(o) {
   const dok = o.dokumenter||[];
   if (!dok.length) return '<div class="muted small">Ingen dokumenter lagt til</div>';
-  const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  // Kun admin kan slette dokumenter (bedt om av Henrik 2026-10-01 - godkjenner mistet denne).
+  const kanSletteDok = me && me.rolle==='admin';
   return dok.map((d,i)=>`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30">
       <a href="${d.url}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none;font-size:13px;word-break:break-word">${dokIkon(d.navn)} ${esc(d.navn)}</a>
-      ${erGodkjenner?`<button onclick="slettDokument('${o.id}',${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:0;flex-shrink:0">✕</button>`:''}
+      ${kanSletteDok?`<button onclick="slettDokument('${o.id}',${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:0;flex-shrink:0">✕</button>`:''}
     </div>`).join('');
 }
 
@@ -808,6 +811,8 @@ async function lastOppEtDokument(file, id) {
 // Delt av både filvelgeren og dra-og-slipp-boksen - laster opp én fil om gangen (Supabase
 // Storage-kallet må gjøres sekvensielt uansett), lagrer/rerendrer kun ÉN gang til slutt.
 async function lastOppFlereDokumenter(files, id) {
+  // Kun admin kan laste opp dokumenter (bedt om av Henrik 2026-10-01 - godkjenner mistet denne).
+  if (!me || me.rolle!=='admin') return;
   for (const file of files) await lastOppEtDokument(file, id);
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
   const o = S.ordrer.find(x=>x.id===id);
@@ -838,6 +843,8 @@ async function dokDrop(e, id) {
 }
 
 async function slettDokument(id, idx) {
+  // Kun admin kan slette dokumenter (bedt om av Henrik 2026-10-01 - godkjenner mistet denne).
+  if (!me || me.rolle!=='admin') return;
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
   const dok = o.dokumenter[idx]; if (!dok) return;
   if (!confirm(`Slette "${dok.navn}"?`)) return;

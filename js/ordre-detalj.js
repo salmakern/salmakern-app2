@@ -485,7 +485,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card">
         <div class="h">Dokumenter</div>
         <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
-        ${me&&(me.rolle==='admin'||me.rolle==='godkjenner')?`<label id="dokDropzone_${o.id}" class="dok-dropzone small muted" style="margin-top:8px;display:block" title="Samme filnavn erstatter forrige versjon"
+        ${me&&me.rolle==='admin'?`<label id="dokDropzone_${o.id}" class="dok-dropzone small muted" style="margin-top:8px;display:block" title="Samme filnavn erstatter forrige versjon"
             ondragover="dokDragOver(event,'${o.id}')" ondragleave="dokDragLeave(event,'${o.id}')" ondrop="dokDrop(event,'${o.id}')">
           Dra dokumenter hit, eller klikk for å velge
           <input type="file" multiple accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
@@ -494,7 +494,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
       </div>
 
-      ${o.godkjent?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
+      ${(o.godkjent&&erGodkjenner)?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
       ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
     </div>
   </div>`;
