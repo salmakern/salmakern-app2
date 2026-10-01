@@ -78,7 +78,7 @@ function renderOrdreList() {
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
     const si = statusInfo(o.ordreStatus);
     const drivstoffTekst = drivstoffKundeprisTekst(o);
-    return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':(o.bestiltFrakt?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
+    return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
       ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
@@ -152,7 +152,7 @@ function renderOversikt(q) {
   if (!activeElHarFokusertValg) activeEl.innerHTML = aktive.length
     ? aktive.map(o => {
         const si = statusInfo(o.ordreStatus);
-        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':(o.bestiltFrakt?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
+        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           ${bestiltFraktBadgeHTML(o, 'right:12px')}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
@@ -173,7 +173,7 @@ function renderOversikt(q) {
   if (!pendElHarFokusertValg) pendEl.innerHTML = pending.length
     ? pending.map(o => {
         const si = statusInfo(o.ordreStatus);
-        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':(o.bestiltFrakt?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;min-width:0">
+        return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           ${bestiltFraktBadgeHTML(o, 'right:12px')}
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
@@ -574,7 +574,10 @@ function tvangsflytBarHTML(o) {
     </div>
   </div>`;
 }
+// Vedtak er kun for admin å se/endre (bedt om av Henrik 2026-10-01) - samme mønster som
+// fakturertKortHTML rett under.
 function godkjentKortHTML(o) {
+  if (!me || me.rolle !== 'admin') return '';
   return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
     Vedtak
     <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
