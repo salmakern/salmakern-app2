@@ -364,6 +364,28 @@ describe('Egenerklæring - Brukt Kjøretøy utelater merkeplate/fabrikasjonsplat
   });
 });
 
+// For flåteordrer settes chassis til den faste teksten 'Se kjøretøyliste' (se
+// visningsOrdre i genererVegvesenDokumenter) - åpningssetningen på Egenerklæringen skal da
+// vise "Flåtegodkjenning" mellom merke/modell og "Se kjøretøyliste" (bedt om av Henrik
+// 2026-10-01). For en vanlig enkeltordre (ekte chassisnummer) skal ingenting legges til.
+describe('Egenerklæring - "Flåtegodkjenning" for flåteordrer', () => {
+  it('egenerklaeringAvsnitt: med for "Se kjøretøyliste", borte for ekte chassis', () => {
+    const flate = egenerklaeringAvsnitt('standard', 'Se kjøretøyliste', 'KIA EV9', false);
+    const enkelt = egenerklaeringAvsnitt('standard', 'CHASSIS123', 'KIA EV9', false);
+    expect(flate[0]).toBe('Ombyggingen gjelder en KIA EV9, Flåtegodkjenning, Se kjøretøyliste.');
+    expect(enkelt[0]).toBe('Ombyggingen gjelder en KIA EV9, CHASSIS123.');
+  });
+
+  it('egenerklaeringAvsnittRexton/LandRover/Mercedes: samme oppførsel', () => {
+    expect(egenerklaeringAvsnittRexton('Se kjøretøyliste', 'KGM Rexton', false)[0])
+      .toBe('Ombyggingen gjelder en KGM Rexton, Flåtegodkjenning, Se kjøretøyliste.');
+    expect(egenerklaeringAvsnittLandRover('Se kjøretøyliste', 'Land Rover Defender', false)[0])
+      .toBe('Ombyggingen gjelder en Land Rover Defender, Flåtegodkjenning, Se kjøretøyliste.');
+    expect(egenerklaeringAvsnittMercedes('Se kjøretøyliste', 'Mercedes-Benz GLS', false)[0])
+      .toBe('Ombyggingen gjelder en Mercedes-Benz GLS, Flåtegodkjenning, Se kjøretøyliste.');
+  });
+});
+
 // F7 Fabrikasjonsplate-raden skal finnes i ALLE modellers kravRader for Nytt Kjøretøy
 // (selve F7-filtreringen for Brukt Kjøretøy skjer inline i genFabrikantattestPDF - dekket
 // av manuell PDF-verifisering, se commit - denne testen er en sikkerhetsnett-sjekk på at
@@ -373,26 +395,6 @@ describe('kravRader - F7 Fabrikasjonsplate finnes for alle modeller med Fabrikan
   it.each(modellerMedF7)('%s har en F7-kodet krav-rad', navn => {
     const modell = vegvesenFinnModell('', navn);
     expect(modell.kravRader.some(([kode]) => kode === 'F7')).toBe(true);
-  });
-});
-
-// "Varerommets lengde" (Inn, dvs. FØR ombygging) i Fabrikantattest sin "Andre endringer"-
-// tabell viste tidligere alltid en hardkodet strek for ALLE modeller (rapportert av Henrik
-// 2026-10-01, sammenlignet mot referanse-Excelarket for KIA EV9 som hadde en ekte 1200mm-
-// verdi der) - verdiene under er lest direkte fra Henriks egne referanse-Fabrikantattester
-// for hver modell (noen har ingen varerom før ombygging i det hele tatt, derav null).
-describe('VEGVESEN_MODELLER - varerommetInnMm (Fabrikantattest "Andre endringer")', () => {
-  it.each([
-    ['KIA', 'EV9', 1200],
-    ['KGM', 'Rexton', null],
-    ['Land Rover', 'Defender 110', 924],
-    ['Land Rover', 'Discovery 5', null],
-    ['Mercedes-Benz', 'GLS', null],
-    ['Mercedes-Benz', 'Geländewagen', 822],
-    ['Volkswagen', 'ID.Buzz', null],
-  ])('%s %s -> %s', (merke, modell, forventet) => {
-    const m = vegvesenFinnModell(merke, modell);
-    expect(m.varerommetInnMm).toBe(forventet);
   });
 });
 

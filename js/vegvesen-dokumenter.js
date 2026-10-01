@@ -56,9 +56,17 @@ function vegvesenFjernMerkeplateSetning(avsnitt, erBruktKjoretoy) {
 // støtdempertårn) som ikke finnes i noen andre modellers tekst, og avslutter
 // skilleveggsetningen uten "tak"-prefikset på braketten - gjengitt eksakt fra
 // referansedokumentene (Defender 110 og Discovery 5 sine tekster er ord-for-ord like).
+// For flåteordrer settes chassis til den faste teksten 'Se kjøretøyliste' (se
+// visningsOrdre i genererVegvesenDokumenter) - på selve Egenerklæringen skal det da i
+// tillegg stå "Flåtegodkjenning" mellom merke/modell og "Se kjøretøyliste" (bedt om av
+// Henrik 2026-10-01). For enkeltordrer (ekte chassisnummer) skal ingenting legges til.
+function vegvesenFlaateTekst(chassis) {
+  return chassis === 'Se kjøretøyliste' ? ', Flåtegodkjenning' : '';
+}
+
 function egenerklaeringAvsnittLandRover(chassis, merkeModell, erBruktKjoretoy) {
   return vegvesenFjernMerkeplateSetning([
-    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    `Ombyggingen gjelder en ${merkeModell}${vegvesenFlaateTekst(chassis)}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften, og at det ikke er laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen. Det er kun tatt i bruk originale fester.',
     'I forbindelse med ombygging av denne bilen blir andre og eventuelt tredje seterad, med tilhørende braketter og deksler demontert og fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, så legges disse bak sidepanelene. Så blir de originale støtdempertårnene byttet ut med egentilvirkede støtdempertårn. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres to gulvplater på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer og nagler, og i egne braketter som festes i de originale festene til håndtakene i taket.',
     'Bilen er vist med taktrekk, men uten et uoriginalt teppe som blir lagt løst inn i bilen etter godkjenning. Dette teppe må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på statskassen, og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
@@ -73,7 +81,7 @@ function egenerklaeringAvsnittLandRover(chassis, merkeModell, erBruktKjoretoy) {
 // takkanaler å fjerne), gjengitt fra GLS/Geländewagen sine referansedokumenter.
 function egenerklaeringAvsnittMercedes(chassis, merkeModell, erBruktKjoretoy) {
   return vegvesenFjernMerkeplateSetning([
-    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    `Ombyggingen gjelder en ${merkeModell}${vegvesenFlaateTekst(chassis)}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften. Det er ikke laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen, da det her kun er tatt i bruk originale fester.',
     'I forbindelse med ombygging av denne bilen blir andre og tredje seteradene, med tilhørende braketter og deksler demontert og fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres gulvplaten på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer og nagler, og i egne braketter som festes i originale fester i taket.',
     'Bilen er vist med taktrekk, men uten et uoriginalt teppe som legges løst inn etter godkjenning. Dette må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på «statskassen», og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
@@ -90,7 +98,7 @@ function egenerklaeringAvsnittMercedes(chassis, merkeModell, erBruktKjoretoy) {
 // referansedokument, IKKE forenklet til en av de andre malene.
 function egenerklaeringAvsnittRexton(chassis, merkeModell, erBruktKjoretoy) {
   return vegvesenFjernMerkeplateSetning([
-    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    `Ombyggingen gjelder en ${merkeModell}${vegvesenFlaateTekst(chassis)}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted nr. 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften. Det er under ombyggingen til varebil klasse 2 av denne bilen blitt gjort et inngrep i bilens karosseri, se vedlagt dokumentasjon. Det er ikke laget nye fester eller gjort andre inngrep i bilens karosseri ved monteringen av den resterende innredningen, da det her kun er tatt i bruk originale fester.',
     'I forbindelse med den resterende ombygging av denne bilen blir andre seteraden med tilhørende braketter og deksler fjernet. Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet og disse blir festet ved bruk av originale skruer i de originale festene i gulvet, eller med montasje lim. Så monteres gulvplaten på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer, og i egne takbraketter som festes i de originale festene til håndtakene i taket.',
     'Bilen er vist med taktrekk, men uten et uoriginalt teppe og en skumsats. Teppe og skumsatsen er lagt løst inn i bilen etter godkjenning, og disse må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på «statskassen», og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
@@ -118,7 +126,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /\bev9\b/i, navn: 'KIA EV9',
     geometri: { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 },
-    varerommetInnMm: 1200,
     fabrikant1: { navn: 'KIA Coporation', adresse: ['12, Heolleung-ro, Seocho-gu', 'Seoul', 'Korea'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177', 'TÜV NORD'],
@@ -141,7 +148,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /\brexton\b/i, navn: 'KGM Rexton',
     geometri: { a: 2.865, b: 1.430, d: 2.061, cOffset: 1.75 },
-    varerommetInnMm: null,
     fabrikant1: { navn: 'KGM Mobility Corp.', adresse: ['455-12, Dongsak-ro, Pyeongtaek-21', 'Gyeonggi-do', 'Korea'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8123999128-YK', 'TÜV NORD'],
@@ -168,7 +174,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /defender\b/i, navn: 'Land Rover Defender',
     geometri: { a: 3.022, b: 1.600, d: 1.600, cOffset: 1.94 },
-    varerommetInnMm: 924,
     fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LE', 'TÜV NORD'],
@@ -204,7 +209,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /discovery\s*5\b/i, navn: 'Land Rover Discovery 5',
     geometri: { a: 2.923, b: 1.550, d: 1.860, cOffset: 1.97 },
-    varerommetInnMm: null,
     fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LR', 'TÜV NORD'],
@@ -223,7 +227,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /\bgls\b/i, navn: 'Mercedes-Benz GLS',
     geometri: { a: 3.135, b: 1.510, d: 2.080, cOffset: 1.88 },
-    varerommetInnMm: null,
     fabrikant1: { navn: 'Mercedes-Benz AG', adresse: ['DE-70372 Stuttgart', 'Germany'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_M-GLS', 'TÜV NORD'],
@@ -242,7 +245,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /gel[aä]ndewagen/i, navn: 'Mercedes-Benz Geländewagen',
     geometri: { a: 2.890, b: 1.490, d: 1.620, cOffset: 1.87 },
-    varerommetInnMm: 822,
     fabrikant1: { navn: 'Mercedes-Benz AG', adresse: ['DE-70372 Stuttgart', 'Germany'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_M-G', 'TÜV NORD'],
@@ -261,7 +263,6 @@ const VEGVESEN_MODELLER = [
   {
     match: /id\.?\s*buzz/i, navn: 'Volkswagen ID.Buzz',
     geometri: { a: 3.239, b: 1.180, d: 2.416, cOffset: 1.55 },
-    varerommetInnMm: null,
     fabrikant1: { navn: 'Volkswagen AG', adresse: ['Berliner Ring 2', '38 440 Wolfsburg', 'Germany'] },
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-EB', 'TÜV NORD'],
@@ -381,7 +382,10 @@ function vegvesenOmbrytTekst(tekst, font, storrelse, maksBredde) {
 async function vegvesenTegnBrevhode(page, font, fontBold, logoImg, bredde, toppY) {
   const H = 3734;
   if (logoImg) {
-    const logoBredde = 130;
+    // Økt fra 130 (bedt om av Henrik 2026-10-01: "logoen blitt en del større sånn at den
+    // fyller hjørnet litt bedre") - god plass helt til adresseblokken (bredde-260≈335),
+    // så fortsatt rikelig luft mellom logo og adresse ved denne bredden.
+    const logoBredde = 220;
     const logoHoyde = logoImg.height * (logoBredde / logoImg.width);
     page.drawImage(logoImg, { x: 40, y: toppY - logoHoyde, width: logoBredde, height: logoHoyde });
   }
@@ -415,7 +419,7 @@ function egenerklaeringAvsnitt(variant, chassis, merkeModell, erBruktKjoretoy) {
     ? ', kanaler til klima i taket og bakre sjalusi på glasstak demontert og fjernet.'
     : ' og kanaler til klima i taket demontert og fjernet.';
   return vegvesenFjernMerkeplateSetning([
-    `Ombyggingen gjelder en ${merkeModell}, ${chassis}.`,
+    `Ombyggingen gjelder en ${merkeModell}${vegvesenFlaateTekst(chassis)}, ${chassis}.`,
     'Telemark Salmakerverksted, påbyggerverksted nr. 31067, bekrefter herved at ombyggingen av denne bilen tilfredsstiller de krav som er beskrevet i Bilforskriften, og at det ikke er laget nye fester eller gjort inngrep i bilens karosseri ved monteringen av innredningen, da det her kun er tatt i bruk originale fester.',
     `${EGENERKLAERING_AVSNITT3_FELLES_START}${demontering} Sikkerhetsbelter blir løsnet i endefestene som er synlig i bilen, men selve belterullen blir stående. Så foldes beltestroppen sammen og en skumplast blir lagt rundt for å beskytte mot skader, og så legges disse bak sidepanelene. Deretter blir støttebraketter montert i gulvet, og disse blir festet ved bruk av originale skruer og i de originale festene i gulvet. Så monteres gulvplatene på disse brakettene med nagler. Skilleveggen blir montert i framkant av gulvplaten med skruer, og i egne takbraketter som festes i de originale festene til håndtakene i taket.`,
     'Bilen er vist med taktrekk, men uten et uoriginalt teppe som legges løst inn etter godkjenning. Dette må fjernes dersom «statskassen» skal plasseres i bilen på et senere tidspunkt. Takbrakettenes mål kan kontrolleres på vedlagt tegning dersom det er mistanke om at det er gjort endinger på disse. Når vi fremviser denne bilen så bruker vi beskyttelser i hjørnene på «statskassen», og det er derfor viktig at det vises aktsomhet dersom denne skal plasseres på en senere kontroll slik at ikke taktrekket skades unødvendig.',
@@ -696,6 +700,17 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   function tekstLinjer(x, yTop, linjer, storrelse=8.5, linjeHoyde=11) {
     linjer.forEach((l, i) => { if (l) page.drawText(l, { x, y: yTop - i*linjeHoyde, size: storrelse, font }); });
   }
+  // Som tekstLinjer, men bryter HVER linje til flere ved behov i stedet for å la lang
+  // tekst flyte inn i neste kolonne - brukt for kolonner som kan inneholde tekst av
+  // varierende lengde (Kravnivå/Testrapport/Utarbeidet av), i motsetning til Kravområde-
+  // kolonnen, som alltid får nøyaktig to manuelt forhåndsdelte, korte linjer. Manglet
+  // tidligere (rapportert av Henrik 2026-10-01: "her også stemmer ikke alt med
+  // kolonnene") - "Forskrift om engangsavgift" og "TÜV NORD / Telemark Salmakerverksted"
+  // fløt rett inn i nabokolonnen/utenfor siden i stedet for å brytes om.
+  function tekstLinjerOmbrutt(x, yTop, linjer, maksBredde, storrelse=8, linjeHoyde=10) {
+    const alleLinjer = linjer.filter(Boolean).flatMap(l => vegvesenOmbrytTekst(l, font, storrelse, maksBredde));
+    alleLinjer.forEach((l, i) => page.drawText(l, { x, y: yTop - i*linjeHoyde, size: storrelse, font }));
+  }
 
   let y = HOYDE - 40;
   page.drawText('FABRIKANTATTEST', { x: vX, y, size: 13, font: fontBold });
@@ -721,7 +736,11 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   y -= 4*11 + 14;
 
   // Krav-tabellen
-  const kravKolBredder = [140, 90, 60, 125, 100];
+  // Bredden på "Typegodkjenning" (85, var 60) økt så selve OVERSKRIFTEN får plass uten å
+  // flyte inn i "Testrapport" sin overskrift ved siden av - kolonnens egne VERDIER er
+  // alltid bare "NEI", så den trengte ikke bredden for innholdets skyld (rapportert av
+  // Henrik 2026-10-01, se skjermbildet: "TypegodkjenningTestrapport" uten mellomrom).
+  const kravKolBredder = [135, 85, 85, 110, 100];
   const kravKolX = [vX]; kravKolBredder.forEach(b => kravKolX.push(kravKolX[kravKolX.length-1]+b));
   const hodeHoyde = 13;
   page.drawRectangle({ x: vX, y: y-hodeHoyde+3, width: tabellBredde, height: hodeHoyde, color: ORANSJE });
@@ -738,10 +757,10 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
     ramme(vX, y-kravRadHoyde, tabellBredde, kravRadHoyde);
     kravKolBredder.forEach((b,i) => { if (i>0) ramme(kravKolX[i], y-kravRadHoyde, 0.01, kravRadHoyde); });
     tekstLinjer(kravKolX[0]+3, y-9, [l1a, l1b], 8, 10);
-    tekstLinjer(kravKolX[1]+3, y-9, [kravniva], 8, 10);
+    tekstLinjerOmbrutt(kravKolX[1]+3, y-9, [kravniva], kravKolBredder[1]-6, 8, 10);
     tekstLinjer(kravKolX[2]+3, y-9, ['NEI'], 8, 10);
-    tekstLinjer(kravKolX[3]+3, y-9, [testnr, testrapp], 8, 10);
-    tekstLinjer(kravKolX[4]+3, y-9, [utarbeidet], 7.5, 10);
+    tekstLinjerOmbrutt(kravKolX[3]+3, y-9, [testnr, testrapp], kravKolBredder[3]-6, 8, 10);
+    tekstLinjerOmbrutt(kravKolX[4]+3, y-9, [utarbeidet], kravKolBredder[4]-6, 7.5, 10);
     y -= kravRadHoyde;
   });
   y -= 10;
@@ -767,13 +786,10 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   const innVogntog = parseFloat(String(o.vekter?.vogntog?.a||'').replace(',','.')) || 0;
   const sitteplasser = vegvesenModell.antallSitteplasser(o);
   const varerommetUtMm = Math.round(vegvesenModell.geometri.d * 1000) + 'mm';
-  // Varerommets lengde FØR ombygging er en fast per-modell måling (ikke ordre-data) -
-  // enkelte modeller har ingen varerom i det hele tatt før ombygging (vist som "-" i
-  // Henriks egne referansedokumenter), mens andre (EV9/Defender/Geländewagen) har en ekte
-  // målt verdi. Stod tidligere alltid som en hardkodet strek for ALLE modeller (rapportert
-  // av Henrik 2026-10-01, sammenlignet mot referanse-Excelarket for KIA EV9: "1200mm" der,
-  // ikke "-").
-  const varerommetInnMm = vegvesenModell.varerommetInnMm ? vegvesenModell.varerommetInnMm + 'mm' : '-';
+  // Varerommets lengde FØR ombygging skal alltid vises som bare "-" (bekreftet eksplisitt
+  // av Henrik 2026-10-01 - en tidligere antagelse om at denne skulle vise en reell
+  // per-modell måling for enkelte modeller var feil, se git-historikk).
+  const varerommetInnMm = '-';
   let endrRader = [
     ['Egenvekt', vegvesenFmtKg(o.egenvektCoc||0)+'kg', vegvesenFmtKg(egenvektUt)+'kg', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
     ['Tillatt totalvekt', vegvesenFmtKg(innTotalvekt)+'kg', vegvesenFmtKg(endringP)+'kg', 'Egenerklæring', 'Telemark Salmakerverksted'],
@@ -790,10 +806,14 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
     endrRader = endrRader.filter(([label]) => !ekskluder.includes(label));
     if (vegvesenModell.andreEndringerBruktEkstra) endrRader = [...vegvesenModell.andreEndringerBruktEkstra, ...endrRader];
   }
-  const endrRadHoyde = 13.5;
+  // Radhøyde økt (var 13.5, kun plass til én linje) og tekst brytes nå om i stedet for å
+  // flyte utenfor cellen - samme fiks som Krav-tabellen over. Nødvendig etter at kolonnene
+  // ble delt med Krav-tabellen: "Utarbeidet av" sin bredde (100, var 115 kun her) er nå for
+  // smal til at "Telemark Salmakerverksted" alltid er garantert å få plass på én linje.
+  const endrRadHoyde = 20;
   endrRader.forEach(rad => {
     ramme(vX, y-endrRadHoyde, tabellBredde, endrRadHoyde);
-    rad.forEach((verdi,i) => page.drawText(verdi, { x: endrKolX[i]+3, y: y-9.5, size: 8, font }));
+    rad.forEach((verdi,i) => tekstLinjerOmbrutt(endrKolX[i]+3, y-9.5, [verdi], endrKolBredder[i]-6, 8, 10));
     y -= endrRadHoyde;
   });
   y -= 14;
