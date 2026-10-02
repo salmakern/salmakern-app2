@@ -916,24 +916,18 @@ function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 // Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
 // regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.
 function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
-// "Chassis: <nr>" pakket i en white-space:nowrap-span - uten den brøt et 17-tegns
-// chassisnummer midt i seg selv på smale mobilskjermer (rapportert av Henrik 2026-09-30:
-// "chassis.nr blir for lange på mobilen så de deler seg opp"). Med nowrap velger
-// nettleseren i stedet mellomrommet FØR "Chassis:" som bruddpunkt når det ikke er plass
-// til alt på én linje - selve nummeret havner da helt og uskadd på sin egen linje, i
-// stedet for å bli splittet midt i. Samme nowrap-pakking trengs OGSÅ når chassis er det
-// eneste som vises (ingen regnr) - det ble glemt i første runde av denne fiksen, og brøt
-// fortsatt midt i nummeret på mobil (rapportert av Henrik 2026-10-01).
-// 2026-10-02: samme symptom en TREDJE gang ("chassis.nr er ikke bra... generelt på alle i
-// mobilen") - rotårsaken var at overflow-wrap:break-word, satt på <b>-elementet rundt denne
-// spannen alle stedene ordreLabelFull() brukes, arves ned på spannen og kan likevel tvinge
-// fram et brudd MIDT i nowrap-teksten når den er bredere enn tilgjengelig plass (bekreftet
-// visuelt - nowrap alene stoppet det ikke). Viktigste fiks var å fjerne et min-width:0 som
-// klemte kolonnen unødvendig smal (se oversikt-kalender.js/arkiv-mer.js), men
-// overflow-wrap:normal legges også til her som en ekstra sikring mot akkurat dette.
+// Chassisnummeret brøt tidligere midt i seg selv på mobil, fikset tre runder på rad
+// (2026-09-30, 2026-10-01, 2026-10-02) ved å pakke "Chassis: <nr>" inn i en
+// white-space:nowrap-span - men det tvang samtidig status-knappen ved siden av ned på en
+// egen linje når det ikke var plass (siden hele frasen måtte flyttes samlet), noe Henrik
+// ikke ville ha (2026-10-02: "det er status skal være ved siden av"). Løsningen er å IKKE
+// bruke nowrap i det hele tatt - vanlig tekstbryting bryter naturlig ved mellomrommet FØR
+// selve nummeret (så "Chassis:" og nummeret havner på hver sin linje i stedet for midt i et
+// ord), og status-knappen kan da bli stående ved siden av tittelen slik den skal. Bekreftet
+// visuelt i 360px mobilbredde med flere chassis-lengder før dette ble endret.
 function ordreLabelFull(o){
-  if (o.regnr && o.chassis) return esc(o.regnr)+' · <span style="white-space:nowrap;overflow-wrap:normal">Chassis: '+esc(o.chassis)+'</span>';
-  if (!o.regnr && o.chassis) return '<span style="white-space:nowrap;overflow-wrap:normal">Chassis: '+esc(o.chassis)+'</span>';
+  if (o.regnr && o.chassis) return esc(o.regnr)+' · Chassis: '+esc(o.chassis);
+  if (!o.regnr && o.chassis) return 'Chassis: '+esc(o.chassis);
   return ordreLabel(o);
 }
 
