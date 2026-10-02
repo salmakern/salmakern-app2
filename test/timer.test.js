@@ -4,7 +4,10 @@ import { loadScript } from './helpers/load-script.js';
 // timer.js sine DOM-avhengige funksjoner (initTimerPage, updateClock osv.)
 // kalles aldri her - de rene beregningsfunksjonene lastes bare inn i en
 // isolert context uten document/window, akkurat som en vanlig Node-modul.
-const { beregnNettoMinutter, beregnManuellMinutter, beregnOvertid, erHelg } = loadScript('timer.js');
+const {
+  beregnNettoMinutter, beregnManuellMinutter, beregnOvertid, erHelg,
+  genererEgenmeldingDager, egenmeldingEpisoderIAar, egenmeldingerAaAvbryte
+} = loadScript('timer.js');
 
 describe('beregnNettoMinutter (pauseregel for automatisk klokke)', () => {
   it('trekker ikke fra pause under 8 timer', () => {
@@ -72,5 +75,88 @@ describe('beregnOvertid', () => {
   it('over 11,5 timer gir 100% overtid på resten', () => {
     // 450 normal + 240 (maks 50%) + 60 min (1t) 100%-overtid = 750 min totalt
     expect(beregnOvertid(750, '2026-08-24')).toEqual({ normal: 450, ot50: 240, ot100: 60 });
+  });
+});
+
+// Egenmelding dekker 3 sammenhengende VIRKEDAGER fra og med registreringsdatoen (bedt om
+// av Henrik 2026-10-02 - dekket tidligere kun én enkelt dag).
+describe('genererEgenmeldingDager', () => {
+  it('3 hverdager på rad uten helg i veien gir dagen selv + de to neste', () => {
+    // 2026-08-24 er en mandag (se erHelg-testen over)
+    expect(genererEgenmeldingDager('2026-08-24', 3)).toEqual(['2026-08-24', '2026-08-25', '2026-08-26']);
+  });
+  it('hopper over lørdag+søndag når perioden starter på en fredag', () => {
+    // 2026-08-21 er fredagen før mandagen 2026-08-24
+    expect(genererEgenmeldingDager('2026-08-21', 3)).toEqual(['2026-08-21', '2026-08-24', '2026-08-25']);
+  });
+  it('hopper fram til mandag hvis startdatoen selv er en lørdag', () => {
+    expect(genererEgenmeldingDager('2026-08-22', 3)).toEqual(['2026-08-24', '2026-08-25', '2026-08-26']);
+  });
+  it('respekterer et annet antall dager enn standard 3', () => {
+    expect(genererEgenmeldingDager('2026-08-24', 1)).toEqual(['2026-08-24']);
+    expect(genererEgenmeldingDager('2026-08-21', 5)).toEqual(['2026-08-21', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27']);
+  });
+});
+
+// Maks 4 BETALTE egenmeldinger (episoder, ikke dager) per kalenderår - en 5. (eller
+// senere) skal registreres som ubetalt (bedt om av Henrik 2026-10-02).
+describe('egenmeldingEpisoderIAar', () => {
+  const lagTimer = (ansattId, type, dato, periodeId) => ({ ansattId, type, dato, egenmeldingPeriodeId: periodeId });
+  it('teller 0 når ansatten ikke har hatt noen egenmelding i år', () => {
+    expect(egenmeldingEpisoderIAar([], 1, 2026)).toBe(0);
+  });
+  it('teller ANTALL EPISODER, ikke antall dager - 2 episoder á 3 dager gir 2, ikke 6', () => {
+    const timer = [
+      ...['2026-01-05','2026-01-06','2026-01-07'].map(d=>lagTimer(1,'egenmelding',d,'ep1')),
+      ...['2026-03-02','2026-03-03','2026-03-04'].map(d=>lagTimer(1,'egenmelding',d,'ep2'))
+    ];
+    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(2);
+  });
+  it('teller ikke en annen ansatts egenmeldinger', () => {
+    const timer = [lagTimer(2, 'egenmelding', '2026-01-05', 'ep1')];
+    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+  });
+  it('teller ikke egenmeldinger fra et annet kalenderår', () => {
+    const timer = [lagTimer(1, 'egenmelding', '2025-12-30', 'ep1')];
+    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+  });
+  it('teller ikke andre fraværstyper (syk/ferie/permisjon)', () => {
+    const timer = [lagTimer(1, 'syk', '2026-01-05', 'ep1'), lagTimer(1, 'ferie', '2026-01-06', 'ep2')];
+    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+  });
+  it('ignorerer rader uten egenmeldingPeriodeId (f.eks. gamle rader fra før denne kolonnen fantes)', () => {
+    const timer = [{ ansattId:1, type:'egenmelding', dato:'2026-01-05' }];
+    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+  });
+});
+
+// Starter den ansatte en vanlig timer igjen før de 3 egenmeldingsdagene er omme, skal
+// resten av perioden kuttes bort - men ALLEREDE PASSERTE dager beholdes, siden de faktisk
+// ble brukt (bedt om av Henrik 2026-10-02: "blir overkjørt av hvis den ansatte starter
+// timer").
+describe('egenmeldingerAaAvbryte', () => {
+  const lagTimer = (id, ansattId, type, dato) => ({ id, ansattId, type, dato });
+  it('finner kun dagene FRA OG MED i dag, ikke allerede passerte dager', () => {
+    const timer = [
+      lagTimer('t1', 1, 'egenmelding', '2026-08-24'),
+      lagTimer('t2', 1, 'egenmelding', '2026-08-25'),
+      lagTimer('t3', 1, 'egenmelding', '2026-08-26')
+    ];
+    // Ansatt starter en timer 2026-08-25 (dag 2 av 3) - dag 1 (24.) er allerede brukt og
+    // skal IKKE kuttes, dag 2 og 3 (25./26.) skal kuttes.
+    const resultat = egenmeldingerAaAvbryte(timer, 1, '2026-08-25');
+    expect(resultat.map(t=>t.id)).toEqual(['t2', 't3']);
+  });
+  it('rører ikke en annen ansatts egenmelding', () => {
+    const timer = [lagTimer('t1', 2, 'egenmelding', '2026-08-25')];
+    expect(egenmeldingerAaAvbryte(timer, 1, '2026-08-25')).toEqual([]);
+  });
+  it('rører ikke andre fraværstyper (kun egenmelding skal kunne overkjøres slik)', () => {
+    const timer = [lagTimer('t1', 1, 'syk', '2026-08-25'), lagTimer('t2', 1, 'ferie', '2026-08-25')];
+    expect(egenmeldingerAaAvbryte(timer, 1, '2026-08-25')).toEqual([]);
+  });
+  it('gir tom liste når det ikke finnes noen aktiv/fremtidig egenmelding', () => {
+    const timer = [lagTimer('t1', 1, 'egenmelding', '2026-08-20')];
+    expect(egenmeldingerAaAvbryte(timer, 1, '2026-08-25')).toEqual([]);
   });
 });

@@ -1,0 +1,11 @@
+-- Kjørt: 2026-10-02
+-- Bakgrunn: Henrik ba om at egenmelding skal dekke 3 sammenhengende virkedager
+-- automatisk (i stedet for kun én dag om gangen), kuttes kortere hvis den ansatte
+-- starter en vanlig timer igjen før de 3 dagene er omme, og at mer enn 4 egenmeldinger
+-- i løpet av kalenderåret automatisk blir ubetalt (i stedet for at admin må huske å
+-- skru av "Betalt" manuelt for hver). "Betalt"-kolonnen finnes allerede
+-- (20260909130000_timer_betalt_egenmelding.sql) - denne migrasjonen legger kun til en
+-- periode-id som knytter de 2-3 dagene i ÉN egenmelding sammen, slik at appen kan telle
+-- ANTALL EGENMELDINGER (ikke bare antall dager) og vite hvilke rader som hører sammen
+-- når resten av en periode skal kuttes/slettes.
+alter table timer_entries add column if not exists egenmelding_periode_id text;

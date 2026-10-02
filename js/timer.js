@@ -220,7 +220,24 @@ function oppdaterTilstandPille() {
   else { p.textContent='Ikke startet'; p.style.color='#a1a1aa'; p.style.borderColor='#27272a'; }
 }
 
+// Kutter resten av en pågående egenmelding-periode (fra og med i dag) hvis den ansatte
+// starter en vanlig timer igjen - se egenmeldingerAaAvbryte() for begrunnelse. Rene,
+// allerede passerte egenmelding-dager (før i dag) røres ikke.
+function avbrytAktivEgenmelding() {
+  if (!me) return;
+  const today = new Date().toISOString().split('T')[0];
+  const avbrutte = egenmeldingerAaAvbryte(S.timer, me.id, today);
+  if (!avbrutte.length) return;
+  const avbrutteId = new Set(avbrutte.map(t=>t.id));
+  S.timer = (S.timer||[]).filter(t=>!avbrutteId.has(t.id));
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  if(db) db.from('timer_entries').delete().in('id', [...avbrutteId])
+    .then(r=>{if(r.error) console.error('Avbryting av egenmelding feilet:',r.error.message);});
+  renderTimerHistorikk(); renderTimerMaaned();
+}
+
 function doStartTimer(notat) {
+  avbrytAktivEgenmelding();
   const btn=document.getElementById('startBtn');
   if(btn){btn.textContent='▶ Start';btn.disabled=true;}
   timerStart=Date.now();
@@ -301,7 +318,34 @@ function lagreTimer() {
     renderTimerHistorikk(); renderTimerMaaned();
     return;
   } else if (timerType==='egenmelding') {
-    mins=0; start='–'; stopp='–';
+    // Se genererEgenmeldingDager/egenmeldingEpisoderIAar lenger opp i filen for
+    // begrunnelse (3 virkedager, maks 4 betalte episoder per kalenderår).
+    const periodeId = 'ep'+(++S.nextId);
+    const aar = new Date().getFullYear();
+    const tidligereEpisoder = egenmeldingEpisoderIAar(S.timer, me.id, aar);
+    const betalt = tidligereEpisoder < 4;
+    const dager = genererEgenmeldingDager(new Date().toISOString().split('T')[0], 3);
+    const entries = dager.map(dato=>({
+      id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+      dato, type:'egenmelding', start:'–', stopp:'–', mins:0, betalt,
+      egenmeldingPeriodeId:periodeId, _localAt:Date.now()
+    }));
+    entries.forEach(e=>S.timer.push(e));
+    // Ett samlet insert-kall for alle 3 dagene i stedet for ett per dag, samme mønster
+    // som ferie/permisjon/syk rett over.
+    if(db) db.from('timer_entries').insert(entries.map(e=>({
+        id:e.id, ansatt_id:me.id, ansatt:me.navn, dato:e.dato, type:'egenmelding',
+        start:'–', stopp:'–', mins:0, betalt, egenmelding_periode_id:periodeId
+      }))).then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
+    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+    renderTimerHistorikk(); renderTimerMaaned();
+    visToast(
+      betalt
+        ? `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]}`
+        : `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]} - UBETALT (mer enn 4 egenmeldinger brukt i ${aar})`,
+      betalt?'ok':'feil'
+    );
+    return;
   } else { alert('Start timer først'); return; }
   const timerEntry={
     id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
@@ -348,6 +392,60 @@ function erHelg(datoStr) {
   const d = new Date(datoStr);
   const dag = d.getDay(); // 0=søn, 6=lør
   return dag === 0 || dag === 6;
+}
+
+// Egenmelding dekker 3 sammenhengende VIRKEDAGER (helg telles ikke med, samme prinsipp
+// som ferie/permisjon/syk-registrering lenger opp i lagreTimer()) fra og med datoen den
+// registreres - vanlig norsk regel for egenmelding uten IA-avtale (bedt om av Henrik
+// 2026-10-02, tidligere dekket egenmelding kun én enkelt dag).
+/**
+ * @param {string} fraDatoStr "ÅÅÅÅ-MM-DD"
+ * @param {number} antallDager
+ * @returns {string[]}
+ */
+function genererEgenmeldingDager(fraDatoStr, antallDager=3) {
+  const dager=[];
+  let cur=new Date(fraDatoStr);
+  while(dager.length<antallDager){
+    const datoStr=cur.toISOString().split('T')[0];
+    if(!erHelg(datoStr)) dager.push(datoStr);
+    cur.setDate(cur.getDate()+1);
+  }
+  return dager;
+}
+
+// Teller ANTALL EGENMELDINGS-EPISODER (ikke antall dager) en ansatt har brukt i et gitt
+// kalenderår, via egenmelding_periode_id som knytter de 2-3 dagene i én egenmelding
+// sammen. Brukes til å avgjøre om en NY egenmelding er den 5. (eller senere) i år, og
+// dermed skal registreres som ubetalt (se lagreTimer()).
+/**
+ * @param {Array<{ansattId:number,type:string,egenmeldingPeriodeId?:string,dato:string}>} timerListe
+ * @param {number} ansattId
+ * @param {number} aar
+ * @returns {number}
+ */
+function egenmeldingEpisoderIAar(timerListe, ansattId, aar) {
+  const ider = new Set();
+  (timerListe||[]).forEach(t=>{
+    if (t.ansattId===ansattId && t.type==='egenmelding' && t.egenmeldingPeriodeId && t.dato && Number(t.dato.slice(0,4))===aar) {
+      ider.add(t.egenmeldingPeriodeId);
+    }
+  });
+  return ider.size;
+}
+
+// Finner egenmeldingsrader som skal kuttes bort fordi den ansatte starter en vanlig
+// timer igjen FØR de 3 dagene er omme - kun dagene FRA OG MED fraDatoStr (dagen
+// vedkommende starter timer) fjernes; allerede passerte egenmelding-dager beholdes og
+// telles fortsatt, siden de faktisk ble brukt (bedt om av Henrik 2026-10-02: egenmelding
+// "blir overkjørt av hvis den ansatte starter timer").
+/**
+ * @param {Array<{ansattId:number,type:string,dato:string}>} timerListe
+ * @param {number} ansattId
+ * @param {string} fraDatoStr "ÅÅÅÅ-MM-DD"
+ */
+function egenmeldingerAaAvbryte(timerListe, ansattId, fraDatoStr) {
+  return (timerListe||[]).filter(t=>t.ansattId===ansattId && t.type==='egenmelding' && t.dato>=fraDatoStr);
 }
 
 /**

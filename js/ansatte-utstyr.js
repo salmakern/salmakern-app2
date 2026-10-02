@@ -1314,9 +1314,11 @@ function renderAnsattDetalj() {
   const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
   const dagsRader = timer.sort((a,b)=>a.dato?.localeCompare(b.dato)).map(t=>{
     const fType = fraværTyper.includes(t.type);
-    // Bedriften betaler normalt lønn for egenmelding - admin kan skru av "Betalt" for
-    // enkeltdager ved behov (f.eks. brukt opp kvoten for året). Kun relevant for
-    // egenmelding, ikke Syk (sykemelding dekkes av arbeidsgiverperioden uansett).
+    // "Betalt" settes nå automatisk til false av lagreTimer() selv når en egenmelding er
+    // den 5. (eller senere) i kalenderåret (se egenmeldingEpisoderIAar() i timer.js) -
+    // denne avkrysningen er en manuell OVERSTYRING admin kan bruke i tillegg ved behov.
+    // Kun relevant for egenmelding, ikke Syk (sykemelding dekkes av arbeidsgiverperioden
+    // uansett).
     const betaltHTML = t.type==='egenmelding' ? `<label style="display:flex;align-items:center;gap:4px;cursor:pointer" title="Betalt egenmelding">
         <input type="checkbox" ${t.betalt!==false?'checked':''} onchange="adminSettTimerBetalt('${t.id}',this.checked)" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
         <span class="small muted">Betalt</span>
