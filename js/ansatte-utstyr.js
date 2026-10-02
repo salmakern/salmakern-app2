@@ -1323,10 +1323,19 @@ function renderAnsattDetalj() {
         <input type="checkbox" ${t.betalt!==false?'checked':''} onchange="adminSettTimerBetalt('${t.id}',this.checked)" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
         <span class="small muted">Betalt</span>
       </label>` : '';
+    // Admin må kunne notere om selve sykemeldingen (legeerklæringen) faktisk er levert av
+    // den ansatte - uten den kan ikke arbeidsgiver kreve NAV-refusjon for perioden etter
+    // arbeidsgiverperioden (bedt om av Henrik 2026-10-02). Ren manuell avkrysning, samme
+    // mønster som Betalt-haken for egenmelding rett over.
+    const sykLevertHTML = t.type==='syk' ? `<label style="display:flex;align-items:center;gap:4px;cursor:pointer" title="Sykemelding levert">
+        <input type="checkbox" ${t.sykemeldingLevert?'checked':''} onchange="adminSettSykemeldingLevert('${t.id}',this.checked)" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
+        <span class="small muted">Sykemelding levert</span>
+      </label>` : '';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;border-radius:6px;background:#18181b;margin-bottom:4px;font-size:13px;gap:8px;flex-wrap:wrap">
       <span>${t.dato} <span style="color:${fType?'#fca5a5':'#f4f4f5'}">${fType?t.type:t.start+' – '+t.stopp}</span></span>
       <span style="display:flex;align-items:center;gap:8px">
         ${betaltHTML}
+        ${sykLevertHTML}
         <span style="color:#f4f4f5;font-weight:600">${t.mins>0?fmtTid(t.mins):''}</span>
         <button onclick="adminRedigerTimer('${t.id}')" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:14px;padding:0" title="Rediger">✏️</button>
         <button onclick="adminSlettTimer('${t.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0" title="Slett">✕</button>
@@ -1419,6 +1428,13 @@ function adminSettTimerBetalt(id, betalt) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
   t.betalt = betalt;
   if(db) db.from('timer_entries').update({betalt}).eq('id',id).then(r=>{if(r.error) console.error('Betalt-oppdatering feilet:', r.error.message);});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+}
+
+function adminSettSykemeldingLevert(id, levert) {
+  const t = S.timer.find(x=>x.id===id); if(!t) return;
+  t.sykemeldingLevert = levert;
+  if(db) db.from('timer_entries').update({sykemelding_levert:levert}).eq('id',id).then(r=>{if(r.error) console.error('Sykemelding-levert-oppdatering feilet:', r.error.message);});
   try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
 }
 
