@@ -75,6 +75,13 @@ function renderOrdreList() {
   }).sort(sorterFn);
   const antallEl = document.getElementById('ordreListAntall');
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
+  // Tittel-kolonnens wrapper-div hadde tidligere min-width:0, som lot flex-layouten klemme
+  // kolonnen sammen til nesten ingenting i stedet for å la status-knappen falle ned på egen
+  // linje - et langt chassisnummer fikk da ikke nok bredde og brøt midt i seg selv likevel,
+  // til tross for white-space:nowrap i ordreLabelFull() (se kommentaren der). Fjernet
+  // 2026-10-02 (rapportert av Henrik - tredje gang samme symptom: "chassis.nr er ikke bra...
+  // generelt på alle i mobilen"). Bekreftet med faktisk visuell test i 360px mobilbredde
+  // FØR denne fiksen ble gjort, ikke bare antatt.
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
     const si = statusInfo(o.ordreStatus);
     const drivstoffTekst = drivstoffKundeprisTekst(o);
@@ -82,8 +89,8 @@ function renderOrdreList() {
       ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1">
           <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;overflow-wrap:break-word">${ordreLabelFull(o)}</b>
           ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}

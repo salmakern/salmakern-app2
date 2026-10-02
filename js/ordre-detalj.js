@@ -921,8 +921,21 @@ function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.ch
 // "chassis.nr blir for lange på mobilen så de deler seg opp"). Med nowrap velger
 // nettleseren i stedet mellomrommet FØR "Chassis:" som bruddpunkt når det ikke er plass
 // til alt på én linje - selve nummeret havner da helt og uskadd på sin egen linje, i
-// stedet for å bli splittet midt i.
-function ordreLabelFull(o){ return (o.regnr && o.chassis) ? esc(o.regnr)+' · <span style="white-space:nowrap">Chassis: '+esc(o.chassis)+'</span>' : ordreLabel(o); }
+// stedet for å bli splittet midt i. Samme nowrap-pakking trengs OGSÅ når chassis er det
+// eneste som vises (ingen regnr) - det ble glemt i første runde av denne fiksen, og brøt
+// fortsatt midt i nummeret på mobil (rapportert av Henrik 2026-10-01).
+// 2026-10-02: samme symptom en TREDJE gang ("chassis.nr er ikke bra... generelt på alle i
+// mobilen") - rotårsaken var at overflow-wrap:break-word, satt på <b>-elementet rundt denne
+// spannen alle stedene ordreLabelFull() brukes, arves ned på spannen og kan likevel tvinge
+// fram et brudd MIDT i nowrap-teksten når den er bredere enn tilgjengelig plass (bekreftet
+// visuelt - nowrap alene stoppet det ikke). Viktigste fiks var å fjerne et min-width:0 som
+// klemte kolonnen unødvendig smal (se oversikt-kalender.js/arkiv-mer.js), men
+// overflow-wrap:normal legges også til her som en ekstra sikring mot akkurat dette.
+function ordreLabelFull(o){
+  if (o.regnr && o.chassis) return esc(o.regnr)+' · <span style="white-space:nowrap;overflow-wrap:normal">Chassis: '+esc(o.chassis)+'</span>';
+  if (!o.regnr && o.chassis) return '<span style="white-space:nowrap;overflow-wrap:normal">Chassis: '+esc(o.chassis)+'</span>';
+  return ordreLabel(o);
+}
 
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
 // tidligere ordre, sortert etter hvor ofte de forekommer (mest brukt først). Hvert felt

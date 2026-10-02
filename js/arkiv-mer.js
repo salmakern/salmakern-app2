@@ -106,9 +106,12 @@ function renderArkiv() {
         </div>`;
       }).join('') : '<div class="muted small">Ingen</div>';
     } else {
+      // Ikke min-width:0 på tittel-div under - se tilsvarende fiks/kommentar i
+      // oversikt-kalender.js (2026-10-02): klemte sammen chassisnummer-teksten i stedet for
+      // å la fakturert-pillen falle ned på egen linje.
       listeEl.innerHTML = sideListe.length ? sideListe.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-            <div style="min-width:0">
+            <div>
               <b style="font-size:15px">${ordreLabelFull(o)}</b>
               ${o.farge?`<div class="small muted" style="margin-top:2px">${esc(o.farge)}</div>`:''}
             </div>
