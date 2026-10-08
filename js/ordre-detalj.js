@@ -965,6 +965,32 @@ function ordreLabelFull(o){
   return ordreLabel(o);
 }
 
+// 2026-10-08, femte (og forhåpentligvis siste) runde på chassisnummer-vs-status-kortet:
+// Henrik presiserte at kortets layout må være IDENTISK hver gang (status alltid på samme
+// sted i raden, aldri presset ned av lang tekst) OG at selve nummeret aldri skal kuttes med
+// "...". De to kravene kan ikke begge innfris når nummeret deler rad med status-boksen -
+// uansett hvor smal man gjør skriften, er det alltid en statustekst (f.eks. "Vist på
+// biltilsynet") + chassisnummer-kombinasjon som ikke har plass sammen. Løsningen er å ikke
+// prøve i det hele tatt: tittel-raden (med status) viser kun reg.nr (eller en "Chassis.nr"-
+// plassholder hvis bilen ikke har reg.nr ennå), og selve chassisnummeret flyttes til en HELT
+// EGEN linje under hele tittel/status-raden - det får dermed alltid kortets fulle bredde å
+// bryte over, uavhengig av hvor bred status-boksen er. Kun brukt i Oversikt/Ordre-listen
+// (renderOrdreListe) foreløpig, ikke de andre kort-variantene (drag-cards, kalender) som
+// fortsatt bruker ordreLabelFull() over.
+function ordreTittel(o){
+  if (o.regnr) return o.regnr;
+  if (o.chassis) return 'Chassis.nr';
+  return 'Uten reg.nr';
+}
+// Selve chassisnummeret, som egen full-bredde blokk under tittel/status-raden. Viser kun
+// "Chassis.nr"-etiketten her hvis reg.nr FANT STED i tittelen over (ellers sto den der
+// allerede som plassholder, se ordreTittel()) - unngår at etiketten vises to ganger.
+function chassisBlockHTML(o, onclickStr){
+  if (!o.chassis) return '';
+  const etikett = o.regnr ? `<div class="small muted" style="margin-top:6px" onclick="${onclickStr}">Chassis.nr</div>` : '';
+  return etikett + `<div style="font-weight:700;font-size:14px;cursor:pointer;margin-top:2px" onclick="${onclickStr}">${esc(o.chassis)}</div>`;
+}
+
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
 // tidligere ordre, sortert etter hvor ofte de forekommer (mest brukt først). Hvert felt
 // filtreres til det som er brukt sammen med feltene til VENSTRE for det i kjeden
