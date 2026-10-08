@@ -982,13 +982,15 @@ function ordreTittel(o){
   if (o.chassis) return 'Chassis.nr';
   return 'Uten reg.nr';
 }
-// Selve chassisnummeret, som egen full-bredde blokk under tittel/status-raden. Viser kun
-// "Chassis.nr"-etiketten her hvis reg.nr FANT STED i tittelen over (ellers sto den der
-// allerede som plassholder, se ordreTittel()) - unngår at etiketten vises to ganger.
-function chassisBlockHTML(o, onclickStr){
+// Selve chassisnummeret, som egen full-bredde blokk RETT UNDER tittel/status-raden (altså
+// FØR kunde/farge-linjene - bedt om av Henrik 2026-10-08: "den skal jo stå rett under
+// chassis.nr"). Viser kun "Chassis.nr"-etiketten her hvis reg.nr FANT STED i tittelen over
+// (ellers sto den der allerede som plassholder, se ordreTittel()) - unngår at etiketten
+// vises to ganger.
+function chassisBlockHTML(o){
   if (!o.chassis) return '';
-  const etikett = o.regnr ? `<div class="small muted" style="margin-top:6px" onclick="${onclickStr}">Chassis.nr</div>` : '';
-  return etikett + `<div style="font-weight:700;font-size:14px;cursor:pointer;margin-top:2px" onclick="${onclickStr}">${esc(o.chassis)}</div>`;
+  const etikett = o.regnr ? `<div class="small muted" style="margin-top:6px">Chassis.nr</div>` : '';
+  return etikett + `<div style="font-weight:700;font-size:14px;margin-top:2px">${esc(o.chassis)}</div>`;
 }
 
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
