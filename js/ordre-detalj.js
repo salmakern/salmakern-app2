@@ -825,10 +825,12 @@ function tvangsflyt(o) {
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
     {lbl:'Ombygging valgt',   ok: ombyggingValgt},
     {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)},
-    // Ingen tekst i "Skal ha etter visning" -> ingenting å bekrefte, automatisk ok. Finnes
-    // det tekst, må den bekreftes før ordren kan lukkes - hindrer at utstyret glemmes
-    // (bedt om av Henrik 2026-10-08).
-    {lbl:'Utstyr etter visning bekreftet', ok: !o.utstyr?.skalHa?.trim() || !!o.utstyr?.skalHaBekreftet}
+    // Kreves bekreftet UANSETT om feltet har tekst eller ikke - et tomt felt kan bety
+    // "ingenting å legge til", men det kan like gjerne bety at ingen har sjekket ennå, som
+    // er nøyaktig det som skal hindres (rettet 2026-10-08 etter at Henrik påpekte at et
+    // tomt felt ikke varslet i det hele tatt: "da varsler den ikke om at det ikke er
+    // bekreftet" - et unntak for tom tekst ville latt akkurat det glemmes videre).
+    {lbl:'Utstyr etter visning bekreftet', ok: !!o.utstyr?.skalHaBekreftet}
   ];
 }
 
