@@ -983,8 +983,12 @@ function ordreTittel(o){
 }
 function chassisBlockHTML(o){
   if (!o.chassis) return '';
-  return `<div style="font-size:11px;letter-spacing:.1em;font-weight:700;color:#a1a0aa">CHASSIS</div>
-    <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.15;margin-top:2px">${esc(o.chassis)}</div>`;
+  // "CHASSIS"-etiketten vises KUN når reg.nr allerede står i tittelen over (og dermed
+  // trenger en forklaring på hva det NESTE tallet er) - uten reg.nr sier tittelen allerede
+  // "Chassis.nr" som plassholder, så en etikett her ville bare gjentatt samme ord rett
+  // under seg selv (meldt av Henrik 2026-10-08: "hvorfor står det chassis to steder?").
+  const etikett = o.regnr ? `<div style="font-size:11px;letter-spacing:.1em;font-weight:700;color:#a1a0aa">CHASSIS</div>` : '';
+  return etikett + `<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.15">${esc(o.chassis)}</div>`;
 }
 
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
