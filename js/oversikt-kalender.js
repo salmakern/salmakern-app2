@@ -83,7 +83,7 @@ function renderOrdreList() {
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;overflow:hidden">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1">
           <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;overflow-wrap:break-word">${ordreLabelFull(o)}</b>
           ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
