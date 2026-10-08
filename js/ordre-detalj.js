@@ -364,10 +364,14 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         <div id="utstyrSjekkliste_${o.id}">${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}</div>
       </div>
 
-      <div class="card">
+      <div class="card" style="${o.utstyr?.skalHaBekreftet?'border-color:#22c55e;background:rgba(34,197,94,.06)':''}">
         <div class="h">Utstyr – Skal ha etter visning</div>
         <div class="small muted" style="margin-top:6px">Valgte Ekstra utstyr-oppskrifter legges automatisk til her - skriv gjerne inn mer for hånd i tillegg.</div>
         <textarea id="skalHaInput_${o.id}" rows="4" style="margin-top:8px" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:13px;font-weight:700;color:${o.utstyr?.skalHaBekreftet?'#86efac':'#a1a1aa'}">
+          <input type="checkbox" ${o.utstyr?.skalHaBekreftet?'checked':''} onchange="toggleSkalHaBekreftet('${o.id}',this.checked)" style="width:17px;height:17px;accent-color:#22c55e;cursor:pointer">
+          ✔ Utstyr bekreftet klargjort
+        </label>
       </div>
 
       <div class="card">
@@ -520,6 +524,17 @@ function toggleDiagnose(id) {
   o.diagnose = !o.diagnose;
   o.diagnoseAv = o.diagnose ? me.navn : '';
   logChange(o, o.diagnose ? 'Diagnose utført' : 'Diagnose fjernet');
+  save(id); buildOrdreDetail();
+}
+
+// Bekrefter at "Utstyr - Skal ha etter visning" faktisk er klargjort - del av
+// tvangsflyt() lenger ned, så en ordre med utfylt tekst her ikke kan lukkes før denne er
+// huket av (bedt om av Henrik 2026-10-08). su() nullstiller denne automatisk igjen hvis
+// teksten endres etterpå, se ordre-diverse.js.
+function toggleSkalHaBekreftet(id, bekreftet) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.utstyr.skalHaBekreftet = bekreftet;
+  logChange(o, bekreftet ? 'Utstyr etter visning bekreftet' : 'Utstyr etter visning - bekreftelse fjernet');
   save(id); buildOrdreDetail();
 }
 
@@ -809,7 +824,11 @@ function tvangsflyt(o) {
     {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
     {lbl:'Ombygging valgt',   ok: ombyggingValgt},
-    {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)}
+    {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)},
+    // Ingen tekst i "Skal ha etter visning" -> ingenting å bekrefte, automatisk ok. Finnes
+    // det tekst, må den bekreftes før ordren kan lukkes - hindrer at utstyret glemmes
+    // (bedt om av Henrik 2026-10-08).
+    {lbl:'Utstyr etter visning bekreftet', ok: !o.utstyr?.skalHa?.trim() || !!o.utstyr?.skalHaBekreftet}
   ];
 }
 

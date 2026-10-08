@@ -93,7 +93,7 @@ function renderOrdreList() {
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
         ${dokStatusKortHTML(o)}
-        ${hengerfesteKortHTML(o)?`<div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${hengerfesteKortHTML(o)}</div>`:''}
+        ${(hengerfesteKortHTML(o)||skalHaBadgeHTML(o))?`<div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>`:''}
         <div style="padding-bottom:9px;border-bottom:1px solid #27272a">${tvangsflytBarHTML(o)}</div>
         <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px">
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
@@ -159,7 +159,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</div>
@@ -180,7 +180,7 @@ function renderOversikt(q) {
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
@@ -508,6 +508,27 @@ function settHengerfesteMontert(id, val) {
   // ikke herfra - ellers sendes varselet dobbelt.
   save(id); renderAll();
 }
+// Om selve hengerfeste-DELEN er bestilt/ankommet fra leverandør - uavhengig av
+// hengerfesteMontert over, som gjelder MONTERING på bilen (bedt om av Henrik 2026-10-08:
+// "noe som kan vise at hengerfeste til en bil har kommet").
+const HENGERFESTE_BESTILT_LBL = {ikke_bestilt:'Ikke bestilt', bestilt:'Bestilt', ankommet:'Ankommet'};
+function hengerfesteBestiltDropdown(ordreId, bestilt) {
+  const FARGE = {
+    ikke_bestilt: {bg:'#45121288', txt:'#fca5a5', border:'#ef4444'},
+    bestilt:      {bg:'#42200688', txt:'#fef08a', border:'#facc15'},
+    ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
+  };
+  const f = FARGE[bestilt] || FARGE.ikke_bestilt;
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
+    ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
+  </select>`;
+}
+function settHengerfesteBestilt(id, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.utstyr.hengerfesteBestilt = val;
+  logChange(o, 'Hengerfeste ' + (HENGERFESTE_BESTILT_LBL[val]||val).toLowerCase());
+  save(id); renderAll();
+}
 function hengerfesteKortHTML(o) {
   if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
   // Kun selve nummeret fra "Forhandler.nr"-feltet (ordre-detalj.js) vises her, rett ved
@@ -518,9 +539,17 @@ function hengerfesteKortHTML(o) {
   const forhandlerNr = o.utstyr?.forhandlerNr;
   return `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;flex-wrap:wrap">
     <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
+    ${hengerfesteBestiltDropdown(o.id, o.utstyr?.hengerfesteBestilt)}
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
     ${forhandlerNr?`<span style="font-size:13px;font-weight:700;color:#f4f4f5">${esc(forhandlerNr)}</span>`:''}
   </div>`;
+}
+// Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) så lenge "Skal
+// ha etter visning" har tekst som ikke er bekreftet ennå - hindrer at det glemmes (bedt om
+// av Henrik 2026-10-08). Samme regel som tvangsflyt()-kravet i ordre-detalj.js.
+function skalHaBadgeHTML(o) {
+  if (!o.utstyr?.skalHa?.trim() || o.utstyr?.skalHaBekreftet) return '';
+  return `<span class="pill warn" style="font-size:11px;margin:0">⚠ Utstyr ikke bekreftet</span>`;
 }
 // Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
 // bare inne i ordredetaljen), bedt om av Henrik 2026-09-17 for bedre oversikt i listene.

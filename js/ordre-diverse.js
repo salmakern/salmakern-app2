@@ -93,6 +93,16 @@ function beregnDrivstoffHTML(df, innhold=false) {
 }
 function su(id,f,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  // Endres selve "skal ha etter visning"-teksten etter at den er bekreftet, er den gamle
+  // bekreftelsen ikke lenger gyldig - krev en ny (bedt om av Henrik 2026-10-08). Bygger
+  // detaljvisningen på nytt KUN i dette tilfellet (feltet endres uansett først ved blur,
+  // ikke per tastetrykk, så det forstyrrer ikke skriving) slik at bekreft-kortet faktisk
+  // viser seg som ubekreftet igjen med en gang.
+  if (f==='skalHa' && o.utstyr.skalHaBekreftet && o.utstyr.skalHa!==val) {
+    o.utstyr.skalHaBekreftet=false;
+    o.utstyr[f]=val; save(id); buildOrdreDetail();
+    return;
+  }
   o.utstyr[f]=val; save(id);
 }
 // Velges Hengerfeste, skal artikkelnummeret til hengerfestet (521 - "Montering av
