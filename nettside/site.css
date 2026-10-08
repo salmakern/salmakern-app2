@@ -136,7 +136,7 @@ h3 { font-size: 20px; letter-spacing: -0.01em; text-transform: none; margin-bott
 .compare-wrap .section-inner { padding: clamp(56px, 7vw, 96px) var(--pad-x); }
 .compare-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 28px; }
 .compare-head .mono { font-size: 11px; letter-spacing: 0.14em; color: var(--text-label); }
-.compare { position: relative; aspect-ratio: 16 / 9; min-height: 320px; background: var(--surface); overflow: hidden; cursor: ew-resize; touch-action: none; user-select: none; border-bottom: 2px solid var(--red); }
+.compare { position: relative; width: 100%; aspect-ratio: 16 / 9; min-height: 320px; background: var(--surface); overflow: hidden; cursor: ew-resize; touch-action: none; user-select: none; border-bottom: 2px solid var(--red); }
 .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .compare-before-layer { position: absolute; inset: 0; }
 .compare-handle { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--red); transform: translateX(-1px); pointer-events: none; }
