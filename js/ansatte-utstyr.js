@@ -82,7 +82,7 @@ async function lagreKontakt() {
   } else {
     S.kontakter.push(kontakt);
   }
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
 
   if (gammeltNavn !== null && gammeltNavn !== navn) {
     const beroerteOrdre = (S.ordrer||[]).filter(o => o.kunde === gammeltNavn);
@@ -212,7 +212,7 @@ async function slettKontakt(id) {
   } else {
     S.kontakter = S.kontakter.filter(x=>x.id!==id);
   }
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if (k.type === 'Forhandler') { closeModal('forhandlerDetalj'); renderForhandlerListe(); openModal('forhandlerListe'); }
   renderKontakter();
 }
@@ -361,7 +361,7 @@ async function hentOrgnrForAlleForhandlere() {
     } else {
       treff.forEach(({id, orgnr}) => { const k = S.kontakter.find(x=>x.id===id); if (k) k.orgnr = orgnr; });
     }
-    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+    planleggLocalSpeiling();
   }
   statusEl.innerHTML = `Fant org.nr for ${treff.length} av ${manglerOrgnr.length} forhandlere.` +
     (ikkeFunnet.length ? `<br>Ikke funnet (sjekk navn/skrivemåte manuelt): ${esc(ikkeFunnet.join(', '))}` : '');
@@ -870,7 +870,7 @@ function detRapportPivotHTML(ordrerIAar, valgtAar) {
 // LAGRE INNSTILLINGER TIL SUPABASE
 // ════════════════════════════════════════════════════
 function saveInnstillinger() {
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if (!db) return;
   // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig (og potensielt
   // race-utsatt) reinnlesning like etterpå - se samme mønster for ordre (save()).
@@ -901,7 +901,7 @@ function saveInnstillinger() {
 // lokasjon/radius. Reell bug: lokasjonen kunne "hoppe" til feil koordinater en stund
 // etter at den ble satt riktig, uten at noen bevisst endret GPS igjen.
 function saveGPS() {
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if (!db) return;
   ignorerRealtimeInnstillinger = true;
   clearTimeout(ignorerRealtimeInnstillingerTimer);
@@ -1214,7 +1214,7 @@ function toggleKanForeLonn(id) {
     .then(r=>{
       if(r.error){ alert('Feil ved lagring: '+r.error.message); }
     });
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   renderMer();
   if(me?.rolle==='admin'||me?.rolle==='godkjenner') renderTimerOversikt();
 }
@@ -1226,7 +1226,7 @@ function endreAnsattRolle(id, rolle) {
   setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
   if(db) db.from('ansatte').update({rolle}).eq('id',id)
     .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   renderMer();
 }
 
@@ -1242,13 +1242,13 @@ function settAnsattAnsettelsesdato(id, dato) {
   setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
   if(db) db.from('ansatte').update({ansettelsesdato: dato || null}).eq('id',id)
     .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
 }
 
 function toggleAnsatt(id) {
   const a=S.ansatte.find(x=>x.id===id); if(!a) return;
   a.aktiv=!a.aktiv;
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if(db) db.from('ansatte').update({aktiv:a.aktiv}).eq('id',id)
     .then(r=>{if(r.error)console.error('Ansatt lagringsfeil:',r.error.message);});
   renderMer();
@@ -1260,7 +1260,7 @@ function opprettAnsatt() {
   if(!navn||pin.length!==4||isNaN(Number(pin))){alert('Fyll ut navn og 4-sifret PIN');return;}
   const nyA={id:++S.nextId, navn, rolle:document.getElementById('na_rolle').value, aktiv:true};
   S.ansatte.push(nyA);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   // Ansatt + PIN opprettes atomisk i databasen (opprett_ansatt) - PIN-koder
   // lagres ikke lenger direkte via klienten, og dup-sjekk skjer server-side.
   if(db) db.rpc('opprett_ansatt', {p_id:nyA.id, p_navn:navn, p_rolle:nyA.rolle, p_pin:pin})
@@ -1288,7 +1288,7 @@ function slettAnsatt(id) {
   const a = S.ansatte.find(x=>x.id===id); if(!a) return;
   if (!confirm(`Sikker på at du vil slette ${a.navn}?\n\nAlle timeregistreringer for denne ansatte beholdes, men kobles ikke lenger til personen.`)) return;
   S.ansatte = S.ansatte.filter(x=>x.id!==id);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if(db) db.from('ansatte').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message)});
   renderMer();
 }
@@ -1467,21 +1467,21 @@ function adminSettTimerBetalt(id, betalt) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
   t.betalt = betalt;
   if(db) db.from('timer_entries').update({betalt}).eq('id',id).then(r=>{if(r.error) console.error('Betalt-oppdatering feilet:', r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
 }
 
 function adminSettSykemeldingLevert(id, levert) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
   t.sykemeldingLevert = levert;
   if(db) db.from('timer_entries').update({sykemelding_levert:levert}).eq('id',id).then(r=>{if(r.error) console.error('Sykemelding-levert-oppdatering feilet:', r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
 }
 
 function adminSlettTimer(id) {
   if (!confirm('Slette denne registreringen?')) return;
   S.timer = S.timer.filter(t=>t.id!==id);
   if(db) db.from('timer_entries').delete().eq('id',id).then(r=>{if(r.error)console.error(r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   renderAnsattDetalj();
 }
 
@@ -1546,7 +1546,7 @@ function adminLagreTimer() {
     if(db) db.from('timer_entries').insert({id:nyId, ansatt_id:a.id, ansatt:a.navn, dato, type, start, stopp, mins})
       .then(r=>{if(r.error)console.error(r.error.message);});
   }
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   closeModal('adminTimerModal');
   renderAnsattDetalj();
 }

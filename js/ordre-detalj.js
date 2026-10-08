@@ -738,7 +738,7 @@ function togglePrioritert(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.prioritert = !o.prioritert;
   logChange(o, o.prioritert ? 'Merket som prioritert' : 'Fjernet prioritering');
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if (db) db.from('ordrer').update({prioritert:o.prioritert}).eq('id', id)
     .then(r=>{if(r.error) console.error('Prioritering-oppdatering feilet:', r.error.message);});
   renderOrdreList(); renderOversikt();
@@ -755,7 +755,7 @@ function settGodkjentBiltilsyn(id, val) {
   if (o.godkjentBiltilsyn === val) return;
   o.godkjentBiltilsyn = val;
   logChange(o, val ? 'Godkjent på biltilsynet' : 'Fjernet godkjent-merking (biltilsyn)');
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if (db) db.from('ordrer').update({godkjent_biltilsyn:val}).eq('id', id)
     .then(r=>{if(r.error) console.error('Godkjent-biltilsyn oppdatering feilet:', r.error.message);});
   renderOrdreList(); renderOversikt();

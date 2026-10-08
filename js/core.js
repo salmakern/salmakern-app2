@@ -496,6 +496,25 @@ let realtimeChannel = null;
 let realtimeReconnectTimer = null;
 let realtimeReconnectForsok = 0;
 
+// Flere Realtime-hendelser (f.eks. et flerrads-lagre et annet sted gjør, som sender én
+// hendelse PER rad selv om skrivingen var samlet i ett databasekall) kom tidligere rett
+// etter hverandre og trigget et fullt renderAll()/renderAdminArk() PER hendelse - fem
+// fulle sider tegnet på nytt fem ganger på rad for fem rader endret i samme handling.
+// Disse samler i stedet en kort byge med hendelser til ÉN rendering etterpå - selve
+// tilstands-oppdateringen (S.ordrer[i]=... osv.) skjer fortsatt umiddelbart og synkront
+// for hver hendelse, kun selve den kostbare tegningen er utsatt. Funnet i gjennomgang av
+// "appen føles treig" 2026-10-08.
+let _renderAllTimer = null;
+function planleggRenderAll() {
+  clearTimeout(_renderAllTimer);
+  _renderAllTimer = setTimeout(renderAll, 150);
+}
+let _renderAdminArkTimer = null;
+function planleggRenderAdminArk() {
+  clearTimeout(_renderAdminArkTimer);
+  _renderAdminArkTimer = setTimeout(() => renderAdminArk(), 150);
+}
+
 function subscribeRealtime() {
   if (!db) return;
   if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
@@ -504,19 +523,19 @@ function subscribeRealtime() {
   realtimeChannel = db.channel('salmakern_live')
     .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
       if (p.eventType==='INSERT') {
-        if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); renderAll(); }
+        if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); planleggRenderAll(); }
       } else if (p.eventType==='UPDATE') {
         if (ignorerRealtimeFor.has(p.new.id)) return;
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
         if(i>=0){
           S.ordrer[i]=dbToOrdre(p.new);
-          renderAll();
+          planleggRenderAll();
           if(activeOrdreId===p.new.id) buildOrdreDetail();
         }
       } else if (p.eventType==='DELETE') {
         S.ordrer = S.ordrer.filter(o=>o.id!==p.old.id);
         if (activeOrdreId===p.old.id) tilbakeOrdreList();
-        renderAll();
+        planleggRenderAll();
       }
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'ansatte'}, p => {
@@ -539,7 +558,7 @@ function subscribeRealtime() {
       } else if (p.eventType==='DELETE') {
         S.timer = S.timer.filter(t=>t.id!==p.old.id);
       }
-      renderAll();
+      planleggRenderAll();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'flater'}, p => {
       S.flater = S.flater || [];
@@ -602,7 +621,7 @@ function subscribeRealtime() {
       } else if (p.eventType==='DELETE') {
         S.adminArk = S.adminArk.filter(r=>r.id!==p.old.id);
       }
-      if (document.getElementById('admin')?.classList.contains('active')) renderAdminArk();
+      if (document.getElementById('admin')?.classList.contains('active')) planleggRenderAdminArk();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'moter'}, p => {
       S.moter = S.moter || [];
@@ -613,7 +632,7 @@ function subscribeRealtime() {
       } else if (p.eventType==='DELETE') {
         S.moter = S.moter.filter(m=>m.id!==p.old.id);
       }
-      if (me) renderAll();
+      if (me) planleggRenderAll();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'godkjenner_meldinger'}, p => {
       S.godkjennerMeldinger = S.godkjennerMeldinger || [];
@@ -837,8 +856,25 @@ if (typeof window !== 'undefined') {
 // de aller fleste stedene bruker save() uten å vente på det (som før), men
 // steder der det er kritisk å faktisk vite om lagringen lyktes (f.eks.
 // godkjenning/arkivering) kan gjøre `const feil = await save(id)`.
+// localStorage-speilingen av HELE S (alle ordre, arkiv, ansatte, lager, admin-ark osv.) er
+// bare en nødløsning for tilfellet der Supabase-oppstarten selv feiler (se catch-blokken i
+// init-koden lenger opp, som er eneste sted S noensinne leses TILBAKE fra localStorage) -
+// den har ingenting med selve lagringen av ordren å gjøre. Å kjøre JSON.stringify(S) på
+// HELE appens datasett synkront på hovedtråden ved HVER ENESTE feltlagring i hele appen
+// (60+ kallsteder) var en reell treghetskilde som vokser med mengden data (flere år med
+// ordre-arkiv, lagerhistorikk, admin-ark) - uavhengig av hvor liten den ENE ordren som
+// faktisk redigeres er. Debounces til 400ms etter siste kall i stedet for å skrive på hvert
+// kall - selve Supabase-lagringen under er fortsatt umiddelbar og urørt, kun denne lokale
+// nødkopien er utsatt. Funnet i en full gjennomgang av "appen føles treig" 2026-10-08.
+let _saveLocalSpeilingTimer = null;
+function planleggLocalSpeiling() {
+  clearTimeout(_saveLocalSpeilingTimer);
+  _saveLocalSpeilingTimer = setTimeout(() => {
+    try { localStorage.setItem(STORE, JSON.stringify(S)); } catch(e) {}
+  }, 400);
+}
 function save(ordreId) {
-  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch(e) {}
+  planleggLocalSpeiling();
   if (!db || !ordreId) return Promise.resolve(null);
   const o = S.ordrer.find(x=>x.id===ordreId);
   if (!o) return Promise.resolve(null);

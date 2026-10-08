@@ -707,12 +707,29 @@ function settVareBestilt(vareId, val) {
   if (document.getElementById('vareDetaljView')?.style.display === 'block') renderVareDetalj();
 }
 
+// Marker FLERE varer som bestilt samtidig med ÉN samlet databaseoppdatering i stedet for ett
+// kall per vare (samme batch-mønster som lagerBatchFlush() over) - brukt av
+// settKategoriBestilt/bestillAvhukede/bestillAltFraListe under, IKKE av enkelt-knappen i
+// vareDetalj (den bruker fortsatt settVareBestilt() direkte - kun én vare, ingen løkke).
+// Funnet i gjennomgang av "appen føles treig" 2026-10-08: å merke flere varer bestilt
+// samtidig ga før én nettverksrunde per vare, i stedet for én samlet.
+async function settVarerBestiltBatch(ids, val) {
+  const oppdaterte = ids.map(id => (S.lagervarer||[]).find(x=>x.id===id)).filter(Boolean);
+  oppdaterte.forEach(v => { v.bestilt = !!val; });
+  if (db && oppdaterte.length) {
+    const { error } = await db.from('lagervarer').upsert(oppdaterte.map(v=>({id:v.id, bestilt:v.bestilt})), {onConflict:'id'});
+    if (error) console.error('Bestilt-batch-oppdatering feilet:', error.message);
+  }
+  oppdaterLagerVarselBadge();
+  renderGlobalLavLagerVarsel();
+  if (document.getElementById('vareDetaljView')?.style.display === 'block') renderVareDetalj();
+}
 // Marker alle lave, ikke-bestilte varer i en kategori (innenfor en gitt modell, om satt)
 // som bestilt samlet - modell trengs for å ikke blande sammen samme kategorinavn brukt av
 // flere modeller (f.eks. "Modul-system" for både EV9 og en annen modell).
 function settKategoriBestilt(kategori, modell) {
   const varer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori') === kategori && (v.modell||'') === (modell||'') && v.minAntall > 0 && v.antall <= v.minAntall && !v.bestilt);
-  varer.forEach(v => settVareBestilt(v.id, true));
+  settVarerBestiltBatch(varer.map(v=>v.id), true);
 }
 
 // ════════════════════════════════════════════════════
@@ -815,7 +832,7 @@ function visBestillingsliste() {
 function bestillAvhukede() {
   const ids = [...document.querySelectorAll('.bestill-chk:checked')].map(c => c.dataset.vareId);
   if (!ids.length) { visToast('Huk av varene du har bestilt'); return; }
-  ids.forEach(id => settVareBestilt(id, true));
+  settVarerBestiltBatch(ids, true);
   renderLagerListe();
   visToast(`${ids.length} vare${ids.length===1?'':'r'} merket som bestilt`);
   visBestillingsliste();
@@ -951,7 +968,7 @@ function bestillAltFraListe() {
   const varer = laveVarerForBestilling();
   if (!varer.length) return;
   if (!confirm(`Merk alle ${varer.length} varer på listen som bestilt?`)) return;
-  varer.forEach(v => settVareBestilt(v.id, true));
+  settVarerBestiltBatch(varer.map(v=>v.id), true);
   renderLagerListe();
   closeModal('bestillingslisteModal');
 }

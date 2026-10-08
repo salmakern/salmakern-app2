@@ -437,7 +437,7 @@ function adminArkOpprettOrdreForChassis(rad, chassis) {
   ny._localAt = Date.now();
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   visToast('Ny ordre opprettet (På vei)', 'ok');
 }
 
@@ -652,14 +652,18 @@ async function adminArkLagreFelter(rad, endringer) {
 // Oppdaterer kun de berørte radene direkte i tabellen (row.update) istedenfor et fullt
 // gjenoppbygg (renderAdminArk) - det siste oppleves som at "hele siden laster på nytt".
 async function adminArkBekreftFlereVentendeTid(radTekstListe) {
+  // Kjører lagringene parallelt i stedet for sekvensielt (ett nettverkskall om gangen) -
+  // hver rad gjelder nesten alltid en annen ordre/chassis, så det er ingen reell grunn til
+  // å vente på forrige før neste starter. Funnet i gjennomgang av "appen føles treig"
+  // 2026-10-08: å bekrefte flere ventende tider samtidig kunne ta flere sekunder.
   let ok = 0, feilet = 0;
-  for (const { row, rad, tekst } of radTekstListe) {
+  await Promise.all(radTekstListe.map(async ({ row, rad, tekst }) => {
     const tolket = parseTimeBekreftetTekst(tekst);
-    if (!tolket) { feilet++; continue; }
+    if (!tolket) { feilet++; return; }
     await adminArkLagreFelter(rad, { timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, timeBekreftetSted: tolket.sted, ventendeTimer: '' });
     ok++;
     if (row) row.update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid, tolket.sted), ventendeTimer: '' });
-  }
+  }));
   if (ok && !feilet) visToast(ok === 1 ? 'Time bekreftet' : `${ok} timer bekreftet`, 'ok');
   else if (ok && feilet) visToast(`${ok} bekreftet, ${feilet} kunne ikke tolkes`, 'ok');
   else visToast('Kan ikke tolkes som dato/tid - skriv f.eks. 07.08 - 09:00 i Ventende timer først');
@@ -756,25 +760,35 @@ async function vtFlyttInnadIKolonne(kildePosisjoner, startMaalPosisjon) {
   const alleRader = adminArkTable.getRows();
   const tekster = kildePosisjoner.map(pos => alleRader.find(r => r.getPosition() === pos)?.getData().ventendeTimer || '');
 
-  for (const pos of kildePosisjoner) {
+  // Hver rad lagres parallelt i stedet for sekvensielt (ett nettverkskall om gangen) - de
+  // berører nesten alltid ulike chassis/ordre, så det er ingen reell grunn til å vente på
+  // forrige før neste starter. Selve KILDE-tømmingen fullføres likevel helt FØR skrive-
+  // fasen starter (to egne Promise.all, ikke én felles) - rekkefølgen mellom "tøm kilder"
+  // og "skriv mål" må bevares for det sjeldne tilfellet der kilde- og mål-området
+  // overlapper. Funnet i gjennomgang av "appen føles treig" 2026-10-08.
+  await Promise.all(kildePosisjoner.map(async pos => {
     const rad = alleRader.find(r => r.getPosition() === pos);
-    if (!rad) continue;
+    if (!rad) return;
     await adminArkLagreFelter(rad.getData(), { ventendeTimer: '' });
     rad.update({ ventendeTimer: '' });
-  }
+  }));
 
   const posisjonerSortert = alleRader.map(r => r.getPosition()).sort((a, b) => a - b);
   const startIdx = posisjonerSortert.indexOf(startMaalPosisjon);
   let antallFlyttet = 0;
+  const skriveOppgaver = [];
   for (let i = 0; i < tekster.length; i++) {
     const pos = posisjonerSortert[startIdx + i];
     if (pos === undefined || !tekster[i]) continue;
     const rad = alleRader.find(r => r.getPosition() === pos);
     if (!rad) continue;
-    await adminArkLagreFelter(rad.getData(), { ventendeTimer: tekster[i] });
-    rad.update({ ventendeTimer: tekster[i] });
     antallFlyttet++;
+    skriveOppgaver.push((async () => {
+      await adminArkLagreFelter(rad.getData(), { ventendeTimer: tekster[i] });
+      rad.update({ ventendeTimer: tekster[i] });
+    })());
   }
+  await Promise.all(skriveOppgaver);
   visToast(antallFlyttet === 1 ? 'Flyttet 1 rad' : `Flyttet ${antallFlyttet} rader`, 'ok');
 }
 

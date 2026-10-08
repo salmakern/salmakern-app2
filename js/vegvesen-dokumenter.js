@@ -1141,7 +1141,7 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
     if (db) db.from('flater').update({vegvesen_fingerprint:null}).eq('id', kontekst.flate.id)
       .then(r=>{if(r.error) console.error('Nullstilling av flåte-fingerprint feilet:', r.error.message);});
   }
-  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  planleggLocalSpeiling();
   visToast(`Fjernet ${gamle.length} utdatert${gamle.length===1?'':'e'} Vegvesen-dokument${gamle.length===1?'':'er'} siden verken Nytt eller Brukt Kjøretøy lenger er valgt`, 'ok');
 }
 
@@ -1184,7 +1184,7 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   } else {
     logChange(o, 'Generert dokument: ' + filnavn);
   }
-  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  planleggLocalSpeiling();
   const listEl = document.getElementById('dokumenterListe_' + ordreId);
   if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
   return true;
@@ -1264,7 +1264,7 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
     const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
     if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
   }
-  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+  planleggLocalSpeiling();
   oppdaterte.forEach(o => {
     const listEl = document.getElementById('dokumenterListe_' + o.id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(o);

@@ -215,7 +215,7 @@ function doLagreManuellTimer() {
     id:entry.id,ansatt_id:me.id,ansatt:me.navn,
     dato:entry.dato,type:'manuell',start,stopp,mins
   }).then(r=>{if(r.error) console.error('Timer feil:',r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   renderTimerHistorikk(); renderTimerMaaned();
   document.getElementById('mFra').value='';
   document.getElementById('mTil').value='';
@@ -269,7 +269,7 @@ function avbrytAktivEgenmelding() {
   if (!avbrutte.length) return;
   const avbrutteId = new Set(avbrutte.map(t=>t.id));
   S.timer = (S.timer||[]).filter(t=>!avbrutteId.has(t.id));
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if(db) db.from('timer_entries').delete().in('id', [...avbrutteId])
     .then(r=>{if(r.error) console.error('Avbryting av egenmelding feilet:',r.error.message);});
   renderTimerHistorikk(); renderTimerMaaned();
@@ -353,7 +353,7 @@ function lagreTimer() {
     // (se flyttVare()/registrerLagerEndring() sine kommentarer for samme problem).
     if(db) db.from('timer_entries').insert(entries.map(e=>({id:e.id,ansatt_id:me.id,ansatt:me.navn,dato:e.dato,type:timerType,start:'–',stopp:'–',mins:0})))
       .then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
-    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+    planleggLocalSpeiling();
     renderTimerHistorikk(); renderTimerMaaned();
     return;
   } else if (timerType==='egenmelding') {
@@ -380,7 +380,7 @@ function lagreTimer() {
         id:e.id, ansatt_id:me.id, ansatt:me.navn, dato:e.dato, type:'egenmelding',
         start:'–', stopp:'–', mins:0, betalt, egenmelding_periode_id:periodeId
       }))).then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
-    try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+    planleggLocalSpeiling();
     renderTimerHistorikk(); renderTimerMaaned(); visEgenmeldingKvoteInfo();
     visToast(
       betalt
@@ -396,7 +396,7 @@ function lagreTimer() {
     start, stopp, mins, _localAt:Date.now()
   };
   S.timer.push(timerEntry);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   if(db) db.from('timer_entries').insert({
     id:timerEntry.id, ansatt_id:me.id, ansatt:me.navn,
     dato:timerEntry.dato, type:timerType, start, stopp, mins

@@ -457,7 +457,7 @@ async function endreStatus(id, nyStatus) {
   else if (nyStatus === 'ikke_paabegynt' && !o.ankomstdato) o.ankomstdato = new Date().toISOString().split('T')[0];
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   // Målrettet oppdatering av kun disse feltene - IKKE via den generelle
   // save(), slik at denne handlingen aldri kan overskrives av en gammel
   // kopi av ordren som lagres fra et annet sted i appen.

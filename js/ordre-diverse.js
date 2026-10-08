@@ -220,7 +220,7 @@ async function arkiver(id) {
   o.status='arkivert';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Arkivert'};
   o.endringer.push(endring);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   let feil = null;
   if (db) {
     const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);
@@ -306,7 +306,7 @@ function opprettOrdre() {
   if (forhandlerOrgnr) ny.forhandlerOrgnr = forhandlerOrgnr;
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_farge','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');
   const nRegnrStatus = document.getElementById('n_regnrStatus');
@@ -383,7 +383,7 @@ async function bekreftGodkjenn() {
   const overstyrTekst = (!tvangsflytOk && me?.rolle==='admin') ? ' (tvangsflyt overstyrt av admin - ikke alle punkter var fullført)' : '';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjenner.navn+overstyrTekst};
   o.endringer.push(endring);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   let feil = null;
   if (db) {
     const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status, endringer:o.endringer}).eq('id', activeOrdreId);
@@ -814,17 +814,26 @@ async function lastOppEtDokument(file, id) {
     o.dokumenter = [...o.dokumenter, { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() }];
     logChange(o, 'Lastet opp dokument: ' + file.name);
   }
-  db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
-    .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
+  // Databaseoppdateringen av selve "dokumenter"-feltet gjøres IKKE her lenger - se
+  // lastOppFlereDokumenter() under, som nå gjør den ÉN gang etter at alle filene er lastet
+  // opp, i stedet for én gang PER fil (var en reell treghetskilde ved opplasting av flere
+  // filer samtidig, funnet i gjennomgang av "appen føles treig" 2026-10-08). Selve
+  // fil-opplastingen til Storage over må fortsatt skje sekvensielt (uendret) siden
+  // "erstatt gammel versjon"-logikken leser o.dokumenter som det står etter FORRIGE fil.
 }
 
 // Delt av både filvelgeren og dra-og-slipp-boksen - laster opp én fil om gangen (Supabase
-// Storage-kallet må gjøres sekvensielt uansett), lagrer/rerendrer kun ÉN gang til slutt.
+// Storage-kallet må gjøres sekvensielt uansett, siden "erstatt gammel versjon"-logikken i
+// lastOppEtDokument() avhenger av forrige fils resultat), men lagrer/rerendrer kun ÉN gang
+// til slutt i stedet for én gang per fil.
 async function lastOppFlereDokumenter(files, id) {
   // Kun admin kan laste opp dokumenter (bedt om av Henrik 2026-10-01 - godkjenner mistet denne).
   if (!me || me.rolle!=='admin') return;
   for (const file of files) await lastOppEtDokument(file, id);
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
+  const oFerdig = S.ordrer.find(x=>x.id===id);
+  if (db && oFerdig) db.from('ordrer').update({dokumenter:oFerdig.dokumenter}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
+  planleggLocalSpeiling();
   const o = S.ordrer.find(x=>x.id===id);
   const listEl = document.getElementById('dokumenterListe_'+id);
   if (listEl && o) listEl.innerHTML = dokumenterListeHTML(o);
@@ -875,7 +884,7 @@ async function slettDokument(id, idx) {
   });
   if (db) db.from('ordrer').upsert(beroerte.map(m=>({id:m.id, dokumenter:m.dokumenter})), {onConflict:'id'})
     .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(err){}
+  planleggLocalSpeiling();
   beroerte.forEach(m => {
     const listEl = document.getElementById('dokumenterListe_'+m.id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(m);

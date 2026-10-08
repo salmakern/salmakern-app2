@@ -226,7 +226,7 @@ function slettFlate() {
   if (!confirm(`Slette flåten "${f.flatenummer}" helt? Ordrene i den blir ikke slettet, bare koblet fra flåten.`)) return;
   const medlemmer = (S.ordrer||[]).filter(o=>o.flateId===f.id);
   medlemmer.forEach(o => { o.flateId = null; });
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   S.flater = (S.flater||[]).filter(x=>x.id!==f.id);
   if (db) {
     // Ett samlet kall for alle medlemsordrene i stedet for ett save()-kall (og dermed

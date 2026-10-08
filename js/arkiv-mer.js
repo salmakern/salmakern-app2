@@ -208,7 +208,7 @@ function slettOrdre(id) {
     if (flate) db.from('flater').update({primaer_ordre_id:flate.primaerOrdreId}).eq('id',flate.id).then(r=>{if(r.error)console.error('Kunne ikke oppdatere flåtens primær-ordre:',r.error.message)});
     slettOrdreStorageFiler(id);
   }
-  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+  planleggLocalSpeiling();
   tilbakeOrdreList(); renderAll();
 }
 
