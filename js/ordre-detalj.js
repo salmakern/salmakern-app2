@@ -951,13 +951,15 @@ function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.ch
 // for bredt til å få plass i det hele tatt sammen med status-knappen på et smalt
 // mobilskjerm, og brøt da fortsatt midt i et siffer der "Chassis: "-prefikset + nummeret
 // ikke hadde noe naturlig sted å dele seg. Løsningen denne gangen: selve nummeret vises nå
-// tydelig mindre (12px i stedet for full tittelstørrelse) OG som én samlet, usplittbar
-// enhet (nowrap+overflow-wrap:normal) - gir mye mer albuerom, slik at det normalt får plass
-// hele veien ved siden av status-knappen. Skulle det en sjelden gang likevel ikke være nok
-// plass (uvanlig langt chassisnummer på et svært smalt skjermbilde), vil nummeret falle ned
-// som ÉN hel enhet på egen linje - aldri brutt midt i et siffer igjen.
+// tydelig mindre enn full tittelstørrelse OG som én samlet, usplittbar enhet
+// (nowrap+overflow-wrap:normal) - gir mye mer albuerom, slik at det normalt får plass hele
+// veien ved siden av status-knappen. Skulle det en sjelden gang likevel ikke være nok plass
+// (uvanlig langt chassisnummer på et svært smalt skjermbilde), vil nummeret falle ned som
+// ÉN hel enhet på egen linje - aldri brutt midt i et siffer igjen. Startet på 12px
+// (2026-10-08), men det ble meldt "for liten" - hevet til 13px samme dag, fortsatt testet
+// visuelt (340px mobilbredde) for å bekrefte det ikke reintroduserer brudd.
 function ordreLabelFull(o){
-  const chassisHTML = c => `<span style="font-size:12px;font-weight:700;white-space:nowrap;overflow-wrap:normal">Chassis: ${esc(c)}</span>`;
+  const chassisHTML = c => `<span style="font-size:13px;font-weight:700;white-space:nowrap;overflow-wrap:normal">Chassis: ${esc(c)}</span>`;
   if (o.regnr && o.chassis) return esc(o.regnr)+' · '+chassisHTML(o.chassis);
   if (!o.regnr && o.chassis) return chassisHTML(o.chassis);
   return ordreLabel(o);
