@@ -43,6 +43,7 @@ function initTimerPage() {
   timerType='normal';
   highlightTimerType();
   renderTimerHistorikk();
+  visSykemeldingPaaminnelse();
   // Gjenopprett pågående timer hvis siden ble lukket
   const lagretStart = localStorage.getItem('timerStart_'+me?.id);
   if (lagretStart) {
@@ -61,6 +62,22 @@ function initTimerPage() {
   }
 }
 
+// Påminner den ansatte selv om å levere sykemeldingen (legeerklæringen) for sykedager som
+// admin ennå ikke har huket av som levert (se adminSettSykemeldingLevert() i
+// ansatte-utstyr.js) - tidligere var dette kun synlig for admin i en helt annen del av
+// appen, den ansatte selv fikk aldri noen påminnelse (bedt om av Henrik 2026-10-08). Ren
+// informasjon - selve avkrysningen gjøres fortsatt kun av admin.
+function visSykemeldingPaaminnelse() {
+  const el = document.getElementById('sykemeldingReminderBanner'); if (!el || !me) return;
+  const datoer = (S.timer||[])
+    .filter(t=>t.ansattId===me.id && t.type==='syk' && !t.sykemeldingLevert)
+    .map(t=>t.dato).sort();
+  if (!datoer.length) { el.style.display='none'; return; }
+  const vist = datoer.slice(0,5).join(', ') + (datoer.length>5 ? ` og ${datoer.length-5} flere` : '');
+  el.textContent = `⚠ Husk å levere sykemelding for: ${vist}`;
+  el.style.display = 'block';
+}
+
 function setTimerType(t) {
   timerType=t;
   highlightTimerType();
@@ -71,7 +88,9 @@ function setTimerType(t) {
   // sykemelding gjelder som regel en hel periode fra legen, ikke én og én dag, og en
   // forlengelse (ny sykemelding som utsetter friskmeldingen) legges da bare inn som en
   // ny periode med oppdatert til-dato, i stedet for å måtte registrere dag for dag.
-  // Egenmelding beholder enkeltdag-feltet, siden det normalt gjelder kortere perioder.
+  // Egenmelding dekker alltid 3 virkedager fra og med i dag automatisk (se lagreTimer()) -
+  // intet eget datofelt lenger (det forrige datofeltet ble aldri faktisk lest/brukt, bare
+  // stående og misvisende - fjernet 2026-10-08).
   vis('ferieFelt', t==='ferie'||t==='permisjon'||t==='syk');
   vis('sykFelt', t==='egenmelding');
   const today=new Date().toISOString().split('T')[0];
@@ -79,13 +98,28 @@ function setTimerType(t) {
     const mDato=document.getElementById('mDato'); if(mDato&&!mDato.value) mDato.value=today;
   }
   if(t==='egenmelding'){
-    const sDato=document.getElementById('sDato'); if(sDato&&!sDato.value) sDato.value=today;
+    visEgenmeldingKvoteInfo();
   }
   if(t==='ferie'||t==='permisjon'||t==='syk'){
     document.getElementById('fFra').value=today;
     document.getElementById('fTil').value=today;
   }
   oppdaterTilstandPille();
+}
+
+// Viser hvor mange egenmeldinger den ansatte har brukt i år FØR de trykker Lagre, i
+// stedet for at det kun vises en melding etterpå (bedt om av Henrik 2026-10-08).
+function visEgenmeldingKvoteInfo() {
+  const el = document.getElementById('egenmeldingKvoteInfo'); if (!el || !me) return;
+  const aar = new Date().getFullYear();
+  const brukt = egenmeldingEpisoderIAar(S.timer, me.id, aar);
+  if (brukt < 4) {
+    el.textContent = `${brukt} av 4 egenmeldinger brukt i ${aar}`;
+    el.style.color = '#a1a1aa';
+  } else {
+    el.textContent = `${brukt} av 4 egenmeldinger brukt i ${aar} - denne blir UBETALT`;
+    el.style.color = '#fca5a5';
+  }
 }
 
 function highlightTimerType() {
@@ -338,7 +372,7 @@ function lagreTimer() {
         start:'–', stopp:'–', mins:0, betalt, egenmelding_periode_id:periodeId
       }))).then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
     try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
-    renderTimerHistorikk(); renderTimerMaaned();
+    renderTimerHistorikk(); renderTimerMaaned(); visEgenmeldingKvoteInfo();
     visToast(
       betalt
         ? `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]}`
