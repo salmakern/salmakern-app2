@@ -107,17 +107,17 @@ function setTimerType(t) {
   oppdaterTilstandPille();
 }
 
-// Viser hvor mange egenmeldinger den ansatte har brukt i år FØR de trykker Lagre, i
-// stedet for at det kun vises en melding etterpå (bedt om av Henrik 2026-10-08).
+// Viser hvor mange egenmeldinger den ansatte har brukt siste 12 måneder FØR de trykker
+// Lagre, i stedet for at det kun vises en melding etterpå (bedt om av Henrik 2026-10-08).
 function visEgenmeldingKvoteInfo() {
   const el = document.getElementById('egenmeldingKvoteInfo'); if (!el || !me) return;
-  const aar = new Date().getFullYear();
-  const brukt = egenmeldingEpisoderIAar(S.timer, me.id, aar);
+  const idag = new Date().toISOString().split('T')[0];
+  const brukt = egenmeldingEpisoderSisteAar(S.timer, me.id, idag);
   if (brukt < 4) {
-    el.textContent = `${brukt} av 4 egenmeldinger brukt i ${aar}`;
+    el.textContent = `${brukt} av 4 egenmeldinger brukt siste 12 måneder`;
     el.style.color = '#a1a1aa';
   } else {
-    el.textContent = `${brukt} av 4 egenmeldinger brukt i ${aar} - denne blir UBETALT`;
+    el.textContent = `${brukt} av 4 egenmeldinger brukt siste 12 måneder - denne blir UBETALT`;
     el.style.color = '#fca5a5';
   }
 }
@@ -352,13 +352,13 @@ function lagreTimer() {
     renderTimerHistorikk(); renderTimerMaaned();
     return;
   } else if (timerType==='egenmelding') {
-    // Se genererEgenmeldingDager/egenmeldingEpisoderIAar lenger opp i filen for
-    // begrunnelse (3 virkedager, maks 4 betalte episoder per kalenderår).
+    // Se genererEgenmeldingDager/egenmeldingEpisoderSisteAar lenger opp i filen for
+    // begrunnelse (3 kalenderdager, maks 4 betalte episoder siste rullerende 12 måneder).
     const periodeId = 'ep'+(++S.nextId);
-    const aar = new Date().getFullYear();
-    const tidligereEpisoder = egenmeldingEpisoderIAar(S.timer, me.id, aar);
+    const idag = new Date().toISOString().split('T')[0];
+    const tidligereEpisoder = egenmeldingEpisoderSisteAar(S.timer, me.id, idag);
     const betalt = tidligereEpisoder < 4;
-    const dager = genererEgenmeldingDager(new Date().toISOString().split('T')[0], 3);
+    const dager = genererEgenmeldingDager(idag, 3);
     const entries = dager.map(dato=>({
       id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
       dato, type:'egenmelding', start:'–', stopp:'–', mins:0, betalt,
@@ -376,7 +376,7 @@ function lagreTimer() {
     visToast(
       betalt
         ? `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]}`
-        : `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]} - UBETALT (mer enn 4 egenmeldinger brukt i ${aar})`,
+        : `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]} - UBETALT (mer enn 4 egenmeldinger brukt siste 12 måneder)`,
       betalt?'ok':'feil'
     );
     return;
@@ -428,10 +428,11 @@ function erHelg(datoStr) {
   return dag === 0 || dag === 6;
 }
 
-// Egenmelding dekker 3 sammenhengende VIRKEDAGER (helg telles ikke med, samme prinsipp
-// som ferie/permisjon/syk-registrering lenger opp i lagreTimer()) fra og med datoen den
-// registreres - vanlig norsk regel for egenmelding uten IA-avtale (bedt om av Henrik
-// 2026-10-02, tidligere dekket egenmelding kun én enkelt dag).
+// Egenmelding dekker 3 sammenhengende KALENDERDAGER (IKKE bare virkedager - helg telles
+// med) fra og med datoen den registreres. Rettet 2026-10-08 (var feilaktig 3 virkedager
+// med hopp over helg frem til da) etter at Henrik delte den faktiske minimumsregelen for
+// egenmelding uten IA-avtale: "maks 3 kalenderdager per gang". Å hoppe over helg ville i
+// praksis gitt en hel ukes dekning (fre+man+tir) i stedet for de lovbestemte 3 dagene.
 /**
  * @param {string} fraDatoStr "ÅÅÅÅ-MM-DD"
  * @param {number} antallDager
@@ -440,29 +441,36 @@ function erHelg(datoStr) {
 function genererEgenmeldingDager(fraDatoStr, antallDager=3) {
   const dager=[];
   let cur=new Date(fraDatoStr);
-  while(dager.length<antallDager){
-    const datoStr=cur.toISOString().split('T')[0];
-    if(!erHelg(datoStr)) dager.push(datoStr);
+  for (let i=0; i<antallDager; i++) {
+    dager.push(cur.toISOString().split('T')[0]);
     cur.setDate(cur.getDate()+1);
   }
   return dager;
 }
 
-// Teller ANTALL EGENMELDINGS-EPISODER (ikke antall dager) en ansatt har brukt i et gitt
-// kalenderår, via egenmelding_periode_id som knytter de 2-3 dagene i én egenmelding
-// sammen. Brukes til å avgjøre om en NY egenmelding er den 5. (eller senere) i år, og
-// dermed skal registreres som ubetalt (se lagreTimer()).
+// Teller ANTALL EGENMELDINGS-EPISODER (ikke antall dager) en ansatt har brukt de siste
+// RULLERENDE 12 månedene (ikke kalenderår - rettet 2026-10-08 etter samme presisering fra
+// Henrik: "maks 4 ganger i løpet av 12 måneder", ikke "4 ganger per kalenderår"), via
+// egenmelding_periode_id som knytter de 3 dagene i én egenmelding sammen. Brukes til å
+// avgjøre om en NY egenmelding er den 5. (eller senere) siste 12 måneder, og dermed skal
+// registreres som ubetalt (se lagreTimer()). tilDatoStr er datoen den NYE egenmeldingen
+// registreres (normalt i dag) - vinduet regnes 12 måneder bakover FRA DEN datoen.
 /**
  * @param {Array<{ansattId:number,type:string,egenmeldingPeriodeId?:string,dato:string}>} timerListe
  * @param {number} ansattId
- * @param {number} aar
+ * @param {string} tilDatoStr "ÅÅÅÅ-MM-DD"
  * @returns {number}
  */
-function egenmeldingEpisoderIAar(timerListe, ansattId, aar) {
+function egenmeldingEpisoderSisteAar(timerListe, ansattId, tilDatoStr) {
+  const tilDato = new Date(tilDatoStr);
+  const fraDato = new Date(tilDato);
+  fraDato.setFullYear(fraDato.getFullYear()-1);
+  fraDato.setDate(fraDato.getDate()+1); // inkluderende 12-måneders vindu
   const ider = new Set();
   (timerListe||[]).forEach(t=>{
-    if (t.ansattId===ansattId && t.type==='egenmelding' && t.egenmeldingPeriodeId && t.dato && Number(t.dato.slice(0,4))===aar) {
-      ider.add(t.egenmeldingPeriodeId);
+    if (t.ansattId===ansattId && t.type==='egenmelding' && t.egenmeldingPeriodeId && t.dato) {
+      const d = new Date(t.dato);
+      if (d>=fraDato && d<=tilDato) ider.add(t.egenmeldingPeriodeId);
     }
   });
   return ider.size;

@@ -6,7 +6,7 @@ import { loadScript } from './helpers/load-script.js';
 // isolert context uten document/window, akkurat som en vanlig Node-modul.
 const {
   beregnNettoMinutter, beregnManuellMinutter, beregnOvertid, erHelg,
-  genererEgenmeldingDager, egenmeldingEpisoderIAar, egenmeldingerAaAvbryte
+  genererEgenmeldingDager, egenmeldingEpisoderSisteAar, egenmeldingerAaAvbryte
 } = loadScript('timer.js');
 
 describe('beregnNettoMinutter (pauseregel for automatisk klokke)', () => {
@@ -78,55 +78,71 @@ describe('beregnOvertid', () => {
   });
 });
 
-// Egenmelding dekker 3 sammenhengende VIRKEDAGER fra og med registreringsdatoen (bedt om
-// av Henrik 2026-10-02 - dekket tidligere kun én enkelt dag).
+// Egenmelding dekker 3 sammenhengende KALENDERDAGER (IKKE bare virkedager) fra og med
+// registreringsdatoen - rettet 2026-10-08 etter at Henrik delte den faktiske
+// minimumsregelen for egenmelding uten IA-avtale ("maks 3 kalenderdager per gang"). Var
+// feilaktig 3 VIRKEDAGER (hoppet over helg) i en tidligere versjon, se git-historikk.
 describe('genererEgenmeldingDager', () => {
-  it('3 hverdager på rad uten helg i veien gir dagen selv + de to neste', () => {
+  it('3 dager på rad uten helg i veien gir dagen selv + de to neste', () => {
     // 2026-08-24 er en mandag (se erHelg-testen over)
     expect(genererEgenmeldingDager('2026-08-24', 3)).toEqual(['2026-08-24', '2026-08-25', '2026-08-26']);
   });
-  it('hopper over lørdag+søndag når perioden starter på en fredag', () => {
-    // 2026-08-21 er fredagen før mandagen 2026-08-24
-    expect(genererEgenmeldingDager('2026-08-21', 3)).toEqual(['2026-08-21', '2026-08-24', '2026-08-25']);
+  it('teller MED lørdag+søndag når perioden starter på en fredag (kalenderdager, ikke virkedager)', () => {
+    // 2026-08-21 er fredagen før mandagen 2026-08-24 - skal IKKE hoppe til mandag/tirsdag
+    expect(genererEgenmeldingDager('2026-08-21', 3)).toEqual(['2026-08-21', '2026-08-22', '2026-08-23']);
   });
-  it('hopper fram til mandag hvis startdatoen selv er en lørdag', () => {
-    expect(genererEgenmeldingDager('2026-08-22', 3)).toEqual(['2026-08-24', '2026-08-25', '2026-08-26']);
+  it('kan starte på en lørdag uten å hoppe til mandag', () => {
+    expect(genererEgenmeldingDager('2026-08-22', 3)).toEqual(['2026-08-22', '2026-08-23', '2026-08-24']);
   });
   it('respekterer et annet antall dager enn standard 3', () => {
     expect(genererEgenmeldingDager('2026-08-24', 1)).toEqual(['2026-08-24']);
-    expect(genererEgenmeldingDager('2026-08-21', 5)).toEqual(['2026-08-21', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27']);
+    expect(genererEgenmeldingDager('2026-08-21', 5)).toEqual(['2026-08-21', '2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25']);
   });
 });
 
-// Maks 4 BETALTE egenmeldinger (episoder, ikke dager) per kalenderår - en 5. (eller
-// senere) skal registreres som ubetalt (bedt om av Henrik 2026-10-02).
-describe('egenmeldingEpisoderIAar', () => {
+// Maks 4 BETALTE egenmeldinger (episoder, ikke dager) de siste RULLERENDE 12 månedene -
+// rettet 2026-10-08 fra feilaktig telling per KALENDERÅR (1. jan-31. des) til faktisk
+// rullerende 12-måneders vindu bakover fra registreringsdatoen, etter presisering fra
+// Henrik ("maks 4 ganger i løpet av 12 måneder", ikke "per kalenderår"). En 5. (eller
+// senere) episode innenfor vinduet skal registreres som ubetalt.
+describe('egenmeldingEpisoderSisteAar', () => {
   const lagTimer = (ansattId, type, dato, periodeId) => ({ ansattId, type, dato, egenmeldingPeriodeId: periodeId });
-  it('teller 0 når ansatten ikke har hatt noen egenmelding i år', () => {
-    expect(egenmeldingEpisoderIAar([], 1, 2026)).toBe(0);
+  it('teller 0 når ansatten ikke har hatt noen egenmelding', () => {
+    expect(egenmeldingEpisoderSisteAar([], 1, '2026-06-15')).toBe(0);
   });
   it('teller ANTALL EPISODER, ikke antall dager - 2 episoder á 3 dager gir 2, ikke 6', () => {
     const timer = [
       ...['2026-01-05','2026-01-06','2026-01-07'].map(d=>lagTimer(1,'egenmelding',d,'ep1')),
       ...['2026-03-02','2026-03-03','2026-03-04'].map(d=>lagTimer(1,'egenmelding',d,'ep2'))
     ];
-    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(2);
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-06-15')).toBe(2);
   });
   it('teller ikke en annen ansatts egenmeldinger', () => {
     const timer = [lagTimer(2, 'egenmelding', '2026-01-05', 'ep1')];
-    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-06-15')).toBe(0);
   });
-  it('teller ikke egenmeldinger fra et annet kalenderår', () => {
+  // Regresjonstest for selve bug-fiksen: en episode fra like før nyttår skal FORTSATT
+  // telle med rett etter årsskiftet, siden det er godt innenfor de siste 12 månedene -
+  // den gamle (feilaktige) kalenderår-tellingen ville gitt 0 her.
+  it('teller MED en episode fra rett før nyttår når man sjekker rett etter nyttår (rullerende, ikke kalenderår)', () => {
     const timer = [lagTimer(1, 'egenmelding', '2025-12-30', 'ep1')];
-    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-01-05')).toBe(1);
+  });
+  it('teller ikke en episode som er mer enn 12 måneder gammel', () => {
+    const timer = [lagTimer(1, 'egenmelding', '2025-06-15', 'ep1')]; // én dag for tidlig
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-06-15')).toBe(0);
+  });
+  it('teller MED en episode nøyaktig 12 måneder tilbake (vinduets første dag)', () => {
+    const timer = [lagTimer(1, 'egenmelding', '2025-06-16', 'ep1')];
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-06-15')).toBe(1);
   });
   it('teller ikke andre fraværstyper (syk/ferie/permisjon)', () => {
     const timer = [lagTimer(1, 'syk', '2026-01-05', 'ep1'), lagTimer(1, 'ferie', '2026-01-06', 'ep2')];
-    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-06-15')).toBe(0);
   });
   it('ignorerer rader uten egenmeldingPeriodeId (f.eks. gamle rader fra før denne kolonnen fantes)', () => {
     const timer = [{ ansattId:1, type:'egenmelding', dato:'2026-01-05' }];
-    expect(egenmeldingEpisoderIAar(timer, 1, 2026)).toBe(0);
+    expect(egenmeldingEpisoderSisteAar(timer, 1, '2026-06-15')).toBe(0);
   });
 });
 
