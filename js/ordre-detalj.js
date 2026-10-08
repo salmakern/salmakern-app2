@@ -944,9 +944,20 @@ function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.ch
 // selve nummeret (så "Chassis:" og nummeret havner på hver sin linje i stedet for midt i et
 // ord), og status-knappen kan da bli stående ved siden av tittelen slik den skal. Bekreftet
 // visuelt i 360px mobilbredde med flere chassis-lengder før dette ble endret.
+// 2026-10-08, fjerde runde på denne: fjerning av nowrap (forrige fiks) løste at status-
+// knappen ble presset vekk, men løste ikke alt - et langt chassisnummer kan fortsatt være
+// for bredt til å få plass i det hele tatt sammen med status-knappen på et smalt
+// mobilskjerm, og brøt da fortsatt midt i et siffer der "Chassis: "-prefikset + nummeret
+// ikke hadde noe naturlig sted å dele seg. Løsningen denne gangen: selve nummeret vises nå
+// tydelig mindre (12px i stedet for full tittelstørrelse) OG som én samlet, usplittbar
+// enhet (nowrap+overflow-wrap:normal) - gir mye mer albuerom, slik at det normalt får plass
+// hele veien ved siden av status-knappen. Skulle det en sjelden gang likevel ikke være nok
+// plass (uvanlig langt chassisnummer på et svært smalt skjermbilde), vil nummeret falle ned
+// som ÉN hel enhet på egen linje - aldri brutt midt i et siffer igjen.
 function ordreLabelFull(o){
-  if (o.regnr && o.chassis) return esc(o.regnr)+' · Chassis: '+esc(o.chassis);
-  if (!o.regnr && o.chassis) return 'Chassis: '+esc(o.chassis);
+  const chassisHTML = c => `<span style="font-size:12px;font-weight:700;white-space:nowrap;overflow-wrap:normal">Chassis: ${esc(c)}</span>`;
+  if (o.regnr && o.chassis) return esc(o.regnr)+' · '+chassisHTML(o.chassis);
+  if (!o.regnr && o.chassis) return chassisHTML(o.chassis);
   return ordreLabel(o);
 }
 
