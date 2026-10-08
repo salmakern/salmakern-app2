@@ -83,12 +83,15 @@ function renderOrdreList() {
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto">
-          ${ordreIdentHTML(o)}
-          ${o.kunde?`<div style="font-size:15px;color:#c4c3cc;line-height:1.35">${esc(o.kunde)}</div>`:''}
-          ${(o.variant||o.farge)?`<div style="font-size:15px;color:#a1a0aa">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
+          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25">${esc(ordreTittel(o))}</b>
         </div>
         ${ordreKortStatusPilleHTML(o.id, o.ordreStatus)}
+      </div>
+      <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px">
+        ${chassisBlockHTML(o)}
+        ${o.kunde?`<div style="font-size:15px;color:#c4c3cc;line-height:1.35">${esc(o.kunde)}</div>`:''}
+        ${(o.variant||o.farge)?`<div style="font-size:15px;color:#a1a0aa">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
       </div>
 
       <div style="background:#0f0f12;border:1px solid #2a2930;border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:12px">
@@ -96,9 +99,8 @@ function renderOrdreList() {
           ${dokStatusPillHTML('COC', o.coc)}
           ${dokStatusPillHTML('Fullmakt', o.fullmakt)}
           ${ordreKortFlatePilleHTML(o)}
-          ${ordreKortHengerfesteHTML(o)}
-          ${ordreKortSkalHaBadgeHTML(o)}
         </div>
+        ${(ordreKortHengerfesteHTML(o)||ordreKortSkalHaBadgeHTML(o))?`<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${ordreKortHengerfesteHTML(o)}${ordreKortSkalHaBadgeHTML(o)}</div>`:''}
         ${tvangsflytBarHTML(o)}
         <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #2a2930;font-size:15px;line-height:1.4">
           <div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px">
