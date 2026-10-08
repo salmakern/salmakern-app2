@@ -24,7 +24,10 @@
   };
 
   var vehicleGrid = document.getElementById("modelsGrid");
-  if (!vehicleGrid) return;
+  // Antall-tekster ("N MODELLER") merket data-model-count settes fra den samme
+  // lista - tallet i HTML-en er bare en reserve hvis API-et ikke svarer.
+  var countEls = document.querySelectorAll("[data-model-count]");
+  if (!vehicleGrid && countEls.length === 0) return;
 
   // Hide the static fallback list until we know whether real data replaces it -
   // avoids a visible flash of the old boxes right before they get swapped out.
@@ -72,10 +75,16 @@
     .then(function (models) {
       if (!models || models.length === 0) return;
 
-      vehicleGrid.innerHTML = "";
-      models.forEach(function (model) {
-        vehicleGrid.appendChild(buildTag(model));
-      });
+      for (var i = 0; i < countEls.length; i++) {
+        countEls[i].textContent = String(models.length);
+      }
+
+      if (vehicleGrid) {
+        vehicleGrid.innerHTML = "";
+        models.forEach(function (model) {
+          vehicleGrid.appendChild(buildTag(model));
+        });
+      }
     })
     .catch(function () {
       // Leave the existing static/placeholder content in place if the API is unreachable.
