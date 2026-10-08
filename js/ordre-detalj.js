@@ -250,7 +250,7 @@ function buildOrdreDetail() {
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
           <div class="felt-wrap">
             <label>Forhandler org.nr</label>
-            <input id="forhandlerOrgnrInput_${o.id}" value="${esc(o.forhandlerOrgnr||'')}" autocomplete="off" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer"
+            <input id="forhandlerOrgnrInput_${o.id}" value="${esc(vegvesenFormaterOrgnr(o.forhandlerOrgnr||''))}" autocomplete="off" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer"
               onfocus="visFeltDropdown('typeForslag_forhandlerOrgnr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerOrgnr_${o.id}'))">
             <div id="typeForslag_forhandlerOrgnr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerOrgnrInput_'+o.id, forhandlerOrgnrForslag(o.kunde))}</div>
           </div>
@@ -1144,7 +1144,7 @@ function autoFyllForhandlerOrgnr(id) {
   if (!orgnr) return;
   sf(id, 'forhandlerOrgnr', orgnr);
   const input = document.getElementById('forhandlerOrgnrInput_'+id);
-  if (input) input.value = orgnr;
+  if (input) input.value = vegvesenFormaterOrgnr(orgnr);
 }
 
 // Selve nummeret fra "Forhandler.nr"-feltet, vist rett ved siden av Hengerfeste-valget -

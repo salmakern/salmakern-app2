@@ -392,7 +392,7 @@ function renderForhandlerDetalj() {
   el.innerHTML = `
     ${erAdmin?`<button class="btn sm" style="padding:4px 10px;font-size:12px" onclick="apneRedigerForhandler('${forhandler.id}')">✎ Rediger</button>`:''}
     ${forhandler.forhandlerNr?`<div class="small" style="margin-top:6px">Forhandler.nr: <b>${esc(forhandler.forhandlerNr)}</b></div>`:''}
-    ${forhandler.orgnr?`<div class="small" style="margin-top:4px">Org.nr: <b>${esc(forhandler.orgnr)}</b></div>`:''}
+    ${forhandler.orgnr?`<div class="small" style="margin-top:4px">Org.nr: <b>${esc(vegvesenFormaterOrgnr(forhandler.orgnr))}</b></div>`:''}
     ${forhandler.tlf?`<div class="small" style="margin-top:4px">📞 <a href="tel:${esc(forhandler.tlf)}" style="color:#ef4444;font-weight:600;text-decoration:none">${esc(forhandler.tlf)}</a></div>`:''}
     ${forhandler.epost?`<div class="small">✉ <a href="mailto:${esc(forhandler.epost)}" style="color:#a1a1aa;text-decoration:none">${esc(forhandler.epost)}</a></div>`:''}
     ${forhandler.notat?`<div class="small muted" style="margin-top:4px">${esc(forhandler.notat)}</div>`:''}
