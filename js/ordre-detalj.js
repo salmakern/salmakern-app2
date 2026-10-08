@@ -825,12 +825,10 @@ function tvangsflyt(o) {
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
     {lbl:'Ombygging valgt',   ok: ombyggingValgt},
     {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)},
-    // Kreves bekreftet UANSETT om feltet har tekst eller ikke - et tomt felt kan bety
-    // "ingenting å legge til", men det kan like gjerne bety at ingen har sjekket ennå, som
-    // er nøyaktig det som skal hindres (rettet 2026-10-08 etter at Henrik påpekte at et
-    // tomt felt ikke varslet i det hele tatt: "da varsler den ikke om at det ikke er
-    // bekreftet" - et unntak for tom tekst ville latt akkurat det glemmes videre).
-    {lbl:'Utstyr etter visning bekreftet', ok: !!o.utstyr?.skalHaBekreftet}
+    // Ingen tekst i "Skal ha etter visning" -> ingenting å bekrefte, automatisk ok. Finnes
+    // det tekst, må den bekreftes før ordren kan lukkes - hindrer at utstyret glemmes
+    // (bedt om av Henrik 2026-10-08).
+    {lbl:'Utstyr etter visning bekreftet', ok: !o.utstyr?.skalHa?.trim() || !!o.utstyr?.skalHaBekreftet}
   ];
 }
 
@@ -946,51 +944,10 @@ function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.ch
 // selve nummeret (så "Chassis:" og nummeret havner på hver sin linje i stedet for midt i et
 // ord), og status-knappen kan da bli stående ved siden av tittelen slik den skal. Bekreftet
 // visuelt i 360px mobilbredde med flere chassis-lengder før dette ble endret.
-// 2026-10-08, fjerde runde på denne: fjerning av nowrap (forrige fiks) løste at status-
-// knappen ble presset vekk, men løste ikke alt - et langt chassisnummer kan fortsatt være
-// for bredt til å få plass i det hele tatt sammen med status-knappen på et smalt
-// mobilskjerm, og brøt da fortsatt midt i et siffer der "Chassis: "-prefikset + nummeret
-// ikke hadde noe naturlig sted å dele seg. Løsningen denne gangen: selve nummeret vises nå
-// tydelig mindre enn full tittelstørrelse OG som én samlet, usplittbar enhet
-// (nowrap+overflow-wrap:normal) - gir mye mer albuerom, slik at det normalt får plass hele
-// veien ved siden av status-knappen. Skulle det en sjelden gang likevel ikke være nok plass
-// (uvanlig langt chassisnummer på et svært smalt skjermbilde), vil nummeret falle ned som
-// ÉN hel enhet på egen linje - aldri brutt midt i et siffer igjen. Startet på 12px
-// (2026-10-08), men det ble meldt "for liten" - hevet til 13px samme dag, fortsatt testet
-// visuelt (340px mobilbredde) for å bekrefte det ikke reintroduserer brudd.
 function ordreLabelFull(o){
-  const chassisHTML = c => `<span style="font-size:14px;font-weight:700;white-space:nowrap;overflow-wrap:normal">Chassis: ${esc(c)}</span>`;
-  if (o.regnr && o.chassis) return esc(o.regnr)+' · '+chassisHTML(o.chassis);
-  if (!o.regnr && o.chassis) return chassisHTML(o.chassis);
+  if (o.regnr && o.chassis) return esc(o.regnr)+' · Chassis: '+esc(o.chassis);
+  if (!o.regnr && o.chassis) return 'Chassis: '+esc(o.chassis);
   return ordreLabel(o);
-}
-
-// 2026-10-08, femte (og forhåpentligvis siste) runde på chassisnummer-vs-status-kortet:
-// Henrik presiserte at kortets layout må være IDENTISK hver gang (status alltid på samme
-// sted i raden, aldri presset ned av lang tekst) OG at selve nummeret aldri skal kuttes med
-// "...". De to kravene kan ikke begge innfris når nummeret deler rad med status-boksen -
-// uansett hvor smal man gjør skriften, er det alltid en statustekst (f.eks. "Vist på
-// biltilsynet") + chassisnummer-kombinasjon som ikke har plass sammen. Løsningen er å ikke
-// prøve i det hele tatt: tittel-raden (med status) viser kun reg.nr (eller en "Chassis.nr"-
-// plassholder hvis bilen ikke har reg.nr ennå), og selve chassisnummeret flyttes til en HELT
-// EGEN linje under hele tittel/status-raden - det får dermed alltid kortets fulle bredde å
-// bryte over, uavhengig av hvor bred status-boksen er. Kun brukt i Oversikt/Ordre-listen
-// (renderOrdreListe) foreløpig, ikke de andre kort-variantene (drag-cards, kalender) som
-// fortsatt bruker ordreLabelFull() over.
-function ordreTittel(o){
-  if (o.regnr) return o.regnr;
-  if (o.chassis) return 'Chassis.nr';
-  return 'Uten reg.nr';
-}
-// Selve chassisnummeret, som egen full-bredde blokk RETT UNDER tittel/status-raden (altså
-// FØR kunde/farge-linjene - bedt om av Henrik 2026-10-08: "den skal jo stå rett under
-// chassis.nr"). Viser kun "Chassis.nr"-etiketten her hvis reg.nr FANT STED i tittelen over
-// (ellers sto den der allerede som plassholder, se ordreTittel()) - unngår at etiketten
-// vises to ganger.
-function chassisBlockHTML(o){
-  if (!o.chassis) return '';
-  const etikett = o.regnr ? `<div class="small muted" style="margin-top:6px">Chassis.nr</div>` : '';
-  return etikett + `<div style="font-weight:700;font-size:14px;margin-top:2px">${esc(o.chassis)}</div>`;
 }
 
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på

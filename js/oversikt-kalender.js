@@ -82,16 +82,13 @@ function renderOrdreList() {
       ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
-          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25">${esc(ordreTittel(o))}</b>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1">
+          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;overflow-wrap:break-word">${ordreLabelFull(o)}</b>
+          ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
+          ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
-        ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:4px 8px;max-width:132px;flex-shrink:0')}
-      </div>
-      <div onclick="openOrdre('${o.id}')" style="cursor:pointer">
-        ${chassisBlockHTML(o)}
-        ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
-        ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
+        ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:7px 11px;max-width:132px')}
       </div>
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
@@ -486,7 +483,7 @@ async function endreStatus(id, nyStatus) {
 
 function statusDropdown(ordreId, currentStatus, extraStyle='') {
   const si = statusInfo(currentStatus);
-  return `<select onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
+  return `<select onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
     ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
   </select>`;
 }
@@ -499,7 +496,7 @@ function hengerfesteMontertDropdown(ordreId, montert) {
     montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[montert] || FARGE.ikke_montert;
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto">
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -522,7 +519,7 @@ function hengerfesteBestiltDropdown(ordreId, bestilt) {
     ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[bestilt] || FARGE.ikke_bestilt;
-  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto">
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -547,12 +544,11 @@ function hengerfesteKortHTML(o) {
     ${forhandlerNr?`<span style="font-size:13px;font-weight:700;color:#f4f4f5">${esc(forhandlerNr)}</span>`:''}
   </div>`;
 }
-// Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) helt til "Skal
-// ha etter visning" er bekreftet - UANSETT om feltet har tekst eller ikke (rettet
-// 2026-10-08: et unntak for tomt felt lot nettopp det glemmes videre, som er det hele
-// poenget å hindre). Samme regel som tvangsflyt()-kravet i ordre-detalj.js.
+// Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) så lenge "Skal
+// ha etter visning" har tekst som ikke er bekreftet ennå - hindrer at det glemmes (bedt om
+// av Henrik 2026-10-08). Samme regel som tvangsflyt()-kravet i ordre-detalj.js.
 function skalHaBadgeHTML(o) {
-  if (o.utstyr?.skalHaBekreftet) return '';
+  if (!o.utstyr?.skalHa?.trim() || o.utstyr?.skalHaBekreftet) return '';
   return `<span class="pill warn" style="font-size:11px;margin:0">⚠ Utstyr ikke bekreftet</span>`;
 }
 // Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
