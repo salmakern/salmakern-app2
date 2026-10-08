@@ -245,6 +245,16 @@ Første e-post fra en ny avsender havner ofte i søppelpost til mottakeren har m
 
 ## Arbeidsvaner (gjelder også her, se Forhandlerportal sin CLAUDE.md for full begrunnelse)
 
+**Hold QA-oppgaven i takt med endringene.** Når en endring påvirker hva besøkende ser eller
+gjør på nettsiden (nytt design, endrede tekster/tall, nye sider, endret datakilde),
+oppdater den daglige QA-oppgaven `nettside-daglig-qa` i SAMME økt, før arbeidet meldes
+ferdig. Prompten ligger i `C:\Users\GroAnitaMartinsen\.claude\scheduled-tasks\nettside-daglig-qa\SKILL.md`
+og endres med `update_scheduled_task` (les SKILL.md først og bygg videre på den). Legg til/endre
+sjekkpunktet for det som ble endret, og fjern det som ikke lenger gjelder - ellers gir QA-en
+falske varsler. Gjelder endringen også Forhandlerportalen, oppdater `forhandlerportal-daglig-qa`
+(se Forhandlerportal sin CLAUDE.md). Booking-QA-en (`salmakern-booking-daglig-qa`) oppdateres på
+samme måte når booking-verktøyet endres.
+
 Se kritisk på visuelle endringer ved faktisk visningsstørrelse/bakgrunn før de vises frem som
 ferdige. Ved subjektive designvalg (f.eks. hvilken logofil/størrelse) - vis flere reelle
 alternativer side ved side og la Henrik velge, ikke bestem selv.
