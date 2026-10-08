@@ -108,7 +108,7 @@ function renderArkiv() {
     } else {
       listeEl.innerHTML = sideListe.length ? sideListe.map(o=>`<div class="box" style="margin-bottom:8px;padding:14px 16px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
-            <div style="min-width:0">
+            <div style="flex:1;overflow:hidden">
               <b style="font-size:15px">${ordreLabelFull(o)}</b>
               ${o.farge?`<div class="small muted" style="margin-top:2px">${esc(o.farge)}</div>`:''}
             </div>

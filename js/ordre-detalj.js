@@ -959,7 +959,7 @@ function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.ch
 // (2026-10-08), men det ble meldt "for liten" - hevet til 13px samme dag, fortsatt testet
 // visuelt (340px mobilbredde) for å bekrefte det ikke reintroduserer brudd.
 function ordreLabelFull(o){
-  const chassisHTML = c => `<span style="font-size:13px;font-weight:700;white-space:nowrap;overflow-wrap:normal">Chassis: ${esc(c)}</span>`;
+  const chassisHTML = c => `<span style="font-size:14px;font-weight:700;white-space:nowrap;overflow-wrap:normal">Chassis: ${esc(c)}</span>`;
   if (o.regnr && o.chassis) return esc(o.regnr)+' · '+chassisHTML(o.chassis);
   if (!o.regnr && o.chassis) return chassisHTML(o.chassis);
   return ordreLabel(o);
