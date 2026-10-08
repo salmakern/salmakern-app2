@@ -320,8 +320,13 @@ async function hentOrgnrForKontaktModal() {
 
 // Batch-oppslag for ALLE forhandlere som mangler org.nr ennå (🔍-knappen i forhandlerListe-
 // modalen) - ETT samlet databasekall til slutt (kontakter_orgnr_batch_oppdater), aldri ett
-// kall per forhandler i løkka (samme regel som lagerBatchFlush() i lager.js). Et lite
-// mellomrom mellom hvert brreg-kall for å ikke storme et gratis offentlig API unødig.
+// kall per forhandler i løkka (samme regel som lagerBatchFlush() i lager.js).
+// Kjører BRREG_SAMTIDIGE oppslag parallelt i stedet for helt sekvensielt (hvert med sin egen
+// 150ms-pause mellom kallene) - med 49+ forhandlere var det rene sekvensielle løpet merkbart
+// tregt (meldt av Henrik 2026-10-08: "appen sliter med å laste opp org.nr... det går litt
+// for sakte"). 4 samtidige strømmer, hver med samme pause som før, er fortsatt skånsomt mot
+// det gratis offentlige APIet - bare ~4x raskere totalt.
+const BRREG_SAMTIDIGE = 4;
 async function hentOrgnrForAlleForhandlere() {
   const btn = document.getElementById('forhandlerOrgnrBatchBtn');
   const statusEl = document.getElementById('forhandlerOrgnrBatchStatus');
@@ -330,18 +335,24 @@ async function hentOrgnrForAlleForhandlere() {
   btn.disabled = true;
   const treff = [];
   const ikkeFunnet = [];
-  for (let i = 0; i < manglerOrgnr.length; i++) {
-    const k = manglerOrgnr[i];
-    statusEl.textContent = `Slår opp ${i+1} av ${manglerOrgnr.length}: ${k.navn}...`;
-    try {
-      const orgnr = await brregEksaktTreff(k.navn);
-      if (orgnr) treff.push({id: k.id, orgnr}); else ikkeFunnet.push(k.navn);
-    } catch (e) {
-      console.error('Brreg-oppslag feilet for ' + k.navn + ':', e);
-      ikkeFunnet.push(k.navn);
+  let fullfort = 0;
+  let neste = 0;
+  async function arbeider() {
+    while (neste < manglerOrgnr.length) {
+      const k = manglerOrgnr[neste++];
+      try {
+        const orgnr = await brregEksaktTreff(k.navn);
+        if (orgnr) treff.push({id: k.id, orgnr}); else ikkeFunnet.push(k.navn);
+      } catch (e) {
+        console.error('Brreg-oppslag feilet for ' + k.navn + ':', e);
+        ikkeFunnet.push(k.navn);
+      }
+      fullfort++;
+      statusEl.textContent = `Slår opp ${fullfort} av ${manglerOrgnr.length}...`;
+      if (neste < manglerOrgnr.length) await new Promise(r => setTimeout(r, 150));
     }
-    if (i < manglerOrgnr.length - 1) await new Promise(r => setTimeout(r, 150));
   }
+  await Promise.all(Array.from({length: Math.min(BRREG_SAMTIDIGE, manglerOrgnr.length)}, arbeider));
   if (treff.length) {
     if (db) {
       const { data, error } = await db.rpc('kontakter_orgnr_batch_oppdater', { p_oppdateringer: treff });
