@@ -16,8 +16,10 @@
 //   2-påbygger (se vegvesenFjernMerkeplateSetning) - resten av teksten er ordrett lik.
 // - Fabrikantattest: utelater ALLTID krav-raden "F7 Fabrikasjonsplate" (samme grunn -
 //   ingen ny fabrikasjonsplate på en bil som allerede er registrert).
-// - "Melding om registrering" genereres IKKE for Brukt Kjøretøy (gjelder kun
-//   førstegangsregistrering, ikke ombygging av en allerede registrert bil).
+// - "Melding om registrering" ble en kort periode (2026-09-23 til 2026-10-08) IKKE
+//   generert for Brukt Kjøretøy, ut fra en antakelse om at skjemaet kun gjaldt
+//   førstegangsregistrering. Henrik bekreftet 2026-10-08 at antakelsen var feil - den
+//   skal genereres for begge, se vegvesenGenererOgLagre().
 // - "Andre endringer"-tabellen i Fabrikantattest er ellers lik Nytt Kjøretøy, MED ETT
 //   UNNTAK: KGM Rexton sitt Brukt Kjøretøy-referansedokument har en egen "Høyde"-rad og
 //   MANGLER "Tillatt totalvekt"/"Tillatt vogntogvekt" - se
@@ -1284,31 +1286,23 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   const visningsOrdre = kontekst ? { ...kilde, chassis: 'Se kjøretøyliste' } : kilde;
   const malOrdreIder = kontekst ? kontekst.medlemmer.map(m => m.id) : [kilde.id];
   const filnavnNokkel = kontekst ? (kontekst.flate.flatenummer || kontekst.flate.id) : (kilde.chassis || 'UKJENT');
-  // "Melding om registrering" gjelder kun førstegangsregistrering av kjøretøyet - ikke
-  // aktuelt for en ombygging av en bil som allerede er registrert (Henriks egne
-  // referansedokumenter for Brukt Kjøretøy har ingen slik melding blant dem, bekreftet
-  // 2026-09-23).
-  const erBrukt = !!kilde.ombygging?.bruktKjoretoy;
-
+  // Generert for ALLE modeller (ikke bare de med mal+geometri, se geometri-sjekken under) -
+  // bedt om av Henrik 2026-09-30: "Melding skal brukes på alle nytt kjøretøy på alle
+  // modellene", og skjemaet krever uansett ingen modell-spesifikk geometridata. Gjelder nå
+  // BÅDE Nytt og Brukt Kjøretøy (til og med 2026-10-08 ble den feilaktig utelatt for Brukt
+  // Kjøretøy - se toppkommentaren i filen - Henrik bekreftet at den skal være med på begge).
+  // Farge/eier/org.nr varierer per bil i en flåte (ulikt Merke/Modell, som er likt for
+  // alle) - viser derfor "Se kjøretøyliste" på disse feltene også, akkurat som Chassis
+  // allerede gjorde (bedt om av Henrik 2026-10-01: "skal det være Se kjøretøyliste på
+  // farge og navn eier" + "og samme på org.nr over").
   const egenerklaeringBytes = await genEgenerklaeringPDF(visningsOrdre);
   const egenerklaeringOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
 
-  let meldingOk = true;
-  if (!erBrukt) {
-    // Uavhengig av vektberegningen under - trenger kun ordrens egne stamdata. Generert
-    // for ALLE modeller (ikke bare de med mal+geometri, se geometri-sjekken under) - bedt
-    // om av Henrik 2026-09-30: "Melding skal brukes på alle nytt kjøretøy på alle
-    // modellene", og skjemaet krever uansett ingen modell-spesifikk geometridata.
-    // Farge/eier/org.nr varierer per bil i en flåte (ulikt Merke/Modell, som er likt for
-    // alle) - viser derfor "Se kjøretøyliste" på disse feltene også, akkurat som Chassis
-    // allerede gjorde (bedt om av Henrik 2026-10-01: "skal det være Se kjøretøyliste på
-    // farge og navn eier" + "og samme på org.nr over").
-    const visningsOrdreForMelding = kontekst
-      ? { ...visningsOrdre, farge: 'Se kjøretøyliste', kunde: 'Se kjøretøyliste', forhandlerOrgnr: 'Se kjøretøyliste' }
-      : visningsOrdre;
-    const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdreForMelding);
-    meldingOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
-  }
+  const visningsOrdreForMelding = kontekst
+    ? { ...visningsOrdre, farge: 'Se kjøretøyliste', kunde: 'Se kjøretøyliste', forhandlerOrgnr: 'Se kjøretøyliste' }
+    : visningsOrdre;
+  const meldingBytes = await genMeldingOmRegistreringPDF(visningsOrdreForMelding);
+  const meldingOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Melding om registrering', filnavnNokkel), meldingBytes);
   // Stopper her (i stedet for å fortsette til Vektfordeling/Fabrikantattest) hvis selve
   // lagringen feilet - en 'feil'-status lagrer IKKE fingerprinten hos kalleren, slik at
   // neste forsøk (auto-trigger eller et nytt knappetrykk) prøver på nytt i stedet for å
@@ -1324,11 +1318,11 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   // seg selv når noen fyller inn Vekter-feltene) siden vegvesenAutoGenererHvisKomplett()
   // trenger å vite hvilket for å avgjøre om den skal fortsette å prøve på nytt.
   if (!vegvesenGeometri(kilde.merke, kilde.modell)) {
-    return { status: 'delvis_geometri_mangler', melding: `Egenerklæring${erBrukt?'':' og Melding om registrering'} generert. Ingen mal/geometri lagt inn for ${kilde.merke||'?'} ${kilde.modell||'?'} ennå - Vektfordeling/Fabrikantattest kan ikke genereres.` };
+    return { status: 'delvis_geometri_mangler', melding: `Egenerklæring og Melding om registrering generert. Ingen mal/geometri lagt inn for ${kilde.merke||'?'} ${kilde.modell||'?'} ennå - Vektfordeling/Fabrikantattest kan ikke genereres.` };
   }
   const resultat = vegvesenBeregnOgSettEndring(kilde);
   if (!resultat) {
-    return { status: 'delvis_vekt_mangler', melding: `Egenerklæring${erBrukt?'':' og Melding om registrering'} generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
+    return { status: 'delvis_vekt_mangler', melding: `Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
   }
   const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
   const { bytes: vektfordelingBytes } = await genVektfordelingPDF(visningsOrdre, justertP, P1, P2, M, M1, M2, geom);
@@ -1346,7 +1340,7 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
     if (!kjoretoylisteOk) return { status: 'feil', melding: 'Kunne ikke lagre Kjøretøyliste - prøv igjen.' };
   }
 
-  const dokumentliste = `Egenerklæring, Vektfordeling, Fabrikantattest${erBrukt?'':' og Melding om registrering'}`;
+  const dokumentliste = `Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering`;
   return { status: 'ok', melding: kontekst ? 'Vegvesen-dokumenter generert og lagret for hele flåten (inkl. Kjøretøyliste)' : `${dokumentliste} generert og lagret` };
 }
 

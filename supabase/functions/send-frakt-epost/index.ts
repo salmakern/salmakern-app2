@@ -148,14 +148,18 @@ Deno.serve(async (req) => {
     }
 
     if (payload.type === 'hentet') {
-      const { kontaktpersonEpost, chassisNr, avsenderNavn } = payload
+      const { kontaktpersonEpost, chassisNr, fraktselskap, avsenderNavn } = payload
       if (!kontaktpersonEpost) return new Response('Mangler e-post for kontaktperson', { status: 400, headers: CORS_HEADERS })
+      // Nevner hvilket fraktselskap som faktisk hentet bilen når det er registrert på raden
+      // (bedt om av Henrik 2026-10-08) - utelatt hvis feltet er tomt, i stedet for å skrive
+      // "av " etterfulgt av ingenting.
+      const avSetning = fraktselskap ? ` av ${escHtml(fraktselskap)}` : ''
       const emne = `Bilen er hentet${chassisNr ? ' - ' + chassisNr : ''}`
       const html = `
         <p style="margin:0 0 12px">Hei,</p>
-        <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er nå hentet.</p>
+        <p style="margin:0 0 16px">Bilen med chassis.nr ${escHtml(chassisNr || '-')} er nå hentet${avSetning}.</p>
         ${await signaturHtml(avsenderNavn)}`
-      const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er nå hentet.\n\n`
+      const tekst = `Hei,\n\nBilen med chassis.nr ${chassisNr || '-'} er nå hentet${fraktselskap ? ' av ' + fraktselskap : ''}.\n\n`
         + signaturTekst(avsenderNavn)
       await sendEpost(kontaktpersonEpost, undefined, emne, html, tekst)
       return new Response('ok', { status: 200, headers: CORS_HEADERS })

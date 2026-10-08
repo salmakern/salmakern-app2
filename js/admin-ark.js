@@ -341,7 +341,7 @@ async function adminArkVarsleHentet(chassisNr) {
   const sporsmal = erLeveringAvOss ? 'at bilen er på vei til dere' : 'at bilen er hentet';
   if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om ${sporsmal}?`)) return;
   try {
-    await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, avsenderNavn: me?.navn });
+    await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, fraktselskap: erLeveringAvOss ? '' : (rad.fraktselskap||''), avsenderNavn: me?.navn });
     visToast('Varsel sendt til ' + rad.kontaktperson, 'ok');
     const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
     const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
