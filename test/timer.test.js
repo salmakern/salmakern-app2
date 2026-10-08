@@ -6,7 +6,8 @@ import { loadScript } from './helpers/load-script.js';
 // isolert context uten document/window, akkurat som en vanlig Node-modul.
 const {
   beregnNettoMinutter, beregnManuellMinutter, beregnOvertid, erHelg,
-  genererEgenmeldingDager, egenmeldingEpisoderSisteAar, egenmeldingerAaAvbryte
+  genererEgenmeldingDager, egenmeldingEpisoderSisteAar, egenmeldingerAaAvbryte,
+  egenmeldingKvalifisert
 } = loadScript('timer.js');
 
 describe('beregnNettoMinutter (pauseregel for automatisk klokke)', () => {
@@ -174,5 +175,27 @@ describe('egenmeldingerAaAvbryte', () => {
   it('gir tom liste når det ikke finnes noen aktiv/fremtidig egenmelding', () => {
     const timer = [lagTimer('t1', 1, 'egenmelding', '2026-08-20')];
     expect(egenmeldingerAaAvbryte(timer, 1, '2026-08-25')).toEqual([]);
+  });
+});
+
+// Egenmelding kan først brukes etter minst 2 måneders ansettelse (faktisk norsk
+// minimumsregel, bedt om av Henrik 2026-10-08).
+describe('egenmeldingKvalifisert', () => {
+  it('regnes som kvalifisert når ansettelsesdato er ukjent (tom/null) - ikke sperr eksisterende ansatte uten data', () => {
+    expect(egenmeldingKvalifisert(null, '2026-06-15')).toBe(true);
+    expect(egenmeldingKvalifisert(undefined, '2026-06-15')).toBe(true);
+    expect(egenmeldingKvalifisert('', '2026-06-15')).toBe(true);
+  });
+  it('IKKE kvalifisert rett etter ansettelse', () => {
+    expect(egenmeldingKvalifisert('2026-06-01', '2026-06-15')).toBe(false);
+  });
+  it('IKKE kvalifisert én dag før 2-månedersgrensen', () => {
+    expect(egenmeldingKvalifisert('2026-06-01', '2026-07-31')).toBe(false);
+  });
+  it('kvalifisert nøyaktig på 2-månedersdagen', () => {
+    expect(egenmeldingKvalifisert('2026-06-01', '2026-08-01')).toBe(true);
+  });
+  it('kvalifisert godt etter 2-månedersgrensen', () => {
+    expect(egenmeldingKvalifisert('2026-01-01', '2026-06-15')).toBe(true);
   });
 });

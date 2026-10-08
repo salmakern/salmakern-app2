@@ -1219,6 +1219,21 @@ function endreAnsattRolle(id, rolle) {
   renderMer();
 }
 
+// Styrer 2-månedersregelen for egenmelding (se egenmeldingKvalifisert() i timer.js) - tom
+// dato = ikke sperret ennå (vi vet ikke når vedkommende faktisk startet, så vi antar
+// kvalifisert i stedet for å plutselig stenge ute alle eksisterende ansatte med en gang
+// feltet ble lagt til). Admin må fylle inn ekte datoer per ansatt (bedt om av Henrik
+// 2026-10-08).
+function settAnsattAnsettelsesdato(id, dato) {
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
+  a.ansettelsesdato = dato || null;
+  ignorerRealtimeAnsatt.add(String(id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
+  if(db) db.from('ansatte').update({ansettelsesdato: dato || null}).eq('id',id)
+    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
+  try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}
+}
+
 function toggleAnsatt(id) {
   const a=S.ansatte.find(x=>x.id===id); if(!a) return;
   a.aktiv=!a.aktiv;

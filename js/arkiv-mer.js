@@ -289,6 +289,7 @@ function renderMer() {
           <option value="godkjenner" ${a.rolle==='godkjenner'?'selected':''}>Godkjenner</option>
           <option value="admin" ${a.rolle==='admin'?'selected':''}>Admin</option>
         </select>
+        <input type="date" value="${a.ansettelsesdato||''}" onchange="settAnsattAnsettelsesdato(${a.id},this.value)" title="Ansettelsesdato - styrer 2-månedersregelen for egenmelding. Tom = ikke sperret ennå." style="width:auto;padding:5px 8px;font-size:12px">
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
         <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
         <button class="btn sm" onclick="slettAnsatt(${a.id})" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>

@@ -112,6 +112,11 @@ function setTimerType(t) {
 function visEgenmeldingKvoteInfo() {
   const el = document.getElementById('egenmeldingKvoteInfo'); if (!el || !me) return;
   const idag = new Date().toISOString().split('T')[0];
+  if (!egenmeldingKvalifisert(me.ansettelsesdato, idag)) {
+    el.textContent = `Ikke kvalifisert for egenmelding ennå (krever 2 måneders ansettelse)`;
+    el.style.color = '#fca5a5';
+    return;
+  }
   const brukt = egenmeldingEpisoderSisteAar(S.timer, me.id, idag);
   if (brukt < 4) {
     el.textContent = `${brukt} av 4 egenmeldinger brukt siste 12 måneder`;
@@ -354,8 +359,12 @@ function lagreTimer() {
   } else if (timerType==='egenmelding') {
     // Se genererEgenmeldingDager/egenmeldingEpisoderSisteAar lenger opp i filen for
     // begrunnelse (3 kalenderdager, maks 4 betalte episoder siste rullerende 12 måneder).
-    const periodeId = 'ep'+(++S.nextId);
     const idag = new Date().toISOString().split('T')[0];
+    if (!egenmeldingKvalifisert(me.ansettelsesdato, idag)) {
+      alert('Du kan ikke bruke egenmelding ennå - dette krever minst 2 måneders ansettelse.');
+      return;
+    }
+    const periodeId = 'ep'+(++S.nextId);
     const tidligereEpisoder = egenmeldingEpisoderSisteAar(S.timer, me.id, idag);
     const betalt = tidligereEpisoder < 4;
     const dager = genererEgenmeldingDager(idag, 3);
@@ -504,6 +513,23 @@ function beregnOvertid(mins, datoStr) {
   const ot50   = Math.min(rest, 240);   // neste 4 timer = 240 min (til 11.5 timer totalt)
   const ot100  = Math.max(0, rest - 240);
   return {normal, ot50, ot100};
+}
+
+// Egenmelding kan først brukes etter minst 2 måneders ansettelse (faktisk norsk
+// minimumsregel, delt av Henrik 2026-10-08). Ukjent/tom ansettelsesdato (ansatte som
+// fantes før feltet ble lagt til, og som admin ikke har fylt inn ennå) regnes som
+// kvalifisert i stedet for å plutselig sperre alle eksisterende ansatte - se migrasjonen
+// 20261008100000_ansettelsesdato.sql.
+/**
+ * @param {string|null|undefined} ansettelsesdatoStr "ÅÅÅÅ-MM-DD"
+ * @param {string} idagStr "ÅÅÅÅ-MM-DD"
+ * @returns {boolean}
+ */
+function egenmeldingKvalifisert(ansettelsesdatoStr, idagStr) {
+  if (!ansettelsesdatoStr) return true;
+  const kvalifisertFra = new Date(ansettelsesdatoStr);
+  kvalifisertFra.setMonth(kvalifisertFra.getMonth() + 2);
+  return new Date(idagStr) >= kvalifisertFra;
 }
 
 function timerMaanedNaviger(dir) {
