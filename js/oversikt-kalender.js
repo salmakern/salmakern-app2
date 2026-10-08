@@ -544,11 +544,12 @@ function hengerfesteKortHTML(o) {
     ${forhandlerNr?`<span style="font-size:13px;font-weight:700;color:#f4f4f5">${esc(forhandlerNr)}</span>`:''}
   </div>`;
 }
-// Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) så lenge "Skal
-// ha etter visning" har tekst som ikke er bekreftet ennå - hindrer at det glemmes (bedt om
-// av Henrik 2026-10-08). Samme regel som tvangsflyt()-kravet i ordre-detalj.js.
+// Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) helt til "Skal
+// ha etter visning" er bekreftet - UANSETT om feltet har tekst eller ikke (rettet
+// 2026-10-08: et unntak for tomt felt lot nettopp det glemmes videre, som er det hele
+// poenget å hindre). Samme regel som tvangsflyt()-kravet i ordre-detalj.js.
 function skalHaBadgeHTML(o) {
-  if (!o.utstyr?.skalHa?.trim() || o.utstyr?.skalHaBekreftet) return '';
+  if (o.utstyr?.skalHaBekreftet) return '';
   return `<span class="pill warn" style="font-size:11px;margin:0">⚠ Utstyr ikke bekreftet</span>`;
 }
 // Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
