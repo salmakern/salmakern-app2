@@ -149,13 +149,8 @@ gjennomgang av hele appen og rapporterer status til Henrik om morgenen - se
 `C:\Users\GroAnitaMartinsen\.claude\scheduled-tasks\salmakern-booking-daglig-qa\SKILL.md`
 for den fulle sjekklisten. Oppgaven kan ikke logge inn (PIN alltid blokkert i ubetjente
 økter), så den dekker Ordre/Timer/Kalender/Lager/Ansatte/Admin-ark/Eksport med statisk
-kodegjennomgang i stedet for en ekte brukerflyt når den kjører ubetjent.
-
-**Vedlikeholdsregel (bedt om av Henrik 2026-10-08):** når en endring i en VANLIG
-(interaktiv) økt påvirker det ansatte ser eller gjør i appen (ny funksjon, endret flyt,
-nye regler) - oppdater sjekklisten i SKILL.md-filen over i SAMME økt som endringen gjøres,
-i stedet for å vente til neste planlagte kjøring oppdager det selv. Samme mønster som
-Forhandlerportal-repoets tilsvarende daglige QA-oppgave bruker.
+kodegjennomgang i stedet for en ekte brukerflyt når den kjører ubetjent. Holdes i takt med
+endringer i appen - se "Arbeidsvaner" i nettside-delen av denne filen for selve regelen.
 
 ## Kjente begrensninger i dette utviklingsmiljøet
 
