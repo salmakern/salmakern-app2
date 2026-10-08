@@ -625,8 +625,14 @@ function renderTimerOversikt() {
   const erAdm = me && me.rolle === 'admin';
   const GRID = 'grid-template-columns:minmax(0,2fr) repeat(3,minmax(52px,1fr)) minmax(0,1.2fr)';
 
+  // Egenmeldingskvoten er alltid "akkurat nå" (rullerende 12 måneder bakover fra i dag) -
+  // ikke knyttet til måneden som navigeres i resten av denne oversikten, se samme
+  // begrunnelse i renderAnsattDetalj() (bedt om av Henrik 2026-10-08: samlet oversikt over
+  // alle ansattes egenmelding-bruk på ett sted, i stedet for å måtte klikke inn på hver).
+  const idagEgenm = new Date().toISOString().split('T')[0];
   const rader = S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false).map(a => {
     const timer = S.timer.filter(t => t.ansattId===a.id && t.dato?.startsWith(prefix));
+    const egenmKvote = egenmeldingEpisoderSisteAar(S.timer, a.id, idagEgenm);
     const arbTimer = timer.filter(t=>t.mins>0);
     const totMins = arbTimer.reduce((s,t)=>s+t.mins,0);
     const sykDager = timer.filter(t=>['syk','egenmelding'].includes(t.type)).length;
@@ -662,6 +668,7 @@ function renderTimerOversikt() {
         <div style="text-align:right"><div class="small" style="font-size:10px;color:#fed7aa">100%</div><div style="font-weight:700;color:#f97316">${ot100?fmtTid(ot100):'—'}</div></div>
         <div style="text-align:right;font-size:12px">${fravarTxt}</div>
       </div>
+      ${egenmKvote>0?`<div class="small" style="margin-top:5px;color:${egenmKvote>=4?'#fca5a5':'#fde68a'}">Egenmelding: ${egenmKvote} av 4 siste 12 mnd${egenmKvote>=4?' - neste blir ubetalt':''}</div>`:''}
       ${stripe}
     </div>`;
   });

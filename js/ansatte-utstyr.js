@@ -1312,6 +1312,18 @@ function renderAnsattDetalj() {
   document.getElementById('ansattDetaljNavn').textContent = a.navn;
   document.getElementById('ansattDetaljLbl').textContent = `${maanedNavn[dato.getMonth()]} ${dato.getFullYear()}`;
 
+  // Egenmeldingskvoten er alltid "akkurat nå" (rullerende 12 måneder bakover fra i dag) -
+  // ikke knyttet til måneden/året som navigeres i resten av visningen under. Viste
+  // tidligere kun "X dager" for navigert KALENDERÅR, som ikke stemte med den faktiske
+  // kvoteregelen (rettet 2026-10-08 etter spørsmål fra Henrik: "er det mulig for admin å
+  // se hvor mange egenmeldinger de ansatte har brukt").
+  const egenmKvoteBrukt = egenmeldingEpisoderSisteAar(S.timer, a.id, new Date().toISOString().split('T')[0]);
+  const egenmKvoteEl = document.getElementById('ansattDetaljEgenmKvote');
+  if (egenmKvoteEl) {
+    egenmKvoteEl.textContent = `Egenmelding: ${egenmKvoteBrukt} av 4 siste 12 måneder${egenmKvoteBrukt>=4?' - neste blir ubetalt':''}`;
+    egenmKvoteEl.style.color = egenmKvoteBrukt>=4 ? '#fca5a5' : '#a1a1aa';
+  }
+
   const timer = S.timer.filter(t=>t.ansattId===a.id && t.dato?.startsWith(prefix));
   const arbTimer = timer.filter(t=>t.mins>0);
   const totMins = arbTimer.reduce((s,t)=>s+t.mins,0);
