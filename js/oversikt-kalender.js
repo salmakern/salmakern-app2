@@ -78,46 +78,45 @@ function renderOrdreList() {
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
     const si = statusInfo(o.ordreStatus);
     const drivstoffTekst = drivstoffKundeprisTekst(o);
-    return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
-      ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
+    return `<div style="position:relative;background:#17161b;border:2px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0">
+      ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#17161b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0">
-          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25">${esc(ordreTittel(o))}</b>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto">
+          ${ordreIdentHTML(o)}
+          ${o.kunde?`<div style="font-size:15px;color:#c4c3cc;line-height:1.35">${esc(o.kunde)}</div>`:''}
+          ${(o.variant||o.farge)?`<div style="font-size:15px;color:#a1a0aa">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
-        ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:4px 8px;max-width:132px;flex-shrink:0')}
-      </div>
-      <div onclick="openOrdre('${o.id}')" style="cursor:pointer">
-        ${chassisBlockHTML(o)}
-        ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
-        ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
+        ${ordreKortStatusPilleHTML(o.id, o.ordreStatus)}
       </div>
 
-      <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
-        ${dokStatusKortHTML(o)}
-        ${(hengerfesteKortHTML(o)||skalHaBadgeHTML(o))?`<div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>`:''}
-        <div style="padding-bottom:9px;border-bottom:1px solid #27272a">${tvangsflytBarHTML(o)}</div>
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:3px">
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
-            <span class="muted" style="min-width:54px">Ankomst</span>
-            <span>${o.ankomstdato||'—'}</span>
+      <div style="background:#0f0f12;border:1px solid #2a2930;border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          ${dokStatusPillHTML('COC', o.coc)}
+          ${dokStatusPillHTML('Fullmakt', o.fullmakt)}
+          ${ordreKortFlatePilleHTML(o)}
+          ${ordreKortHengerfesteHTML(o)}
+          ${ordreKortSkalHaBadgeHTML(o)}
+        </div>
+        ${tvangsflytBarHTML(o)}
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid #2a2930;font-size:15px;line-height:1.4">
+          <div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px">
+            <span style="color:#a1a0aa">Ankomst</span><span>${o.ankomstdato||'—'}</span>
           </div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
-            <span class="muted" style="min-width:54px">Tilvalg</span>
-            <span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span>
+          <div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px">
+            <span style="color:#a1a0aa">Tilvalg</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span>
           </div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
-            <span class="muted" style="min-width:54px">Drivstoff</span>
-            <span style="color:${drivstoffTekst?'#f4f4f5':'#71717a'}">${drivstoffTekst||'—'}</span>
+          <div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px">
+            <span style="color:#a1a0aa">Drivstoff</span><span style="color:${drivstoffTekst?'#f4f4f5':'#71717a'}">${drivstoffTekst||'—'}</span>
           </div>
         </div>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-        <span onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0">
-          <span style="width:7px;height:7px;border-radius:999px;background:${o.kalenderDato?'#3f3f46':'#ef4444'};flex-shrink:0"></span>
-          <span class="small" style="color:${o.kalenderDato?'#f4f4f5':'#fca5a5'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;align-items:center;gap:8px;min-width:0;font-size:14px">
+          <span style="width:8px;height:8px;border-radius:999px;background:${o.kalenderDato?'#5b5a63':'#ef4444'};flex-shrink:0"></span>
+          <span style="color:${o.kalenderDato?'#c4c3cc':'#fca5a5'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
         </span>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
           ${godkjentKortHTML(o)}
@@ -492,13 +491,13 @@ function statusDropdown(ordreId, currentStatus, extraStyle='') {
 }
 
 const HENGERFESTE_MONTERT_LBL = {ikke_montert:'Ikke montert', ledningsnett:'Ledningsnett', montert:'Montert'};
+const HENGERFESTE_MONTERT_FARGE = {
+  ikke_montert: {bg:'#42200688', txt:'#fef08a', border:'#facc15'},
+  ledningsnett: {bg:'#17255488', txt:'#bfdbfe', border:'#60a5fa'},
+  montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
+};
 function hengerfesteMontertDropdown(ordreId, montert) {
-  const FARGE = {
-    ikke_montert: {bg:'#42200688', txt:'#fef08a', border:'#facc15'},
-    ledningsnett: {bg:'#17255488', txt:'#bfdbfe', border:'#60a5fa'},
-    montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
-  };
-  const f = FARGE[montert] || FARGE.ikke_montert;
+  const f = HENGERFESTE_MONTERT_FARGE[montert] || HENGERFESTE_MONTERT_FARGE.ikke_montert;
   return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
@@ -515,13 +514,13 @@ function settHengerfesteMontert(id, val) {
 // hengerfesteMontert over, som gjelder MONTERING på bilen (bedt om av Henrik 2026-10-08:
 // "noe som kan vise at hengerfeste til en bil har kommet").
 const HENGERFESTE_BESTILT_LBL = {ikke_bestilt:'Ikke bestilt', bestilt:'Bestilt', ankommet:'Ankommet'};
+const HENGERFESTE_BESTILT_FARGE = {
+  ikke_bestilt: {bg:'#45121288', txt:'#fca5a5', border:'#ef4444'},
+  bestilt:      {bg:'#42200688', txt:'#fef08a', border:'#facc15'},
+  ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
+};
 function hengerfesteBestiltDropdown(ordreId, bestilt) {
-  const FARGE = {
-    ikke_bestilt: {bg:'#45121288', txt:'#fca5a5', border:'#ef4444'},
-    bestilt:      {bg:'#42200688', txt:'#fef08a', border:'#facc15'},
-    ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
-  };
-  const f = FARGE[bestilt] || FARGE.ikke_bestilt;
+  const f = HENGERFESTE_BESTILT_FARGE[bestilt] || HENGERFESTE_BESTILT_FARGE.ikke_bestilt;
   return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
@@ -578,17 +577,58 @@ function dokStatusDropdown(ordreId, felt, verdi) {
     <option value="har" ${verdi==='har'?'selected':''}>Har</option>
   </select>`;
 }
+// ════════════════════════════════════════════════════
+// ORDREKORT (fanen "Ordre", renderOrdreList) - endelig design 2026-10-08
+// ════════════════════════════════════════════════════
+// Henrik leverte et ferdig high-fidelity design-handoff (design_handoff_ordrekort/README.md)
+// som endelig svar på den lange chassisnummer/status-saken - "Farger, størrelser og
+// rekkefølge er endelige". Funksjonene under gjelder KUN dette ene kortet (renderOrdreList
+// lenger ned), IKKE de tilsvarende, men mindre, kortene på Oversikt-siden (drag-cards over i
+// denne filen, som fortsatt bruker de opprinnelige hengerfesteKortHTML/flateKortHTML/
+// skalHaBadgeHTML/statusDropdown rett over - de er bevisst ikke rørt for å ikke endre
+// utseendet et sted ingen ba om det).
 function dokStatusPillHTML(label, verdi) {
   verdi = verdi || 'har_ikke';
   const f = dokStatusFarge(verdi);
   const kort = verdi==='har_ikke' ? 'Mangler' : (verdi==='etterspurt' ? 'Etterspurt' : 'OK');
-  return `<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:${f.bg};color:${f.txt};border:1px solid ${f.border};white-space:nowrap">${label}: ${kort}</span>`;
+  return `<span style="display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;border:1.5px solid ${f.border};background:${f.bg};color:${f.txt};font-size:12px;font-weight:700;white-space:nowrap">${label}: ${kort}</span>`;
 }
-// Flåte-pillen vises i SAMME rad som COC/Fullmakt (flyttet opp hit av Henrik 2026-09-25,
-// tidligere egen rad sammen med Hengerfeste) - naturlig plassering siden alle tre er
-// kompakte status-piller for ordren, ikke fordi Flåte er en "dokumentstatus" i seg selv.
-function dokStatusKortHTML(o) {
-  return `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}${flateKortHTML(o)}</div>`;
+function ordreKortFlatePilleHTML(o) {
+  const f = o.flateId ? (S.flater||[]).find(x=>x.id===o.flateId) : null;
+  return f
+    ? `<span style="display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;border:1.5px solid #3b82f6;background:#0f1d33;color:#93c5fd;font-size:12px;font-weight:700;white-space:nowrap">Flåte ${esc(f.flatenummer)}</span>`
+    : `<span style="display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;border:1.5px solid #3f3f46;background:#1f1e24;color:#a1a1aa;font-size:12px;font-weight:700;white-space:nowrap">Ingen flåte</span>`;
+}
+function ordreKortSkalHaBadgeHTML(o) {
+  if (o.utstyr?.skalHaBekreftet) return '';
+  return `<span style="display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;border:1.5px solid #a16207;background:#2b220a;color:#fde68a;font-size:12px;font-weight:700;white-space:nowrap">⚠ Utstyr ikke bekreftet</span>`;
+}
+// Egen select-med-pil-markup (appearance:none + håndtegnet ▼) siden den native pil-ikonet
+// ikke kan farges/forminskes - delt av statuspillen og hengerfeste-pillene under.
+function ordreKortPilleSelectHTML(onchange, valgHTML, farge, minHeight, fontSize) {
+  return `<span style="position:relative;display:inline-flex;flex:none">
+    <select onchange="${onchange}" style="appearance:none;-webkit-appearance:none;min-height:${minHeight}px;max-width:100%;border-radius:999px;border:1.5px solid ${farge.border};background:${farge.bg};color:${farge.txt};font-size:${fontSize}px;font-weight:700;padding:0 20px 0 9px;cursor:pointer">${valgHTML}</select>
+    <span style="position:absolute;right:7px;top:50%;transform:translateY(-50%);pointer-events:none;color:${farge.txt};font-size:7px">▼</span>
+  </span>`;
+}
+function ordreKortStatusPilleHTML(ordreId, currentStatus) {
+  const si = statusInfo(currentStatus);
+  const valgHTML = STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('');
+  return `<span style="flex:none;max-width:46%">${ordreKortPilleSelectHTML(`endreStatus('${ordreId}',this.value)`, valgHTML, si, 30, 12)}</span>`;
+}
+function ordreKortHengerfesteHTML(o) {
+  if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
+  const forhandlerNr = o.utstyr?.forhandlerNr;
+  const bFarge = HENGERFESTE_BESTILT_FARGE[o.utstyr?.hengerfesteBestilt] || HENGERFESTE_BESTILT_FARGE.ikke_bestilt;
+  const mFarge = HENGERFESTE_MONTERT_FARGE[o.utstyr?.hengerfesteMontert] || HENGERFESTE_MONTERT_FARGE.ikke_montert;
+  const bestiltValgHTML = Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${o.utstyr?.hengerfesteBestilt===val?'selected':''}>${lbl}</option>`).join('');
+  const montertValgHTML = Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${o.utstyr?.hengerfesteMontert===val?'selected':''}>${lbl}</option>`).join('');
+  return `<span style="display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border-radius:999px;border:1.5px solid #a16207;background:#2b220a;color:#fde68a;font-size:12px;font-weight:700;white-space:nowrap">Hengerfeste</span>` +
+    `<span style="display:inline-flex;gap:6px;flex-wrap:nowrap;align-items:center">` +
+      ordreKortPilleSelectHTML(`settHengerfesteBestilt('${o.id}',this.value)`, bestiltValgHTML, bFarge, 26, 12) +
+      ordreKortPilleSelectHTML(`settHengerfesteMontert('${o.id}',this.value)`, montertValgHTML, mFarge, 26, 12) +
+      (forhandlerNr?`<span style="display:inline-flex;align-items:center;min-height:26px;font-size:13px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap">${esc(forhandlerNr)}</span>`:'') +
+    `</span>`;
 }
 // Kompakt fremdriftsindikator for tvangsflyt-kravene på ordrekortene - samme
 // krav som tvangsflyt(o) i ordre-detalj.js, bare vist som en rad segmenter i
@@ -596,14 +636,13 @@ function dokStatusKortHTML(o) {
 function tvangsflytBarHTML(o) {
   const tf = tvangsflyt(o);
   const oppfylt = tf.filter(t=>t.ok).length;
-  const si = statusInfo(o.ordreStatus);
-  const tallFarge = oppfylt===tf.length ? '#86efac' : oppfylt<Math.ceil(tf.length/2) ? '#fca5a5' : '#a1a1aa';
-  return `<div onclick="event.stopPropagation()">
-    <div class="small muted" style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:10px;letter-spacing:.06em;text-transform:uppercase">
-      <span>Tvangsflyt</span><span style="font-weight:700;color:${tallFarge}">${oppfylt} av ${tf.length} krav</span>
+  const alle = oppfylt === tf.length;
+  return `<div onclick="event.stopPropagation()" style="display:flex;flex-direction:column;gap:8px">
+    <div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;letter-spacing:.1em;font-weight:700">
+      <span style="color:#a1a0aa">TVANGSFLYT</span><span style="color:${alle?'#4ade80':'#fb923c'}">${oppfylt} AV ${tf.length} KRAV</span>
     </div>
-    <div style="display:flex;gap:4px;margin-top:4px">
-      ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:6px;border-radius:999px;background:${t.ok?si.border:'#27272a'}"></span>`).join('')}
+    <div style="display:grid;grid-template-columns:repeat(${tf.length},minmax(0,1fr));gap:5px">
+      ${tf.map(t=>`<span title="${esc(t.lbl)}" style="height:8px;border-radius:4px;background:${t.ok?(alle?'#22c55e':'#f97316'):'#33323a'}"></span>`).join('')}
     </div>
   </div>`;
 }
@@ -611,18 +650,18 @@ function tvangsflytBarHTML(o) {
 // fakturertKortHTML rett under.
 function godkjentKortHTML(o) {
   if (!me || me.rolle !== 'admin') return '';
-  return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
+  return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;min-height:36px;font-size:13px;font-weight:700;color:#c4c3cc;cursor:pointer;flex-shrink:0">
     Vedtak
-    <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
+    <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:20px;height:20px;accent-color:#4ade80;cursor:pointer">
   </label>`;
 }
 // Fakturering er en admin-oppgave (samme sperre som Fakturering-kortet på selve ordresiden),
 // så denne haken vises kun for admin - andre ansatte ser ingenting her.
 function fakturertKortHTML(o) {
   if (!me || me.rolle !== 'admin') return '';
-  return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.fakturert?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
+  return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:6px;min-height:36px;font-size:13px;font-weight:700;color:#c4c3cc;cursor:pointer;flex-shrink:0">
     Fakturert
-    <input type="checkbox" ${o.fakturert?'checked':''} onchange="toggleFakturert('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
+    <input type="checkbox" ${o.fakturert?'checked':''} onchange="toggleFakturert('${o.id}')" style="width:20px;height:20px;accent-color:#4ade80;cursor:pointer">
   </label>`;
 }
 

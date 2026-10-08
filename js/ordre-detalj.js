@@ -965,32 +965,27 @@ function ordreLabelFull(o){
   return ordreLabel(o);
 }
 
-// 2026-10-08, femte (og forhåpentligvis siste) runde på chassisnummer-vs-status-kortet:
-// Henrik presiserte at kortets layout må være IDENTISK hver gang (status alltid på samme
-// sted i raden, aldri presset ned av lang tekst) OG at selve nummeret aldri skal kuttes med
-// "...". De to kravene kan ikke begge innfris når nummeret deler rad med status-boksen -
-// uansett hvor smal man gjør skriften, er det alltid en statustekst (f.eks. "Vist på
-// biltilsynet") + chassisnummer-kombinasjon som ikke har plass sammen. Løsningen er å ikke
-// prøve i det hele tatt: tittel-raden (med status) viser kun reg.nr (eller en "Chassis.nr"-
-// plassholder hvis bilen ikke har reg.nr ennå), og selve chassisnummeret flyttes til en HELT
-// EGEN linje under hele tittel/status-raden - det får dermed alltid kortets fulle bredde å
-// bryte over, uavhengig av hvor bred status-boksen er. Kun brukt i Oversikt/Ordre-listen
-// (renderOrdreListe) foreløpig, ikke de andre kort-variantene (drag-cards, kalender) som
-// fortsatt bruker ordreLabelFull() over.
-function ordreTittel(o){
-  if (o.regnr) return o.regnr;
-  if (o.chassis) return 'Chassis.nr';
-  return 'Uten reg.nr';
-}
-// Selve chassisnummeret, som egen full-bredde blokk RETT UNDER tittel/status-raden (altså
-// FØR kunde/farge-linjene - bedt om av Henrik 2026-10-08: "den skal jo stå rett under
-// chassis.nr"). Viser kun "Chassis.nr"-etiketten her hvis reg.nr FANT STED i tittelen over
-// (ellers sto den der allerede som plassholder, se ordreTittel()) - unngår at etiketten
-// vises to ganger.
-function chassisBlockHTML(o){
-  if (!o.chassis) return '';
-  const etikett = o.regnr ? `<div class="small muted" style="margin-top:6px">Chassis.nr</div>` : '';
-  return etikett + `<div style="font-weight:700;font-size:14px;margin-top:2px">${esc(o.chassis)}</div>`;
+// Endelig design for identifikasjons-blokken øverst til venstre på ordrekortet i
+// Oversikt/Ordre-listen (renderOrdreListe), levert av Henrik 2026-10-08 som et ferdig
+// high-fidelity design-handoff (design_handoff_ordrekort/README.md) etter en lang rekke
+// runder på å få chassisnummeret til å oppføre seg på mobil - løser dette ved at nummeret
+// ALDRI deler rad med statusvelgeren: det står i egen stor stil (20px/800/hvit) med en
+// liten etikett over («CHASSIS» - eksakt tekst fra designet), i en kolonne som alltid tar
+// kortets fulle venstre bredde, mens statusvelgeren ligger ved siden av i toppraden
+// (se renderOrdreListe). Reg.nr er ikke dekket av design-spesifikasjonen (den modellerer
+// bare chassis), så når bilen har fått reg.nr vises DEN i samme store stil under etiketten
+// «REG.NR» i stedet - chassisnummeret vises da fortsatt, men som en mindre sekundærlinje
+// under, siden det ikke lenger er hovedidentifikatoren. Kun brukt i Oversikt/Ordre-listen,
+// ikke de andre kort-variantene (drag-cards, kalender) som fortsatt bruker ordreLabelFull().
+function ordreIdentHTML(o){
+  const stor = v => `<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:.01em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;line-height:1.15">${esc(v)}</div>`;
+  const etikett = t => `<div style="font-size:11px;letter-spacing:.1em;font-weight:700;color:#a1a0aa">${t}</div>`;
+  if (o.regnr) {
+    const chassisEkstra = o.chassis ? `<div class="small muted" style="margin-top:2px">Chassis.nr ${esc(o.chassis)}</div>` : '';
+    return etikett('REG.NR') + stor(o.regnr) + chassisEkstra;
+  }
+  if (o.chassis) return etikett('CHASSIS') + stor(o.chassis);
+  return stor('Uten reg.nr');
 }
 
 // Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
