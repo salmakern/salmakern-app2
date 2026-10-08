@@ -745,6 +745,21 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
       <div class="mer-seksjon-label" onclick="toggleMerSeksjon(this,'merGruppeDaglig')"><span class="mer-seksjon-chevron">▾</span>Daglig</div>
       <div class="grid g3" id="merGruppeDaglig">
+        <div class="card" id="merMinProfilKort">
+          <div class="h">Min profil</div>
+          <div class="felt-wrap" style="margin-top:10px">
+            <label>Navn</label>
+            <input id="mpNavn" onchange="endreEgetNavn(this.value)">
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn sm" id="mpEndrePinBtn" onclick="apneEndreEgenPin()">Endre PIN</button>
+          </div>
+          <div id="mpPinForm" style="display:none;margin-top:10px;gap:6px;align-items:center">
+            <input id="mpNyPin" type="password" inputmode="numeric" maxlength="4" placeholder="Ny PIN (4 siffer)" style="width:140px">
+            <button class="btn sm red" onclick="lagreEgenPin()">Lagre</button>
+            <button class="btn sm" onclick="document.getElementById('mpPinForm').style.display='none'">Avbryt</button>
+          </div>
+        </div>
         <div class="card" id="merPINKort" style="display:none">
           <div class="h">Dagens PIN <span class="kort-admin-merke">ADMIN</span></div>
           <div class="box" style="border-color:rgba(239,68,68,.3);text-align:center;margin:10px 0">

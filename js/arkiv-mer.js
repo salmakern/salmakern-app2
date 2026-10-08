@@ -249,6 +249,14 @@ function toggleMerSeksjon(labelEl, gridId) {
 function renderMer() {
   const erAdmin = me && me.rolle === 'admin';
   const erGodkjenner = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
+
+  // "Min profil" - synlig for ALLE innloggede (ikke admin-only), lar hver enkelt ansatt
+  // rette sitt eget navn og endre sin egen PIN (bedt om av Henrik 2026-10-08: "det må være
+  // mulig å gå inn på ansatte og redigere navn og pin hos admin, og hos de ansatte"). Ikke
+  // overskriv navnefeltet mens man skriver i det (samme mønster som GPS-radius/ansattliste
+  // over).
+  const mpNavnEl = document.getElementById('mpNavn');
+  if (me && mpNavnEl && document.activeElement !== mpNavnEl) mpNavnEl.value = me.navn || '';
   oppdaterVarselKnapp();
 
   // Vis/skjul admin-only kort/knapper
@@ -281,8 +289,15 @@ function renderMer() {
     // ansatte-tabellens realtime-abonnement) verdien midt i redigering.
     if (radEl && document.activeElement !== radEl) radEl.value = S.gps?.radius || 300;
     const al = document.getElementById('ansatteListe');
-    al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px">
-      <div><b>${esc(a.navn)}</b>${!a.aktiv?' <span class="small err-text">Inaktiv</span>':''}</div>
+    // Navnet er nå et redigerbart felt (ikke bare statisk tekst) og "Sett PIN" lar admin
+    // overstyre en ansatts PIN (f.eks. glemt PIN) - bedt om av Henrik 2026-10-08. Ikke
+    // overskriv et navnefelt som er under redigering akkurat nå (samme "ikke forstyrr
+    // pågående skriving"-mønster som GPS-radiusfeltet over) - ellers "stjeler" en
+    // sanntidsoppdatering fra en annen admin teksten midt i redigering.
+    const fokusertNavnId = document.activeElement?.id?.startsWith('ansattNavn_') ? document.activeElement.id : null;
+    al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px;align-items:center">
+      <input id="ansattNavn_${a.id}" value="${fokusertNavnId==='ansattNavn_'+a.id?document.getElementById(fokusertNavnId).value:esc(a.navn)}" onchange="endreAnsattNavn(${a.id},this.value)" style="width:auto;max-width:170px;padding:5px 8px;font-size:12px;font-weight:700">
+      ${!a.aktiv?'<span class="small err-text">Inaktiv</span>':''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <select onchange="endreAnsattRolle(${a.id},this.value)" style="width:auto;padding:5px 8px;font-size:12px">
           <option value="ansatt" ${a.rolle==='ansatt'?'selected':''}>Ansatt</option>
@@ -291,6 +306,7 @@ function renderMer() {
         </select>
         <input type="date" value="${a.ansettelsesdato||''}" onchange="settAnsattAnsettelsesdato(${a.id},this.value)" title="Ansettelsesdato - styrer 2-månedersregelen for egenmelding. Tom = ikke sperret ennå." style="width:auto;padding:5px 8px;font-size:12px">
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
+        <button class="btn sm" onclick="adminSettNyPin(${a.id})" title="Sett en ny PIN for denne ansatte, f.eks. ved glemt PIN">🔑 Sett PIN</button>
         <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
         <button class="btn sm" onclick="slettAnsatt(${a.id})" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
       </div>

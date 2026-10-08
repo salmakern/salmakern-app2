@@ -1219,6 +1219,83 @@ function toggleKanForeLonn(id) {
   if(me?.rolle==='admin'||me?.rolle==='godkjenner') renderTimerOversikt();
 }
 
+// Admin retter en ansatts navn (feilskrevet, navnebytte osv.) - redigerbart felt direkte i
+// ansatte-listen, samme mønster som rolle/ansettelsesdato rett under (bedt om av Henrik
+// 2026-10-08).
+function endreAnsattNavn(id, navn) {
+  navn = (navn||'').trim();
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a || !navn) return;
+  a.navn = navn;
+  ignorerRealtimeAnsatt.add(String(id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
+  if(db) db.from('ansatte').update({navn}).eq('id',id)
+    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
+  planleggLocalSpeiling();
+  renderMer();
+}
+
+// Admin setter en NY PIN for en VILKÅRLIG ansatt - dekker "glemt PIN"-tilfellet (en ansatt
+// som ikke kan logge inn kan naturligvis ikke bruke lagreEgenPin() selv). Går via
+// admin_sett_pin()-funksjonen (se migrasjon 20261008150000) siden ansatte_pin ikke har
+// noen RLS-policyer i det hele tatt - kun SECURITY DEFINER-funksjoner kan skrive dit.
+function adminSettNyPin(id) {
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
+  const pin = prompt(`Sett ny PIN for ${a.navn} (4 siffer):`);
+  if (pin === null) return;
+  if (!/^[0-9]{4}$/.test(pin.trim())) { alert('PIN må være nøyaktig 4 siffer'); return; }
+  if (!db) return;
+  db.rpc('admin_sett_pin', {p_ansatt_id:id, p_ny_pin:pin.trim()}).then(r=>{
+    if (r.error) {
+      alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN-en er allerede i bruk av en annen ansatt'
+        : r.error.message.includes('KUN_ADMIN') ? 'Kun admin kan sette PIN for andre'
+        : 'Feil ved lagring: '+r.error.message);
+      return;
+    }
+    visToast(`Ny PIN satt for ${a.navn}`, 'ok');
+  });
+}
+
+// ── Min profil (selvbetjening, Mer-fanen - synlig for ALLE innloggede) ──
+// En ansatt retter sitt eget navn direkte (samme oppdatering som endreAnsattNavn() over,
+// bare for seg selv og uten admin-sjekk siden db.from('ansatte').update() allerede er
+// åpent for enhver innlogget ansatt på denne tabellen, se RLS-policyen
+// "krever_innlogget_ansatt").
+function endreEgetNavn(navn) {
+  navn = (navn||'').trim();
+  if (!me || !navn) return;
+  const a = S.ansatte.find(x=>x.id===me.id); if (!a) return;
+  a.navn = navn; me.navn = navn;
+  ignorerRealtimeAnsatt.add(String(me.id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(me.id)), 5000);
+  if (db) db.from('ansatte').update({navn}).eq('id', me.id)
+    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
+  planleggLocalSpeiling();
+  visToast('Navn oppdatert', 'ok');
+  renderMer();
+}
+function apneEndreEgenPin() {
+  const form = document.getElementById('mpPinForm'); if (!form) return;
+  form.style.display = 'flex';
+  const felt = document.getElementById('mpNyPin');
+  felt.value = ''; felt.focus();
+}
+// Går via endre_egen_pin() (se migrasjon 20261008150000) - current_ansatt() i den
+// funksjonen beviser hvem som faktisk ringer ut fra JWT-sesjonen, så den kan aldri endre
+// noen ANNEN sin PIN uansett hva som sendes inn herfra.
+function lagreEgenPin() {
+  const pin = (document.getElementById('mpNyPin')?.value||'').trim();
+  if (!/^[0-9]{4}$/.test(pin)) { alert('PIN må være nøyaktig 4 siffer'); return; }
+  if (!db) return;
+  db.rpc('endre_egen_pin', {p_ny_pin:pin}).then(r=>{
+    if (r.error) {
+      alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN-en er allerede i bruk av en annen ansatt' : 'Feil ved lagring: '+r.error.message);
+      return;
+    }
+    document.getElementById('mpPinForm').style.display = 'none';
+    visToast('PIN endret', 'ok');
+  });
+}
+
 function endreAnsattRolle(id, rolle) {
   const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
   a.rolle = rolle;
