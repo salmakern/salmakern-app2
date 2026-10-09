@@ -129,6 +129,10 @@ const VEGVESEN_MODELLER = [
     match: /\bev9\b/i, navn: 'KIA EV9',
     geometri: { a: 3.100, b: 1.480, d: 2.120, cOffset: 1.75 },
     fabrikant1: { navn: 'KIA Coporation', adresse: ['12, Heolleung-ro, Seocho-gu', 'Seoul', 'Korea'] },
+    // "Sideairbagers konflikt"-raden hadde "No. 812439217" (manglet et siffer) i stedet for
+    // "No. 8124392177" som resten av radene på denne modellen - en skrivefeil, ikke et ekte
+    // annet testnummer. Funnet og rettet 2026-10-09 ved å faktisk generere og lese innholdet
+    // på alle 7 modellenes Fabrikantattest (bedt om av Henrik etter "5/7"-spørsmålet).
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177', 'TÜV NORD'],
       ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2 og 6', 'No. 8124392177', 'TÜV NORD'],
@@ -136,7 +140,7 @@ const VEGVESEN_MODELLER = [
       ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
       ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
       ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177', 'TÜV NORD'],
-      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 812439217', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177', 'TÜV NORD'],
       ['Airbager i 2. seterad', '', '', 'Annex 5 og 6', 'No. 8124392177', 'TÜV NORD'],
       ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177 / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
     ],
@@ -212,6 +216,11 @@ const VEGVESEN_MODELLER = [
     match: /discovery\s*5\b/i, navn: 'Land Rover Discovery 5',
     geometri: { a: 2.923, b: 1.550, d: 1.860, cOffset: 1.97 },
     fabrikant1: { navn: 'Jaguar Land Rover Ireland Ltd', adresse: ['Abbey Road Whitley', 'Coventry CV3 4LF', 'United Kingdom'] },
+    // De to siste radene hadde "-LE" (Defender sitt testnummer-suffiks, se der) i stedet for
+    // "-LR" som resten av Discovery 5 sine egne rader bruker - sannsynligvis fra at denne
+    // modellen ble satt opp ved å kopiere Defender (de deler Støtdempertårn-logikken via
+    // vegvesenStotdempertarnAnmerkning). Funnet og rettet 2026-10-09, se samme runde som
+    // KIA EV9-fiksen over.
     kravRader: [
       ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177-LR', 'TÜV NORD'],
       ['A6', 'Bilbeltevarslere', 'FN-Reg. 16', 'Annex 2', 'No. 8124392177-LR', 'TÜV NORD'],
@@ -219,8 +228,8 @@ const VEGVESEN_MODELLER = [
       ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
       ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177-LR', 'TÜV NORD'],
       ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177-LR', 'TÜV NORD'],
-      ['Støtdempertårn', '', '', 'Annex 5 og 6 / 7 og 8', 'No. 8124392177-LE', 'TÜV NORD'],
-      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-LE / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+      ['Støtdempertårn', '', '', 'Annex 5 og 6 / 7 og 8', 'No. 8124392177-LR', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177-LR / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
     ],
     saerligAnmerkning: vegvesenStotdempertarnAnmerkning,
     antallSitteplasser: () => ({ inn: '5/7', ut: '2' }),
