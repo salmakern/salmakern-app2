@@ -437,8 +437,82 @@ function renderForhandlerDetalj() {
         </div>`).join('') : '<div class="small muted" style="padding-left:10px">Ingen kontaktpersoner lagt til</div>'}
       ${erAdmin?`<button class="btn sm" style="margin-top:8px;padding:4px 10px;font-size:12px" onclick="apneNyKontaktperson('${forhandler.id}')">+ Legg til kontaktperson</button>`:''}
     </div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid #27272a">
+      <div class="small muted" style="margin-bottom:6px">Fullmakt</div>
+      ${forhandler.fullmaktUrl ? `
+        <div class="small"><a href="${esc(forhandler.fullmaktUrl)}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none">📄 ${esc(forhandler.fullmaktNavn||'Fullmakt')}</a></div>
+        ${forhandler.fullmaktDato?`<div class="small muted" style="margin-top:2px">Lastet opp ${new Date(forhandler.fullmaktDato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}${forhandler.fullmaktLastetOppAv?' av '+esc(forhandler.fullmaktLastetOppAv):''}</div>`:''}
+        ${erAdmin?`
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <label class="btn sm" style="padding:4px 10px;font-size:12px;cursor:pointer;display:inline-block">Last opp ny<input type="file" accept="application/pdf,image/*" style="display:none" onchange="lastOppForhandlerFullmakt(this.files[0])"></label>
+            <button class="btn sm" style="padding:4px 10px;font-size:12px;color:#ef4444" onclick="fjernForhandlerFullmakt('${forhandler.id}')">Fjern</button>
+          </div>
+          <div id="fdFullmaktStatus" class="small muted" style="margin-top:4px"></div>
+        `:''}
+      ` : `
+        <div class="small muted">Ingen fullmakt lastet opp</div>
+        ${erAdmin?`
+          <label class="btn sm" style="margin-top:8px;padding:4px 10px;font-size:12px;cursor:pointer;display:inline-block">+ Last opp fullmakt<input type="file" accept="application/pdf,image/*" style="display:none" onchange="lastOppForhandlerFullmakt(this.files[0])"></label>
+          <div id="fdFullmaktStatus" class="small muted" style="margin-top:4px"></div>
+        `:''}
+      `}
+    </div>
     ${erAdmin?`<button class="btn sm" style="margin-top:14px;padding:4px 10px;font-size:12px;color:#ef4444" onclick="slettKontakt('${forhandler.id}')">Slett forhandler</button>`:''}
   `;
+}
+
+// Fullmakt lastes opp PER FORHANDLER her i Kontakter (bedt om av Henrik 2026-10-09: "at jeg
+// kan laste opp en fullmakt i forhandleren under kontakter") - kopieres deretter automatisk
+// inn i dokumentlisten på enhver ordre som har denne forhandleren valgt, se
+// autoFyllForhandlerFullmakt() i js/ordre-detalj.js. Lagres som felt direkte på selve
+// kontakt-objektet (fullmaktUrl/fullmaktNavn/...) siden kontakter er en JSONB-liste uten
+// faste kolonner - ingen egen migrasjon trengs, kontakter_upsert() tar imot objektet som det
+// er (se migrasjon 20260926120000). Gjenbruker samme ordre-dokumenter-bucket/opplastingsmønster
+// som lastOppEtDokument() i ordre-diverse.js, bare med forhandler-id i stien i stedet for
+// ordre-id. Den GAMLE filen i storage slettes bevisst IKKE ved ny opplasting/fjerning - en
+// ordre som allerede har kopiert inn URL-en til dokumentlisten sin ville ellers mistet en
+// gyldig lenke til en fullmakt som var riktig DA den ble lagt til, selv om forhandleren siden
+// har skiftet den ut.
+async function lastOppForhandlerFullmakt(file) {
+  if (!file) return;
+  const forhandlerId = document.getElementById('fdForhandlerId')?.value;
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId);
+  if (!forhandler) return;
+  if (!db) { visToast('Ikke koblet til Supabase'); return; }
+  const statusEl = document.getElementById('fdFullmaktStatus');
+  if (statusEl) statusEl.textContent = 'Laster opp...';
+  try {
+    const tryggNavn = file.name.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-zA-Z0-9.\-]/g,'_');
+    const filnavn = `forhandlere/${forhandlerId}/${Date.now()}_${tryggNavn}`;
+    const { error: uploadError } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream', cacheControl:'31536000'});
+    if (uploadError) throw uploadError;
+    const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
+    const oppdatertKontakt = { ...forhandler, fullmaktUrl: data.publicUrl, fullmaktNavn: file.name, fullmaktLastetOppAv: me.navn, fullmaktDato: new Date().toISOString() };
+    const { data: nyeKontakter, error } = await db.rpc('kontakter_upsert', { p_kontakt: oppdatertKontakt });
+    if (error) throw error;
+    S.kontakter = nyeKontakter || [];
+    planleggLocalSpeiling();
+    renderForhandlerDetalj();
+    visToast('Fullmakt lastet opp', 'ok');
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '';
+    visToast('Opplasting feilet: ' + e.message);
+  }
+}
+
+async function fjernForhandlerFullmakt(forhandlerId) {
+  const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler || !forhandler.fullmaktUrl) return;
+  if (!confirm(`Fjerne fullmakten for "${forhandler.navn}"?`)) return;
+  const { fullmaktUrl, fullmaktNavn, fullmaktLastetOppAv, fullmaktDato, ...resten } = forhandler;
+  if (db) {
+    const { data, error } = await db.rpc('kontakter_upsert', { p_kontakt: resten });
+    if (error) { visToast('Kunne ikke fjerne: ' + error.message); return; }
+    S.kontakter = data || [];
+  } else {
+    Object.assign(forhandler, { fullmaktUrl: undefined, fullmaktNavn: undefined, fullmaktLastetOppAv: undefined, fullmaktDato: undefined });
+  }
+  planleggLocalSpeiling();
+  renderForhandlerDetalj();
 }
 
 // Hopper midlertidig ut av forhandlerDetalj mens Ny/Rediger kontaktperson-modalen er åpen

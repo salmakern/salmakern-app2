@@ -304,8 +304,19 @@ function opprettOrdre() {
   if (forhandlerNr) ny.utstyr.forhandlerNr = forhandlerNr;
   const forhandlerOrgnr = finnForhandlerOrgnr(ny.kunde);
   if (forhandlerOrgnr) ny.forhandlerOrgnr = forhandlerOrgnr;
+  // Samme auto-vedlegg som autoFyllForhandlerFullmakt() i ordre-detalj.js gjør for en
+  // EKSISTERENDE ordre - her for en helt ny ordre i stedet. `dokumenter` inngår bevisst ikke
+  // i ordreToDb() (se der), så dette MÅ skrives med et eget update-kall ETTER at selve
+  // insert-en er bekreftet vellykket, ikke samtidig - ellers kan update-kallet nå frem før
+  // raden faktisk finnes i databasen og forsvinne sporløst (0 rader truffet, ingen feil).
+  const fullmakt = finnForhandlerFullmakt(ny.kunde);
+  if (fullmakt) ny.dokumenter = [{ navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
   S.ordrer.push(ny);
-  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
+  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{
+    if (r.error) { console.error(r.error.message); return; }
+    if (ny.dokumenter && ny.dokumenter.length) db.from('ordrer').update({dokumenter:ny.dokumenter}).eq('id', id)
+      .then(r2=>{if(r2.error) console.error('Fullmakt-auto-vedlegg feilet:', r2.error.message);});
+  });
   planleggLocalSpeiling();
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_farge','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');

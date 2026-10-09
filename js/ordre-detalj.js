@@ -198,7 +198,7 @@ function buildOrdreDetail() {
             <div style="display:flex;gap:6px">
               <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
                 oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}');renderForhandlerForslag(null,null,'kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
-                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}');autoFyllForhandlerOrgnr('${o.id}')"
+                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}');autoFyllForhandlerOrgnr('${o.id}');autoFyllForhandlerFullmakt('${o.id}')"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
@@ -1168,6 +1168,32 @@ function autoFyllForhandlerOrgnr(id) {
   sf(id, 'forhandlerOrgnr', orgnr);
   const input = document.getElementById('forhandlerOrgnrInput_'+id);
   if (input) input.value = vegvesenFormaterOrgnr(orgnr);
+}
+// Samme mønster som finnForhandlerNr/finnForhandlerOrgnr rett over, men for en allerede
+// opplastet fullmakt-fil på forhandleren (lastet opp i Kontakter → Forhandler-detalj, se
+// lastOppForhandlerFullmakt i js/ansatte-utstyr.js) - kopieres automatisk inn i ordrens egen
+// dokumentliste slik at fullmakten følger med ordren uten at noen må huske å legge den ved
+// manuelt hver gang (bedt om av Henrik 2026-10-09: "når man legger til forhandlerne i ordren
+// så blir den automatisk lagt inn i dokumenter"). Gjør ingenting hvis forhandleren mangler
+// fullmakt, eller ordren allerede har et dokument med akkurat dette navnet (unngår duplikater
+// hver gang Forhandler-feltet trigges på nytt med samme forhandler).
+function finnForhandlerFullmakt(kundeNavn) {
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (kundeNavn||'').trim().toLowerCase());
+  return forhandlerKontakt?.fullmaktUrl ? { navn: forhandlerKontakt.fullmaktNavn || 'Fullmakt.pdf', url: forhandlerKontakt.fullmaktUrl } : null;
+}
+function autoFyllForhandlerFullmakt(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const fullmakt = finnForhandlerFullmakt(o.kunde);
+  if (!fullmakt) return;
+  o.dokumenter = o.dokumenter || [];
+  if (o.dokumenter.some(d => d.navn === fullmakt.navn)) return;
+  o.dokumenter = [...o.dokumenter, { navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
+  logChange(o, 'La automatisk til fullmakt fra forhandler: ' + fullmakt.navn);
+  if (db) db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Fullmakt-auto-vedlegg feilet:', r.error.message);});
+  planleggLocalSpeiling();
+  const listEl = document.getElementById('dokumenterListe_'+id);
+  if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
 }
 
 // Selve nummeret fra "Forhandler.nr"-feltet, vist rett ved siden av Hengerfeste-valget -
