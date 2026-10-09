@@ -57,9 +57,22 @@ async function lagreKontakt() {
   const epost = document.getElementById('kEpost').value.trim();
   const notat = document.getElementById('kNotat').value.trim();
   const forhandlerNr = document.getElementById('kForhandlerNr').value.trim();
-  const orgnr = document.getElementById('kOrgnr').value.trim();
+  let orgnr = document.getElementById('kOrgnr').value.trim();
   const kId = document.getElementById('kId').value;
   const eksisterende = kId ? S.kontakter.find(k=>k.id===kId) : null;
+
+  // Slår automatisk opp org.nr for en HELT NY forhandler som ikke selv har fylt det inn -
+  // samme eksakt-navnetreff-regel som det manuelle 🔍-oppslaget/batch-knappen bruker (se
+  // brregEksaktTreff, med samme begrunnelse for hvorfor kun eksakt treff godtas automatisk).
+  // Kun ved OPPRETTELSE, ikke redigering av en eksisterende forhandler - de har allerede
+  // 🔍-knappen og "Hent org.nr for alle forhandlere" for det samme (bedt om av Henrik
+  // 2026-10-09: "når jeg legger inn nye forhandlere... finner den automatisk org.nr").
+  if (type === 'Forhandler' && !eksisterende && !orgnr) {
+    try {
+      const funnet = await brregEksaktTreff(navn);
+      if (funnet) { orgnr = funnet; visToast(`Fant org.nr automatisk: ${vegvesenFormaterOrgnr(funnet)}`, 'ok'); }
+    } catch (e) { console.error('Automatisk org.nr-oppslag ved opprettelse feilet:', e); }
+  }
 
   let kontakt, gammeltNavn = null;
   if (eksisterende) {
