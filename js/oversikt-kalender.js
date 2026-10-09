@@ -102,7 +102,7 @@ function renderOrdreList() {
           </div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
             <span class="muted" style="min-width:54px">Tilvalg</span>
-            <span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</span>
+            <span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</span>
           </div>
           <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
             <span class="muted" style="min-width:54px">Drivstoff</span>
@@ -162,7 +162,7 @@ function renderOversikt(q) {
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
-          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'—'}</div>
+          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
         </div>`;
       }).join('')

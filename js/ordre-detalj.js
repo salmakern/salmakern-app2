@@ -367,7 +367,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card" style="${o.utstyr?.skalHaBekreftet?'border-color:#22c55e;background:rgba(34,197,94,.06)':''}">
         <div class="h">Utstyr – Skal ha etter visning</div>
         <div class="small muted" style="margin-top:6px">Valgte Ekstra utstyr-oppskrifter legges automatisk til her - skriv gjerne inn mer for hånd i tillegg.</div>
-        <textarea id="skalHaInput_${o.id}" rows="4" style="margin-top:8px" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+        <textarea id="skalHaInput_${o.id}" rows="4" style="margin-top:8px" placeholder="Ingen tilvalg" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
         <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:13px;font-weight:700;color:${o.utstyr?.skalHaBekreftet?'#86efac':'#a1a1aa'}">
           <input type="checkbox" ${o.utstyr?.skalHaBekreftet?'checked':''} onchange="toggleSkalHaBekreftet('${o.id}',this.checked)" style="width:17px;height:17px;accent-color:#22c55e;cursor:pointer">
           ✔ Utstyr bekreftet klargjort

@@ -280,7 +280,7 @@ function genPDF(id) {
               `<div style="display:flex;align-items:baseline;gap:9px;padding:3px 0">
                  <span style="width:13px;height:13px;border:1.5px solid #1a1a1a;flex-shrink:0;margin-top:2px"></span>
                  <span>${l}</span></div>`).join('')
-          : '<div class="tom">Ingenting registrert</div>'}
+          : '<div class="tom">Ingen tilvalg</div>'}
       </div>
       <div class="s-hode" style="margin-top:20px"><span class="s-tittel">Hengerfeste</span></div>
       <div style="font-size:13px;margin-top:8px">${
