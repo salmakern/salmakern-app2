@@ -231,6 +231,36 @@ Forhandlerportalens offentlige API i stedet for å ha dem hardkodet:
   filen midlertidig pekes mot `http://localhost:3000` og CORS midlertidig åpnes, husk å
   reversere begge deler før push.
 
+## Finn forhandler (2026-10-10)
+
+`finn-forhandler.html` + `finn-forhandler.js`: kunden velger modell, skriver postnummer/sted
+(eller "Bruk min posisjon"), ser forhandlerne som selger modellen sortert på luftlinje-avstand
+og kan sende en forespørsel til opptil 3 av dem. Data og utsending ligger i Forhandlerportalen
+(se dens CLAUDE.md, seksjonen "Finn forhandler"): `GET /api/public/dealers`,
+`GET /api/public/models`, `POST /api/public/foresporsel`.
+
+- **Postnummer/sted slås opp direkte fra nettleseren hos Kartverket (Geonorge)**, aldri via våre
+  servere - ingenting om kundens posisjon lagres. Postnummer = snitt av adressene i området,
+  stedsnavn via stedsnavn-API-et (bare by/tettsted/bygd/kommune-typer), ellers fullt adressesøk.
+- Nedtrekket viser BARE modeller som har forhandlere. Tre tilstander skal alltid være pene:
+  ingen forhandlere lagt inn ("Vi legger inn forhandlere fortløpende" + kontaktknapper), API-feil
+  og normal visning. Siden er derfor trygg å ha live før Henrik har lagt inn forhandlere.
+- **Menylenke** "Finn forhandler" (og bunntekstlenke) på alle aktive sider. `galleri.html`,
+  `om.html` og `tjenester.html` har et eldre oppsett uten hovedmeny, er ikke lenket fra noe
+  sted og er bevisst ikke rørt. CTA-knappen "Finn forhandler" på modellsidene (lenker til
+  `finn-forhandler.html?modell=<slug>`) legges til av `model-sync.js`, ikke i hver HTML-fil.
+- **Headeren er klebrig og vokste da menyen fikk en lenke til** (målt, ikke gjettet): ved
+  900-1024px ble den fra én til to rader, og på mobil +36px. Rettet i `site.css` med en regel
+  for `max-width: 1120px` (litt tettere meny) og strammere mobilregel (`720px`); målt etterpå:
+  én rad fra 900px og opp, 800px lavere enn før, mobil ca. +7px mot før. Husk å måle header-
+  høyden (`.site-header` offsetHeight) ved 375/800/1024/1280 hvis menyen endres igjen. `site.css`
+  er nå `?v=8` på alle sider og `model-sync.js` `?v=5`.
+- **Teste lokalt**: portalens API tillater bare `https://salmaker.as` som origin, så en side
+  servert fra localhost får CORS-feil. Løsning brukt: en liten lokal proxy som serverer
+  `nettside/`, sender `/api/*` videre til portalen på localhost:3000 med `Origin: https://salmaker.as`
+  og bytter `API_BASE` til "" KUN i svaret for `finn-forhandler.js`. Aldri løsne CORS i
+  portalen for å teste.
+
 ## Logofiler
 
 "Master"-kopiene av alle logovarianter ligger samlet i `../logoer/` (én mappenivå opp fra

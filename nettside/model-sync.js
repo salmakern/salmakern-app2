@@ -3,6 +3,16 @@
   var slug = document.body.dataset.modelSlug;
   if (!slug) return;
 
+  // "Finn forhandler"-knapp i CTA-en nederst, med denne modellen forhåndsvalgt.
+  var ctaButtons = document.querySelector(".cta-red .hero-btns");
+  if (ctaButtons) {
+    var findDealer = document.createElement("a");
+    findDealer.href = "finn-forhandler.html?modell=" + encodeURIComponent(slug);
+    findDealer.className = "btn btn-outline-on-red";
+    findDealer.textContent = "Finn forhandler";
+    ctaButtons.insertBefore(findDealer, ctaButtons.lastElementChild);
+  }
+
   var prodGrid = document.getElementById("prodGrid");
   var mainImg = document.getElementById("mainImg");
   var thumbContainer = document.getElementById("thumbContainer");

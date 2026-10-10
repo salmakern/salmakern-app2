@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finn forhandler – Telemark Salmakerverksted</title>
+<meta name="description" content="Finn nærmeste forhandler som selger ombygging fra Telemark Salmakerverksted – velg modell, skriv inn postnummer og send forespørsel direkte.">
+<link rel="icon" type="image/png" sizes="192x192" href="ikoner/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="ikoner/icon-512.png">
+<link rel="stylesheet" href="site.css?v=8">
+<style>
+  .fh-panel { display: grid; gap: 22px; }
+  .fh-search-row { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; }
+  .fh-search-row .btn { padding: 15px 26px; white-space: nowrap; }
+  .fh-note { font-size: 14px; line-height: 1.55; color: var(--text-muted); }
+  .fh-status { font-size: 15px; line-height: 1.5; padding: 12px 16px; border: 1px solid var(--border); color: var(--text-body); }
+  .fh-status.is-error { border-color: #7a2f27; background: #2a1815; color: #f0a79d; }
+  .fh-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; margin-bottom: 14px; }
+  .fh-head h2 { font-size: clamp(22px, 2.4vw, 30px); }
+  .fh-list { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); }
+  .fh-card { background: var(--surface); padding: 22px 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 28px; align-items: start; }
+  .fh-name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.25; }
+  .fh-addr { color: var(--text-body); font-size: 15px; line-height: 1.55; margin-top: 4px; }
+  .fh-links { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 10px; font-size: 14px; font-weight: 600; }
+  .fh-links a { color: var(--red-light); }
+  .fh-links a:hover { color: var(--text); }
+  .fh-side { display: grid; gap: 12px; justify-items: end; text-align: right; }
+  .fh-dist { font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: 0.1em; color: var(--text); }
+  .fh-dist small { display: block; font-size: 10px; letter-spacing: 0.14em; color: var(--text-label); margin-top: 2px; }
+  .fh-choose { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; cursor: pointer; padding: 10px 14px; border: 1px solid var(--border); background: var(--bg); }
+  .fh-choose:hover { border-color: var(--text); }
+  .fh-choose input { width: 18px; height: 18px; accent-color: var(--red); cursor: pointer; }
+  .fh-choose.is-disabled { opacity: 0.45; cursor: not-allowed; }
+  .fh-choose.is-disabled input { cursor: not-allowed; }
+  .fh-choose.is-on { border-color: var(--red); }
+  .fh-chosen { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fh-chip { font-size: 13px; font-weight: 600; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border); }
+  .fh-check { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; line-height: 1.5; color: var(--text-body); }
+  .fh-check input { margin-top: 3px; width: 18px; height: 18px; flex: none; accent-color: var(--red); }
+  .fh-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .fh-success { background: #1a2e22; border: 1px solid #2f6b45; padding: 22px 24px; color: #6ee7b7; font-size: 16px; line-height: 1.55; }
+  .fh-success strong { color: #a7f3d0; }
+  .fh-empty { background: var(--surface); padding: clamp(24px, 3vw, 40px); border-bottom: 2px solid var(--red); }
+  [hidden] { display: none !important; }
+  @media (max-width: 720px) {
+    .fh-search-row { grid-template-columns: 1fr; }
+    .fh-search-row .btn { width: 100%; text-align: center; }
+    .fh-card { grid-template-columns: 1fr; }
+    .fh-side { justify-items: start; text-align: left; grid-auto-flow: row; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mono">GODKJENT PÅBYGGERVERKSTED · STATENS VEGVESEN · SKIEN</span>
+    <a href="https://forhandler.salmaker.as/login" class="mono">ER DU FORHANDLER? →</a>
+  </div>
+</div>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="logo-link"><img src="logo-transparent.png?v=5" alt="Salmaker'n – Telemark Salmakerverksted"></a>
+    <nav class="main-nav">
+      <a href="varebil.html" class="nav-link">Ombygginger</a>
+      <a href="index.html#prosessen" class="nav-link">Prosessen</a>
+      <a href="finn-forhandler.html" class="nav-link is-active">Finn forhandler</a>
+      <a href="kontakt.html" class="nav-link">Kontakt</a>
+      <a href="bestilling.html" class="nav-cta">Send forespørsel</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <div class="section-inner" style="padding:clamp(48px, 6vw, 88px) var(--pad-x) clamp(28px, 4vw, 48px);">
+      <div class="eyebrow">FINN FORHANDLER</div>
+      <h1 style="font-size:clamp(36px, 5.2vw, 70px); line-height:0.95; margin-bottom:22px;">Finn nærmeste forhandler</h1>
+      <p class="body-lead" style="font-size:clamp(16px, 1.7vw, 19px); max-width:56ch;">Velg modellen du er interessert i og skriv inn postnummer eller sted. Vi viser forhandlerne som selger ombygging fra Salmaker'n – nærmest først. Du kan sende en forespørsel til opptil tre av dem på en gang.</p>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--surface);">
+    <div class="section-inner" style="padding:clamp(32px, 4vw, 56px) var(--pad-x) clamp(56px, 7vw, 96px);">
+      <div class="fh-panel">
+
+        <p class="fh-status" id="fhLoading" hidden>Henter forhandlere …</p>
+        <noscript><p class="fh-status">Denne siden trenger JavaScript for å vise forhandlere. Ring oss på <a href="tel:35593395">35 59 33 95</a> eller <a href="bestilling.html">send en forespørsel</a>, så hjelper vi deg.</p></noscript>
+
+        <div class="fh-empty" id="fhEmpty" hidden>
+          <h2 style="font-size:clamp(22px, 2.4vw, 30px); margin-bottom:12px;">Vi legger inn forhandlere fortløpende</h2>
+          <p class="body-lead" style="max-width:52ch; margin-bottom:24px;">Det er ingen forhandlere å vise her akkurat nå. Ta kontakt med oss direkte, så hjelper vi deg videre – enten med et tilbud fra oss eller med en forhandler i nærheten.</p>
+          <div class="hero-btns">
+            <a href="bestilling.html" class="btn btn-primary">Send forespørsel til oss</a>
+            <a href="tel:35593395" class="btn btn-ghost">Ring 35 59 33 95</a>
+          </div>
+        </div>
+
+        <div class="fh-status is-error" id="fhLoadError" hidden>
+          Kunne ikke hente forhandlerlisten akkurat nå. Prøv å laste siden på nytt, eller ring oss på <a href="tel:35593395">35 59 33 95</a>.
+        </div>
+
+        <form class="form-panel" id="fhSearch" novalidate hidden>
+          <label class="form-field">
+            <span class="flabel mono">MODELL</span>
+            <select id="fhModel" name="modell"></select>
+          </label>
+          <div class="fh-search-row">
+            <label class="form-field">
+              <span class="flabel mono">POSTNUMMER ELLER STED</span>
+              <input type="text" id="fhQuery" name="sted" placeholder="F.eks. 3734 eller Skien" autocomplete="postal-code" enterkeyhint="search">
+            </label>
+            <button type="submit" class="btn btn-primary">Søk</button>
+            <button type="button" class="btn btn-ghost" id="fhLocate">Bruk min posisjon</button>
+          </div>
+          <p class="fh-note">Postnummer og sted slås opp hos Kartverket (åpne adressedata) – vi lagrer ingenting om hvor du er. Avstanden er luftlinje.</p>
+          <p class="fh-status" id="fhSearchStatus" role="status" aria-live="polite" hidden></p>
+        </form>
+
+        <div id="fhResults" hidden>
+          <div class="fh-head">
+            <h2 id="fhResultsTitle"></h2>
+            <p class="fh-note" id="fhResultsSub"></p>
+          </div>
+          <div class="fh-list" id="fhList"></div>
+          <p class="fh-note" style="margin-top:14px;" id="fhPickHint">Huk av opptil tre forhandlere for å sende forespørsel.</p>
+        </div>
+
+        <form class="form-panel" id="fhRequest" novalidate hidden>
+          <div>
+            <div class="flabel mono" style="font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.14em; color:var(--text-label); margin-bottom:10px;" id="fhChosenLabel">FORESPØRSEL TIL</div>
+            <div class="fh-chosen" id="fhChosen"></div>
+          </div>
+          <div class="form-row-2">
+            <label class="form-field">
+              <span class="flabel mono">NAVN *</span>
+              <input type="text" name="navn" id="fhNavn" placeholder="Ola Nordmann" autocomplete="name" maxlength="80" required>
+            </label>
+            <label class="form-field">
+              <span class="flabel mono">TELEFON</span>
+              <input type="tel" name="telefon" id="fhTelefon" placeholder="900 00 000" autocomplete="tel" maxlength="25">
+            </label>
+          </div>
+          <label class="form-field">
+            <span class="flabel mono">E-POST *</span>
+            <input type="email" name="epost" id="fhEpost" placeholder="ola@firma.no" autocomplete="email" maxlength="120" required>
+          </label>
+          <label class="form-field">
+            <span class="flabel mono">MELDING</span>
+            <textarea name="melding" id="fhMelding" rows="5" maxlength="1000" placeholder="Fortell kort om bilen og hva du ønsker, f.eks. årsmodell og om du vil ha skillevegg og gulv."></textarea>
+          </label>
+          <div class="fh-hp" aria-hidden="true">
+            <label>La dette feltet stå tomt <input type="text" name="kontaktref" id="fhWebsite" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <label class="fh-check">
+            <input type="checkbox" id="fhConsent" required>
+            <span id="fhConsentText">Jeg godtar at navn, e-post, telefon og melding sendes til forhandlerne jeg har valgt, så de kan kontakte meg. Salmaker'n får også en kopi.</span>
+          </label>
+          <p class="fh-note">Opplysningene sendes som e-post til forhandlerne du velger og til Telemark Salmakerverksted AS (kopi), og brukes bare til å svare på forespørselen. Vi lagrer dem ikke på nettsiden. Vil du at de skal slettes, ta kontakt på <a href="mailto:post@salmaker.as">post@salmaker.as</a>.</p>
+          <p class="fh-status is-error" id="fhRequestError" role="alert" hidden></p>
+          <button type="submit" class="btn btn-primary" id="fhSend" style="width:100%;">Send forespørsel</button>
+        </form>
+
+        <div class="fh-success" id="fhSuccess" role="status" tabindex="-1" hidden></div>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer" style="border-top:1px solid var(--surface);">
+  <div class="footer-grid">
+    <div>
+      <img src="logo-transparent.png?v=5" alt="Salmaker'n">
+      <p>Telemark Salmakerverksted AS — godkjent påbyggerverksted for ombygging av personbiler til varebil. Skien, Telemark.</p>
+    </div>
+    <div>
+      <div class="footer-col-label">SIDER</div>
+      <div class="footer-links">
+        <a href="index.html">Hjem</a>
+        <a href="varebil.html">Ombygginger</a>
+        <a href="finn-forhandler.html">Finn forhandler</a>
+        <a href="bestilling.html">Bestilling</a>
+        <a href="kontakt.html">Kontakt</a>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">KONTAKT</div>
+      <div class="footer-links muted">
+        <a href="tel:35593395">35 59 33 95</a>
+        <a href="mailto:post@salmaker.as">post@salmaker.as</a>
+        <span>Bataljonvegen 25, 3734 Skien</span>
+      </div>
+    </div>
+    <div>
+      <div class="footer-col-label">ÅPNINGSTIDER</div>
+      <div class="footer-links muted">
+        <span>Man–fre 07:30–15:30</span>
+        <span>Lør–søn stengt</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div class="footer-bottom-inner">© 2026 TELEMARK SALMAKERVERKSTED AS · BATALJONVEGEN 25, 3734 SKIEN · POST@SALMAKER.AS</div>
+  </div>
+</footer>
+
+<script src="finn-forhandler.js?v=1" defer></script>
+</body>
+</html>
