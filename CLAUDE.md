@@ -277,21 +277,32 @@ Henrik først.
 
 ## Bestillingsskjema
 
-`bestilling.html` sender til Formspree (`https://formspree.io/f/mqpzrwpg`), AJAX via `fetch()`
-med `Accept: application/json` - ikke en vanlig HTML-skjemainnsending. **Mottakeren styres i
-Formspree-kontoen, ikke i koden**: formspree.io -> skjemaet -> fanen **Workflow** -> handlingen
-**Email**. Alle innsendinger lagres også under **Submissions** (arkivet er på; gratisabonnement).
-Per 2026-10-12 sto `henrik@salmaker.as` som eneste mottaker, og Henrik bestemte da å bytte til
-`post@salmaker.as` (adressen må først kobles til kontoen under Account og bekreftes via
-lenken som sendes dit) - sjekk Workflow -> Email for hva som faktisk står nå.
+`bestilling.html` ("Send forespørsel" - knappene på modellsidene og i menyen) sender med `fetch()`
+som JSON til **Forhandlerportalens eget endepunkt** `https://forhandler.salmaker.as/api/public/bestilling`
+(se portalens CLAUDE.md, seksjonen "Send forespørsel"). Portalen sender e-posten via Resend fra
+verifisert avsender (`post@forhandler.salmaker.as`) til **post@salmaker.as**, med kundens e-post som
+svaradresse. Ingenting lagres.
 
-Skjemaet hadde tidligere et skjult `_cc`-felt som skulle gi kopi til post@salmaker.as. Det
-gjorde ALDRI noe: Formspree har ikke noe `_cc`-felt (se Special Fields i deres dokumentasjon),
-og post@ lå ikke inne som mottaker. Feltet er fjernet 2026-10-12 - ikke legg det tilbake.
-Formshield (spamfilter) er på hos Formspree og kan i verste fall stoppe en ekte forespørsel
-før den når innboksen; spam/stoppede innsendinger vises under Submissions. CAPTCHA er av.
-Første e-post fra en ny avsender havner ofte i søppelpost til mottakeren har markert den som
-"ikke søppelpost" - ikke et symptom på at integrasjonen er ødelagt.
+**Hvorfor ikke Formspree (2026-10-12):** skjemaet sendte tidligere til Formspree
+(`/f/mqpzrwpg`, gratisabonnement). Innsendingene ble lagret der, men e-postvarslene kom aldri frem
+til Microsoft 365-postkassen (salmaker.as ligger bak Exchange Online Protection), og Formshield
+(spamfilter) kunne i tillegg stoppe ekte forespørsler. Det skjulte `_cc`-feltet som skulle gi kopi
+til post@ gjorde heller aldri noe (Formspree har ikke noe slikt felt). Formspree-skjemaet kan
+slås av i Formspree (Settings -> "Form Enabled") når det nye har vist seg i drift; gamle
+innsendinger ligger 30 dager under Submissions. `om.html` (gammel, ikke lenket) har fortsatt et
+Formspree-skjema med plassholder-ID - bevisst ikke rørt.
+
+Skjemaet-siden: inline-skript (ingen avhengigheter), skjult honeypot-felt `kontaktref` (heter
+bevisst ikke "website"/"url" - passordbehandlere autofyller dem), og klienten venter til minst 3 s
+er gått siden sideåpning før den sender (serveren avviser < 2,5 s). Uten JavaScript skjules
+skjemaet helt (et skjema uten action sendes som GET med persondata i URL-en). Feil vises i en
+inline boks (`#formError`), ikke `alert()`.
+
+**Levering er IKKE det samme som "sendt":** Resend aksepterer e-posten, men om Microsoft 365 leverer
+den til innboksen ser vi ikke fra koden. Status per e-post står i Resend-dashbordet (Emails ->
+Delivered/Bounced). Etter endringer i e-postoppsettet eller ved mistanke: send én TEST-forespørsel
+og bekreft at den kommer frem i post@salmaker.as. Siden ingenting lagres, finnes det ikke lenger et
+arkiv som Formspree sitt Submissions - e-posten ER sporet.
 
 ## Arbeidsvaner (gjelder også her, se Forhandlerportal sin CLAUDE.md for full begrunnelse)
 

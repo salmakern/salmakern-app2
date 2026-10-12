@@ -8,6 +8,12 @@
 <link rel="icon" type="image/png" sizes="192x192" href="ikoner/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="ikoner/icon-512.png">
 <link rel="stylesheet" href="site.css?v=8">
+<style>
+  .form-error { border: 1px solid #7a2f27; background: #2a1815; color: #f0a79d; font-size: 15px; line-height: 1.5; padding: 12px 16px; }
+  .form-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .form-error[hidden] { display: none; }
+</style>
+<noscript><style>#bestillingForm > :not(noscript) { display: none; }</style></noscript>
 </head>
 <body>
 
@@ -48,20 +54,21 @@
         <p style="font-size:15px; line-height:1.6; color:var(--text-muted); margin-top:28px;">Vil du heller snakke med noen? Ring <a href="tel:35593395">35 59 33 95</a> man–fre 07:30–15:30.</p>
       </div>
 
-      <form id="bestillingForm" class="form-panel" action="https://formspree.io/f/mqpzrwpg" method="POST">
+      <form id="bestillingForm" class="form-panel" method="post">
+        <noscript><p class="form-error">Skjemaet trenger JavaScript. Ring oss på <a href="tel:35593395">35 59 33 95</a> eller send e-post til <a href="mailto:post@salmaker.as">post@salmaker.as</a>.</p></noscript>
         <div class="form-row-2">
           <label class="form-field">
             <span class="flabel mono">NAVN *</span>
-            <input type="text" name="navn" placeholder="Ola Nordmann" required>
+            <input type="text" name="navn" placeholder="Ola Nordmann" autocomplete="name" maxlength="80" required>
           </label>
           <label class="form-field">
             <span class="flabel mono">TELEFON</span>
-            <input type="tel" name="telefon" placeholder="900 00 000">
+            <input type="tel" name="telefon" placeholder="900 00 000" autocomplete="tel" maxlength="25">
           </label>
         </div>
         <label class="form-field">
           <span class="flabel mono">E-POST *</span>
-          <input type="email" name="epost" placeholder="ola@firma.no" required>
+          <input type="email" name="epost" placeholder="ola@firma.no" autocomplete="email" maxlength="120" required>
         </label>
         <div class="form-row-2">
           <label class="form-field">
@@ -91,16 +98,20 @@
           </label>
           <label class="form-field">
             <span class="flabel mono">ÅRSMODELL</span>
-            <input type="text" name="aarsmodell" placeholder="2024">
+            <input type="text" name="aarsmodell" placeholder="2024" maxlength="20">
           </label>
         </div>
         <label class="form-field">
           <span class="flabel mono">HVA ØNSKER DU? *</span>
-          <textarea name="melding" rows="6" placeholder="Skillevegg og gulv, ønsker også kasser på venstre side. Bilen er ny og skal registreres som varebil." required></textarea>
+          <textarea name="melding" rows="6" maxlength="2000" placeholder="Skillevegg og gulv, ønsker også kasser på venstre side. Bilen er ny og skal registreres som varebil." required></textarea>
         </label>
+        <div class="form-hp" aria-hidden="true">
+          <label>La dette feltet stå tomt <input type="text" name="kontaktref" tabindex="-1" autocomplete="off"></label>
+        </div>
+        <p class="form-error" id="formError" role="alert" hidden></p>
         <button type="submit" class="btn btn-primary" style="width:100%;">Send forespørsel</button>
         <p class="form-note">* OBLIGATORISKE FELT</p>
-        <div class="form-success" id="formSuccess">Takk! Vi har mottatt forespørselen og tar kontakt snart.</div>
+        <div class="form-success" id="formSuccess" role="status" tabindex="-1">Takk! Vi har mottatt forespørselen og tar kontakt snart.</div>
       </form>
 
     </div>
@@ -145,17 +156,71 @@
 </footer>
 
 <script>
-  const form = document.getElementById('bestillingForm');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = form.querySelector('button[type="submit"]');
-    btn.disabled = true; btn.textContent = 'Sender...';
-    try {
-      const res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'Accept': 'application/json' } });
-      if (res.ok) { form.reset(); document.getElementById('formSuccess').style.display = 'block'; btn.textContent = 'Sendt!'; }
-      else { btn.disabled = false; btn.textContent = 'Send forespørsel'; alert('Noe gikk galt. Send e-post til post@salmaker.as'); }
-    } catch { btn.disabled = false; btn.textContent = 'Send forespørsel'; alert('Noe gikk galt. Send e-post til post@salmaker.as'); }
-  });
+  // Sender til Forhandlerportalens eget endepunkt (e-post via vår egen verifiserte avsender til
+  // post@salmaker.as). Erstattet Formspree 2026-10 - varslene derfra kom aldri frem til Microsoft 365.
+  (function () {
+    var API_URL = 'https://forhandler.salmaker.as/api/public/bestilling';
+    // Serveren avviser innsending tidligere enn 2,5 s etter sideåpning (robotvern). En ekte kunde kommer
+    // nesten aldri så fort, men en rask autofyll/oppdatering kan - da venter vi heller litt enn å feile.
+    var MIN_VENT_MS = 3000;
+    var GENERISK = 'Kunne ikke sende forespørselen akkurat nå. Prøv igjen om litt, eller ring oss på 35 59 33 95 / send e-post til post@salmaker.as.';
+    var form = document.getElementById('bestillingForm');
+    var btn = form.querySelector('button[type="submit"]');
+    var errorBox = document.getElementById('formError');
+    var success = document.getElementById('formSuccess');
+
+    function visFeil(tekst) { errorBox.textContent = tekst; errorBox.hidden = false; }
+    function klar() { btn.disabled = false; btn.textContent = 'Send forespørsel'; }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errorBox.hidden = true;
+      btn.disabled = true; btn.textContent = 'Sender...';
+      var vent = Math.max(0, MIN_VENT_MS - performance.now());
+      setTimeout(send, vent);
+    });
+
+    function send() {
+      var f = form.elements;
+      var payload = {
+        navn: f.navn.value,
+        telefon: f.telefon.value,
+        epost: f.epost.value,
+        modell: f.modell.value,
+        aarsmodell: f.aarsmodell.value,
+        melding: f.melding.value,
+        kontaktref: f.kontaktref.value, // skjult felt (honeypot) - skal alltid være tomt
+        // Tid siden siden ble åpnet - en robot som sender med en gang avsløres av dette.
+        ms: Math.round(performance.now())
+      };
+
+      var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 20000) : null;
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (body) { return { ok: res.ok, body: body }; });
+      }).then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (r.ok && r.body && r.body.ok) {
+          form.reset();
+          success.style.display = 'block';
+          btn.textContent = 'Sendt!';
+          success.focus();
+        } else {
+          klar();
+          visFeil((r.body && r.body.error) || GENERISK);
+        }
+      }, function () {
+        if (timer) clearTimeout(timer);
+        klar();
+        visFeil(GENERISK);
+      });
+    }
+  })();
 </script>
 </body>
 </html>
