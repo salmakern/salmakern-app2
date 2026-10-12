@@ -278,8 +278,18 @@ Henrik først.
 ## Bestillingsskjema
 
 `bestilling.html` sender til Formspree (`https://formspree.io/f/mqpzrwpg`), AJAX via `fetch()`
-med `Accept: application/json` - ikke en vanlig HTML-skjemainnsending. `_cc`-felt (skjult
-input) sender kopi til `post@salmaker.as` i tillegg til hovedmottakeren på Formspree-kontoen.
+med `Accept: application/json` - ikke en vanlig HTML-skjemainnsending. **Mottakeren styres i
+Formspree-kontoen, ikke i koden**: formspree.io -> skjemaet -> fanen **Workflow** -> handlingen
+**Email**. Alle innsendinger lagres også under **Submissions** (arkivet er på; gratisabonnement).
+Per 2026-10-12 sto `henrik@salmaker.as` som eneste mottaker, og Henrik bestemte da å bytte til
+`post@salmaker.as` (adressen må først kobles til kontoen under Account og bekreftes via
+lenken som sendes dit) - sjekk Workflow -> Email for hva som faktisk står nå.
+
+Skjemaet hadde tidligere et skjult `_cc`-felt som skulle gi kopi til post@salmaker.as. Det
+gjorde ALDRI noe: Formspree har ikke noe `_cc`-felt (se Special Fields i deres dokumentasjon),
+og post@ lå ikke inne som mottaker. Feltet er fjernet 2026-10-12 - ikke legg det tilbake.
+Formshield (spamfilter) er på hos Formspree og kan i verste fall stoppe en ekte forespørsel
+før den når innboksen; spam/stoppede innsendinger vises under Submissions. CAPTCHA er av.
 Første e-post fra en ny avsender havner ofte i søppelpost til mottakeren har markert den som
 "ikke søppelpost" - ikke et symptom på at integrasjonen er ødelagt.
 
