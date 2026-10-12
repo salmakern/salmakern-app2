@@ -1190,7 +1190,16 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   o.dokumenter = nyeDokumenter;
   if (gammelIdx !== -1) {
     const gammeltFilnavn = eksisterende[gammelIdx].url.split('/ordre-dokumenter/')[1];
-    if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
+    // Feil her ble tidligere ikke sjekket i det hele tatt - en mislykket sletting (f.eks.
+    // RLS-avvist fordi innlogget ansatt ikke er admin/godkjenner, se storage-policyen
+    // "dokumenter_sletting") forsvant sporløst, og gamle PDF-er hopet seg opp i storage uten
+    // at noen fikk vite det. Den nye referansen i dokumenter-lista er uansett allerede trygt
+    // lagret over - dette er bare opprydding av den gamle filen, så en feil her skal logges,
+    // ikke avbryte funksjonen.
+    if (gammeltFilnavn) {
+      const { error: sletteFeil } = await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
+      if (sletteFeil) console.error('Kunne ikke slette gammel versjon av ' + filnavn + ':', sletteFeil.message);
+    }
     logChange(o, 'Erstattet dokument med ny versjon: ' + filnavn);
   } else {
     logChange(o, 'Generert dokument: ' + filnavn);
@@ -1273,7 +1282,12 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
   });
   if (forrige) {
     const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
-    if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
+    // Se tilsvarende kommentar i vegvesenLagreGenerertDokument() - feil her ble tidligere
+    // ikke sjekket, og forsvant sporløst i stedet for å logges.
+    if (gammeltFilnavn) {
+      const { error: sletteFeil } = await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
+      if (sletteFeil) console.error('Kunne ikke slette gammel versjon (flåte) av ' + filnavn + ':', sletteFeil.message);
+    }
   }
   planleggLocalSpeiling();
   oppdaterte.forEach(o => {
@@ -1375,6 +1389,21 @@ async function genererVegvesenDokumenter(ordreId) {
   // Melding om registrering også, selv om ingen av dem faktisk trenger geometridata (kun
   // Vektfordeling/Fabrikantattest gjør). vegvesenGenererOgLagre() genererer nå det som er
   // mulig og gir en forklarende delvis-melding tilbake i stedet.
+  // Samme vegvesenGenererer-sperre som vegvesenAutoGenererHvisKomplett() bruker (se under
+  // i filen - deklarert med const, men trygt å referere her siden denne funksjonen uansett
+  // først kjører ved et brukerklikk, lenge etter at HELE scriptet er lastet). Uten denne
+  // kunne et manuelt klikk på "Generer på nytt" starte SAMTIDIG med en pågående automatisk
+  // generering - begge leser da samme (foreldede) o.dokumenter som utgangspunkt, og den som
+  // lagrer SIST overskriver den andres akkurat oppdaterte dokumentreferanse med sin egen,
+  // eldre kopi. Reell, bekreftet årsak til "Fant ikke dokumentet... lenger (400)"-feilen
+  // Henrik meldte 2026-10-12 - et nå slettet dokument endte tilbake i o.dokumenter via
+  // nøyaktig denne tapt-oppdatering-racen (bekreftet ved å sammenligne storage.objects mot
+  // ordrer.dokumenter direkte i databasen: alle tidligere genererte filer lå fortsatt igjen
+  // i storage, mens ordre-raden pekte på en annen, nyere generering - to overlappende kall
+  // hadde begge lykkes med å laste opp, men bare det siste DB-skrivet vant).
+  const id = kontekst ? 'flate:' + kontekst.flate.id : 'ordre:' + kilde.id;
+  if (vegvesenGenererer.has(id)) { visToast('Genererer allerede - vent til det er ferdig før du prøver igjen.'); return; }
+  vegvesenGenererer.add(id);
   visToast('Genererer dokumenter...', 'ok');
   try {
     const resultat = await vegvesenGenererOgLagre(kilde, kontekst);
@@ -1384,6 +1413,8 @@ async function genererVegvesenDokumenter(ordreId) {
   } catch (e) {
     console.error('Feil ved generering av Vegvesen-dokumenter:', e);
     visToast('Feil ved generering: ' + e.message);
+  } finally {
+    vegvesenGenererer.delete(id);
   }
 }
 
