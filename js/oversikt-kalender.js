@@ -1,3 +1,21 @@
+// Digital klokke øverst på Oversikt-siden (bedt om av Henrik 2026-10-14). Elementet ligger
+// statisk i salmakern.html og er alltid i DOM-et uansett hvilken side som er aktiv (sidene
+// skjules kun med CSS, se showPage) - trygt å oppdatere kontinuerlig fra en global interval i
+// stedet for å starte/stoppe den ved side-bytte. Guard på document-eksistens trengs for
+// Node-testene (vm-context uten ekte DOM, se CLAUDE.md "Node vm-særtrekk").
+function oppdaterDigitalKlokke() {
+  const klokkeEl = document.getElementById('digitalKlokke');
+  if (!klokkeEl) return;
+  const now = new Date();
+  klokkeEl.textContent = now.toLocaleTimeString('no', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const datoEl = document.getElementById('digitalKlokkeDato');
+  if (datoEl) datoEl.textContent = now.toLocaleDateString('no', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+if (typeof window !== 'undefined') {
+  oppdaterDigitalKlokke();
+  setInterval(oppdaterDigitalKlokke, 1000);
+}
+
 // ════════════════════════════════════════════════════
 // PAGE ROUTING
 // ════════════════════════════════════════════════════
@@ -159,7 +177,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
@@ -180,7 +198,7 @@ function renderOversikt(q) {
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${hengerfesteKortHTML(o)}${skalHaBadgeHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
