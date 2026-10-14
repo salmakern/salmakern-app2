@@ -298,6 +298,8 @@ er gått siden sideåpning før den sender (serveren avviser < 2,5 s). Uten Java
 skjemaet helt (et skjema uten action sendes som GET med persondata i URL-en). Feil vises i en
 inline boks (`#formError`), ikke `alert()`.
 
+E-postens utseende (felles mal, bilder, mørk modus) er beskrevet i portalens CLAUDE.md, "E-postmalen".
+
 **Levering er IKKE det samme som "sendt":** Resend aksepterer e-posten, men om Microsoft 365 leverer
 den til innboksen ser vi ikke fra koden. Status per e-post står i Resend-dashbordet (Emails ->
 Delivered/Bounced). Etter endringer i e-postoppsettet eller ved mistanke: send én TEST-forespørsel
