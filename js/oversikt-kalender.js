@@ -591,7 +591,7 @@ function dokStatusFarge(verdi) {
 function dokStatusDropdown(ordreId, felt, verdi) {
   verdi = verdi || 'har_ikke';
   const f = dokStatusFarge(verdi);
-  return `<select onchange="sf('${ordreId}','${felt}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
+  return `<select id="dokStatus_${felt}_${ordreId}" onchange="sf('${ordreId}','${felt}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
     <option value="har_ikke" ${verdi==='har_ikke'?'selected':''}>Har ikke</option>
     <option value="etterspurt" ${verdi==='etterspurt'?'selected':''}>Etterspurt</option>
     <option value="har" ${verdi==='har'?'selected':''}>Har</option>

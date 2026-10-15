@@ -172,6 +172,11 @@ function leggOrdreIFlate(ordreId) {
     if (primaer) {
       o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
       o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+      // Samme regel som synkroniserFraPrimaer() i ordre-detalj.js (se kommentaren der) -
+      // en flåte er alltid Nytt Kjøretøy med likt typegodkjenningsnummer for alle bilene.
+      o.typegodkjenning = primaer.typegodkjenning;
+      o.ombygging = o.ombygging || {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
+      o.ombygging.nyttKjoretoy = true;
     }
   }
   logChange(o, 'Lagt i flåte');

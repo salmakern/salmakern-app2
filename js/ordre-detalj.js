@@ -132,6 +132,7 @@ function buildOrdreDetail() {
   const focusTag = document.activeElement?.tagName;
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
   synkroniserOmbyggingFikenLinjer(o);
+  synkroniserDrivstoffFikenLinje(o);
   vegvesenAutoGenererHvisKomplett(o);
   // Vegvesen-dokumenter (Fabrikantattest/Egenerklæring/Vektfordeling, + Melding om
   // registrering for Nytt Kjøretøy) gjelder "Nytt Kjøretøy"- ELLER "Brukt
@@ -581,7 +582,15 @@ function leggTilFikenLinjerFraUtstyr(id) {
   const nye = hentFikenLinjerFraUtstyr(o);
   if (!nye.length) { visToast('Fant ingen rene produktnumre i Utstyr-boksen'); return; }
   if (!o.fikenLinjer) o.fikenLinjer = [];
-  o.fikenLinjer.push(...nye);
+  // Oppdaterer en eksisterende linje for samme produktnummer i stedet for å pushe en ny
+  // (uten dette ga et andre trykk duplikate fakturalinjer - funnet 2026-10-15). Knappen
+  // skal fjernes helt etter hvert (bedt om av Henrik), så bare denne minimale fiksen -
+  // ikke bygget om til automatisk synk slik ombygging/drivstoff er.
+  nye.forEach(({produktnummer, antall}) => {
+    const eksisterende = o.fikenLinjer.find(l => l.produktnummer === produktnummer);
+    if (eksisterende) eksisterende.antall = antall;
+    else o.fikenLinjer.push({produktnummer, antall});
+  });
   save(id);
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
@@ -932,6 +941,27 @@ function synkroniserOmbyggingFikenLinjer(o) {
   if (modell.personbil) oppdaterFikenLinjeForOppskrift(modell.personbil, !!o.ombygging.personbil);
 }
 
+// Holder Fiken-drivstofflinjen i synk med den faktiske kundeprisen på hvert render - i
+// motsetning til ombygging rett over krevde denne tidligere et manuelt trykk på
+// "⛽ Hent drivstoff" (leggTilFikenLinjeDrivstoff) hver gang prisen endret seg, og en
+// utdatert pris kunne bli stående i fakturagrunnlaget til noen husket å trykke på nytt
+// (bedt om av Henrik 2026-10-15: "den oppdaterte prisen [skal] alltid ligge i
+// faktureringa"). Ingen toast her ved manglende pris (i motsetning til knappen) - de
+// fleste ordre har rett og slett ingen drivstoffpris ennå, og det er ikke en feil. No-op
+// (ingen lagring) når linjen allerede stemmer, trygt å kalle på hvert render.
+function synkroniserDrivstoffFikenLinje(o) {
+  const belop = drivstoffKundepris(o);
+  if (!belop) return;
+  if (!o.fikenLinjer) o.fikenLinjer = [];
+  const eksisterende = o.fikenLinjer.find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
+  if (eksisterende && eksisterende.antall===1 && eksisterende.belop===belop) return;
+  if (eksisterende) { eksisterende.antall = 1; eksisterende.belop = belop; }
+  else { o.fikenLinjer.push({produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop}); }
+  save(o.id);
+  const el = document.getElementById('fikenLinjer_'+o.id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+
 function sfOmbygging(id, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
@@ -1209,14 +1239,26 @@ function autoFyllForhandlerFullmakt(id) {
   const fullmakt = finnForhandlerFullmakt(o.kunde);
   if (!fullmakt) return;
   o.dokumenter = o.dokumenter || [];
-  if (o.dokumenter.some(d => d.navn === fullmakt.navn)) return;
-  o.dokumenter = [...o.dokumenter, { navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
-  logChange(o, 'La automatisk til fullmakt fra forhandler: ' + fullmakt.navn);
-  if (db) db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
-    .then(r=>{if(r.error) console.error('Fullmakt-auto-vedlegg feilet:', r.error.message);});
-  planleggLocalSpeiling();
-  const listEl = document.getElementById('dokumenterListe_'+id);
-  if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  if (!o.dokumenter.some(d => d.navn === fullmakt.navn)) {
+    o.dokumenter = [...o.dokumenter, { navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
+    logChange(o, 'La automatisk til fullmakt fra forhandler: ' + fullmakt.navn);
+    if (db) db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
+      .then(r=>{if(r.error) console.error('Fullmakt-auto-vedlegg feilet:', r.error.message);});
+    planleggLocalSpeiling();
+    const listEl = document.getElementById('dokumenterListe_'+id);
+    if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  }
+  // Setter selve "Fullmakt"-statusen (nedtrekket på ordresiden, speilet i Admin-ark og på
+  // ordrekortet) til "Har" når forhandleren faktisk har en fullmakt registrert - tidligere
+  // ble kun FILEN kopiert inn over, mens status sto igjen på "Har ikke" til noen krysset
+  // den av manuelt (bedt om av Henrik 2026-10-15). Kjøres uavhengig av if-blokken over, så
+  // den også retter opp status på ordre der filen allerede ble lagt til en tidligere gang.
+  // Nedgraderer aldri en status som alt er 'har'.
+  if (o.fullmakt !== 'har') {
+    sf(id, 'fullmakt', 'har');
+    const dd = document.getElementById('dokStatus_fullmakt_'+id);
+    if (dd) dd.outerHTML = dokStatusDropdown(id, 'fullmakt', 'har');
+  }
 }
 // Varsler når autoFyllForhandlerNr/Orgnr/Fullmakt over ikke fant noe å fylle ut - alle tre
 // var til nå helt stille ved svikt (bedt om av Henrik 2026-10-14: "det er ikke alltid org.nr
@@ -1332,6 +1374,17 @@ function synkroniserFraPrimaer(id) {
     (S.ordrer||[]).filter(o => o.flateId===f.id && o.id!==id).forEach(o => {
       o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
       o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+      // En flåte er alltid Nytt Kjøretøy, og typegodkjenningsnummeret er likt for alle
+      // bilene i den (bekreftet av Henrik 2026-10-15) - uten dette måtte Nytt Kjøretøy
+      // krysses av for hånd på hver enkelt sekundærbil for at DENS EGEN Fiken-fakturalinje
+      // skulle bli riktig (se synkroniserOmbyggingFikenLinjer), og det var en kjent,
+      // dokumentert mangel at sekundærbiler kunne stå uten nyttKjoretoy=true (se
+      // vegvesen-dokumenter.js sin vegvesenAutoGenererHvisKomplett, som måtte omgå dette
+      // ved å sjekke PRIMÆRENS ombygging i stedet for bilens egen, funnet i test
+      // 2026-09-21 - denne fiksen fjerner selve årsaken i stedet for bare workarounden).
+      o.typegodkjenning = primaer.typegodkjenning;
+      o.ombygging = o.ombygging || {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
+      o.ombygging.nyttKjoretoy = true;
       save(o.id);
     });
   });
