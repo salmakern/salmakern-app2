@@ -196,6 +196,11 @@ function sfFlate(field, val) {
   val = val.trim();
   if (field === 'flatenummer' && !val) { alert('Flåtenummer kan ikke være tomt'); renderFlateDetalj(); return; }
   f[field] = val;
+  // "flater" hadde ingen Realtime-ekko-beskyttelse noe sted i appen (i motsetning til
+  // ordrer/ansatte/admin_ark) - lagt til her og de to andre update-kallene under
+  // (funnet i samme gjennomgang som vegvesen-dokumenter-fiksen 2026-10-14).
+  ignorerRealtimeFlate.add(f.id);
+  setTimeout(()=>ignorerRealtimeFlate.delete(f.id), 10000);
   if (db) db.from('flater').update({[field]:val}).eq('id', f.id)
     .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
   renderFlaterListe();
@@ -205,6 +210,8 @@ function toggleArkiverFlate() {
   if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   f.status = f.status === 'aktiv' ? 'arkivert' : 'aktiv';
+  ignorerRealtimeFlate.add(f.id);
+  setTimeout(()=>ignorerRealtimeFlate.delete(f.id), 10000);
   if (db) db.from('flater').update({status:f.status}).eq('id', f.id)
     .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
   renderFlateDetalj();
@@ -214,6 +221,8 @@ function settFlatePrimaer(ordreId) {
   if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
   f.primaerOrdreId = ordreId;
+  ignorerRealtimeFlate.add(f.id);
+  setTimeout(()=>ignorerRealtimeFlate.delete(f.id), 10000);
   if (db) db.from('flater').update({primaer_ordre_id:ordreId}).eq('id', f.id)
     .then(r=>{if(r.error) console.error('Flåte-oppdatering feilet:', r.error.message);});
   synkroniserFraPrimaer(ordreId);
@@ -231,8 +240,12 @@ function slettFlate() {
   if (db) {
     // Ett samlet kall for alle medlemsordrene i stedet for ett save()-kall (og dermed
     // ett update-kall) per ordre - samme mønster som de andre batch-fiksene i dag.
-    if (medlemmer.length) db.from('ordrer').upsert(medlemmer.map(ordreToDb), {onConflict:'id'})
-      .then(r=>{if(r.error) console.error('Frakobling fra flåte feilet:', r.error.message);});
+    if (medlemmer.length) {
+      medlemmer.forEach(o => ignorerRealtimeFor.add(o.id));
+      setTimeout(()=>medlemmer.forEach(o => ignorerRealtimeFor.delete(o.id)), 10000);
+      db.from('ordrer').upsert(medlemmer.map(ordreToDb), {onConflict:'id'})
+        .then(r=>{if(r.error) console.error('Frakobling fra flåte feilet:', r.error.message);});
+    }
     db.from('flater').delete().eq('id', f.id)
       .then(r=>{if(r.error) console.error('Sletting av flåte feilet:', r.error.message);});
   }

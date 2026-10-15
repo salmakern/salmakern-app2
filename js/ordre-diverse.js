@@ -221,6 +221,12 @@ async function arkiver(id) {
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Arkivert'};
   o.endringer.push(endring);
   planleggLocalSpeiling();
+  // save() utelater bevisst status/endringer fra sin egen lagring (se kommentaren i
+  // core.js save()) nettopp fordi EN SLIK målrettet oppdatering som denne skal styre
+  // status-feltet alene - men denne egen-skrivingen fikk aldri save() sin
+  // ignorerRealtimeFor-beskyttelse mot egne Realtime-ekko (funnet 2026-10-14).
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
   let feil = null;
   if (db) {
     const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);
@@ -395,6 +401,10 @@ async function bekreftGodkjenn() {
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjenner.navn+overstyrTekst};
   o.endringer.push(endring);
   planleggLocalSpeiling();
+  // Samme manglende beskyttelse som arkiver() - denne målrettede status-skrivingen (se
+  // kommentaren i core.js save()) manglet ignorerRealtimeFor (funnet 2026-10-14).
+  ignorerRealtimeFor.add(activeOrdreId);
+  setTimeout(()=>ignorerRealtimeFor.delete(activeOrdreId), 10000);
   let feil = null;
   if (db) {
     const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status, endringer:o.endringer}).eq('id', activeOrdreId);

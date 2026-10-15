@@ -218,6 +218,10 @@ async function gjenopprett(id) {
   o.status='aktiv';
   const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Gjenopprettet'};
   o.endringer.push(endring);
+  // Samme manglende beskyttelse som arkiver()/bekreftGodkjenn() i ordre-diverse.js - denne
+  // målrettede status-skrivingen manglet ignorerRealtimeFor (funnet 2026-10-14).
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
   let feil = null;
   if (db) {
     const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);

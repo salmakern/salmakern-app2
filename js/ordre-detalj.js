@@ -198,7 +198,7 @@ function buildOrdreDetail() {
             <div style="display:flex;gap:6px">
               <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
                 oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}');renderForhandlerForslag(null,null,'kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
-                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}');autoFyllForhandlerOrgnr('${o.id}');autoFyllForhandlerFullmakt('${o.id}')"
+                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}');autoFyllForhandlerOrgnr('${o.id}');autoFyllForhandlerFullmakt('${o.id}');varsleHvisForhandlerDataMangler('${o.id}')"
                 onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
               ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
             </div>
@@ -674,6 +674,15 @@ async function fakturerViaFiken(id) {
   if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer || !o.fikenLinjer.length) { visToast('Legg til minst én fakturalinje først'); return; }
+  // Stopper fakturering helt hvis ombygging er huket av men modellen ikke har noen kjent
+  // Fiken-produktlinje (se ombyggingBoksHTML) - ellers kunne ordren bli fakturert med andre
+  // linjer (utstyr, drivstoff) men uten selve ombyggingsjobben, uten at noen oppdaget det
+  // før fakturaen allerede var sendt (funnet 2026-10-14).
+  const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
+  if (erOmbyggingValgt && !finnFikenOmbyggingModell(o.merke, o.modell)) {
+    visToast(`Ingen kjent Fiken-produktlinje for "${o.merke||''} ${o.modell||''}" - ombyggingslinjen mangler. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.`);
+    return;
+  }
   fikenFaktureringBrukRabatt = document.getElementById('brukRabatt_'+id)?.checked ?? true;
   const btn = document.getElementById('fakturerBtn_'+id);
   if (btn) { btn.disabled = true; btn.textContent = 'Oppretter kladd i Fiken...'; }
@@ -837,6 +846,20 @@ function tvangsflyt(o) {
 }
 
 function ombyggingBoksHTML(o) {
+  // Varsel når Nytt/Brukt Kjøretøy er huket av men merke/modell ikke matcher noen kjent
+  // Fiken-ombyggingslinje (se FIKEN_OMBYGGING_MODELLER/finnFikenOmbyggingModell under) -
+  // uten dette forsvant selve ombyggingslinjen stille fra fakturagrunnlaget, og en ordre
+  // kunne bli fakturert med andre linjer (utstyr, drivstoff) men uten jobben selv (funnet
+  // 2026-10-14). Vises som en synlig, vedvarende advarsel i stedet for en toast, siden
+  // tilstanden varer helt til modellen legges inn - en toast som bare vises én gang (f.eks.
+  // ved avkryssing) ville vært glemt igjen neste gang noen åpner ordren dager senere.
+  const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
+  const manglerFikenModell = erOmbyggingValgt && !finnFikenOmbyggingModell(o.merke, o.modell);
+  const varselHTML = manglerFikenModell
+    ? `<div style="margin-top:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fca5a5">
+        ⚠ Ingen kjent Fiken-produktlinje for "${esc(o.merke||'')} ${esc(o.modell||'')}" - ombyggingslinjen mangler i fakturagrunnlaget. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil.
+      </div>`
+    : '';
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
       <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
@@ -844,7 +867,7 @@ function ombyggingBoksHTML(o) {
         <span style="font-size:13.5px;font-weight:${o.ombygging?.[k]?'700':'400'};color:${o.ombygging?.[k]?'#f4f4f5':'#a1a1aa'}">${lbl}</span>
       </label>
     `).join('')}
-  </div>`;
+  </div>${varselHTML}`;
 }
 // Fiken produktnummer for selve ombyggingen (Nytt/Brukt Kjøretøy) og evt. personbil-
 // ombygging (motsatt retning, N1->M1) per modell - i motsetning til Ekstra utstyr-
@@ -1194,6 +1217,26 @@ function autoFyllForhandlerFullmakt(id) {
   planleggLocalSpeiling();
   const listEl = document.getElementById('dokumenterListe_'+id);
   if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+}
+// Varsler når autoFyllForhandlerNr/Orgnr/Fullmakt over ikke fant noe å fylle ut - alle tre
+// var til nå helt stille ved svikt (bedt om av Henrik 2026-10-14: "det er ikke alltid org.nr
+// følger med forhandleren når man legger det inn" - viste seg å ramme Forhandler.nr også,
+// samme rotårsak tre steder). To ulike svikt-tilfeller gir ulik beskjed: ingen Forhandler-
+// kontakt med dette navnet i det hele tatt (alle tre uteblir), eller kontakten finnes men
+// mangler selve dataen på kortet (kun Forhandler.nr/org.nr nevnes - fullmakt er ofte bevisst
+// fraværende for en forhandler uten signert fullmakt, så den tas ikke med her for å unngå
+// støy).
+function varsleHvisForhandlerDataMangler(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o || !(o.kunde||'').trim()) return;
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === o.kunde.trim().toLowerCase());
+  if (!forhandlerKontakt) {
+    visToast(`Fant ingen forhandler med navnet "${o.kunde}" i Kontakter - sjekk stavemåten, eller legg den til der. Forhandler.nr/org.nr/fullmakt fylles ikke ut automatisk.`);
+    return;
+  }
+  const mangler = [];
+  if (!forhandlerKontakt.forhandlerNr) mangler.push('Forhandler.nr');
+  if (!forhandlerKontakt.orgnr) mangler.push('org.nr');
+  if (mangler.length) visToast(`${o.kunde} mangler ${mangler.join(' og ')} i Kontakter.`);
 }
 
 // Selve nummeret fra "Forhandler.nr"-feltet, vist rett ved siden av Hengerfeste-valget -

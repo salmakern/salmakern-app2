@@ -250,6 +250,11 @@ async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato) {
   o.bestiltFrakt = true;
   o.henteKlarDato = dato || '';
   logChange(o, dato ? `Bestilt frakt, henteklar ${fmtDatoKort(dato)}` : 'Bestilt frakt');
+  // Uten denne kan et forsinket Realtime-ekko av DENNE skrivingen stille fjerne
+  // "klar for henting"-merket igjen lokalt, selv om frakt faktisk er bestilt i databasen
+  // (funnet 2026-10-14, samme mønster som de andre målrettede ordre-oppdateringene).
+  ignorerRealtimeFor.add(o.id);
+  setTimeout(()=>ignorerRealtimeFor.delete(o.id), 10000);
   if (db) {
     const { error } = await db.from('ordrer').update({ bestilt_frakt: true, hente_klar_dato: dato || null, endringer: o.endringer }).eq('id', o.id);
     if (error) console.error('Kunne ikke oppdatere bestilt_frakt/hente_klar_dato på ordre:', error.message);
@@ -641,6 +646,11 @@ async function adminArkLagreFelter(rad, endringer) {
       o.kalenderTid = ark.timeBekreftet ? (ark.timeBekreftetTid || o.kalenderTid || '09:00') : '';
       oppdatering.kalender_dato = o.kalenderDato || null;
       oppdatering.kalender_tid = o.kalenderTid || null;
+      // Denne skrivingen til "ordrer" manglet ignorerRealtimeFor - et forsinket ekko kunne
+      // stille sette biltilsyn-timen tilbake til en eldre verdi lokalt, en reell risiko for
+      // en glemt time siden feltet også styrer 30-min-varselet (funnet 2026-10-14).
+      ignorerRealtimeFor.add(o.id);
+      setTimeout(()=>ignorerRealtimeFor.delete(o.id), 10000);
       const { error: oErr } = await db.from('ordrer').update(oppdatering).eq('id', o.id);
       if (oErr) console.error('Kunne ikke oppdatere tid_biltilsynet på ordre:', oErr.message);
     }

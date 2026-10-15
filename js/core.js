@@ -169,6 +169,8 @@ let openedFromArkiv = false;
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
 const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
 const ignorerRealtimeAdminArk = new Set(); // admin_ark-ID-er vi nettopp lagret
+const ignorerRealtimeFlate = new Set(); // flate-ID-er vi nettopp lagret
+const ignorerRealtimeTimer = new Set(); // timer_entries-ID-er vi nettopp lagret
 let ignorerRealtimeInnstillinger = false; // innstillinger er én rad - enkelt flagg holder
 let ignorerRealtimeInnstillingerTimer = null;
 let flyttOrdreId  = null;
@@ -554,6 +556,7 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.timer.find(t=>t.id===p.new.id)) S.timer.unshift(dbToTimer(p.new));
       } else if (p.eventType==='UPDATE') {
+        if (ignorerRealtimeTimer.has(String(p.new.id))) return;
         const i=S.timer.findIndex(t=>t.id===p.new.id); if(i>=0) S.timer[i]=dbToTimer(p.new);
       } else if (p.eventType==='DELETE') {
         S.timer = S.timer.filter(t=>t.id!==p.old.id);
@@ -565,6 +568,7 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.flater.find(f=>f.id===p.new.id)) S.flater.push(dbToFlate(p.new));
       } else if (p.eventType==='UPDATE') {
+        if (ignorerRealtimeFlate.has(String(p.new.id))) return;
         const i=S.flater.findIndex(f=>f.id===p.new.id); if(i>=0) S.flater[i]=dbToFlate(p.new);
       } else if (p.eventType==='DELETE') {
         S.flater = S.flater.filter(f=>f.id!==p.old.id);

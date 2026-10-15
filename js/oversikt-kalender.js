@@ -478,7 +478,11 @@ async function endreStatus(id, nyStatus) {
   planleggLocalSpeiling();
   // Målrettet oppdatering av kun disse feltene - IKKE via den generelle
   // save(), slik at denne handlingen aldri kan overskrives av en gammel
-  // kopi av ordren som lagres fra et annet sted i appen.
+  // kopi av ordren som lagres fra et annet sted i appen. Manglet derimot selv
+  // ignorerRealtimeFor, så et forsinket ekko av DENNE skrivingen kunne stille
+  // reversere statusendringen lokalt (funnet 2026-10-14).
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
   let feil = null;
   if (db) {
     // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),

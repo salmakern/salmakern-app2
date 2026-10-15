@@ -1122,6 +1122,15 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
   const gamle = (o.dokumenter || []).filter(d => VEGVESEN_DOKUMENTTYPER.some(p => d.navn.startsWith(p)));
   if (!gamle.length) return;
 
+  // Samme rotårsak-fiks som vegvesenGenererOgLagre (se kommentaren der) - denne løkken gjør
+  // også flere separate lagringer til "ordrer" etter hverandre, så uten denne markeringen
+  // kan et forsinket Realtime-ekko fra en TIDLIGERE fjerning overskrive dokumentlisten
+  // lokalt og la et dokument se ut som det fortsatt finnes, selv om filen allerede er
+  // slettet fra Storage (funnet 2026-10-14).
+  const malOrdreIder = kontekst ? kontekst.medlemmer.map(m => m.id) : [o.id];
+  malOrdreIder.forEach(id => ignorerRealtimeFor.add(id));
+  setTimeout(() => malOrdreIder.forEach(id => ignorerRealtimeFor.delete(id)), 10000);
+
   for (const dok of gamle) {
     const beroerte = kontekst
       ? kontekst.medlemmer.filter(m => (m.dokumenter||[]).some(d => d.navn===dok.navn && d.url===dok.url))
@@ -1149,6 +1158,8 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
     .then(r=>{if(r.error) console.error('Nullstilling av fingerprint feilet:', r.error.message);});
   if (kontekst) {
     kontekst.flate.vegvesenFingerprint = null;
+    ignorerRealtimeFlate.add(kontekst.flate.id);
+    setTimeout(()=>ignorerRealtimeFlate.delete(kontekst.flate.id), 10000);
     if (db) db.from('flater').update({vegvesen_fingerprint:null}).eq('id', kontekst.flate.id)
       .then(r=>{if(r.error) console.error('Nullstilling av flåte-fingerprint feilet:', r.error.message);});
   }
@@ -1308,6 +1319,17 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
 async function vegvesenGenererOgLagre(kilde, kontekst) {
   const visningsOrdre = kontekst ? { ...kilde, chassis: 'Se kjøretøyliste' } : kilde;
   const malOrdreIder = kontekst ? kontekst.medlemmer.map(m => m.id) : [kilde.id];
+  // Denne funksjonen gjør FLERE separate lagringer etter hverandre (Egenerklæring, Melding
+  // om registrering, Vektfordeling, Fabrikantattest, ev. Kjøretøyliste) - uten denne
+  // markeringen kommer Realtime-echoet fra et TIDLIGERE dokument tilbake og overskriver
+  // o.dokumenter i S.ordrer[] i sin HELHET (se S.ordrer[i]=dbToOrdre(p.new) i core.js) etter
+  // at et SENERE dokument allerede er lagt til lokalt - dokumentet er fortsatt trygt i
+  // databasen, men forsvinner fra det lokale objektet "Skriv ut" leser fra, inntil neste
+  // reload. Samme rotårsak-mønster som ignorerRealtimeFor andre steder i appen (bedt om av
+  // Henrik 2026-10-14: "noen ganger når dokumentene blir laget ferdig ... får jeg ikke
+  // skrevet dem ut, sånn at jeg må genere de på nytt").
+  malOrdreIder.forEach(id => ignorerRealtimeFor.add(id));
+  setTimeout(() => malOrdreIder.forEach(id => ignorerRealtimeFor.delete(id)), 10000);
   const filnavnNokkel = kontekst ? (kontekst.flate.flatenummer || kontekst.flate.id) : (kilde.chassis || 'UKJENT');
   // Generert for ALLE modeller (ikke bare de med mal+geometri, se geometri-sjekken under) -
   // bedt om av Henrik 2026-09-30: "Melding skal brukes på alle nytt kjøretøy på alle
@@ -1453,12 +1475,16 @@ async function vegvesenLagreFingerprint(kilde, kontekst) {
   const fp = vegvesenFingerprint(kilde, kontekst);
   if (kontekst) {
     kontekst.flate.vegvesenFingerprint = fp;
+    ignorerRealtimeFlate.add(kontekst.flate.id);
+    setTimeout(()=>ignorerRealtimeFlate.delete(kontekst.flate.id), 10000);
     if (db) {
       const { error } = await db.from('flater').update({ vegvesen_fingerprint: fp }).eq('id', kontekst.flate.id);
       if (error) console.error('Flåte-fingerprint feilet:', error.message);
     }
   } else {
     kilde.vegvesenFingerprint = fp;
+    ignorerRealtimeFor.add(kilde.id);
+    setTimeout(()=>ignorerRealtimeFor.delete(kilde.id), 10000);
     if (db) {
       const { error } = await db.from('ordrer').update({ vegvesen_fingerprint: fp }).eq('id', kilde.id);
       if (error) console.error('Vegvesen-fingerprint feilet:', error.message);

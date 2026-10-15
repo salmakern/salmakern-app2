@@ -1408,11 +1408,18 @@ function trekkOppskriftForOrdre(oppskriftId) {
 
   const batchId = 'batch_' + Date.now();
   const lagerBatch = lagerBatchNy();
+  // Varsler om ingredienser som ikke lenger finnes i lageret (slettet siden oppskriften ble
+  // laget) - disse ble tidligere bare hoppet stille over, slik at lagerbeholdningen driftet
+  // bort fra virkeligheten uten at noen fikk vite det (funnet 2026-10-14). De andre
+  // ingrediensene trekkes fortsatt som normalt.
+  let antallIkkeFunnet = 0;
   (r.ingredienser||[]).forEach(i => {
-    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId); if (!v) return;
+    const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
+    if (!v) { antallIkkeFunnet++; return; }
     registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId, lagerBatch, r.id);
   });
   lagerBatchFlush(lagerBatch);
+  if (antallIkkeFunnet) visToast(`${r.navn}: ${antallIkkeFunnet} vare(r) i oppskriften finnes ikke lenger i lageret og ble ikke trukket. Rediger oppskriften under Lager → Oppskrifter.`);
   renderOrdreLagerbruk();
 }
 

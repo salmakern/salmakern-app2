@@ -1630,6 +1630,8 @@ function renderAnsattDetalj() {
 function adminSettTimerBetalt(id, betalt) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
   t.betalt = betalt;
+  ignorerRealtimeTimer.add(String(id));
+  setTimeout(()=>ignorerRealtimeTimer.delete(String(id)), 10000);
   if(db) db.from('timer_entries').update({betalt}).eq('id',id).then(r=>{if(r.error) console.error('Betalt-oppdatering feilet:', r.error.message);});
   planleggLocalSpeiling();
 }
@@ -1637,6 +1639,8 @@ function adminSettTimerBetalt(id, betalt) {
 function adminSettSykemeldingLevert(id, levert) {
   const t = S.timer.find(x=>x.id===id); if(!t) return;
   t.sykemeldingLevert = levert;
+  ignorerRealtimeTimer.add(String(id));
+  setTimeout(()=>ignorerRealtimeTimer.delete(String(id)), 10000);
   if(db) db.from('timer_entries').update({sykemelding_levert:levert}).eq('id',id).then(r=>{if(r.error) console.error('Sykemelding-levert-oppdatering feilet:', r.error.message);});
   planleggLocalSpeiling();
 }
@@ -1699,6 +1703,8 @@ function adminLagreTimer() {
   if (id) {
     const t = S.timer.find(x=>x.id===id); if(!t) return;
     t.dato=dato; t.type=type; t.start=start; t.stopp=stopp; t.mins=mins;
+    ignorerRealtimeTimer.add(String(id));
+    setTimeout(()=>ignorerRealtimeTimer.delete(String(id)), 10000);
     if(db) db.from('timer_entries').update({dato,type,start,stopp,mins}).eq('id',id)
       .then(r=>{if(r.error)console.error(r.error.message);});
   } else {
