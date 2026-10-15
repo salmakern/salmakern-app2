@@ -53,9 +53,14 @@
       img.loading = "lazy";
       thumb.appendChild(img);
     } else {
-      var placeholder = document.createElement("span");
+      // Samme "Kommer snart"-plate som Forhandlerportalen viser for modeller uten bilde
+      // (NoImagePlaceholder i portalen) - se .thumb-placeholder i site.css.
+      var placeholder = document.createElement("div");
       placeholder.className = "thumb-placeholder";
-      placeholder.textContent = "🚐";
+      var plate = document.createElement("span");
+      plate.className = "thumb-placeholder-label";
+      plate.textContent = "Kommer snart";
+      placeholder.appendChild(plate);
       thumb.appendChild(placeholder);
     }
 

@@ -222,7 +222,11 @@ Forhandlerportalens offentlige API i stedet for å ha dem hardkodet:
 - `model-list-sync.js` - kjører på `varebil.html`, henter `GET /api/public/models` (hele
   lista), erstatter den statiske `#modelsGrid`-lenkelisten med ferske lenker + bilder. Modeller
   med en av de 17 kjente slugene lenker til sin egendefinerte side; alt annet lenker til
-  `modell.html?slug=X`.
+  `modell.html?slug=X`. Modeller UTEN bilde får en "KOMMER SNART"-plate (`.thumb-placeholder` /
+  `.thumb-placeholder-label` i `site.css`: skråstriper og en mørk plate med rød venstrekant) -
+  samme utseende som `NoImagePlaceholder` i Forhandlerportalen (endret 2026-10-15, før det var et
+  bil-emoji). Hold de to like hvis den ene endres. Enkeltmodellsiden (`model-sync.js`) viser for en
+  modell uten bilder fortsatt "Legg til bilder her" med et kamera-emoji - ikke endret.
 - `modell.html` - generisk modellside for HELT NYE modeller lagt til i Forhandlerportalens
   admin-panel. Trenger ingen ny HTML-fil lenger - admin setter navn, slug, "fordeler"-liste og
   bilde, så fungerer siden automatisk.
@@ -254,7 +258,7 @@ og kan sende en forespørsel til opptil 3 av dem. Data og utsending ligger i For
   for `max-width: 1120px` (litt tettere meny) og strammere mobilregel (`720px`); målt etterpå:
   én rad fra 900px og opp, 800px lavere enn før, mobil ca. +7px mot før. Husk å måle header-
   høyden (`.site-header` offsetHeight) ved 375/800/1024/1280 hvis menyen endres igjen. `site.css`
-  er nå `?v=8` på alle sider og `model-sync.js` `?v=5`.
+  er nå `?v=9` på alle sider (bumpet 2026-10-15), `model-sync.js` `?v=5` og `model-list-sync.js` `?v=7`.
 - **Teste lokalt**: portalens API tillater bare `https://salmaker.as` som origin, så en side
   servert fra localhost får CORS-feil. Løsning brukt: en liten lokal proxy som serverer
   `nettside/`, sender `/api/*` videre til portalen på localhost:3000 med `Origin: https://salmaker.as`
