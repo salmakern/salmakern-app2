@@ -208,6 +208,15 @@ eksponere det interne verktøyet for PIN-gjetting via lenker fra den offentlige 
   ingen byggesteg. Bruk **relative** stier for bilder/CSS/JS (ikke `/nettside/...`) - GH Pages
   gjør ekte navigasjon uten server-side rewrite, så absolutte stier brekker under
   prosjekt-understien.
+- **`reveal.js` (fade-inn ved scrolling) må IKKE bruke en andel som terskel** (`threshold: 0.15` e.l.).
+  Tidligere vistes et element først når 15 % av det var synlig, og modelllista på `varebil.html` er ca.
+  5000 px høy på mobil (16 modeller i én kolonne): 15 % er ca. 750 px, så på telefoner med synlig høyde
+  under det ble listen ALDRI synlig (opacity 0), og hver ny modell gjorde det verre. Målt 2026-10-15 i
+  headless Edge: 375x500 og 375x664 aldri, 375x812/360x740/390x844 så vidt. Nå `threshold: 0` med
+  `rootMargin: "0px 0px -40px 0px"` (vises når toppen er 40 px inne i skjermen). Testet på alle 20 sider i
+  375x664 og 1315x740: alt blir synlig etter scrolling, og elementer under folden er fortsatt skjult ved
+  lasting (effekten er bevart). `reveal.js` lastes uten `?v=`, så gamle nettlesere kan bruke den
+  bufrede filen i opptil ca. 10 min (GitHub Pages).
 
 ## Synk mot Forhandlerportalen
 
