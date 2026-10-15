@@ -78,6 +78,12 @@ body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:10
   .wrap.full #admin .card{display:block;max-width:100%;overflow-x:auto}
 }
 
+/* DIGITAL KLOKKE - LED-stil, valgt av Henrik 2026-10-14 blant 4 alternativer */
+.klokke-led{background:#0a0d0a;border-color:#1a2e1a;box-shadow:inset 0 0 24px #00000080}
+#digitalKlokke{font-family:'Courier New',monospace;font-size:34px;font-weight:700;letter-spacing:4px;color:#ff3b30;text-shadow:0 0 12px #ff3b3090,0 0 2px #ff3b30}
+#digitalKlokkeDato{font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;color:#7a2a26;text-transform:uppercase}
+@media(max-width:480px){#digitalKlokke{font-size:26px;letter-spacing:2px}}
+
 /* LOGIN */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:20px;padding:16px}
 .pin-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:260px;width:100%}
@@ -381,9 +387,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <!-- ── OVERSIKT ── -->
     <section id="oversikt" class="page active">
-      <div class="card" style="margin-bottom:12px;text-align:center;padding:14px">
-        <div id="digitalKlokke" style="font-size:42px;font-weight:800;letter-spacing:-1px;line-height:1;font-variant-numeric:tabular-nums">00:00:00</div>
-        <div id="digitalKlokkeDato" class="muted small" style="margin-top:4px;text-transform:capitalize"></div>
+      <div class="card klokke-led" style="margin-bottom:12px;text-align:center;padding:14px">
+        <div id="digitalKlokke" style="line-height:1;font-variant-numeric:tabular-nums">00:00:00</div>
+        <div id="digitalKlokkeDato" style="margin-top:8px"></div>
       </div>
       <div class="grid g2" style="margin-bottom:12px">
         <div class="card" id="merMoterKort" style="margin-bottom:0;display:none">
