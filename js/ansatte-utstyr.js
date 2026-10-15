@@ -443,16 +443,22 @@ function renderForhandlerDetalj() {
         <div class="small"><a href="${esc(forhandler.fullmaktUrl)}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none">📄 ${esc(forhandler.fullmaktNavn||'Fullmakt')}</a></div>
         ${forhandler.fullmaktDato?`<div class="small muted" style="margin-top:2px">Lastet opp ${new Date(forhandler.fullmaktDato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}${forhandler.fullmaktLastetOppAv?' av '+esc(forhandler.fullmaktLastetOppAv):''}</div>`:''}
         ${erAdmin?`
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <label class="btn sm" style="padding:4px 10px;font-size:12px;cursor:pointer;display:inline-block">Last opp ny<input type="file" accept="application/pdf,image/*" style="display:none" onchange="lastOppForhandlerFullmakt(this.files[0])"></label>
-            <button class="btn sm" style="padding:4px 10px;font-size:12px;color:#ef4444" onclick="fjernForhandlerFullmakt('${forhandler.id}')">Fjern</button>
-          </div>
+          <label id="fdFullmaktDropzone" class="dok-dropzone small muted" style="margin-top:8px;display:block;padding:10px" title="Samme filnavn erstatter forrige versjon"
+              ondragover="fullmaktDragOver(event)" ondragleave="fullmaktDragLeave(event)" ondrop="fullmaktDrop(event)">
+            Dra ny fullmakt hit, eller klikk for å velge
+            <input type="file" accept="application/pdf,image/*" style="display:none" onchange="lastOppForhandlerFullmakt(this.files[0])">
+          </label>
+          <button class="btn sm" style="margin-top:6px;padding:4px 10px;font-size:12px;color:#ef4444" onclick="fjernForhandlerFullmakt('${forhandler.id}')">Fjern</button>
           <div id="fdFullmaktStatus" class="small muted" style="margin-top:4px"></div>
         `:''}
       ` : `
         <div class="small muted">Ingen fullmakt lastet opp</div>
         ${erAdmin?`
-          <label class="btn sm" style="margin-top:8px;padding:4px 10px;font-size:12px;cursor:pointer;display:inline-block">+ Last opp fullmakt<input type="file" accept="application/pdf,image/*" style="display:none" onchange="lastOppForhandlerFullmakt(this.files[0])"></label>
+          <label id="fdFullmaktDropzone" class="dok-dropzone small muted" style="margin-top:8px;display:block;padding:14px" title="Dra inn PDF/bilde, eller klikk for å velge"
+              ondragover="fullmaktDragOver(event)" ondragleave="fullmaktDragLeave(event)" ondrop="fullmaktDrop(event)">
+            Dra fullmakt hit, eller klikk for å velge
+            <input type="file" accept="application/pdf,image/*" style="display:none" onchange="lastOppForhandlerFullmakt(this.files[0])">
+          </label>
           <div id="fdFullmaktStatus" class="small muted" style="margin-top:4px"></div>
         `:''}
       `}
@@ -498,6 +504,24 @@ async function lastOppForhandlerFullmakt(file) {
     if (statusEl) statusEl.textContent = '';
     visToast('Opplasting feilet: ' + e.message);
   }
+}
+
+// Dra-og-slipp for fullmakt-opplastingen over - samme mønster (CSS-klasser og hover-logikk)
+// som dokDragOver/dokDragLeave/dokDrop for ordre-dokumenter i ordre-diverse.js (bedt om av
+// Henrik 2026-10-15). Kun ett Forhandler-detalj-vindu kan være åpent av gangen, så i
+// motsetning til ordre-varianten trengs ingen id-suffiks på dropzone-elementet.
+function fullmaktDragOver(e) {
+  e.preventDefault();
+  document.getElementById('fdFullmaktDropzone')?.classList.add('dok-dropzone-over');
+}
+function fullmaktDragLeave(e) {
+  document.getElementById('fdFullmaktDropzone')?.classList.remove('dok-dropzone-over');
+}
+function fullmaktDrop(e) {
+  e.preventDefault();
+  document.getElementById('fdFullmaktDropzone')?.classList.remove('dok-dropzone-over');
+  const file = e.dataTransfer?.files?.[0];
+  if (file) lastOppForhandlerFullmakt(file);
 }
 
 async function fjernForhandlerFullmakt(forhandlerId) {
