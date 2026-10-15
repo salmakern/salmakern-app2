@@ -196,10 +196,16 @@
       '<p style="font-size:14px;color:#e2725f;font-weight:600;">Ta kontakt for full produktinformasjon og tilbud på denne modellen.</p></div>';
     var galleryMain = document.querySelector(".gallery-main");
     if (galleryMain) {
+      // Samme "Kommer snart"-plate som modelllista og Forhandlerportalen (.thumb-placeholder i site.css). Bilderuta
+      // (4:3 med rød kant) beholdes, bare tømt, så oppsettet er likt modeller med bilde.
+      galleryMain.innerHTML = "";
       var placeholder = document.createElement("div");
-      placeholder.className = "img-placeholder";
-      placeholder.innerHTML = '<span style="font-size:36px;">📷</span>Legg til bilder her';
-      galleryMain.replaceWith(placeholder);
+      placeholder.className = "thumb-placeholder";
+      var plate = document.createElement("span");
+      plate.className = "thumb-placeholder-label";
+      plate.textContent = "Kommer snart";
+      placeholder.appendChild(plate);
+      galleryMain.appendChild(placeholder);
     }
     if (thumbContainer) thumbContainer.remove();
   }
