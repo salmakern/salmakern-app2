@@ -458,8 +458,30 @@ function adminArkOpprettOrdreForChassis(rad, chassis) {
   const ny = mkOrdre(id, '', rad.forhandler||'', rad.kontaktperson||'', '', '', '', '', '', '', '', 'paa_vei');
   ny.chassis = chassis;
   ny._localAt = Date.now();
+  // Samme auto-vedlegg av forhandlerens fullmakt som "Ny ordre"-modalen (opprettOrdre(),
+  // ordre-diverse.js) og Forhandler-feltets onchange (autoFyllForhandlerFullmakt(),
+  // ordre-detalj.js) allerede gjør - manglet her, så en ordre opprettet ved å skrive inn et
+  // chassisnummer i Admin-ark (i stedet for de to andre veiene å opprette en ordre på) fikk
+  // ALDRI forhandlerens fullmakt kopiert inn automatisk, selv om forhandleren hadde en
+  // registrert (meldt av Henrik 2026-10-22).
+  const fullmakt = finnForhandlerFullmakt(ny.kunde);
   S.ordrer.push(ny);
-  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{if(r.error)console.error(r.error.message)});
+  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(async r => {
+    if (r.error) { console.error(r.error.message); return; }
+    if (!fullmakt) return;
+    // Dokumenter-feltet kan først skrives ETTER at selve insert-en er bekreftet vellykket
+    // (samme begrunnelse som i opprettOrdre()) - bruker nå den atomiske
+    // oppdater_ordre_dokument()-funksjonen (se migrasjonen 20261022120000) i stedet for en
+    // vanlig update, siden den uansett er like trygg og allerede er standarden appen bruker
+    // for dette feltet andre steder.
+    const { data, error } = await db.rpc('oppdater_ordre_dokument', {
+      p_ordre_id: id, p_navn: fullmakt.navn,
+      p_dokument: { navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }
+    });
+    if (error) { console.error('Fullmakt-auto-vedlegg feilet:', error.message); return; }
+    ny.dokumenter = data?.dokumenter || ny.dokumenter;
+    if (ny.fullmakt !== 'har') sf(id, 'fullmakt', 'har');
+  });
   planleggLocalSpeiling();
   visToast('Ny ordre opprettet (På vei)', 'ok');
 }
