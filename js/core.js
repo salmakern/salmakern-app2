@@ -507,7 +507,40 @@ function dbToTimer(r) {
 
 let realtimeChannel = null;
 let realtimeReconnectTimer = null;
-let realtimeReconnectForsok = 0;
+// Persisteres i localStorage (ikke bare denne JS-øktens levetid) - en enhet som
+// restarter/laster appen på nytt midt i en gjenoppkoblings-runde (f.eks. en tablet med
+// ustabil WiFi som restarter seg selv, eller en PWA OS-en dreper og relanserer i
+// bakgrunnen) startet ellers ALLTID tilbake på det RASKESTE forsøket (1 sek) igjen og
+// igjen, i stedet for å faktisk nå frem til et rolig nivå - bekreftet reell hendelse
+// 2026-10-22: ca. 2,7 MILLIONER gjenoppkoblinger (hver med en full nedlasting av hele
+// datasettet) over 43 dager, et snitt på under 1,5 sekund mellom hver - mye raskere enn
+// den tiltenkte backoff-en alene skulle tillate selv i verste fall. Resulterte i en
+// egress-regning på over 1,9 PETABYTE på et datasett som til sammen er noen få MB.
+// Verdien forfaller (nullstilles) av seg selv etter 10 minutter uten noen ny feil - en
+// ekte, varig gjenopprettet forbindelse skal ikke holde enheten tilbake for alltid.
+const REALTIME_BACKOFF_KEY = 'realtimeBackoff_v1';
+function lesRealtimeBackoff() {
+  try {
+    const raw = localStorage.getItem(REALTIME_BACKOFF_KEY);
+    if (!raw) return 0;
+    const { forsok, tid } = JSON.parse(raw);
+    if (!forsok || Date.now() - tid > 10 * 60 * 1000) return 0;
+    return forsok;
+  } catch(e) { return 0; }
+}
+function lagreRealtimeBackoff(forsok) {
+  try {
+    if (!forsok) { localStorage.removeItem(REALTIME_BACKOFF_KEY); return; }
+    localStorage.setItem(REALTIME_BACKOFF_KEY, JSON.stringify({ forsok, tid: Date.now() }));
+  } catch(e) {}
+}
+let realtimeReconnectForsok = lesRealtimeBackoff();
+// Nullstilles kun etter at forbindelsen har stått STABIL en liten stund (se
+// subscribeRealtime() sin 'SUBSCRIBED'-håndtering under) - en forbindelse som lykkes helt
+// kort og så umiddelbart feiler igjen ("flapper") skal IKKE få lov til å nullstille
+// backoff-nivået og dermed starte helt forfra på 1 sek, som i praksis opphevet hele
+// backoff-mekanismen ved akkurat denne typen ustabil tilkobling.
+let realtimeStabilTimer = null;
 
 // Flere Realtime-hendelser (f.eks. et flerrads-lagre et annet sted gjør, som sender én
 // hendelse PER rad selv om skrivingen var samlet i ett databasekall) kom tidligere rett
@@ -531,6 +564,7 @@ function planleggRenderAdminArk() {
 function subscribeRealtime() {
   if (!db) return;
   if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
+  clearTimeout(realtimeStabilTimer);
   if (realtimeChannel) { try { db.removeChannel(realtimeChannel); } catch(_){} realtimeChannel = null; }
 
   realtimeChannel = db.channel('salmakern_live')
@@ -680,13 +714,27 @@ function subscribeRealtime() {
     })
     .subscribe(async (status, err) => {
       if (status === 'SUBSCRIBED') {
-        realtimeReconnectForsok = 0;
         prosesserOfflineKo(); // sanntidskanalen kom opp igjen - sterkt signal om at nettet er tilbake
+        // Nullstiller IKKE backoff-nivået med en gang - kun etter at forbindelsen faktisk har
+        // stått stabil i 60 sek. En forbindelse som flapper (lykkes kort, feiler igjen med én
+        // gang) skal IKKE få lov til å nullstille og dermed starte helt forfra på 1 sek hver
+        // gang - se toppkommentaren på REALTIME_BACKOFF_KEY for hvorfor dette er kritisk.
+        clearTimeout(realtimeStabilTimer);
+        realtimeStabilTimer = setTimeout(() => {
+          realtimeReconnectForsok = 0;
+          lagreRealtimeBackoff(0);
+        }, 60000);
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn('Sanntid frakoblet:', status, err);
+        clearTimeout(realtimeStabilTimer);
         if (!realtimeReconnectTimer && db && me) {
-          const forsinkelse = Math.min(1000 * Math.pow(2, realtimeReconnectForsok), 30000);
+          // Tak økt fra 30 sek til 5 min 2026-10-22 - 30 sek var ikke nok til å hindre en
+          // reell løpsk kostnad (se toppkommentaren på REALTIME_BACKOFF_KEY): en enhet som
+          // aldri klarer å koble stabilt til bør IKKE prøve på nytt oftere enn hvert 5.
+          // minutt, siden hvert forsøk utløser en full nedlasting av hele datasettet.
+          const forsinkelse = Math.min(1000 * Math.pow(2, realtimeReconnectForsok), 300000);
           realtimeReconnectForsok++;
+          lagreRealtimeBackoff(realtimeReconnectForsok);
           realtimeReconnectTimer = setTimeout(async () => {
             realtimeReconnectTimer = null;
             if (db && me) {
