@@ -1,19 +1,36 @@
 // ════════════════════════════════════════════════════
 // BESKJEDER
 // ════════════════════════════════════════════════════
-function lagreBeskjed() {
+// Lagres nå atomisk via beskjed_upsert() (radlås i databasen, se migrasjonen
+// 20261022170000) i stedet for saveInnstillinger() sin blinde full-rad-skriving av HELE
+// innstillinger-raden (som også sendte en potensielt utdatert kopi av kontakter på nytt ved
+// hver eneste beskjed - funnet 2026-10-22).
+async function lagreBeskjed() {
   const tekst = document.getElementById('bTekst').value.trim();
   if (!tekst) return;
-  S.beskjeder.unshift({id:'b'+(++S.nextId), av:me.navn, avId:me.id, tekst, dato:new Date().toISOString()});
-  saveInnstillinger();
+  const beskjed = {id:'b'+Date.now()+'_'+Math.random().toString(36).slice(2,7), av:me.navn, avId:me.id, tekst, dato:new Date().toISOString()};
+  S.beskjeder.unshift(beskjed);
+  planleggLocalSpeiling();
   closeModal('nyBeskjed');
   document.getElementById('bTekst').value='';
   renderBeskjeder();
+  if (db) {
+    const { data, error } = await db.rpc('beskjed_upsert', { p_beskjed: beskjed });
+    if (error) { console.error('Kunne ikke lagre beskjed:', error.message); return; }
+    S.beskjeder = data || S.beskjeder;
+    renderBeskjeder();
+  }
 }
 
-function slettBeskjed(id) {
+async function slettBeskjed(id) {
   S.beskjeder = S.beskjeder.filter(b=>b.id!==id);
-  saveInnstillinger();
+  renderBeskjeder();
+  if (db) {
+    const { data, error } = await db.rpc('beskjed_slett', { p_beskjed_id: id });
+    if (error) { console.error('Kunne ikke slette beskjed:', error.message); return; }
+    S.beskjeder = data || S.beskjeder;
+  }
+  planleggLocalSpeiling();
   renderBeskjeder();
 }
 
@@ -584,7 +601,11 @@ function lukkNyKontaktperson() {
   }
 }
 
-function lagreKontaktperson() {
+// Lagres nå atomisk via kontaktperson_upsert() (radlås i databasen, se migrasjonen
+// 20261022170000) i stedet for saveInnstillinger() sin blinde full-rad-skriving av HELE
+// innstillinger-raden, inkl. hele kontakter-arrayet - kunne overskrive en ANNEN admins
+// nylig lagrede/slettede kontakt eller kontaktperson (funnet 2026-10-22).
+async function lagreKontaktperson() {
   const forhandlerId = document.getElementById('kpForhandlerId').value;
   const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
   const navn = document.getElementById('kpNavn').value.trim();
@@ -597,22 +618,36 @@ function lagreKontaktperson() {
   };
   if (!forhandler.kontaktpersoner) forhandler.kontaktpersoner = [];
   const kpId = document.getElementById('kpId').value;
+  const kontaktperson = kpId ? { id: kpId, ...felter } : { id:'kp'+Date.now()+'_'+Math.random().toString(36).slice(2,7), ...felter };
   const eksisterende = kpId ? forhandler.kontaktpersoner.find(p=>p.id===kpId) : null;
   if (eksisterende) Object.assign(eksisterende, felter);
-  else forhandler.kontaktpersoner.push({ id:'kp'+(++S.nextId), ...felter });
-  saveInnstillinger();
+  else forhandler.kontaktpersoner.push(kontaktperson);
   renderKontakter();
   lukkNyKontaktperson();
+  if (db) {
+    const { data, error } = await db.rpc('kontaktperson_upsert', { p_forhandler_id: forhandlerId, p_kontaktperson: kontaktperson });
+    if (error) { visToast('Kunne ikke lagre kontaktperson: ' + error.message); return; }
+    S.kontakter = data || S.kontakter;
+    renderKontakter();
+  }
+  planleggLocalSpeiling();
 }
 
-function slettKontaktperson(forhandlerId, kpId) {
+async function slettKontaktperson(forhandlerId, kpId) {
   const forhandler = S.kontakter.find(k=>k.id===forhandlerId); if (!forhandler) return;
   const p = (forhandler.kontaktpersoner||[]).find(x=>x.id===kpId); if (!p) return;
   if (!confirm(`Slette kontaktpersonen "${p.navn}"?`)) return;
   forhandler.kontaktpersoner = forhandler.kontaktpersoner.filter(x=>x.id!==kpId);
-  saveInnstillinger();
   renderForhandlerDetalj();
   renderKontakter();
+  if (db) {
+    const { data, error } = await db.rpc('kontaktperson_slett', { p_forhandler_id: forhandlerId, p_kontaktperson_id: kpId });
+    if (error) { visToast('Kunne ikke slette kontaktperson: ' + error.message); return; }
+    S.kontakter = data || S.kontakter;
+    renderForhandlerDetalj();
+    renderKontakter();
+  }
+  planleggLocalSpeiling();
 }
 
 // Forhandlere er bevisst utelatt fra denne lista (se apneForhandlerListe/renderForhandlerListe
@@ -994,14 +1029,19 @@ function saveInnstillinger() {
   // overskrevet med en utdatert GPS-verdi fra minnet hver gang NOEN lagret noe helt
   // urelatert (f.eks. genererte en ny PIN) på en enhet som ikke hadde fått med seg en
   // fersk GPS-endring via sanntid ennå - reell bug rapportert 2026-09-04.
+  // beskjeder/kontakter/hms er av SAMME grunn fjernet herfra 2026-10-22 - kontakter hadde
+  // allerede egne atomiske funksjoner (kontakter_upsert/kontakter_slett), men ble likevel
+  // sendt på nytt i DENNE payloaden fra hver eneste beskjed-/HMS-lagring, og kunne dermed
+  // stille overskrive en ANNEN admins nylig lagrede/slettede kontakt. beskjeder/hms/
+  // kontaktpersoner har nå sine egne atomiske funksjoner (se lagreBeskjed/slettBeskjed/
+  // lagreHMS/toggleHMSLukket/lagreKontaktperson/slettKontaktperson og migrasjonen
+  // 20261022170000) - denne funksjonen brukes nå kun til dagens_pin/utstyr_maler/
+  // drivstoff_satser.
   db.from('innstillinger').upsert({
     id: 1,
     dagens_pin: S.dagensPIN,
     utstyr_maler: S.utstyrMaler||[],
-    drivstoff_satser: S.drivstoffSatser||[],
-    beskjeder: S.beskjeder||[],
-    kontakter: S.kontakter||[],
-    hms: S.hms||[]
+    drivstoff_satser: S.drivstoffSatser||[]
   }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
 }
 
@@ -1277,28 +1317,44 @@ function toggleUtstyrPunkt(ordreId, idx) {
 // ════════════════════════════════════════════════════
 // HMS-LOGG
 // ════════════════════════════════════════════════════
-function lagreHMS() {
+// Lagres nå atomisk via hms_upsert() (radlås i databasen, se migrasjonen 20261022170000) i
+// stedet for saveInnstillinger() sin blinde full-rad-skriving (samme rotårsak som
+// lagreBeskjed() - funnet 2026-10-22).
+async function lagreHMS() {
   const besk = document.getElementById('hmsBesk').value.trim();
   if (!besk) { alert('Beskrivelse er påkrevd'); return; }
-  S.hms.unshift({
-    id:'h'+(++S.nextId), av:me.navn, avId:me.id,
+  const sak = {
+    id:'h'+Date.now()+'_'+Math.random().toString(36).slice(2,7), av:me.navn, avId:me.id,
     dato:new Date().toISOString(),
     type:document.getElementById('hmsType').value,
     beskrivelse:besk,
     tiltak:document.getElementById('hmsTiltak').value.trim(),
     lukket:false
-  });
-  saveInnstillinger();
+  };
+  S.hms.unshift(sak);
+  planleggLocalSpeiling();
   closeModal('nyHMS');
   ['hmsBesk','hmsTiltak'].forEach(i=>document.getElementById(i).value='');
   renderHMS();
+  if (db) {
+    const { data, error } = await db.rpc('hms_upsert', { p_sak: sak });
+    if (error) { console.error('Kunne ikke lagre HMS-sak:', error.message); return; }
+    S.hms = data || S.hms;
+    renderHMS();
+  }
 }
 
-function toggleHMSLukket(id) {
+async function toggleHMSLukket(id) {
   const h = S.hms.find(x=>x.id===id); if(!h) return;
   h.lukket=!h.lukket;
-  saveInnstillinger();
+  planleggLocalSpeiling();
   renderHMS();
+  if (db) {
+    const { data, error } = await db.rpc('hms_upsert', { p_sak: h });
+    if (error) { console.error('Kunne ikke oppdatere HMS-sak:', error.message); return; }
+    S.hms = data || S.hms;
+    renderHMS();
+  }
 }
 
 function renderHMS() {
