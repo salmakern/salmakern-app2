@@ -101,7 +101,18 @@ function adminArkOppdaterVentendeTimerSnapshot() {
 // snapshotet TATT FØR draget) tilbake på riktig plass, og batch-upserter alt i ett kall.
 async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
   const rader = adminArkTable.getData();
-  const oppdateringer = [];
+  // Minimal felt-sett (id/rekkefolge/ventende_timer) for EKSISTERENDE rader - tidligere
+  // sendte denne hele radens daværende lokale tilstand (alle ~16 felt) for SAMTLIGE rader i
+  // tabellen ved HVER rad-flytting, selv om det bare er rekkefølgen som faktisk skal endre
+  // seg. En annen ansatts nylige endring på en av de ANDRE radene (som ennå ikke hadde
+  // synkronisert seg inn lokalt) kunne dermed bli overskrevet av denne batchen (funnet
+  // 2026-10-22, samme rotårsak som admin-ark-kappløpet i adminArkLagreFelter()). Postgres
+  // håndterer konkurrerende UPDATE på ULIKE kolonner på samme rad trygt av seg selv, så
+  // lenge vi faktisk bare sender de kolonnene som endret seg. Nye rader (løse rader som
+  // nettopp fikk sin første admin_ark-oppføring) sendes fortsatt med fullt feltsett i et
+  // eget kall, siden det er en insert uten noen eksisterende rad å kollidere med.
+  const rekkefolgeOppdateringer = [];
+  const nyeRader = [];
   rader.forEach((rad, idx) => {
     const posisjonsbasertVentendeTimer = ventendeTimerSnapshot[idx] ?? '';
     let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
@@ -112,30 +123,35 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
         forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
         serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
       S.adminArk = [...(S.adminArk||[]), ark];
+      nyeRader.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
+        forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
+        serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
+        fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, hentet_varslet: !!ark.hentetVarslet, utstyr: ark.utstyr||'',
+        merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
+        time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
     } else {
       ark.rekkefolge = idx;
       ark.ventendeTimer = posisjonsbasertVentendeTimer;
+      rekkefolgeOppdateringer.push({ id: ark.id, rekkefolge: idx, ventende_timer: ark.ventendeTimer||'' });
     }
-    oppdateringer.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
-      forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
-      serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
-      fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, hentet_varslet: !!ark.hentetVarslet, utstyr: ark.utstyr||'',
-      merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
-      time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert });
   });
   // Oppdaterer selve tabellvisningen slik at Ventende timer-kolonnen faktisk viser
   // den posisjonsbaserte verdien med en gang, ikke verdien som fulgte bilen(e).
   adminArkTable.getRows().forEach((r, idx) => r.update({ ventendeTimer: ventendeTimerSnapshot[idx] ?? '' }));
   adminArkOppdaterVentendeTimerSnapshot();
-  if (oppdateringer.length) {
-    // Samme echo-unngåelse som adminArkLagreFelter() - uten denne vil hver
-    // rekkefølge-endring (drag/flytt rad) trigge en full re-rendering av tabellen.
-    oppdateringer.forEach(o => {
-      ignorerRealtimeAdminArk.add(o.id);
-      setTimeout(()=>ignorerRealtimeAdminArk.delete(o.id), 10000);
-    });
-    const { error } = await db.from('admin_ark').upsert(oppdateringer, {onConflict:'id'});
+  // Samme echo-unngåelse som adminArkLagreFelter() - uten denne vil hver
+  // rekkefølge-endring (drag/flytt rad) trigge en full re-rendering av tabellen.
+  [...rekkefolgeOppdateringer, ...nyeRader].forEach(o => {
+    ignorerRealtimeAdminArk.add(o.id);
+    setTimeout(()=>ignorerRealtimeAdminArk.delete(o.id), 10000);
+  });
+  if (rekkefolgeOppdateringer.length) {
+    const { error } = await db.from('admin_ark').upsert(rekkefolgeOppdateringer, {onConflict:'id'});
     if (error) console.error('Rekkefølge-lagring feilet:', error.message);
+  }
+  if (nyeRader.length) {
+    const { error } = await db.from('admin_ark').upsert(nyeRader, {onConflict:'id'});
+    if (error) console.error('Rekkefølge-lagring (nye rader) feilet:', error.message);
   }
 }
 if (!window._adminArkEnterLytterBundet) {
@@ -610,11 +626,36 @@ function adminArkByggRader() {
 
 const ADMIN_ARK_EDITERBARE_FELT = ['forhandler','kontaktperson','chassisNr','serienummer','mottatt','papirer','dokumenter','fraktselskap','bestiltFrakt','merknader','ventendeTimer'];
 
+// Kolonnenavn (snake_case) + verdi-coercion for hvert admin_ark-felt som kan skrives fra
+// adminArkLagreFelter() - delt mellom full insert (ny rad) og målrettet update (eksisterende
+// rad, se der).
+const ADMIN_ARK_FELT_KOLONNE = {
+  chassisNr: { kol: 'chassis_nr', verdi: v => v||'' },
+  forhandler: { kol: 'forhandler', verdi: v => v||'' },
+  kontaktperson: { kol: 'kontaktperson', verdi: v => v||'' },
+  serienummer: { kol: 'serienummer', verdi: v => v||'' },
+  mottatt: { kol: 'mottatt', verdi: v => !!v },
+  papirer: { kol: 'papirer', verdi: v => v||'' },
+  dokumenter: { kol: 'dokumenter', verdi: v => !!v },
+  fraktselskap: { kol: 'fraktselskap', verdi: v => v||'' },
+  bestiltFrakt: { kol: 'bestilt_frakt', verdi: v => !!v },
+  hentetVarslet: { kol: 'hentet_varslet', verdi: v => !!v },
+  utstyr: { kol: 'utstyr', verdi: v => v||'' },
+  merknader: { kol: 'merknader', verdi: v => v||'' },
+  flateHypotetisk: { kol: 'flate_hypotetisk', verdi: v => v||'' },
+  timeBekreftet: { kol: 'time_bekreftet', verdi: v => v||null },
+  timeBekreftetTid: { kol: 'time_bekreftet_tid', verdi: v => v||'' },
+  timeBekreftetSted: { kol: 'time_bekreftet_sted', verdi: v => v||'' },
+  ventendeTimer: { kol: 'ventende_timer', verdi: v => v||'' },
+  arkivert: { kol: 'arkivert', verdi: v => !!v },
+};
+
 // endringer er et objekt med ett eller flere felt->verdi (f.eks. {serienummer:'x'} eller
-// {timeBekreftet:'2026-08-07', timeBekreftetTid:'09:00'}) - lagres samlet i én upsert.
+// {timeBekreftet:'2026-08-07', timeBekreftetTid:'09:00'}) - lagres samlet i ett DB-kall.
 async function adminArkLagreFelter(rad, endringer) {
   let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
   if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, rad.chassisNr) && !r.arkivert);
+  const erNyRad = !ark;
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: adminArkNesteRekkefolge(),
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
@@ -622,19 +663,37 @@ async function adminArkLagreFelter(rad, endringer) {
     S.adminArk = [...(S.adminArk||[]), ark];
   }
   Object.assign(ark, endringer);
-  // Alltid upsert med hele radens nåværende tilstand - unngår racen der en update
-  // kan lande på serveren FØR den tilhørende insert-en, som stille treffer 0 rader.
-  const payload = { id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: ark.rekkefolge,
-    forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
-    serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
-    fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, hentet_varslet: !!ark.hentetVarslet, utstyr: ark.utstyr||'',
-    merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
-    time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
   // Unngår at sanntids-echo av vår egen skriving trigger en unødvendig re-rendering av
   // hele Admin-ark-tabellen like etterpå (samme mønster som ordre bruker via save()).
   ignorerRealtimeAdminArk.add(ark.id);
   setTimeout(()=>ignorerRealtimeAdminArk.delete(ark.id), 10000);
-  const { error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'});
+  let error;
+  if (erNyRad) {
+    // Ny rad: full insert (via upsert) - unngår racen der en update kan lande på
+    // serveren FØR den tilhørende insert-en, som stille treffer 0 rader. Ingen eksisterende
+    // rad å kollidere med ennå, så full-rad er trygt her.
+    const payload = { id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: ark.rekkefolge,
+      forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
+      serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
+      fraktselskap: ark.fraktselskap||'', bestilt_frakt: !!ark.bestiltFrakt, hentet_varslet: !!ark.hentetVarslet, utstyr: ark.utstyr||'',
+      merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
+      time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
+    ({ error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'}));
+  } else {
+    // Eksisterende rad: skriver KUN de faktisk endrede kolonnene i stedet for hele radens
+    // nåværende (potensielt utdaterte) lokale tilstand - en full-rad-skriving her kunne
+    // overskrive et felt en ANNEN ansatt nettopp endret på SAMME rad (funnet 2026-10-22,
+    // samme rotårsak som dokumenter-/endringer-/fikenLinjer-kappløpet). Trenger ingen egen
+    // databasefunksjon slik de gjorde - admin_ark-feltene er vanlige kolonner, og Postgres
+    // håndterer konkurrerende UPDATE på ULIKE kolonner på samme rad helt trygt av seg selv,
+    // så lenge vi faktisk bare sender kolonnene som endret seg.
+    const payload = {};
+    for (const felt of Object.keys(endringer)) {
+      const def = ADMIN_ARK_FELT_KOLONNE[felt];
+      if (def) payload[def.kol] = def.verdi(ark[felt]);
+    }
+    ({ error } = await db.from('admin_ark').update(payload).eq('id', ark.id));
+  }
   if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
   // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
   // Verkstedkalenderen (kalender_dato/kalender_tid) skal speile den samme verdien begge
