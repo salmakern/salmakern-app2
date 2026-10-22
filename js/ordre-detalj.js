@@ -501,23 +501,43 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
   }
 }
 
+// "Ansatte på ordren" lar flere ansatte jobbe på samme bil samtidig, hver i sin egen
+// nettleserøkt - to ansatte som endrer ULIKE felt på samme ordre tett i tid (f.eks. én
+// merker diagnose utført mens en annen fyller inn en vekt) kunne tidligere overskrive
+// hverandre stille, siden toggleDiagnose() gikk via den generelle save() (full-rad-upsert
+// basert på nettleserens lokale kopi - se kommentaren i core.js save()). Skriver nå i
+// stedet KUN diagnose/diagnose_av direkte - helt ordinære kolonner, og Postgres håndterer
+// konkurrerende UPDATE på ULIKE kolonner på samme rad helt trygt av seg selv (funnet
+// 2026-10-22, samme rotårsak som dokumenter-/endringer-kappløpet, men løst enklere siden
+// dette ikke er et array-felt).
 function toggleDiagnose(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.diagnose = !o.diagnose;
   o.diagnoseAv = o.diagnose ? me.navn : '';
   logChange(o, o.diagnose ? 'Diagnose utført' : 'Diagnose fjernet');
-  save(id); buildOrdreDetail();
+  planleggLocalSpeiling();
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
+  if (db) db.from('ordrer').update({ diagnose: o.diagnose, diagnose_av: o.diagnoseAv }).eq('id', id)
+    .then(r=>{if(r.error) console.error('Kunne ikke lagre diagnose:', r.error.message);});
+  buildOrdreDetail();
 }
 
 // Bekrefter at "Utstyr - Skal ha etter visning" faktisk er klargjort - del av
 // tvangsflyt() lenger ned, så en ordre med utfylt tekst her ikke kan lukkes før denne er
 // huket av (bedt om av Henrik 2026-10-08). su() nullstiller denne automatisk igjen hvis
-// teksten endres etterpå, se ordre-diverse.js.
+// teksten endres etterpå, se ordre-diverse.js. Samme målrettet-oppdatering-fiks som
+// toggleDiagnose() over (funnet 2026-10-22) - skriver kun utstyr-feltet, ikke hele raden.
 function toggleSkalHaBekreftet(id, bekreftet) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.utstyr.skalHaBekreftet = bekreftet;
   logChange(o, bekreftet ? 'Utstyr etter visning bekreftet' : 'Utstyr etter visning - bekreftelse fjernet');
-  save(id); buildOrdreDetail();
+  planleggLocalSpeiling();
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
+  if (db) db.from('ordrer').update({ utstyr: o.utstyr }).eq('id', id)
+    .then(r=>{if(r.error) console.error('Kunne ikke lagre bekreftelse:', r.error.message);});
+  buildOrdreDetail();
 }
 
 // Fakturalinjer (produktnummer + antall) som senere skal sendes til Fiken ved
@@ -806,23 +826,39 @@ function apneAdminMeldPaaModal(ordreId) {
   }).join('') : '<div class="small muted">Ingen aktive ansatte funnet</div>';
   openModal('adminMeldPaa');
 }
-function bekreftAdminMeldPaa() {
+// Samme atomiske oppdater_ordre_ansatt_signert()-fiks som meldPaa()/meldAv() (ordre-
+// diverse.js) - kaller den én gang PER faktisk endret ansatt (ikke en full-rad-lagring av
+// hele lista), slik at en samtidig selv-påmelding fra en ansatt IKKE fanget opp av admins
+// øyeblikksbilde av avkrysningsboksene ikke overskrives (funnet 2026-10-22).
+async function bekreftAdminMeldPaa() {
   const o = S.ordrer.find(x=>x.id===adminMeldPaaOrdreId); if(!o) return;
+  const id = adminMeldPaaOrdreId;
+  const endringer = [];
   document.querySelectorAll('#adminMeldPaaListe .adminMeldPaaCheck').forEach(c => {
     const ansattId = Number(c.value);
     const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId); if (!ansatt) return;
     const erAlleredePaameldt = !!o.ansatteSignert.find(a=>a.id===ansattId);
     if (c.checked && !erAlleredePaameldt) {
-      o.ansatteSignert.push({id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())});
+      const nyAnsatt = {id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())};
+      o.ansatteSignert.push(nyAnsatt);
       logChange(o, ansatt.navn+' meldt på');
+      endringer.push({ ansattId, ansatt: nyAnsatt });
     } else if (!c.checked && erAlleredePaameldt) {
       o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==ansattId);
       logChange(o, ansatt.navn+' meldt av');
+      endringer.push({ ansattId, ansatt: null });
     }
   });
-  save(adminMeldPaaOrdreId);
   buildOrdreDetail();
   closeModal('adminMeldPaa');
+  if (db) {
+    for (const { ansattId, ansatt } of endringer) {
+      const { data, error } = await db.rpc('oppdater_ordre_ansatt_signert', { p_ordre_id: id, p_ansatt_id: ansattId, p_ansatt: ansatt });
+      if (error) { console.error('Kunne ikke oppdatere påmelding:', error.message); continue; }
+      o.ansatteSignert = data || o.ansatteSignert;
+    }
+  }
+  planleggLocalSpeiling();
 }
 
 function tvangsflyt(o) {

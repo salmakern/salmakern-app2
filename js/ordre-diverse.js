@@ -119,18 +119,39 @@ function settHengerfeste(id, val) {
 // ════════════════════════════════════════════════════
 // ORDRE ACTIONS
 // ════════════════════════════════════════════════════
-function meldPaa(id) {
+// "Ansatte på ordren" lar bevisst FLERE ansatte melde seg på samme ordre samtidig, hver i
+// sin egen nettleserøkt - meldPaa()/meldAv() skriver nå ansatteSignert atomisk via
+// oppdater_ordre_ansatt_signert() (radlås i databasen, se migrasjonen 20261022180000) i
+// stedet for den generelle save() (full-rad-upsert fra nettleserens lokale kopi), som kunne
+// la to påmeldinger tett i tid overskrive hverandre (funnet 2026-10-22, samme rotårsak som
+// dokumenter-/fikenLinjer-kappløpet).
+async function meldPaa(id) {
   const o = S.ordrer.find(x=>x.id===id);
   if (!o || o.ansatteSignert.find(a=>a.id===me.id)) return;
-  o.ansatteSignert.push({id:me.id, navn:me.navn, tid:fmt(new Date())});
-  logChange(o, me.navn+' meldt på'); save(id); buildOrdreDetail();
+  const ansatt = {id:me.id, navn:me.navn, tid:fmt(new Date())};
+  o.ansatteSignert.push(ansatt);
+  logChange(o, me.navn+' meldt på');
+  buildOrdreDetail();
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_ansatt_signert', { p_ordre_id: id, p_ansatt_id: me.id, p_ansatt: ansatt });
+    if (error) { console.error('Kunne ikke melde på:', error.message); return; }
+    o.ansatteSignert = data || o.ansatteSignert;
+  }
+  planleggLocalSpeiling();
 }
-function meldAv(id) {
+async function meldAv(id) {
   const o = S.ordrer.find(x=>x.id===id);
   if (!o) return;
   if (!confirm('Vil du melde deg av denne ordren?')) return;
   o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==me.id);
-  logChange(o, me.navn+' meldt av'); save(id); buildOrdreDetail();
+  logChange(o, me.navn+' meldt av');
+  buildOrdreDetail();
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_ansatt_signert', { p_ordre_id: id, p_ansatt_id: me.id, p_ansatt: null });
+    if (error) { console.error('Kunne ikke melde av:', error.message); return; }
+    o.ansatteSignert = data || o.ansatteSignert;
+  }
+  planleggLocalSpeiling();
 }
 // Ordretid er delt i to uavhengige tidtakere på samme ordre - Ombygging (feltet het
 // opprinnelig bare "Ordretid" og er nå gjenbrukt som Ombygging-tiden, uendret lagringsform)
