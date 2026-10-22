@@ -218,8 +218,10 @@ async function arkiver(id) {
   if (!me || !(me.rolle==='godkjenner'||me.rolle==='admin')) return;
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
   o.status='arkivert';
-  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Arkivert'};
-  o.endringer.push(endring);
+  // logChange() persisterer logglinjen atomisk selv (se egen kommentar der) - denne
+  // målrettede status-skrivingen sender derfor ikke lenger "endringer" selv (fjernet
+  // 2026-10-22, samme rotårsak som dokumenter-kappløpet).
+  logChange(o, 'Arkivert');
   planleggLocalSpeiling();
   // save() utelater bevisst status/endringer fra sin egen lagring (se kommentaren i
   // core.js save()) nettopp fordi EN SLIK målrettet oppdatering som denne skal styre
@@ -229,12 +231,11 @@ async function arkiver(id) {
   setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
   let feil = null;
   if (db) {
-    const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);
+    const { error } = await db.from('ordrer').update({status:o.status}).eq('id', id);
     if (error) feil = error.message;
   }
   if (feil) {
     o.status='aktiv';
-    o.endringer = o.endringer.filter(e=>e!==endring);
     visToast('Kunne ikke arkivere ordren: ' + feil + ' — prøv igjen.');
     return;
   }
@@ -398,8 +399,10 @@ async function bekreftGodkjenn() {
   o.godkjent=true; o.godkjennerNavn=godkjenner.navn; o.status='arkivert';
   const tvangsflytOk = tvangsflyt(o).every(t=>t.ok);
   const overstyrTekst = (!tvangsflytOk && me?.rolle==='admin') ? ' (tvangsflyt overstyrt av admin - ikke alle punkter var fullført)' : '';
-  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Godkjent og lukket av '+godkjenner.navn+overstyrTekst};
-  o.endringer.push(endring);
+  // logChange() persisterer logglinjen atomisk selv (se egen kommentar der) - denne
+  // målrettede skrivingen sender derfor ikke lenger "endringer" selv (fjernet 2026-10-22,
+  // samme rotårsak som dokumenter-kappløpet).
+  logChange(o, 'Godkjent og lukket av '+godkjenner.navn+overstyrTekst);
   planleggLocalSpeiling();
   // Samme manglende beskyttelse som arkiver() - denne målrettede status-skrivingen (se
   // kommentaren i core.js save()) manglet ignorerRealtimeFor (funnet 2026-10-14).
@@ -407,13 +410,12 @@ async function bekreftGodkjenn() {
   setTimeout(()=>ignorerRealtimeFor.delete(activeOrdreId), 10000);
   let feil = null;
   if (db) {
-    const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status, endringer:o.endringer}).eq('id', activeOrdreId);
+    const { error } = await db.from('ordrer').update({godkjent:o.godkjent, godkjenner_navn:o.godkjennerNavn, status:o.status}).eq('id', activeOrdreId);
     if (error) feil = error.message;
   }
   if (feil) {
     // Lagringen feilet - ikke la det se ut som ordren er lukket når den ikke er det
     o.godkjent=false; o.godkjennerNavn=''; o.status='aktiv';
-    o.endringer = o.endringer.filter(e=>e!==endring);
     if (btn) { btn.disabled = false; btn.textContent = 'Godkjenn og lukk'; }
     visToast('Kunne ikke lukke ordren: ' + feil + ' — prøv igjen.');
     return;

@@ -902,9 +902,13 @@ function save(ordreId) {
   // noen redigerer et vanlig felt (f.eks. merke) mens de har en litt gammel
   // kopi av ordren i minnet, ville denne lagringen ellers kunne skrive den
   // gamle statusen tilbake og "gjenåpne" en nettopp arkivert/godkjent ordre.
+  // endringer utelates av samme grunn (lagt til 2026-10-22) - den skrives nå KUN av
+  // logChange() sitt eget atomiske RPC-kall (se ordre-detalj.js), ellers kunne denne
+  // full-rad-lagringen overskrive en logglinje en ANNEN økt nettopp la til på samme ordre.
   const payload = ordreToDb(o);
   delete payload.status; delete payload.ordre_status;
   delete payload.godkjent; delete payload.godkjenner_navn;
+  delete payload.endringer;
   return db.from('ordrer').upsert(payload)
     .then(r=>{
       if (r.error) {

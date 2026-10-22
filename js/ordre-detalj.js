@@ -1357,7 +1357,23 @@ function merkeModell(o) { return `${o.merke||''} ${o.modell||''}`.trim(); }
 
 function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
 
-function logChange(o, txt) { o.endringer.push({av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt}); }
+// Pusher lokalt for umiddelbar visning, OG persisterer atomisk til databasen via
+// legg_til_ordre_endring() (se migrasjonen 20261022140000) - uavhengig av hvilken save()/
+// update()-vei som ellers lagrer resten av ordren akkurat nå. Uten dette delte den
+// generelle save() (og flere egne målrettede update()-kall) sin "les hele arrayet fra
+// nettleserens minne, skriv hele arrayet tilbake"-oppførsel samme kappløpsrisiko som den
+// bekreftede dokumenter-hendelsen 2026-10-22 - to uavhengige lagringer på samme ordre tett i
+// tid kunne overskrive hverandres logglinjer. save() og de andre målrettede update()-kallene
+// sender derfor ikke lenger "endringer" i sin egen payload i det hele tatt (se egne
+// kommentarer der) - denne funksjonen er nå det ENESTE stedet som skriver kolonnen.
+function logChange(o, txt) {
+  const entry = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt};
+  o.endringer.push(entry);
+  if (db && o.id) {
+    db.rpc('legg_til_ordre_endring', { p_ordre_id: o.id, p_av: entry.av, p_tid: entry.tid, p_tekst: txt })
+      .then(r => { if (r.error) console.error('Kunne ikke lagre endringslogg:', r.error.message); });
+  }
+}
 
 function sf(id, field, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return false;

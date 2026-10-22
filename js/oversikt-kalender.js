@@ -418,7 +418,6 @@ async function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   const forrigeStatus = o.ordreStatus;
   const forrigeArkivStatus = o.status;
-  const forrigeEndringer = [...o.endringer];
   const forrigeDatoKlarHenting = o.datoKlarHenting;
   const forrigeAnkomstdato = o.ankomstdato;
   // Ingen skal kunne begynne å jobbe på en bil uten at det er registrert HVEM som gjør
@@ -486,14 +485,15 @@ async function endreStatus(id, nyStatus) {
   let feil = null;
   if (db) {
     // Push-varsel sendes av databasetriggeren "ordre-push" (AFTER UPDATE på ordrer),
-    // ikke herfra - ellers sendes varselet dobbelt.
-    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, endringer:o.endringer, dato_klar_henting:o.datoKlarHenting||null, ankomstdato:o.ankomstdato||null}).eq('id', id);
+    // ikke herfra - ellers sendes varselet dobbelt. "endringer" sendes ikke lenger her -
+    // logChange() over persisterer logglinjen atomisk selv (fjernet 2026-10-22, samme
+    // rotårsak som dokumenter-kappløpet).
+    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, dato_klar_henting:o.datoKlarHenting||null, ankomstdato:o.ankomstdato||null}).eq('id', id);
     if (error) feil = error.message;
   }
   if (feil) {
     o.ordreStatus = forrigeStatus;
     o.status = forrigeArkivStatus;
-    o.endringer = forrigeEndringer;
     o.datoKlarHenting = forrigeDatoKlarHenting;
     o.ankomstdato = forrigeAnkomstdato;
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');

@@ -256,7 +256,9 @@ async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato) {
   ignorerRealtimeFor.add(o.id);
   setTimeout(()=>ignorerRealtimeFor.delete(o.id), 10000);
   if (db) {
-    const { error } = await db.from('ordrer').update({ bestilt_frakt: true, hente_klar_dato: dato || null, endringer: o.endringer }).eq('id', o.id);
+    // "endringer" sendes ikke lenger her - logChange() over persisterer logglinjen atomisk
+    // selv (fjernet 2026-10-22, samme rotårsak som dokumenter-kappløpet).
+    const { error } = await db.from('ordrer').update({ bestilt_frakt: true, hente_klar_dato: dato || null }).eq('id', o.id);
     if (error) console.error('Kunne ikke oppdatere bestilt_frakt/hente_klar_dato på ordre:', error.message);
   }
   renderAll();
@@ -647,7 +649,9 @@ async function adminArkLagreFelter(rad, endringer) {
       o.tidBiltilsynetSted = ark.timeBekreftetSted||'';
       logChange(o, 'Time på biltilsynet satt fra Admin-ark: ' + (o.tidBiltilsynet ? (o.tidBiltilsynet+' '+o.tidBiltilsynetTid+(o.tidBiltilsynetSted?' '+o.tidBiltilsynetSted:'')) : '(fjernet)'));
       // Nullstiller "allerede varslet"-merket - en flyttet/ny time skal gi et friskt 30-min-varsel.
-      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, tid_biltilsynet_sted: ark.timeBekreftetSted||'', biltilsyn_varslet: false, endringer: o.endringer };
+      // "endringer" sendes ikke lenger her - logChange() over persisterer logglinjen
+      // atomisk selv (fjernet 2026-10-22, samme rotårsak som dokumenter-kappløpet).
+      const oppdatering = { tid_biltilsynet: ark.timeBekreftet||null, tid_biltilsynet_tid: ark.timeBekreftetTid||null, tid_biltilsynet_sted: ark.timeBekreftetSted||'', biltilsyn_varslet: false };
       o.kalenderDato = ark.timeBekreftet || '';
       o.kalenderTid = ark.timeBekreftet ? (ark.timeBekreftetTid || o.kalenderTid || '09:00') : '';
       oppdatering.kalender_dato = o.kalenderDato || null;

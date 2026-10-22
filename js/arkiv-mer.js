@@ -216,20 +216,21 @@ async function gjenopprett(id) {
   if (!me || me.rolle !== 'admin') return;
   const o=S.ordrer.find(x=>x.id===id); if(!o) return;
   o.status='aktiv';
-  const endring = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt:'Gjenopprettet'};
-  o.endringer.push(endring);
+  // logChange() persisterer logglinjen atomisk selv (se egen kommentar der) - uavhengig av
+  // den målrettede status-skrivingen under, som derfor ikke lenger sender "endringer" i det
+  // hele tatt (fjernet 2026-10-22, samme rotårsak som dokumenter-kappløpet).
+  logChange(o, 'Gjenopprettet');
   // Samme manglende beskyttelse som arkiver()/bekreftGodkjenn() i ordre-diverse.js - denne
   // målrettede status-skrivingen manglet ignorerRealtimeFor (funnet 2026-10-14).
   ignorerRealtimeFor.add(id);
   setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
   let feil = null;
   if (db) {
-    const { error } = await db.from('ordrer').update({status:o.status, endringer:o.endringer}).eq('id', id);
+    const { error } = await db.from('ordrer').update({status:o.status}).eq('id', id);
     if (error) feil = error.message;
   }
   if (feil) {
     o.status='arkivert';
-    o.endringer = o.endringer.filter(e=>e!==endring);
     visToast('Kunne ikke gjenopprette ordren: ' + feil + ' — prøv igjen.');
     return;
   }
