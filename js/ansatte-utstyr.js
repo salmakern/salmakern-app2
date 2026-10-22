@@ -1117,13 +1117,16 @@ function autoVelgUtstyrMal(ordreId) {
   o.utstyrMalNavn = mal.navn;
   logChange(o, 'Utstyr-mal (ankomst) automatisk valgt: '+mal.navn);
   save(ordreId);
-  // Samme "ikke 501"-initiering som applyUtstyrMal() (manuelt valgt mal) gjør - uten
-  // dette sto "ikke 501" aldri i Skal ha etter visning for en EV9-ordre der malen ble
+  // Samme "Ikke 501"-initiering som applyUtstyrMal() (manuelt valgt mal) gjør - uten
+  // dette sto "Ikke 501" aldri i Skal ha etter visning for en EV9-ordre der malen ble
   // valgt HER (automatisk ved opprettelse) i stedet for manuelt, siden ingen noen gang
   // faktisk trykket på Panorama-punktet (bekreftet av Henrik 2026-09-30: "det må stå
-  // ikke 501 på de ordrene som ikke får panorama huket av på").
+  // ikke 501 på de ordrene som ikke får panorama huket av på"). Samme opprydding av en
+  // ev. tidligere "501" som i applyUtstyrMal() - se kommentaren der.
   if (erKiaEv9(o) && o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false);
+    oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false);
   }
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);
   if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');
@@ -1141,11 +1144,18 @@ function applyUtstyrMal(ordreId, malIdx) {
   logChange(o, 'Utstyr-mal (ankomst) valgt: '+mal.navn);
   save(ordreId); buildOrdreDetail();
   // Alle punkter starter uhuket - har malen et panorama-punkt betyr det standard
-  // (ikke-panorama) glasstak, som skal vises som "ikke 501" med en gang (se
+  // (ikke-panorama) glasstak, som skal vises som "Ikke 501" med en gang (se
   // toggleUtstyrPunkt under for samme logikk ved manuell av/på-huking, inkl. hvorfor
-  // dette er begrenset til KIA EV9).
+  // dette er begrenset til KIA EV9). Fjerner også en ev. "501"/fiken-linje fra en
+  // TIDLIGERE huket Panorama-tilstand på denne ordren - uten dette kunne en ordre som
+  // allerede hadde fått "501" lagt til (bilen var faktisk huket av fra før malen ble
+  // valgt/byttet på nytt) ende opp med BÅDE "501" og "Ikke 501" stående samtidig i Skal
+  // ha etter visning, siden denne funksjonen nullstiller sjekklisten til uhuket uten å
+  // rydde opp i den forrige huket-tilstandens følger (funnet 2026-10-21 i ekte ordredata).
   if (erKiaEv9(o) && o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false);
+    oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false);
   }
 }
 
@@ -1163,7 +1173,9 @@ function erKiaEv9(o) {
   return /\bev9\b/i.test(`${o.merke||''} ${o.modell||''}`);
 }
 const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
-const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'ikke 501';
+// Stor "I" i "Ikke" (bedt om av Henrik 2026-10-21) - teksten går rett inn i "Skal ha etter
+// visning" via oppdaterSkalHaForOppskrift() under, uten noen egen formatering/kapitalisering.
+const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'Ikke 501';
 const FIKEN_PRODUKTNUMMER_4SETER_180 = '502';
 
 // Samme mønster for Mercedes-Benz Geländewagen (bekreftet av Henrik 2026-09-24) - kun

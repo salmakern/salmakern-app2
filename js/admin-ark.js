@@ -532,7 +532,13 @@ function adminArkByggRader() {
       // og ikke en live statusindikator. Eldre ordre som allerede sto i denne statusen
       // før dette feltet fantes har ingen lagret dato ennå - faller da tilbake til et
       // kryss, men bare mens ordren fortsatt faktisk STÅR i klar_henting-status.
-      henteklarVis: o.datoKlarHenting ? fmtDatoKort(o.datoKlarHenting) : (o.ordreStatus === 'klar_henting' ? '✓' : ''),
+      // Faller videre tilbake til o.henteKlarDato (datoen valgt i "Bestill frakt"/"Hente
+      // selv"-dialogen, se adminArkSpeilBestiltFraktPaaOrdre()) hvis det ikke finnes noen
+      // datoKlarHenting ennå - uten dette var datoen man faktisk valgte der usynlig i
+      // Admin-ark-arket (meldt av Henrik 2026-10-21), selv om den lå lagret på ordren og
+      // vistes på selve ordrekortet i Oversikt/Ordre-lista.
+      henteklarVis: o.datoKlarHenting ? fmtDatoKort(o.datoKlarHenting)
+        : (o.henteKlarDato ? fmtDatoKort(o.henteKlarDato) : (o.ordreStatus === 'klar_henting' ? '✓' : '')),
       merknader: ark?.merknader || '',
       flateVis: adminArkFlateNavn(o) || ark?.flateHypotetisk || '',
       _flateErEkte: !!adminArkFlateNavn(o),
@@ -1428,6 +1434,12 @@ function renderAdminArk(scrollTilBunn) {
     const verdi = felt === 'chassisNr' ? (cell.getValue()||'').trim().toUpperCase() : cell.getValue();
     adminArkLagreFelter(rad, {[felt]: verdi})
       .then(() => {
+        // "Frakt-e-post"-kolonnen (Bestill-knappen) leser fraktselskap/bestiltFrakt fra
+        // raden sin i formatteren sin, men Tabulator tegner ikke den kolonnen på nytt bare
+        // fordi EN ANNEN celle i raden endret verdi - uten dette ble "Bestill"-knappen
+        // stående grået ut helt til noe annet (f.eks. et realtime-oppdatering) tilfeldigvis
+        // tegnet raden på nytt, selv om fraktselskap faktisk var valgt (meldt av Henrik).
+        if (felt === 'fraktselskap' || felt === 'bestiltFrakt') cell.getRow().reformat();
         if (felt !== 'chassisNr') return;
         if (verdi !== cell.getValue()) cell.getRow().update({ chassisNr: verdi });
         // Løs rad (ingen ordre ennå) som nettopp fikk et chassis-nr - oppretter automatisk

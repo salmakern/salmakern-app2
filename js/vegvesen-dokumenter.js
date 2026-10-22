@@ -1187,20 +1187,25 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   const { error } = await db.storage.from('ordre-dokumenter').upload(lagringsnavn, blob, { contentType: 'application/pdf', cacheControl: '31536000' });
   if (error) { visToast('Feil ved lagring av ' + filnavn + ': ' + error.message); return false; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(lagringsnavn);
-  const eksisterende = o.dokumenter || [];
-  const gammelIdx = eksisterende.findIndex(d => d.navn === filnavn);
   const nyttDok = { navn: filnavn, url: data.publicUrl, lastetOppAv: me?.navn || 'Automatisk', dato: new Date().toISOString() };
-  const nyeDokumenter = gammelIdx !== -1
-    ? eksisterende.map((d, i) => i === gammelIdx ? nyttDok : d)
-    : [...eksisterende, nyttDok];
-  // Lagre dokumentlisten og VENT på bekreftelse FØR vi sier fra oss at dette lyktes -
-  // den gamle filen slettes først etterpå, når vi er sikre på at referansen til den nye
-  // faktisk er trygt lagret (i stedet for potensielt å stå igjen uten noen av dem).
-  const { error: dbError } = await db.from('ordrer').update({ dokumenter: nyeDokumenter }).eq('id', ordreId);
+  // Selve les-endre-skriv-steget på dokumenter-lista skjer nå ATOMISK i databasen
+  // (oppdater_ordre_dokument, se migrasjonen 20261022120000) i stedet for her i
+  // nettleseren. Tidligere leste denne funksjonen o.dokumenter FRA NETTLESERENS EGET
+  // MINNE, la til/erstattet én linje, og skrev hele lista tilbake - et klassisk
+  // les-endre-skriv-kappløp. Reell, bekreftet hendelse 2026-10-22: to ansatte genererte
+  // Vegvesen-dokumenter på samme ordre ~40 sekunder fra hverandre, og den som lagret SIST
+  // overskrev hele lista med sin egen (eldre) kopi - kun ÉN av fire dokumentlinjer overlevde,
+  // og selve PDF-filen den pekte til var i tillegg allerede slettet som "gammel versjon" av
+  // den andre, tapte skrivingen. Databasefunksjonen radlåser ordren til den er ferdig, slik
+  // at et overlappende kall fra en annen ansatt/nettleser venter og ser den OPPDATERTE
+  // lista før det legger til sin egen linje - uavhengig av hvor lenge PDF-generering/
+  // opplasting tar.
+  const { data: rpcData, error: dbError } = await db.rpc('oppdater_ordre_dokument', { p_ordre_id: ordreId, p_navn: filnavn, p_dokument: nyttDok });
   if (dbError) { visToast('Kunne ikke lagre dokumentlisten for ' + filnavn + ': ' + dbError.message); return false; }
-  o.dokumenter = nyeDokumenter;
-  if (gammelIdx !== -1) {
-    const gammeltFilnavn = eksisterende[gammelIdx].url.split('/ordre-dokumenter/')[1];
+  const forrige = rpcData?.forrige || null;
+  o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter || []), nyttDok];
+  if (forrige?.url) {
+    const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
     // Feil her ble tidligere ikke sjekket i det hele tatt - en mislykket sletting (f.eks.
     // RLS-avvist fordi innlogget ansatt ikke er admin/godkjenner, se storage-policyen
     // "dokumenter_sletting") forsvant sporløst, og gamle PDF-er hopet seg opp i storage uten
@@ -1258,8 +1263,6 @@ function vegvesenFlateKontext(o) {
 async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) {
   if (ordreIder.length === 1) return vegvesenLagreGenerertDokument(ordreIder[0], filnavn, pdfBytes);
   if (!db) { visToast('Ikke koblet til Supabase'); return false; }
-  const forsteOrdre = S.ordrer.find(x => x.id === ordreIder[0]);
-  const forrige = forsteOrdre && (forsteOrdre.dokumenter || []).find(d => d.navn === filnavn);
 
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
   const tryggNavn = filnavn.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9.\-]/g, '_');
@@ -1269,29 +1272,26 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(lagringsnavn);
   const nyttDok = { navn: filnavn, url: data.publicUrl, lastetOppAv: me?.navn || 'Automatisk', dato: new Date().toISOString() };
 
+  // Samme atomiske databasefunksjon (oppdater_ordre_dokument, se vegvesenLagreGenerertDokument()
+  // sin kommentar for selve kappløps-bakgrunnen) - kalt én gang PER ordre i flåten (samme
+  // dokument/URL til alle), siden hver ordre-rad radlåses og oppdateres for seg i stedet for
+  // én felles batch-upsert som overskrev hele lista basert på nettleserens (potensielt
+  // utdaterte) kopi.
+  let forrige = null;
   const oppdaterte = [];
-  ordreIder.forEach(id => {
-    const o = S.ordrer.find(x => x.id === id); if (!o) return;
-    const eksisterende = o.dokumenter || [];
-    const gammelIdx = eksisterende.findIndex(d => d.navn === filnavn);
-    o._nyeDokumenter = gammelIdx !== -1 ? eksisterende.map((d, i) => i === gammelIdx ? nyttDok : d) : [...eksisterende, nyttDok];
-    oppdaterte.push(o);
-  });
-  // Lagre og VENT på bekreftelse FØR vi sier fra oss at dette lyktes og sletter den gamle
-  // filen - samme root-cause-fiks som vegvesenLagreGenerertDokument() (bekreftet av
-  // Henrik 2026-10-01), bare for flåte-varianten av samme lagrings-steg.
-  const { error: dbError } = await db.from('ordrer').upsert(oppdaterte.map(o => ({ id: o.id, dokumenter: o._nyeDokumenter })), { onConflict: 'id' });
-  if (dbError) {
-    oppdaterte.forEach(o => { delete o._nyeDokumenter; });
-    visToast('Kunne ikke lagre dokumentlisten (flåte) for ' + filnavn + ': ' + dbError.message);
-    return false;
-  }
-  oppdaterte.forEach(o => {
-    o.dokumenter = o._nyeDokumenter;
-    delete o._nyeDokumenter;
+  for (const id of ordreIder) {
+    const o = S.ordrer.find(x => x.id === id); if (!o) continue;
+    const { data: rpcData, error: dbError } = await db.rpc('oppdater_ordre_dokument', { p_ordre_id: id, p_navn: filnavn, p_dokument: nyttDok });
+    if (dbError) {
+      visToast(`Kunne ikke lagre dokumentlisten (flåte) for ${filnavn} (${o.chassis || id}): ${dbError.message}`);
+      return false;
+    }
+    if (rpcData?.forrige && !forrige) forrige = rpcData.forrige;
+    o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter || []), nyttDok];
     logChange(o, 'Generert dokument (flåte): ' + filnavn);
-  });
-  if (forrige) {
+    oppdaterte.push(o);
+  }
+  if (forrige?.url) {
     const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
     // Se tilsvarende kommentar i vegvesenLagreGenerertDokument() - feil her ble tidligere
     // ikke sjekket, og forsvant sporløst i stedet for å logges.
