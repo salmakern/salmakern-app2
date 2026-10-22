@@ -638,29 +638,34 @@ function varselMangelfullLevering(v, forventet, mottatt, mangler) {
 // en gang.
 function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, lagerBatch, oppskriftId) {
   const varLavFor = v.minAntall > 0 && (Number(v.antall)||0) <= v.minAntall;
+  // Lokal, optimistisk oppdatering for umiddelbar visning - selve databaseskrivingen under
+  // er nå en ATOMISK tilvekst, ikke avhengig av at denne lokale verdien er korrekt.
   v.antall = (Number(v.antall)||0) + endring;
   const erLavNa = v.minAntall > 0 && v.antall <= v.minAntall;
-
-  // Nullstill "bestilt"-merking automatisk når varen fylles opp over grensen igjen,
-  // slik at neste gang den blir lav gir et nytt, friskt varsel.
-  let bestiltEndret = false;
-  if (!erLavNa && v.bestilt) {
-    v.bestilt = false;
-    bestiltEndret = true;
-  }
+  // Nullstill "bestilt"-merking lokalt når varen fylles opp over grensen igjen (databasen
+  // gjør den ekte, atomiske versjonen av akkurat denne logikken selv - se
+  // endre_lagervare_antall_batch()).
+  if (!erLavNa && v.bestilt) v.bestilt = false;
 
   const hId = 'lh_' + Date.now() + '_' + Math.floor(Math.random()*1000);
   const hist = { id:hId, vareId:v.id, vareNavn:v.navn, endring, type, ordreId:ordreId||null, batchId:batchId||null, oppskriftId:oppskriftId||null, ansattNavn: me?me.navn:'', kommentar:kommentar||'', createdAt:new Date().toISOString() };
   S.lagerhistorikk = S.lagerhistorikk || [];
   S.lagerhistorikk.unshift(hist);
 
-  const vareOppdatering = bestiltEndret ? {id:v.id, antall:v.antall, bestilt:false} : {id:v.id, antall:v.antall};
+  // Selve beholdnings-endringen skrives nå som en ATOMISK tilvekst i databasen
+  // (endre_lagervare_antall_batch, se migrasjonen 20261022160000) i stedet for å skrive
+  // denne øktens lokalt beregnede ABSOLUTTVERDI - to uavhengige endringer på samme vare tett
+  // i tid (f.eks. manuelt uttak på én ordre og et automatisk oppskrift-trekk på en annen,
+  // begge mot samme delte lagervare) kunne ellers overskrive hverandre og la feil
+  // sluttantall bli stående (funnet 2026-10-22, samme rotårsak som
+  // dokumenter-/endringer-/fikenLinjer-kappløpet).
+  const vareDelta = {vareId:v.id, endring};
   const historikkInnsetting = {id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, oppskrift_id:oppskriftId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''};
   if (lagerBatch) {
-    lagerBatch.vareOppdateringer.push(vareOppdatering);
+    lagerBatch.vareDeltaer.push(vareDelta);
     lagerBatch.historikkInnsettinger.push(historikkInnsetting);
   } else if (db) {
-    db.from('lagervarer').upsert(vareOppdatering, {onConflict:'id'})
+    db.rpc('endre_lagervare_antall_batch', { p_endringer: [vareDelta] })
       .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
     db.from('lagerhistorikk').insert(historikkInnsetting)
       .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
@@ -682,12 +687,15 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, la
 // Se registrerLagerEndring() sin kommentar - samler opp flere varers endringer for én
 // samlet upsert/insert i stedet for ett Supabase-kall per vare i en oppskrift.
 function lagerBatchNy() {
-  return { vareOppdateringer: [], historikkInnsettinger: [] };
+  return { vareDeltaer: [], historikkInnsettinger: [] };
 }
 async function lagerBatchFlush(lagerBatch) {
   if (!db || !lagerBatch) return;
-  if (lagerBatch.vareOppdateringer.length) {
-    const { error } = await db.from('lagervarer').upsert(lagerBatch.vareOppdateringer, {onConflict:'id'});
+  if (lagerBatch.vareDeltaer.length) {
+    // Atomisk tilvekst for alle varene i batchen i ÉTT kall (samme funksjon som
+    // registrerLagerEndring() sin enkelt-vare-variant bruker, se migrasjonen
+    // 20261022160000) - ikke en absoluttverdi-upsert basert på nettleserens lokale kopi.
+    const { error } = await db.rpc('endre_lagervare_antall_batch', { p_endringer: lagerBatch.vareDeltaer });
     if (error) console.error('Lagerbeholdning-batch-oppdatering feilet:', error.message);
   }
   if (lagerBatch.historikkInnsettinger.length) {
@@ -1508,21 +1516,24 @@ async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa) {
 async function angreLagerBatch(batchId) {
   if (!confirm('Angre denne uttrekkingen og legge varene tilbake på lager?')) return;
   const rader = (S.lagerhistorikk||[]).filter(h=>h.batchId===batchId);
-  // Samler opp vare- og historikk-endringene og sender dem som to samlede kall (én
-  // upsert, én batch-delete) i stedet for to Supabase-kall per vare i oppskriften -
-  // se registrerLagerEndring() sin kommentar for hvorfor.
-  const vareOppdateringer = [];
+  // Samler opp vare- og historikk-endringene og sender dem som to samlede kall i stedet for
+  // to Supabase-kall per vare i oppskriften - se registrerLagerEndring() sin kommentar for
+  // hvorfor. Selve beholdnings-reverseringen er nå en ATOMISK tilvekst (negativ delta) i
+  // databasen i stedet for en absoluttverdi beregnet fra nettleserens lokale kopi - samme
+  // rotårsak-fiks som registrerLagerEndring() (funnet 2026-10-22, se migrasjonen
+  // 20261022160000).
+  const vareDeltaer = [];
   rader.forEach(h => {
     const v = (S.lagervarer||[]).find(x=>x.id===h.vareId);
     if (v) {
       v.antall = (Number(v.antall)||0) - h.endring;
-      vareOppdateringer.push({id:v.id, antall:v.antall});
+      vareDeltaer.push({vareId:v.id, endring: -h.endring});
     }
   });
   S.lagerhistorikk = (S.lagerhistorikk||[]).filter(h=>h.batchId!==batchId);
   if (db) {
-    if (vareOppdateringer.length) {
-      const { error } = await db.from('lagervarer').upsert(vareOppdateringer, {onConflict:'id'});
+    if (vareDeltaer.length) {
+      const { error } = await db.rpc('endre_lagervare_antall_batch', { p_endringer: vareDeltaer });
       if (error) console.error('Lagerbeholdning-batch-oppdatering feilet:', error.message);
     }
     if (rader.length) {
