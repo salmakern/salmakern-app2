@@ -820,40 +820,33 @@ async function lastOppEtDokument(file, id) {
   const { error } = await db.storage.from('ordre-dokumenter').upload(filnavn, file, {contentType: file.type || 'application/octet-stream', cacheControl:'31536000'});
   if (error) { visToast(`Feil ved opplasting av "${file.name}": ` + error.message); return; }
   const { data } = db.storage.from('ordre-dokumenter').getPublicUrl(filnavn);
-  o.dokumenter = o.dokumenter || [];
-  // Samme filnavn som et eksisterende dokument = ny versjon som erstatter den gamle,
-  // i stedet for at gamle versjoner hoper seg opp i listen.
-  const gammelIdx = o.dokumenter.findIndex(d => d.navn === file.name);
-  if (gammelIdx !== -1) {
-    const gammel = o.dokumenter[gammelIdx];
-    const gammeltFilnavn = gammel.url.split('/ordre-dokumenter/')[1];
+  const nyttDok = { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() };
+  // Selve "dokumenter"-kolonnen oppdateres nå ATOMISK i databasen (oppdater_ordre_dokument,
+  // samme radlåste funksjon som Vegvesen-dokumentene bruker, se migrasjonen 20261022120000)
+  // i stedet for å lese/endre/skrive hele lista fra nettleserens eget minne - uten dette
+  // kunne et dokument en annen ansatt lastet opp/slettet på samme ordre omtrent samtidig
+  // forsvinne sporløst, akkurat som den bekreftede Vegvesen-hendelsen 2026-10-22, bare via
+  // denne manuelle opplastingsveien.
+  const { data: rpcData, error: dbError } = await db.rpc('oppdater_ordre_dokument', { p_ordre_id: id, p_navn: file.name, p_dokument: nyttDok });
+  if (dbError) { visToast(`Kunne ikke lagre "${file.name}" i dokumentlisten: ` + dbError.message); return; }
+  const forrige = rpcData?.forrige || null;
+  o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter||[]), nyttDok];
+  if (forrige?.url) {
+    const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
     if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
-    o.dokumenter[gammelIdx] = { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() };
-    o.dokumenter = [...o.dokumenter];
     logChange(o, 'Erstattet dokument med ny versjon: ' + file.name);
   } else {
-    o.dokumenter = [...o.dokumenter, { navn: file.name, url: data.publicUrl, lastetOppAv: me.navn, dato: new Date().toISOString() }];
     logChange(o, 'Lastet opp dokument: ' + file.name);
   }
-  // Databaseoppdateringen av selve "dokumenter"-feltet gjøres IKKE her lenger - se
-  // lastOppFlereDokumenter() under, som nå gjør den ÉN gang etter at alle filene er lastet
-  // opp, i stedet for én gang PER fil (var en reell treghetskilde ved opplasting av flere
-  // filer samtidig, funnet i gjennomgang av "appen føles treig" 2026-10-08). Selve
-  // fil-opplastingen til Storage over må fortsatt skje sekvensielt (uendret) siden
-  // "erstatt gammel versjon"-logikken leser o.dokumenter som det står etter FORRIGE fil.
 }
 
 // Delt av både filvelgeren og dra-og-slipp-boksen - laster opp én fil om gangen (Supabase
-// Storage-kallet må gjøres sekvensielt uansett, siden "erstatt gammel versjon"-logikken i
-// lastOppEtDokument() avhenger av forrige fils resultat), men lagrer/rerendrer kun ÉN gang
-// til slutt i stedet for én gang per fil.
+// Storage-kallet gjøres sekvensielt), men rerendrer kun ÉN gang til slutt i stedet for én
+// gang per fil.
 async function lastOppFlereDokumenter(files, id) {
   // Kun admin kan laste opp dokumenter (bedt om av Henrik 2026-10-01 - godkjenner mistet denne).
   if (!me || me.rolle!=='admin') return;
   for (const file of files) await lastOppEtDokument(file, id);
-  const oFerdig = S.ordrer.find(x=>x.id===id);
-  if (db && oFerdig) db.from('ordrer').update({dokumenter:oFerdig.dokumenter}).eq('id', id)
-    .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
   planleggLocalSpeiling();
   const o = S.ordrer.find(x=>x.id===id);
   const listEl = document.getElementById('dokumenterListe_'+id);
@@ -899,16 +892,22 @@ async function slettDokument(id, idx) {
     const filnavn = dok.url.split('/ordre-dokumenter/')[1];
     if (filnavn) await db.storage.from('ordre-dokumenter').remove([filnavn]);
   }
-  beroerte.forEach(m => {
-    m.dokumenter = m.dokumenter.filter(d => !(d.navn===dok.navn && d.url===dok.url));
+  // Fjerning av selve dokumentlinja går nå via den atomiske oppdater_ordre_dokument()-
+  // funksjonen (p_dokument=null = slett) PER berørt ordre, i stedet for å lese/filtrere/
+  // skrive hele dokumenter-lista fra nettleserens eget minne - samme kappløpsrisiko som
+  // den bekreftede Vegvesen-hendelsen 2026-10-22 gjaldt også denne slette-veien.
+  for (const m of beroerte) {
+    if (db) {
+      const { data, error } = await db.rpc('oppdater_ordre_dokument', { p_ordre_id: m.id, p_navn: dok.navn, p_dokument: null });
+      if (error) { console.error('Dokument-sletting feilet:', error.message); continue; }
+      m.dokumenter = data?.dokumenter ?? [];
+    } else {
+      m.dokumenter = m.dokumenter.filter(d => !(d.navn===dok.navn && d.url===dok.url));
+    }
     logChange(m, 'Slettet dokument: ' + dok.navn);
-  });
-  if (db) db.from('ordrer').upsert(beroerte.map(m=>({id:m.id, dokumenter:m.dokumenter})), {onConflict:'id'})
-    .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
-  planleggLocalSpeiling();
-  beroerte.forEach(m => {
     const listEl = document.getElementById('dokumenterListe_'+m.id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(m);
-  });
+  }
+  planleggLocalSpeiling();
 }
 

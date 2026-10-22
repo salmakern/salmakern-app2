@@ -1135,6 +1135,12 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
   malOrdreIder.forEach(id => ignorerRealtimeFor.add(id));
   setTimeout(() => malOrdreIder.forEach(id => ignorerRealtimeFor.delete(id)), 10000);
 
+  // Fjerning av hver dokumentlinje går nå via den atomiske oppdater_ordre_dokument()-
+  // funksjonen (p_dokument=null = slett), én gang PER berørt ordre - samme radlås som
+  // beskytter vegvesenLagreGenerertDokument() (se migrasjonen 20261022130000) i stedet for
+  // den tidligere "les hele lista lokalt, filtrer, skriv hele lista tilbake"-formen, som
+  // hadde nøyaktig samme kappløpsrisiko som den allerede bekreftede 2026-10-22-hendelsen
+  // (funnet i full gjennomgang samme dag).
   for (const dok of gamle) {
     const beroerte = kontekst
       ? kontekst.medlemmer.filter(m => (m.dokumenter||[]).some(d => d.navn===dok.navn && d.url===dok.url))
@@ -1143,16 +1149,18 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
       const filnavn = dok.url.split('/ordre-dokumenter/')[1];
       if (filnavn) await db.storage.from('ordre-dokumenter').remove([filnavn]);
     }
-    beroerte.forEach(m => {
-      m.dokumenter = (m.dokumenter||[]).filter(d => !(d.navn===dok.navn && d.url===dok.url));
+    for (const m of beroerte) {
+      if (db) {
+        const { data, error } = await db.rpc('oppdater_ordre_dokument', { p_ordre_id: m.id, p_navn: dok.navn, p_dokument: null });
+        if (error) { console.error('Dokument-fjerning feilet:', error.message); continue; }
+        m.dokumenter = data?.dokumenter ?? [];
+      } else {
+        m.dokumenter = (m.dokumenter||[]).filter(d => !(d.navn===dok.navn && d.url===dok.url));
+      }
       logChange(m, 'Fjernet utdatert Vegvesen-dokument (verken Nytt eller Brukt Kjøretøy lenger valgt): ' + dok.navn);
-    });
-    if (db) db.from('ordrer').upsert(beroerte.map(m=>({id:m.id, dokumenter:m.dokumenter})), {onConflict:'id'})
-      .then(r=>{if(r.error) console.error('Dokument-oppdatering feilet:', r.error.message);});
-    beroerte.forEach(m => {
       const listEl = document.getElementById('dokumenterListe_' + m.id);
       if (listEl) listEl.innerHTML = dokumenterListeHTML(m);
-    });
+    }
   }
 
   // Nullstiller fingerprint slik at automatikken regenererer helt friskt igjen hvis
