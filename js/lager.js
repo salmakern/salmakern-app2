@@ -1477,14 +1477,30 @@ function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa) {
 // å gå via fritekstboksen og stole på at noen henter tallet derfra etterpå. Én linje per
 // oppskrift (antall 1) - trenger oppskriften flere enheter samtidig, juster antallet
 // manuelt i Fakturering-kortet etterpå.
-function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa) {
+async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa) {
   const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
-  if (!o.fikenLinjer) o.fikenLinjer = [];
-  const idx = o.fikenLinjer.findIndex(l=>l.produktnummer===produktnummer);
-  if (skalStaa && idx===-1) o.fikenLinjer.push({produktnummer, antall:1});
-  else if (!skalStaa && idx!==-1) o.fikenLinjer.splice(idx, 1);
-  else return;
-  save(o.id);
+  const finnes = (o.fikenLinjer||[]).some(l=>l.produktnummer===produktnummer);
+  if (skalStaa === finnes) return;
+  // Skriver nå ATOMISK via oppdater_ordre_fiken_linje() (radlås i databasen) i stedet for
+  // å lese/endre/skrive hele fikenLinjer-arrayet fra nettleserens eget minne via den
+  // generelle save() - denne funksjonen kalles fra flere automatiske synk-steder (EV9-
+  // panorama/4-seter, utstyr-maler, ombygging) som kan kjøre på hver render og dermed
+  // overlappe med en annen ansatts manuelle fakturalinje-redigering på samme ordre (funnet
+  // 2026-10-22, samme rotårsak som dokumenter-/endringer-kappløpet).
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', {
+      p_ordre_id: o.id, p_produktnummer: produktnummer,
+      p_linje: skalStaa ? { produktnummer, antall: 1 } : null
+    });
+    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
+  } else {
+    o.fikenLinjer = o.fikenLinjer || [];
+    const idx = o.fikenLinjer.findIndex(l=>l.produktnummer===produktnummer);
+    if (skalStaa && idx===-1) o.fikenLinjer.push({produktnummer, antall:1});
+    else if (!skalStaa && idx!==-1) o.fikenLinjer.splice(idx, 1);
+  }
+  planleggLocalSpeiling();
   const el = document.getElementById('fikenLinjer_'+o.id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }

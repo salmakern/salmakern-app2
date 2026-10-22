@@ -540,6 +540,29 @@ function fikenLinjerHTML(o) {
     </div>
   </div>`;
 }
+// Skriver ÉN fakturalinje atomisk (radlås i databasen, se oppdater_ordre_fiken_linje() i
+// migrasjonen 20261022150000) i stedet for å lese/endre/skrive hele fikenLinjer-arrayet fra
+// nettleserens eget minne - brukt av de PRODUKTNUMMER-keyede skrivingene (drivstoff, "Hent
+// fra Utstyr-boksen"). Dekker IKKE den rent manuelle, indeks-baserte linjeredigeringen
+// (leggTilFikenLinje/fjernFikenLinje/settFikenLinje under) - den har ingen naturlig "nøkkel"
+// per linje (kan ha tom/duplikat produktnummer mens den skrives inn) og står foreløpig igjen
+// med samme (lavere praktiske risiko, siden det er én admin som bygger fakturaen) mønster som
+// før (funnet og vurdert 2026-10-22, se samtalen).
+async function oppdaterOrdreFikenLinje(o, produktnummer, linje) {
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', { p_ordre_id: o.id, p_produktnummer: produktnummer, p_linje: linje });
+    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
+  } else {
+    o.fikenLinjer = o.fikenLinjer || [];
+    const idx = o.fikenLinjer.findIndex(l=>l.produktnummer===produktnummer);
+    if (linje) { if (idx!==-1) o.fikenLinjer[idx]=linje; else o.fikenLinjer.push(linje); }
+    else if (idx!==-1) o.fikenLinjer.splice(idx,1);
+  }
+  planleggLocalSpeiling();
+  const el = document.getElementById('fikenLinjer_'+o.id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
 function leggTilFikenLinje(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer) o.fikenLinjer = [];
@@ -558,23 +581,17 @@ function hentFikenLinjerFraUtstyr(o) {
   linjer.forEach(n => { antallPerNummer[n] = (antallPerNummer[n]||0) + 1; });
   return Object.entries(antallPerNummer).map(([produktnummer, antall]) => ({produktnummer, antall}));
 }
-function leggTilFikenLinjerFraUtstyr(id) {
+async function leggTilFikenLinjerFraUtstyr(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   const nye = hentFikenLinjerFraUtstyr(o);
   if (!nye.length) { visToast('Fant ingen rene produktnumre i Utstyr-boksen'); return; }
-  if (!o.fikenLinjer) o.fikenLinjer = [];
   // Oppdaterer en eksisterende linje for samme produktnummer i stedet for å pushe en ny
   // (uten dette ga et andre trykk duplikate fakturalinjer - funnet 2026-10-15). Knappen
   // skal fjernes helt etter hvert (bedt om av Henrik), så bare denne minimale fiksen -
   // ikke bygget om til automatisk synk slik ombygging/drivstoff er.
-  nye.forEach(({produktnummer, antall}) => {
-    const eksisterende = o.fikenLinjer.find(l => l.produktnummer === produktnummer);
-    if (eksisterende) eksisterende.antall = antall;
-    else o.fikenLinjer.push({produktnummer, antall});
-  });
-  save(id);
-  const el = document.getElementById('fikenLinjer_'+id);
-  if (el) el.innerHTML = fikenLinjerHTML(o);
+  for (const {produktnummer, antall} of nye) {
+    await oppdaterOrdreFikenLinje(o, produktnummer, {produktnummer, antall});
+  }
 }
 function fjernFikenLinje(id, idx) {
   const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
@@ -588,17 +605,11 @@ function fjernFikenLinje(id, idx) {
 // i stedet for å hente pris fra produktet slik de andre linjene gjør. Legger til/oppdaterer
 // ÉN linje (ikke flere ved gjentatte trykk) siden en ordre kun har én reell drivstoffpris.
 const FIKEN_PRODUKTNUMMER_DRIVSTOFF = '21';
-function leggTilFikenLinjeDrivstoff(id) {
+async function leggTilFikenLinjeDrivstoff(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   const belop = drivstoffKundepris(o);
   if (!belop) { visToast('Ingen drivstoffpris registrert på denne ordren'); return; }
-  if (!o.fikenLinjer) o.fikenLinjer = [];
-  const eksisterende = o.fikenLinjer.find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
-  if (eksisterende) { eksisterende.antall = 1; eksisterende.belop = belop; }
-  else { o.fikenLinjer.push({produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop}); }
-  save(id);
-  const el = document.getElementById('fikenLinjer_'+id);
-  if (el) el.innerHTML = fikenLinjerHTML(o);
+  await oppdaterOrdreFikenLinje(o, FIKEN_PRODUKTNUMMER_DRIVSTOFF, {produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop});
 }
 function settFikenLinje(id, idx, felt, val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer || !o.fikenLinjer[idx]) return;
@@ -969,17 +980,12 @@ function synkroniserOmbyggingFikenLinjer(o) {
 // faktureringa"). Ingen toast her ved manglende pris (i motsetning til knappen) - de
 // fleste ordre har rett og slett ingen drivstoffpris ennå, og det er ikke en feil. No-op
 // (ingen lagring) når linjen allerede stemmer, trygt å kalle på hvert render.
-function synkroniserDrivstoffFikenLinje(o) {
+async function synkroniserDrivstoffFikenLinje(o) {
   const belop = drivstoffKundepris(o);
   if (!belop) return;
-  if (!o.fikenLinjer) o.fikenLinjer = [];
-  const eksisterende = o.fikenLinjer.find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
+  const eksisterende = (o.fikenLinjer||[]).find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
   if (eksisterende && eksisterende.antall===1 && eksisterende.belop===belop) return;
-  if (eksisterende) { eksisterende.antall = 1; eksisterende.belop = belop; }
-  else { o.fikenLinjer.push({produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop}); }
-  save(o.id);
-  const el = document.getElementById('fikenLinjer_'+o.id);
-  if (el) el.innerHTML = fikenLinjerHTML(o);
+  await oppdaterOrdreFikenLinje(o, FIKEN_PRODUKTNUMMER_DRIVSTOFF, {produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop});
 }
 
 function sfOmbygging(id, felt, val) {

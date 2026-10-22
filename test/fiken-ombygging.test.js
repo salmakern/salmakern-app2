@@ -26,6 +26,8 @@ function nyEnvironment() {
     S: { ordrer: [] },
     activeOrdreId: null,
     save() {},
+    planleggLocalSpeiling() {},
+    db: null,
   };
   vm.createContext(sandbox);
   vm.runInContext(ordreDetaljKode, sandbox, { filename: 'ordre-detalj.js' });

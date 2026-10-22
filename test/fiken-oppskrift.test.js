@@ -30,6 +30,8 @@ function nyEnvironment() {
     merkeModell: o => `${o.merke||''} ${o.modell||''}`.trim(),
     su() {},
     save() {},
+    planleggLocalSpeiling() {},
+    db: null,
   };
   vm.createContext(sandbox);
   vm.runInContext(kode, sandbox, { filename: 'lager.js' });
