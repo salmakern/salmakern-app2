@@ -1442,6 +1442,12 @@ function renderAdminArk(scrollTilBunn) {
         if (felt === 'fraktselskap' || felt === 'bestiltFrakt') cell.getRow().reformat();
         if (felt !== 'chassisNr') return;
         if (verdi !== cell.getValue()) cell.getRow().update({ chassisNr: verdi });
+        // _fraktKnapper-formatteren leser også rad.chassisNr ("Krever chassis.nr") - uten
+        // dette eksplisitte reformat()-kallet ble knappene stående igjen i sin FORRIGE
+        // tilstand (inkl. det gamle chassisnummeret bakt inn i onclick) når noen TØMTE
+        // feltet helt (den betingede renderAdminArk() under kjører kun når et NYTT
+        // chassisnummer settes, ikke når et gammelt fjernes) - funnet 2026-10-22.
+        cell.getRow().reformat();
         // Løs rad (ingen ordre ennå) som nettopp fikk et chassis-nr - oppretter automatisk
         // en ny ordre ("På vei") for den, se adminArkOpprettOrdreForChassis().
         if (verdi && !rad._erOrdre) { adminArkOpprettOrdreForChassis(rad, verdi); renderAdminArk(); }

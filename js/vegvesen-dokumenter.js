@@ -1090,6 +1090,10 @@ function vegvesenBeregnOgSettEndring(o) {
   o.vekter.bakaksel.e = String(P2);
   logChange(o, 'Vektfordeling beregnet' + (delta>0 ? ` - totalvekt justert ned ${delta} kg` : ''));
   save(o.id);
+  // Oppdaterer de synlige "Endring"-inputfeltene med en gang - uten dette sto de med
+  // gammel/tom verdi helt til noe HELT ANNET tilfeldigvis trigget en ny full rendering av
+  // ordresiden (se oppdaterVektInputVerdierIDOM() i ordre-detalj.js, funnet 2026-10-22).
+  if (typeof oppdaterVektInputVerdierIDOM === 'function') oppdaterVektInputVerdierIDOM(o);
 
   return { geometri, P, P1, P2, M, M1, M2, justertP, justertVogntog, beregning };
 }

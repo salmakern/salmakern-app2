@@ -142,10 +142,7 @@ function buildOrdreDetail() {
   const vegvesenKontekst = vegvesenFlateKontext(o);
   const vegvesenKilde = (vegvesenKontekst ? vegvesenKontekst.primaer : o).ombygging;
   const vegvesenGjelderDenneOrdren = !!(vegvesenKilde?.nyttKjoretoy || vegvesenKilde?.bruktKjoretoy);
-  const tf = tvangsflyt(o);
-  const tvangsflytOk = tf.every(t=>t.ok);
   const erAdmin = me && me.rolle==='admin';
-  const kanLukke = tvangsflytOk || erAdmin; // admin kan overstyre ufullstendig tvangsflyt
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
   const headerH = document.querySelector('.top')?.offsetHeight || 0;
   // "meldt på"/"meldt av"-hendelser vises i egen boks under Ansatte på ordren i stedet for
@@ -430,23 +427,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
 
     <!-- SIDEBAR -->
     <div>
-      <div class="card">
-        <div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
-        <div style="display:flex;gap:3px;margin-top:10px">
-          ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:5px;border-radius:999px;background:${t.ok?'#4ade80':'rgba(239,68,68,.5)'}"></span>`).join('')}
-        </div>
-        <div class="box" style="margin-top:10px;padding:0;overflow:hidden">
-          ${tf.map((t,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid ${i===0?'transparent':'#1f1f23'};background:${t.ok?'transparent':'rgba(239,68,68,.05)'}">
-            <span style="flex-shrink:0;width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:${t.ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.14)'};border:1px solid ${t.ok?'rgba(34,197,94,.35)':'rgba(239,68,68,.4)'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
-            <span style="font-size:13.5px;color:${t.ok?'#a1a1aa':'#f4f4f5'}">${esc(t.lbl)}</span>
-          </div>`).join('')}
-        </div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
-          ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
-            ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:8px">${erAdmin?'Tvangsflyt ikke fullført - du kan overstyre som admin.':'Fullfør tvangsflyt først.'}</div>`:''}
-            <button class="btn red" style="width:100%" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
-        </div>
-      </div>
+      <div class="card" id="tvangsflytBoks_${o.id}">${tvangsflytBoksHTML(o)}</div>
 
       <div class="card">
         <div class="h">Time på biltilsynet</div>
@@ -854,6 +835,45 @@ function tvangsflyt(o) {
   ];
 }
 
+// Innholdet i "Tvangsflyt"-kortet i sidepanelet - egen funksjon (i stedet for inline i
+// buildOrdreDetail()) slik at sv()/sfOmbygging()/sf() kan tegne akkurat denne boksen på nytt
+// etter at de endrer et felt tvangsflyt(o) leser (vekter, ombygging) - UTEN å kalle
+// buildOrdreDetail() selv, som bevisst nekter å kjøre mens brukeren har et annet
+// input/select/textarea fokusert andre steder på siden (se guard-en øverst i
+// buildOrdreDetail()). Uten dette ble boksen stående med feil krav-status/deaktivert
+// "Godkjenn og lukk"-knapp helt til noe HELT ANNET tilfeldigvis trigget en full rendering
+// (funnet 2026-10-22).
+function tvangsflytBoksHTML(o) {
+  const tf = tvangsflyt(o);
+  const tvangsflytOk = tf.every(t=>t.ok);
+  const erAdmin = me && me.rolle==='admin';
+  const kanLukke = tvangsflytOk || erAdmin;
+  const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  return `<div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
+    <div style="display:flex;gap:3px;margin-top:10px">
+      ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:5px;border-radius:999px;background:${t.ok?'#4ade80':'rgba(239,68,68,.5)'}"></span>`).join('')}
+    </div>
+    <div class="box" style="margin-top:10px;padding:0;overflow:hidden">
+      ${tf.map((t,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid ${i===0?'transparent':'#1f1f23'};background:${t.ok?'transparent':'rgba(239,68,68,.05)'}">
+        <span style="flex-shrink:0;width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:${t.ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.14)'};border:1px solid ${t.ok?'rgba(34,197,94,.35)':'rgba(239,68,68,.4)'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
+        <span style="font-size:13.5px;color:${t.ok?'#a1a1aa':'#f4f4f5'}">${esc(t.lbl)}</span>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+      ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
+        ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:8px">${erAdmin?'Tvangsflyt ikke fullført - du kan overstyre som admin.':'Fullfør tvangsflyt først.'}</div>`:''}
+        <button class="btn red" style="width:100%" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
+    </div>`;
+}
+// Tegner Tvangsflyt-boksen på nytt i det eksisterende DOM-elementet (se tvangsflytBoksHTML())
+// - trygt å kalle fra sv()/sfOmbygging()/sf() uten sideeffekter hvis ordren ikke er den som
+// faktisk vises akkurat nå (f.eks. en bakgrunnstrigget vegvesenBeregnOgSettEndring() for en
+// annen ordre enn den brukeren har åpen).
+function oppdaterTvangsflytBoks(o) {
+  const el = document.getElementById('tvangsflytBoks_' + o.id);
+  if (el) el.innerHTML = tvangsflytBoksHTML(o);
+}
+
 function ombyggingBoksHTML(o) {
   // Varsel når Nytt/Brukt Kjøretøy er huket av men merke/modell ikke matcher noen kjent
   // Fiken-ombyggingslinje (se FIKEN_OMBYGGING_MODELLER/finnFikenOmbyggingModell under) -
@@ -971,6 +991,9 @@ function sfOmbygging(id, felt, val) {
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
   synkroniserOmbyggingFikenLinjer(o);
+  // Tvangsflyt-kravet "Ombygging valgt" leser o.ombygging - samme begrunnelse som i sv()
+  // over (funnet 2026-10-22).
+  oppdaterTvangsflytBoks(o);
   // Rydder bort tidligere auto-genererte Vegvesen-dokumenter hvis Nytt ELLER Brukt
   // Kjøretøy skrus av etter at de allerede er laget - ellers blir de stående og se
   // gyldige ut for en kategori ordren ikke lenger tilhører (se vegvesen-dokumenter.js -
@@ -1351,6 +1374,16 @@ function sf(id, field, val) {
   }
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
+  // Merke/Modell styrer BÅDE "Ombygging valgt"-advarselen (manglende Fiken-produktlinje,
+  // se ombyggingBoksHTML()) og selve ombyggingslinjen i fakturagrunnlaget - uten dette ble
+  // begge stående med feil/utdatert status helt til noe HELT ANNET trigget en full
+  // rendering, selv om sfOmbygging() (avkrysningsboksene i SAMME kort) allerede gjorde
+  // nøyaktig dette ved egen endring (funnet 2026-10-22).
+  if (['merke','modell'].includes(field)) {
+    const container = document.getElementById('ombyggingBoks_' + id);
+    if (container) container.innerHTML = ombyggingBoksHTML(o);
+    synkroniserOmbyggingFikenLinjer(o);
+  }
   return true;
 }
 function sv(id,k,col,val) {
@@ -1364,6 +1397,10 @@ function sv(id,k,col,val) {
   }
   save(id);
   if (['totalvekt','vogntog'].includes(k) && (col==='a'||col==='e')) oppdaterVektFarge(id,k);
+  // Tvangsflyt-kravet "Vekter fylt ut" leser o.vekter.totalvekt.a - uten dette ble
+  // sidepanelet stående å vise kravet som ikke oppfylt (og "Godkjenn og lukk" deaktivert
+  // for en godkjenner) selv rett etter at feltet faktisk ble fylt ut (funnet 2026-10-22).
+  if (k === 'totalvekt' && col === 'a') oppdaterTvangsflytBoks(o);
   synkroniserFraPrimaer(id);
 }
 function synkroniserFraPrimaer(id) {
@@ -1399,6 +1436,25 @@ function oppdaterVektFarge(id,k) {
   if (!inp) return;
   inp.style.color = rod ? '#ef4444' : '';
   inp.style.borderColor = rod ? '#ef4444' : '';
+}
+// Oppdaterer "Endring"-inputfeltene (kolonne 'e') i Vekter-tabellen med de 4 verdiene
+// vegvesenBeregnOgSettEndring() (vegvesen-dokumenter.js) nettopp regnet ut og lagret på
+// o.vekter - den funksjonen kjører i bakgrunnen fra vegvesenAutoGenererHvisKomplett() lenge
+// etter at tabellen allerede er tegnet, og gjorde tidligere ALDRI noen tilsvarende DOM-
+// oppdatering (i motsetning til sv() sin egen foraksel/bakaksel-synk rett over) - den
+// ansatte så fortsatt den gamle/tomme verdien i feltet selv om den nettopp lagrede, ekte
+// justerte totalvekten (den som faktisk havner på Fabrikantattest/trinn 2-lappen) var en
+// annen (funnet 2026-10-22).
+function oppdaterVektInputVerdierIDOM(o) {
+  const table = document.querySelector('#ordreDetail table');
+  if (!table) return;
+  const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
+  rader.forEach((k,i) => {
+    const inp = table.querySelectorAll('tbody tr')[i]?.querySelectorAll('input')[1];
+    if (inp) inp.value = o.vekter[k].e;
+  });
+  oppdaterVektFarge(o.id,'totalvekt');
+  oppdaterVektFarge(o.id,'vogntog');
 }
 function vektEnter(e, rad, kol) {
   const cols = ['a','e','v'];
