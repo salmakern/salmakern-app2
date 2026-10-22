@@ -89,6 +89,17 @@ function visToast(melding, type='feil') {
   el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 5000);
 }
 
+// Delt av dokDrop() (ordre-diverse.js) og fullmaktDrop() (ansatte-utstyr.js) - begge gjorde
+// tidligere INGENTING (ingen toast, ingen feilmelding) når en drag-og-slipp ikke inneholdt
+// noen faktisk fil, noe som så ut som appen "hang" fremfor at noe faktisk feilet. Vanligste
+// årsak (bekreftet 2026-10-22, se kildene i samtalen): den nye Outlook-appen blokkerer å dra
+// vedlegg direkte fra en e-post inn i nettlesere - en Microsoft-side begrensning som gjelder
+// alle nettsider, ikke noe som kan rettes i denne appens kode. Eneste praktiske løsning er å
+// lagre vedlegget til disk først.
+function visTomDropToast() {
+  visToast('Fant ingen fil i det du dro inn. Vanligste årsak: den nye Outlook-appen tillater ikke å dra vedlegg direkte fra en e-post til en nettside - lagre vedlegget på datamaskinen først, og dra/velg den lagrede filen i stedet.');
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

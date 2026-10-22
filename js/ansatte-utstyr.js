@@ -522,6 +522,7 @@ function fullmaktDrop(e) {
   document.getElementById('fdFullmaktDropzone')?.classList.remove('dok-dropzone-over');
   const file = e.dataTransfer?.files?.[0];
   if (file) lastOppForhandlerFullmakt(file);
+  else visTomDropToast();
 }
 
 async function fjernForhandlerFullmakt(forhandlerId) {

@@ -878,7 +878,7 @@ async function dokDrop(e, id) {
   e.preventDefault();
   document.getElementById('dokDropzone_'+id)?.classList.remove('dok-dropzone-over');
   const files = Array.from(e.dataTransfer?.files || []);
-  if (!files.length) return;
+  if (!files.length) { visTomDropToast(); return; }
   await lastOppFlereDokumenter(files, id);
 }
 
