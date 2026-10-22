@@ -37,6 +37,21 @@ function beregnManuellMinutter(start, stopp) {
   return { raatid, pause, mins: netto };
 }
 
+// Genererer en kollisjonsfri ID for en ny timer-/egenmeldingsrad - IKKE basert på det delte,
+// rent lokale S.nextId-telleverket (satt én gang per nettleserøkt ved innlasting, se
+// loadFromSupabase() i core.js). To ansatte som logger inn omtrent samtidig (typisk ved
+// skiftstart) og lagrer sin første timer samme dag FØR noen andre nye ID-krevende rader er
+// opprettet, fikk nøyaktig samme start-S.nextId - og dermed samme 't<tall>'-id ved sitt
+// FØRSTE lagre()-trykk hvis begge gjorde det omtrent samtidig (f.eks. ved skiftslutt). Siden
+// timer_entries.id er primærnøkkel, feilet den ene innsettingen stille (kun console.error,
+// se lagreTimer()/doLagreManuellTimer()) mens raden likevel sto synlig i den ansattes egen,
+// lokale liste - timen forsvant sporløst fra lønnsgrunnlaget uten at noen fikk vite det
+// (bekreftet reell bug 2026-10-22). Samme mønster (tidsstempel + tilfeldig suffiks) som
+// admin-ark.js/lager.js allerede bruker for sine egne ID-er.
+function nyTimerId(prefiks) {
+  return prefiks + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+
 function initTimerPage() {
   const d=new Date();
   document.getElementById('timerDatoLbl').textContent=d.toLocaleDateString('no',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -207,14 +222,14 @@ function doLagreManuellTimer() {
   const { mins }=beregnManuellMinutter(start,stopp);
   const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
   const entry={
-    id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+    id:nyTimerId('t'), ansattId:me.id, ansatt:me.navn,
     dato, type:'manuell', start, stopp, mins, _localAt:Date.now()
   };
   S.timer.push(entry);
   if(db) db.from('timer_entries').insert({
     id:entry.id,ansatt_id:me.id,ansatt:me.navn,
     dato:entry.dato,type:'manuell',start,stopp,mins
-  }).then(r=>{if(r.error) console.error('Timer feil:',r.error.message);});
+  }).then(r=>{if(r.error) { console.error('Timer feil:',r.error.message); visToast('Kunne ikke lagre timeregistreringen - prøv igjen'); } });
   planleggLocalSpeiling();
   renderTimerHistorikk(); renderTimerMaaned();
   document.getElementById('mFra').value='';
@@ -311,7 +326,7 @@ function updateClock() {
   oppdaterKlokkeRing(Math.min(netto/(7.5*60),1)*360, true);
 }
 
-function lagreTimer() {
+async function lagreTimer() {
   if(!me) return;
   let start='', stopp='', mins=0;
   if (timerType==='manuell') {
@@ -339,7 +354,7 @@ function lagreTimer() {
       const dag=cur.getDay();
       if(dag!==0&&dag!==6){ // skip weekends
         entries.push({
-          id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+          id:nyTimerId('t'), ansattId:me.id, ansatt:me.navn,
           dato:cur.toISOString().split('T')[0], type:timerType,
           start:'–', stopp:'–', mins:0, _localAt:Date.now()
         });
@@ -352,7 +367,7 @@ function lagreTimer() {
     // lengre ferie/permisjon kan fort bli mange enkeltkall, som har vist seg upålitelig
     // (se flyttVare()/registrerLagerEndring() sine kommentarer for samme problem).
     if(db) db.from('timer_entries').insert(entries.map(e=>({id:e.id,ansatt_id:me.id,ansatt:me.navn,dato:e.dato,type:timerType,start:'–',stopp:'–',mins:0})))
-      .then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
+      .then(r=>{if(r.error) { console.error('Timer lagringsfeil:',r.error.message); visToast('Kunne ikke lagre registreringen - prøv igjen'); } });
     planleggLocalSpeiling();
     renderTimerHistorikk(); renderTimerMaaned();
     return;
@@ -364,12 +379,30 @@ function lagreTimer() {
       alert('Du kan ikke bruke egenmelding ennå - dette krever minst 2 måneders ansettelse.');
       return;
     }
-    const periodeId = 'ep'+(++S.nextId);
-    const tidligereEpisoder = egenmeldingEpisoderSisteAar(S.timer, me.id, idag);
+    const periodeId = nyTimerId('ep');
+    // Teller FERSKE episoder direkte fra databasen i stedet for kun denne øktens lokale
+    // S.timer-kopi - uten dette kunne samme ansatt (logget inn på f.eks. både jobbtelefon
+    // og en felles tidsklokke på verkstedet - PIN-innlogging setter ingen sperre mot flere
+    // samtidige økter) registrere egenmelding fra begge enhetene innen kort tid og få BEGGE
+    // feilaktig merket betalt:true, siden ingen av øktene ennå hadde mottatt den andres nye
+    // rad via Realtime (funnet 2026-10-22). Faller tilbake til den lokale kopien hvis
+    // spørringen feiler eller appen er offline - samme oppførsel som før fiksen.
+    let episodeKilde = S.timer;
+    if (db) {
+      const { data, error } = await db.from('timer_entries')
+        .select('dato,egenmelding_periode_id')
+        .eq('ansatt_id', me.id).eq('type', 'egenmelding');
+      if (!error && data) {
+        episodeKilde = data.map(r => ({ ansattId: me.id, type: 'egenmelding', dato: r.dato, egenmeldingPeriodeId: r.egenmelding_periode_id }));
+      } else if (error) {
+        console.error('Kunne ikke hente ferske egenmeldinger, bruker lokal kopi:', error.message);
+      }
+    }
+    const tidligereEpisoder = egenmeldingEpisoderSisteAar(episodeKilde, me.id, idag);
     const betalt = tidligereEpisoder < 4;
     const dager = genererEgenmeldingDager(idag, 3);
     const entries = dager.map(dato=>({
-      id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+      id:nyTimerId('t'), ansattId:me.id, ansatt:me.navn,
       dato, type:'egenmelding', start:'–', stopp:'–', mins:0, betalt,
       egenmeldingPeriodeId:periodeId, _localAt:Date.now()
     }));
@@ -379,7 +412,7 @@ function lagreTimer() {
     if(db) db.from('timer_entries').insert(entries.map(e=>({
         id:e.id, ansatt_id:me.id, ansatt:me.navn, dato:e.dato, type:'egenmelding',
         start:'–', stopp:'–', mins:0, betalt, egenmelding_periode_id:periodeId
-      }))).then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
+      }))).then(r=>{if(r.error) { console.error('Timer lagringsfeil:',r.error.message); visToast('Kunne ikke lagre egenmeldingen - prøv igjen'); } });
     planleggLocalSpeiling();
     renderTimerHistorikk(); renderTimerMaaned(); visEgenmeldingKvoteInfo();
     visToast(
@@ -391,7 +424,7 @@ function lagreTimer() {
     return;
   } else { alert('Start timer først'); return; }
   const timerEntry={
-    id:'t'+(++S.nextId), ansattId:me.id, ansatt:me.navn,
+    id:nyTimerId('t'), ansattId:me.id, ansatt:me.navn,
     dato:new Date().toISOString().split('T')[0], type:timerType,
     start, stopp, mins, _localAt:Date.now()
   };
@@ -400,7 +433,7 @@ function lagreTimer() {
   if(db) db.from('timer_entries').insert({
     id:timerEntry.id, ansatt_id:me.id, ansatt:me.navn,
     dato:timerEntry.dato, type:timerType, start, stopp, mins
-  }).then(r=>{if(r.error) console.error('Timer lagringsfeil:',r.error.message);});
+  }).then(r=>{if(r.error) { console.error('Timer lagringsfeil:',r.error.message); visToast('Kunne ikke lagre timeregistreringen - prøv igjen'); } });
   localStorage.removeItem('timerStart_'+me?.id);
   renderTimerHistorikk();
   stoppTimer();
