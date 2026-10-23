@@ -232,7 +232,11 @@ function plasserKalenderHendelser(items) {
   });
 }
 
-const FRAVAR_FARGE = { syk:'#ef4444', egenmelding:'#ef4444', ferie:'#22c55e', permisjon:'#a1a1aa' };
+// Egenmelding fikk egen farge (amber, samme som "50% overtid" ellers i appen) 2026-10-23
+// (bedt om av Henrik: gjøre fraværskalenderen "bedre og mer oversiktlig") - delte
+// tidligere farge med Syk, så de to var kun til å skille fra hverandre via verktøytipset,
+// ikke et blikk på selve kalenderruta/prikken.
+const FRAVAR_FARGE = { syk:'#ef4444', egenmelding:'#facc15', ferie:'#22c55e', permisjon:'#a1a1aa' };
 const FRAVAR_LABEL = { syk:'Syk', egenmelding:'Egenmelding', ferie:'Ferie', permisjon:'Permisjon' };
 
 function renderWeek() {

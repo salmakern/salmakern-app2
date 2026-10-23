@@ -52,6 +52,24 @@ function nyTimerId(prefiks) {
   return prefiks + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 }
 
+// Varsler admin (push) idet en ansatt registrerer sykdom eller egenmelding - bedt om av
+// Henrik 2026-10-23, slik at han vet med en gang i stedet for å oppdage det tilfeldigvis
+// senere (f.eks. på lønnsslippen, eller ved å åpne fraværskalenderen). Samme "send-push"-
+// edge-funksjon som resten av appen bruker (se supabase/functions/send-push) - egen "type"
+// der filtrerer selv til kun admin-abonnenter, se den filen for selve varsel-teksten.
+// Bevisst ikke sendt for ferie/permisjon - de er normalt planlagt i god tid og mindre
+// tidskritiske å få vite om umiddelbart (samme vurdering som Henrik selv gjorde i samtalen).
+function varsleAdminOmFravaer(fravaerType, fraDato, tilDato, betalt) {
+  if (!SUPA_URL || !SUPA_KEY) return;
+  fetch(SUPA_URL + '/functions/v1/send-push', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+    body: JSON.stringify({
+      type: 'fravaer_registrert', ansattNavn: me?.navn || '?', fravaerType, fraDato, tilDato,
+      betalt: betalt === undefined ? null : betalt
+    })
+  }).catch(e => console.warn('Fravær-varsel feilet:', e));
+}
+
 function initTimerPage() {
   const d=new Date();
   document.getElementById('timerDatoLbl').textContent=d.toLocaleDateString('no',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -370,6 +388,8 @@ async function lagreTimer() {
       .then(r=>{if(r.error) { console.error('Timer lagringsfeil:',r.error.message); visToast('Kunne ikke lagre registreringen - prøv igjen'); } });
     planleggLocalSpeiling();
     renderTimerHistorikk(); renderTimerMaaned();
+    // Kun syk varsler admin med en gang - ferie/permisjon er normalt planlagt i god tid.
+    if (timerType === 'syk') varsleAdminOmFravaer('syk', entries[0].dato, entries[entries.length-1].dato);
     return;
   } else if (timerType==='egenmelding') {
     // Se genererEgenmeldingDager/egenmeldingEpisoderSisteAar lenger opp i filen for
@@ -421,6 +441,7 @@ async function lagreTimer() {
         : `Egenmelding registrert ${dager[0]} til ${dager[dager.length-1]} - UBETALT (mer enn 4 egenmeldinger brukt siste 12 måneder)`,
       betalt?'ok':'feil'
     );
+    varsleAdminOmFravaer('egenmelding', dager[0], dager[dager.length-1], betalt);
     return;
   } else { alert('Start timer først'); return; }
   const timerEntry={

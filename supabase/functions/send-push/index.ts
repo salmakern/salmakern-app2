@@ -39,6 +39,11 @@ function imorgenDato(dagensDato: string): string {
   d.setUTCDate(d.getUTCDate() + 1)
   return d.toISOString().slice(0, 10)
 }
+// "2026-10-23" -> "23.10" - kort norsk datoformat til varseltekst.
+function fmtDatoKort(iso: string): string {
+  const [, m, d] = iso.split('-')
+  return `${d}.${m}`
+}
 
 // Sender hver melding kun til abonnentene som hører til deltakerIder - tom/manglende
 // deltakerIder betyr "alle" (bevarer eksisterende oppførsel for biltilsyn-varsler m.m.).
@@ -141,6 +146,33 @@ Deno.serve(async (req) => {
         body: `${payload.tittel} - ${payload.dato?.split('-').reverse().join('.')} kl. ${payload.tid}${navnSuffiks}`,
         deltakerIder: payload.deltakerIder
       }])
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
+
+    // Sendes fra klienten (timer.js, varsleAdminOmFravaer()) idet en ansatt registrerer
+    // syk eller egenmelding - KUN til admin-kontoer, aldri alle ansatte (dette er
+    // lønnsrelatert informasjon om en navngitt kollega). Bedt om av Henrik 2026-10-23: han
+    // skal vite med en gang i stedet for å oppdage det tilfeldigvis senere.
+    if (payload.type === 'fravaer_registrert') {
+      const { data: adminer, error: adminErr } = await supabase
+        .from('ansatte')
+        .select('id')
+        .eq('rolle', 'admin')
+        .eq('aktiv', true)
+      if (adminErr) console.error('Henting av admin-liste feilet:', adminErr.message)
+      const adminIder = (adminer ?? []).map((a: any) => a.id)
+      if (adminIder.length) {
+        const typeTekst = payload.fravaerType === 'syk' ? 'sykmeldt' : 'har registrert egenmelding'
+        const periodeTekst = payload.fraDato === payload.tilDato
+          ? fmtDatoKort(payload.fraDato)
+          : `${fmtDatoKort(payload.fraDato)}-${fmtDatoKort(payload.tilDato)}`
+        const ubetaltTekst = payload.betalt === false ? ' - UBETALT (mer enn 4 egenmeldinger siste 12 mnd)' : ''
+        await sendTilAbonnenter(supabase, [{
+          title: `${payload.ansattNavn} ${typeTekst}`,
+          body: `${periodeTekst}${ubetaltTekst}`,
+          deltakerIder: adminIder
+        }])
+      }
       return new Response('ok', { status: 200, headers: CORS_HEADERS })
     }
 

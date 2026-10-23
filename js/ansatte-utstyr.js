@@ -747,14 +747,27 @@ function renderFravarKalender() {
   // Hvem er borte denne måneden, oppsummert
   const perPerson = {};
   Object.values(perDag).flat().forEach(t => {
-    const k = t.ansatt + '|' + t.type;
+    const k = t.ansattId + '|' + t.ansatt + '|' + t.type;
     perPerson[k] = (perPerson[k] || 0) + 1;
   });
+  // Egenmelding-kvoten (maks 4 betalte siste 12 mnd, se egenmeldingEpisoderSisteAar() i
+  // timer.js) vises nå rett i oppsummeringen - bedt om av Henrik 2026-10-23 ("regler blir
+  // fulgt"): uten dette måtte man telle episoder manuelt for å se om en gitt ansatt
+  // nærmer seg/har passert grensa, selv om selve lønnsberegningen allerede håndhever den
+  // riktig i bakgrunnen. KUN admin ser dette - denne kalenderen er synlig for ALLE
+  // ansatte (ingen rollesperre på selve knappen/visningen), og betalt/ubetalt-status er
+  // lønnsrelatert informasjon kollegaer ikke skal se om hverandre.
+  const erAdmin = me && me.rolle === 'admin';
   const sammendrag = Object.entries(perPerson)
     .sort((a,b) => b[1]-a[1])
     .map(([k,n]) => {
-      const [navn, type] = k.split('|');
-      return `<span class="pill" style="margin:0;font-size:11px;padding:3px 10px;border-color:${FRAVAR_FARGE[type]}55;color:${FRAVAR_FARGE[type]}">${esc(navn)} · ${n}d ${FRAVAR_LABEL[type]}</span>`;
+      const [ansattIdStr, navn, type] = k.split('|');
+      let kvoteTekst = '';
+      if (type === 'egenmelding' && erAdmin) {
+        const brukt = egenmeldingEpisoderSisteAar(S.timer, Number(ansattIdStr), idag);
+        kvoteTekst = ` (${brukt}/4 siste 12mnd${brukt>=4?' - UBETALT':''})`;
+      }
+      return `<span class="pill" style="margin:0;font-size:11px;padding:3px 10px;border-color:${FRAVAR_FARGE[type]}55;color:${FRAVAR_FARGE[type]}">${esc(navn)} · ${n}d ${FRAVAR_LABEL[type]}${kvoteTekst}</span>`;
     }).join('');
 
   el.innerHTML = `
@@ -770,9 +783,10 @@ function renderFravarKalender() {
     ${sammendrag?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid #27272a">${sammendrag}</div>`
       :'<div class="muted small" style="margin-top:12px">Ingen fravær registrert denne måneden</div>'}
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11.5px" class="muted">
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#ef4444"></span>Syk</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#22c55e"></span>Ferie</span>
-      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:#a1a1aa"></span>Permisjon</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:${FRAVAR_FARGE.syk}"></span>Syk</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:${FRAVAR_FARGE.egenmelding}"></span>Egenmelding</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:${FRAVAR_FARGE.ferie}"></span>Ferie</span>
+      <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:999px;background:${FRAVAR_FARGE.permisjon}"></span>Permisjon</span>
     </div>`;
 }
 

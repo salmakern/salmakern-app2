@@ -1444,16 +1444,30 @@ function sf(id, field, val) {
   }
   return true;
 }
-function sv(id,k,col,val) {
+// Skriver nå det/de spesifikke vekt-delfeltet(ene) atomisk via oppdater_ordre_vekter_felt()
+// (radlås i databasen, se migrasjonen 20261022190000) i stedet for den generelle save()
+// (full-rad-upsert, som også inkluderer HELE o.vekter fra nettleserens lokale kopi). Denne
+// funksjonen og vegvesenBeregnOgSettEndring() (vegvesen-dokumenter.js, kjører automatisk i
+// bakgrunnen) skriver begge til o.vekter - uten dette kunne en ansatt som tastet inn ett
+// vektfelt overskrive en nylig automatisk beregning av et ANNET vektfelt, eller omvendt
+// (funnet 2026-10-22, samme rotårsak som dokumenter-/fikenLinjer-kappløpet).
+async function sv(id,k,col,val) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.vekter[k][col]=val;
+  const felter = { [`${k}.${col}`]: val };
   if (['foraksel','bakaksel'].includes(k) && col==='a') {
     o.vekter[k].e = val;
+    felter[`${k}.e`] = val;
     const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
     const inp = document.querySelector('#ordreDetail table')?.querySelectorAll('tbody tr')[rader.indexOf(k)]?.querySelectorAll('input')[1];
     if (inp) inp.value = val;
   }
-  save(id);
+  planleggLocalSpeiling();
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_vekter_felt', { p_ordre_id: id, p_felter: felter });
+    if (error) { console.error('Kunne ikke lagre vektfelt:', error.message); visToast('Kunne ikke lagre vektfeltet - prøv igjen'); return; }
+    o.vekter = data || o.vekter;
+  }
   if (['totalvekt','vogntog'].includes(k) && (col==='a'||col==='e')) oppdaterVektFarge(id,k);
   // Tvangsflyt-kravet "Vekter fylt ut" leser o.vekter.totalvekt.a - uten dette ble
   // sidepanelet stående å vise kravet som ikke oppfylt (og "Godkjenn og lukk" deaktivert

@@ -1070,7 +1070,7 @@ async function genKjoretoylistePDF(flate, primaer, medlemmer) {
 // disse 4 verdiene er det som siden brukes i Fabrikantattest sine Ut-felt og på
 // trinn 2-lappen (spesifisert av Henrik 2026-09-14). Aksel 1/2 sin Endring er alltid
 // lik Ved ankomst (aldri selv justert). Returnerer null hvis vektfelt mangler.
-function vegvesenBeregnOgSettEndring(o) {
+async function vegvesenBeregnOgSettEndring(o) {
   const geometri = vegvesenGeometri(o.merke, o.modell);
   if (!geometri) return null;
   const tall = v => parseFloat(String(v||'').replace(',','.')) || 0;
@@ -1089,7 +1089,18 @@ function vegvesenBeregnOgSettEndring(o) {
   o.vekter.foraksel.e = String(P1);
   o.vekter.bakaksel.e = String(P2);
   logChange(o, 'Vektfordeling beregnet' + (delta>0 ? ` - totalvekt justert ned ${delta} kg` : ''));
-  save(o.id);
+  planleggLocalSpeiling();
+  // Skriver nå kun de 4 "Endring"-delfeltene atomisk via oppdater_ordre_vekter_felt() (se
+  // sv() sin kommentar i ordre-detalj.js for selve kappløps-bakgrunnen - samme fiks her,
+  // bare for denne automatiske beregningen i stedet for manuell inntasting).
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_vekter_felt', {
+      p_ordre_id: o.id,
+      p_felter: { 'totalvekt.e': o.vekter.totalvekt.e, 'vogntog.e': o.vekter.vogntog.e, 'foraksel.e': o.vekter.foraksel.e, 'bakaksel.e': o.vekter.bakaksel.e }
+    });
+    if (error) console.error('Kunne ikke lagre beregnet vektfordeling:', error.message);
+    else o.vekter = data || o.vekter;
+  }
   // Oppdaterer de synlige "Endring"-inputfeltene med en gang - uten dette sto de med
   // gammel/tom verdi helt til noe HELT ANNET tilfeldigvis trigget en ny full rendering av
   // ordresiden (se oppdaterVektInputVerdierIDOM() i ordre-detalj.js, funnet 2026-10-22).
@@ -1377,7 +1388,7 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   if (!vegvesenGeometri(kilde.merke, kilde.modell)) {
     return { status: 'delvis_geometri_mangler', melding: `Egenerklæring og Melding om registrering generert. Ingen mal/geometri lagt inn for ${kilde.merke||'?'} ${kilde.modell||'?'} ennå - Vektfordeling/Fabrikantattest kan ikke genereres.` };
   }
-  const resultat = vegvesenBeregnOgSettEndring(kilde);
+  const resultat = await vegvesenBeregnOgSettEndring(kilde);
   if (!resultat) {
     return { status: 'delvis_vekt_mangler', melding: `Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
   }
