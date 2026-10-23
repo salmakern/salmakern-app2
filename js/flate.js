@@ -245,10 +245,15 @@ function slettFlate() {
   if (db) {
     // Ett samlet kall for alle medlemsordrene i stedet for ett save()-kall (og dermed
     // ett update-kall) per ordre - samme mønster som de andre batch-fiksene i dag.
+    // Skriver nå KUN flate_id (ikke hele ordreToDb(o)) - den fulle raden ble tidligere
+    // sendt basert på nettleserens lokale kopi av HVER medlemsordre, som kunne overskrive
+    // et felt en annen ansatt nettopp endret på en av dem mens flåten ble slettet (funnet
+    // 2026-10-22, samme rotårsak som admin-ark-kappløpet - her holder det med en vanlig
+    // targeted update siden flate_id er en helt ordinær kolonne).
     if (medlemmer.length) {
       medlemmer.forEach(o => ignorerRealtimeFor.add(o.id));
       setTimeout(()=>medlemmer.forEach(o => ignorerRealtimeFor.delete(o.id)), 10000);
-      db.from('ordrer').upsert(medlemmer.map(ordreToDb), {onConflict:'id'})
+      db.from('ordrer').update({ flate_id: null }).in('id', medlemmer.map(o=>o.id))
         .then(r=>{if(r.error) console.error('Frakobling fra flåte feilet:', r.error.message);});
     }
     db.from('flater').delete().eq('id', f.id)
