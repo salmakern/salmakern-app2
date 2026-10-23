@@ -17,14 +17,15 @@ beforeEach(() => {
 });
 
 describe('ordreAktivFase() - hvilken klokke skal løpe gitt ordrens status', () => {
+  // KUN Ombygging er automatisert - Klargjøring ble bevisst tatt ut igjen 2026-10-23
+  // samme dag (Henrik: klargjøring skjer på varierende tidspunkter, ikke pålitelig
+  // avgrenset til statusen "Vist på biltilsynet") og er nå en ren manuell klokke uten
+  // noen kobling til status, se startOrdreTimer()/stoppOrdreTimer() i ordre-diverse.js.
   it('returnerer Ombygging-feltet for status "paabegynt"', () => {
     expect(env.ordreAktivFase({ ordreStatus: 'paabegynt' })).toBe('ordreTimerSessions');
   });
-  it('returnerer Klargjøring-feltet for status "vist_biltilsyn"', () => {
-    expect(env.ordreAktivFase({ ordreStatus: 'vist_biltilsyn' })).toBe('klargjoringTimerSessions');
-  });
-  it.each(['ikke_paabegynt', 'paa_vei', 'ikke_veid', 'klar_visning', 'klar_henting', 'hentet'])(
-    'returnerer null (ingen klokke) for status "%s" - bevisst dødsone/ferdig', (status) => {
+  it.each(['ikke_paabegynt', 'paa_vei', 'ikke_veid', 'klar_visning', 'vist_biltilsyn', 'klar_henting', 'hentet'])(
+    'returnerer null (ingen automatisk klokke) for status "%s"', (status) => {
       expect(env.ordreAktivFase({ ordreStatus: status })).toBeNull();
     }
   );

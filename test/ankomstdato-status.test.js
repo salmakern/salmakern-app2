@@ -53,7 +53,6 @@ function nyEnvironment() {
     function _setDb(v){ db = v; }
     function ordreAktivFase(o) {
       if (o.ordreStatus === 'paabegynt') return 'ordreTimerSessions';
-      if (o.ordreStatus === 'vist_biltilsyn') return 'klargjoringTimerSessions';
       return null;
     }
     function feltTilKolonne(felt) { return felt==='ordreTimerSessions' ? 'ordre_timer_sessions' : 'klargjoring_timer_sessions'; }

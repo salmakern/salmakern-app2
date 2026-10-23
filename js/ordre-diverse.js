@@ -125,12 +125,14 @@ function settHengerfeste(id, val) {
 // stedet for den generelle save() (full-rad-upsert fra nettleserens lokale kopi), som kunne
 // la to påmeldinger tett i tid overskrive hverandre (funnet 2026-10-22, samme rotårsak som
 // dokumenter-/fikenLinjer-kappløpet).
-// Hvilket av de to tidsfeltene (hvis noen) som skal løpe automatisk gitt ordrens NÅVÆRENDE
-// status - se migrasjonen 20261023140000 for full begrunnelse på fasegrensene (bekreftet av
-// Henrik 2026-10-23). 'ikke_veid'/'klar_visning' er bevisst en "dødsone" uten klokke.
+// Hvilket tidsfelt (hvis noen) som skal løpe automatisk gitt ordrens NÅVÆRENDE status - se
+// migrasjonen 20261023140000 for fasegrensen (bekreftet av Henrik 2026-10-23). KUN Ombygging
+// er automatisert - Klargjøring ble bevisst tatt ut igjen samme dag (Henrik: klargjøring kan
+// skje på varierende tidspunkter, ikke pålitelig avgrenset til statusen "Vist på
+// biltilsynet") og er nå en ren manuell klokke (se startOrdreTimer()/stoppOrdreTimer()),
+// uten noen kobling til status eller meldt-på i det hele tatt.
 function ordreAktivFase(o) {
   if (o.ordreStatus === 'paabegynt') return 'ordreTimerSessions';
-  if (o.ordreStatus === 'vist_biltilsyn') return 'klargjoringTimerSessions';
   return null;
 }
 function feltTilKolonne(felt) { return felt==='ordreTimerSessions' ? 'ordre_timer_sessions' : 'klargjoring_timer_sessions'; }
@@ -236,7 +238,7 @@ function ordreTimerKortHTML(o, felt) {
         <div class="h">${ORDRE_TIMER_LABEL[felt]}</div>
         <div style="font-size:28px;font-weight:800;margin-top:4px;color:${gaaende.length?'#86efac':'#f4f4f5'}">${tidStr}</div>
         ${gaaende.length?`<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå: ${gaaende.map(x=>esc(x.ansatt||'?')).join(', ')}</div>`:''}
-        <div class="small muted" style="margin-top:2px">Starter/stopper normalt automatisk (meldt på + status) - knappen er en manuell nødløsning</div>
+        <div class="small muted" style="margin-top:2px">${felt==='ordreTimerSessions' ? 'Starter/stopper normalt automatisk (meldt på + status \"Påbegynt\") - knappen er en manuell nødløsning' : 'Rent manuell - trykk Start når du begynner, Stopp når du er ferdig'}</div>
       </div>
       <div style="display:flex;gap:8px">
         ${migLoper
@@ -334,15 +336,36 @@ async function hentArbeidsintervaller(ansattIder, fraDato, tilDato) {
   });
   return intervaller;
 }
-async function effektivOrdreTidMs(o) {
+// Som effektivOrdreTidMs(), men bryter i tillegg ned totalen per ansatt - brukt av
+// renderBilEffektivitetBadge() til å vise hvor mye HVER bidragsyter faktisk brukte på
+// ordren, ikke bare summen (bedt om av Henrik 2026-10-26: "hvor lang tid bruker en ansatt
+// per bil"). Henter arbeidsintervallene ÉN gang og gjenbruker dem for både total og
+// nedbrytning, i stedet for to separate DB-kall.
+async function effektivOrdreTidPerAnsattMs(o) {
   const alleSesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
-  if (!alleSesjoner.length) return 0;
+  if (!alleSesjoner.length) return { totalMs: 0, perAnsatt: [] };
   const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
-  if (!ansattIder.length || !db) return alleSesjoner.reduce((sum,s)=>sum+((s.stopp||Date.now())-s.start),0);
-  const minStart = Math.min(...alleSesjoner.map(s=>s.start));
-  const maxSlutt = Math.max(...alleSesjoner.map(s=>s.stopp||Date.now()));
-  const intervaller = await hentArbeidsintervaller(ansattIder, new Date(minStart).toISOString().split('T')[0], new Date(maxSlutt).toISOString().split('T')[0]);
-  return beregnOverlappMs(alleSesjoner, intervaller);
+  if (!ansattIder.length) return { totalMs: 0, perAnsatt: [] };
+  let intervaller = {};
+  if (db) {
+    const minStart = Math.min(...alleSesjoner.map(s=>s.start));
+    const maxSlutt = Math.max(...alleSesjoner.map(s=>s.stopp||Date.now()));
+    intervaller = await hentArbeidsintervaller(ansattIder, new Date(minStart).toISOString().split('T')[0], new Date(maxSlutt).toISOString().split('T')[0]);
+  } else {
+    // Uten database (offline/test) - beste estimat er rå tid, ingen overlapp-data tilgjengelig.
+    ansattIder.forEach(id => { intervaller[id] = [{start:-Infinity, slutt:Infinity}]; });
+  }
+  const perAnsatt = ansattIder.map(ansattId => {
+    const mine = alleSesjoner.filter(s=>s.ansattId===ansattId);
+    const navn = mine.find(s=>s.ansatt)?.ansatt || '?';
+    const ms = beregnOverlappMs(mine, intervaller);
+    return { ansattId, navn, ms };
+  }).filter(r => r.ms > 0).sort((a,b) => b.ms - a.ms);
+  const totalMs = perAnsatt.reduce((sum,r) => sum+r.ms, 0);
+  return { totalMs, perAnsatt };
+}
+async function effektivOrdreTidMs(o) {
+  return (await effektivOrdreTidPerAnsattMs(o)).totalMs;
 }
 // Standardtid = TOTAL forventet tid for bilen (Ombygging + Klargjøring samlet), ikke delt per
 // ansatt selv når flere jobber samtidig (bekreftet av Henrik 2026-10-23) - modeller uten satt
@@ -401,15 +424,47 @@ async function renderBilEffektivitetBadge(o) {
   const el = document.getElementById('bilEffektivitetBadge_'+o.id); if (!el) return;
   const standardMs = ordreStandardMs(o);
   if (standardMs == null) { el.innerHTML = `<div class="small muted">Ingen standardtid satt for "${esc(o.modell||'ukjent modell')}" (sett under Mer → Standardtider)</div>`; return; }
-  const bruktMs = await effektivOrdreTidMs(o);
+  const { totalMs: bruktMs, perAnsatt } = await effektivOrdreTidPerAnsattMs(o);
   const elNa = document.getElementById('bilEffektivitetBadge_'+o.id); if (!elNa) return; // kan ha forsvunnet mens vi ventet (byttet ordre)
   const vurdering = bilEffektivitetVurdering(bruktMs/standardMs);
+  const nedbrytning = perAnsatt.length > 1 ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
+      ${perAnsatt.map(r => `<div class="small" style="display:flex;justify-content:space-between"><span class="muted">${esc(r.navn)}</span><span>${fmtTime(r.ms)}</span></div>`).join('')}
+    </div>` : '';
   elNa.innerHTML = `<div class="h">Bil-effektivitet</div>
     <div style="font-size:22px;font-weight:800;margin-top:4px;color:${vurdering.farge}">
       Brukt tid ${fmtTime(bruktMs)} <span style="font-size:15px;font-weight:600;color:#a1a1aa">(standard ${fmtTime(standardMs)})</span>
     </div>
     <div class="small" style="color:${vurdering.farge};margin-top:2px">${vurdering.label}</div>
+    ${nedbrytning}
     <div class="small muted" style="margin-top:4px">Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka</div>`;
+}
+// Historisk snitt per modell (alle ferdigstilte biler, ikke bare denne måneden) - til hjelp
+// når admin skal avgjøre/justere standardtiden for en modell under Mer → Standardtider
+// (bedt om av Henrik 2026-10-26: "gjennomsnitt tid på modellene"). Henter arbeidsintervaller
+// ÉN gang for ALLE relevante ansatte/datoer, samme mønster som beregnBilEffektivitetPerAnsatt().
+async function beregnGjennomsnittTidPerModell() {
+  const relevante = (S.ordrer||[]).filter(o => o.modell && o.datoKlarHenting &&
+    ((o.ordreTimerSessions||[]).length || (o.klargjoringTimerSessions||[]).length));
+  if (!relevante.length) return {};
+  const alleSesjoner = relevante.flatMap(o => [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])]);
+  const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
+  if (!ansattIder.length) return {};
+  const minStart = Math.min(...alleSesjoner.map(s=>s.start));
+  const maxSlutt = Math.max(...alleSesjoner.map(s=>s.stopp||Date.now()));
+  const intervaller = await hentArbeidsintervaller(ansattIder, new Date(minStart).toISOString().split('T')[0], new Date(maxSlutt).toISOString().split('T')[0]);
+
+  const perModell = {};
+  relevante.forEach(o => {
+    const sesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
+    const brukt = beregnOverlappMs(sesjoner, intervaller);
+    if (!brukt) return;
+    (perModell[o.modell] = perModell[o.modell]||[]).push(brukt);
+  });
+  const resultat = {};
+  Object.entries(perModell).forEach(([modell, tider]) => {
+    resultat[modell] = { snittMs: tider.reduce((a,b)=>a+b,0)/tider.length, antallBiler: tider.length };
+  });
+  return resultat;
 }
 
 async function arkiver(id) {

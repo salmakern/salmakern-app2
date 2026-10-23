@@ -319,6 +319,33 @@ function doStartTimer(notat) {
   updateClock();
   console.log('Timer startet:',notat);
   oppdaterTilstandPille();
+  gjenopptaMineOrdreKlokkerVedInnstempling();
+}
+
+// Kobler den daglige lønnsklokka sammen med Ombygging-klokka (den automatiske, se
+// ordreAktivFase() i ordre-diverse.js) - bedt om av Henrik 2026-10-26 etter at en ansatt
+// stemplet ut mens Ombygging-klokka fortsatt sto og gikk synlig på ordren. Selve EFFEKTIV
+// tid-beregningen (brukt i Bil-effektivitet-visningen) var allerede riktig - natta/fritiden
+// trekkes automatisk fra der - men den RÅ klokka vist på selve ordre-siden fortsatte å løpe
+// i det uendelige helt til noen trykket Stopp manuelt, noe som naturlig nok så feil/
+// urovekkende ut. Stopper nå MIN åpne Ombygging-klokke når jeg stempler ut på vanlig Timer,
+// og gjenopptar den automatisk neste gang jeg stempler inn igjen - uten at jeg må melde meg
+// på/av ordren på nytt. Gjelder BEVISST IKKE Klargjøring, som er en ren manuell klokke uten
+// noen kobling til status eller lønnsklokka i det hele tatt (se samme fil, samme dato).
+async function stoppMineOrdreKlokkerVedUtstempling() {
+  if (!me || !db) return;
+  const apne = (S.ordrer||[]).filter(o => ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', me.id));
+  for (const o of apne) {
+    await stoppOrdreTimerForAnsatt(o, 'ordreTimerSessions', me.id, me.navn);
+  }
+}
+async function gjenopptaMineOrdreKlokkerVedInnstempling() {
+  if (!me || !db) return;
+  const mine = (S.ordrer||[]).filter(o => (o.ansatteSignert||[]).some(a=>a.id===me.id));
+  for (const o of mine) {
+    const felt = ordreAktivFase(o);
+    if (felt && !ansattHarApenOrdreSesjon(o, felt, me.id)) await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+  }
 }
 
 function stoppTimer() {

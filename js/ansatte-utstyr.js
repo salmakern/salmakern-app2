@@ -1067,14 +1067,17 @@ function saveInnstillinger() {
 // brukt til å vise "brukt tid vs. standard" på hver ordre og til effektivitetsoversikten per
 // ansatt (se effektivOrdreTidMs()/beregnBilEffektivitetPerAnsatt() i ordre-diverse.js og
 // samtalen 2026-10-23 for full begrunnelse på hvorfor tiden regnes ut som den gjør).
-function renderStandardtider() {
+async function renderStandardtider() {
   const el = document.getElementById('standardtiderListe'); if (!el) return;
   const modeller = alleKjenteModeller();
   if (!modeller.length) { el.innerHTML = '<div class="muted small">Ingen modeller funnet ennå (legges til via Lager/Utstyr-maler)</div>'; return; }
   el.innerHTML = modeller.map(m => {
     const rad = (S.standardtider||{})[m] || {};
-    return `<div class="box" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-      <div style="flex:1;min-width:120px;font-weight:700">${esc(m)}</div>
+    return `<div class="box" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px" id="standardtidRad_${esc(m)}">
+      <div style="flex:1;min-width:120px">
+        <div style="font-weight:700">${esc(m)}</div>
+        <div class="small muted" data-faktisk-snitt>Henter faktisk snitt...</div>
+      </div>
       <label class="small muted">Ombygging (min)
         <input type="number" min="0" value="${rad.ombygging||''}" style="width:80px;display:block" onchange="settStandardtid('${esc(m).replace(/'/g,"\\'")}','ombygging',this.value)">
       </label>
@@ -1083,6 +1086,16 @@ function renderStandardtider() {
       </label>
     </div>`;
   }).join('');
+  // Faktisk historisk snitt (alle ferdigstilte biler, ikke bare denne måneden) hentes
+  // asynkront og etterfylles per rad - til hjelp når standardtiden skal settes/justeres
+  // (bedt om av Henrik 2026-10-26: "gjennomsnitt tid på modellene").
+  const snittPerModell = await beregnGjennomsnittTidPerModell();
+  modeller.forEach(m => {
+    const rad = document.getElementById('standardtidRad_'+esc(m));
+    const snittEl = rad?.querySelector('[data-faktisk-snitt]'); if (!snittEl) return;
+    const snitt = snittPerModell[m];
+    snittEl.textContent = snitt ? `Faktisk snitt: ${fmtTime(snitt.snittMs)} (${snitt.antallBiler} bil${snitt.antallBiler===1?'':'er'})` : 'Ingen ferdigstilte biler med registrert tid ennå';
+  });
 }
 function settStandardtid(modell, felt, val) {
   const minutter = Math.max(0, Number(val)||0);

@@ -286,6 +286,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 .cal-event:hover .fjern{display:flex}
 .cal-event-regnr{font-size:11.5px;font-weight:700;overflow-wrap:anywhere;line-height:1.2}
 .cal-event-info{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;opacity:.85}
+/* Flere ordre/møter som kolliderer i tid deles side om side i stedet for å stable
+   nedover (se plasserKalenderHendelser() i oversikt-kalender.js) - på et smalere kort
+   brekker ikke lenger tittelen over flere linjer (ville flydd utover kanten), men
+   kuttes med "..." på én linje, og mindre skrift/innrykk gir mer plass til selve teksten. */
+.cal-event-smal{padding:3px 5px}
+.cal-event-smal .cal-event-regnr{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10.5px}
+.cal-event-smal .cal-event-info{font-size:9px}
 /* Tallrader som ikke tåler å brekke: la dem skyves sidelengs på små skjermer */
 .tallrad-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 @media(max-width:520px){

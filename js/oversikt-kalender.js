@@ -216,19 +216,56 @@ function renderOversikt(q) {
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }
 function calIdag()       { calWeekOffset = 0;    renderWeek(); }
 
-// Kalenderkolonnene er for smale til at overlappende hendelser (ordre tett i tid) kan
-// deles side om side og fortsatt være lesbare - et halvbredt kort klarer ikke vise et
-// chassisnummer uten at teksten renner ut over kanten. Kaskaderer i stedet: en hendelse
-// som ville kollidert med den forrige skyves rett ned til der den forrige slutter, og
-// beholder full bredde. Tidspunktet i selve kortteksten er fortsatt det virkelige -
-// bare den vertikale plasseringen justeres ved kollisjon.
+// Overlappende hendelser (ordre/møter tett i tid, enten nøyaktig samme klokkeslett eller
+// bare delvis overlappende varighet) deles side om side i smalere kolonner i stedet for å
+// kaskadere nedover i full bredde (endret 2026-10-26 - stabling gjorde at mange ordre på
+// samme tidspunkt tok opp hele dagens høyde visuelt og skjulte at andre dager var tomme).
+// Samme "lane"-prinsipp som Google Kalender: hendelser grupperes i overlappende klynger
+// (transitivt - overlapper A med B og B med C, havner alle tre i samme klynge), får hver
+// sin kolonne innad i klyngen (grådig: første ledige kolonne som ikke kolliderer med noe
+// allerede plassert i samme klynge), og klyngens høyeste kolonnenummer avgjør hvor smale
+// kortene i akkurat den klyngen blir. it.html() kalles nå med (top, venstrePct, breddePct,
+// totalKolonner) i stedet for bare (top) - se bruken i renderWeek() for hvordan kortet
+// forkorter teksten og bytter til ordreLabel() (uten chassis) når totalKolonner>1.
+function hendelserOverlapper(a, b) {
+  return a.top < b.top + b.height && b.top < a.top + a.height;
+}
 function plasserKalenderHendelser(items) {
   const sortert = items.slice().sort((a,b) => a.top - b.top || a.height - b.height);
-  let nesteLedigTop = -Infinity;
-  return sortert.map(it => {
-    const top = Math.max(it.top, nesteLedigTop);
-    nesteLedigTop = top + it.height + 3;
-    return it.html(top);
+  const n = sortert.length;
+  const klyngeId = new Array(n).fill(-1);
+  let nesteKlyngeId = 0;
+  for (let i = 0; i < n; i++) {
+    if (klyngeId[i] !== -1) continue;
+    klyngeId[i] = nesteKlyngeId;
+    const ko = [i];
+    while (ko.length) {
+      const idx = ko.pop();
+      for (let j = 0; j < n; j++) {
+        if (klyngeId[j] !== -1) continue;
+        if (hendelserOverlapper(sortert[idx], sortert[j])) { klyngeId[j] = nesteKlyngeId; ko.push(j); }
+      }
+    }
+    nesteKlyngeId++;
+  }
+  const kolonne = new Array(n).fill(0);
+  const klyngeMaxKolonne = {};
+  for (let i = 0; i < n; i++) {
+    const kid = klyngeId[i];
+    const opptatt = new Set();
+    for (let j = 0; j < i; j++) {
+      if (klyngeId[j] === kid && hendelserOverlapper(sortert[i], sortert[j])) opptatt.add(kolonne[j]);
+    }
+    let k = 0;
+    while (opptatt.has(k)) k++;
+    kolonne[i] = k;
+    klyngeMaxKolonne[kid] = Math.max(klyngeMaxKolonne[kid] || 0, k);
+  }
+  return sortert.map((it, i) => {
+    const totalKolonner = klyngeMaxKolonne[klyngeId[i]] + 1;
+    const breddePct = 100 / totalKolonner;
+    const venstrePct = kolonne[i] * breddePct;
+    return it.html(it.top, venstrePct, breddePct, totalKolonner);
   });
 }
 
@@ -308,11 +345,17 @@ function renderWeek() {
         const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
         const beregnetTop = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
         const height = (o.regnr && !o.chassis) ? Math.max(38, SLOT_PX) : Math.max(54, SLOT_PX); // romslig nok til at chassisnummer kan brytes over 2 linjer i en smal dagskolonne uten å flyte utover
-        return { top: beregnetTop, height, html: (top) => `<div class="cal-event" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;background:${si.bg};border-color:${si.border}">
+        return { top: beregnetTop, height, html: (top, venstrePct, breddePct, totalKolonner) => {
+          const smalt = totalKolonner > 1;
+          // Smale kort (flere ordre side om side) bruker den kortere ordreLabel() (uten
+          // chassis) og tvinger teksten til é line med "..." i stedet for å brekke over
+          // flere linjer - se hendelserOverlapper()/plasserKalenderHendelser() for hvorfor.
+          const tittel = smalt ? ordreLabel(o) : ordreLabelFull(o);
+          return `<div class="cal-event${smalt?' cal-event-smal':''}" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;left:calc(${venstrePct}% + 2px);right:calc(${100-venstrePct-breddePct}% + 2px);background:${si.bg};border-color:${si.border}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
             <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0;overflow:hidden;height:100%">
-              <div class="cal-event-regnr" style="color:${si.txt}">${ordreLabelFull(o)}</div>
-              <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${o.tidBiltilsynetSted?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
+              <div class="cal-event-regnr" style="color:${si.txt}">${tittel}</div>
+              <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${(!smalt&&o.tidBiltilsynetSted)?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
             </div>
             <div style="position:relative;flex-shrink:0">
               <button onclick="event.stopPropagation();toggleCalMenu('${o.id}')" style="background:none;border:none;color:${si.txt};font-size:18px;line-height:1;padding:0 2px;cursor:pointer" title="Valg">⋯</button>
@@ -322,7 +365,7 @@ function renderWeek() {
               </div>
             </div>
           </div>
-        </div>` };
+        </div>`; } };
       }),
       ...moter.map(m => {
         const erOppgave = m.type === 'oppgave';
@@ -334,7 +377,7 @@ function renderWeek() {
         const bg = erOppgave ? '#0f3d3acc' : '#2e1065cc';
         const border = erOppgave ? '#2dd4bf' : '#a78bfa';
         const txt = erOppgave ? '#99f6e4' : '#ddd6fe';
-        return { top: beregnetTop, height, html: (top) => `<div class="cal-event" style="top:${top}px;height:${height}px;background:${bg};border-color:${border}">
+        return { top: beregnetTop, height, html: (top, venstrePct, breddePct, totalKolonner) => `<div class="cal-event${totalKolonner>1?' cal-event-smal':''}" style="top:${top}px;height:${height}px;left:calc(${venstrePct}% + 2px);right:calc(${100-venstrePct-breddePct}% + 2px);background:${bg};border-color:${border}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
             <div style="flex:1;min-width:0">
               <div class="cal-event-regnr" style="color:${txt}">${erOppgave?'📝':'📅'} ${esc(m.tittel)}</div>
@@ -503,12 +546,13 @@ async function endreStatus(id, nyStatus) {
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }
-  // Start/stopp automatisk ordre-klokka for Ombygging ('paabegynt') og Klargjøring
-  // ('vist_biltilsyn') ut fra faseovergangen, og meld av alle når fasen er over - ingen
-  // ny knapp, se ordreAktivFase()/migrasjonen 20261023140000 for fasegrensene (bekreftet av
-  // Henrik 2026-10-23: 'ikke_veid'/'klar_visning' er bevisst en "dødsone" uten klokke).
+  // Start/stopp automatisk Ombygging-klokka ut fra faseovergangen ('paabegynt'), og meld
+  // av alle når fasen er over - ingen ny knapp, se ordreAktivFase()/migrasjonen
+  // 20261023140000. KUN Ombygging er automatisert - Klargjøring ble bevisst fjernet fra
+  // denne automatikken samme dag (Henrik: klargjøring skjer på varierende tidspunkter, ikke
+  // pålitelig avgrenset til statusen "Vist på biltilsynet") og er nå en ren manuell klokke.
   if (db) {
-    const feltForrige = forrigeStatus==='paabegynt' ? 'ordreTimerSessions' : (forrigeStatus==='vist_biltilsyn' ? 'klargjoringTimerSessions' : null);
+    const feltForrige = forrigeStatus==='paabegynt' ? 'ordreTimerSessions' : null;
     const feltNy = ordreAktivFase(o);
     if (feltForrige && feltForrige !== feltNy) {
       const { data, error } = await db.rpc('oppdater_ordre_timer_fase', { p_ordre_id:id, p_felt:feltTilKolonne(feltForrige), p_handling:'avslutt_fase' });
