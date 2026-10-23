@@ -545,13 +545,17 @@ function toggleSkalHaBekreftet(id, bekreftet) {
 // akkurat som en vanlig faktura har flere linjer.
 function fikenLinjerHTML(o) {
   const linjer = o.fikenLinjer || [];
+  // Hver linje skal ha en stabil id fra databasen (backfillet i migrasjonen
+  // 20261023120000) - denne lazy-tildelingen er kun et sikkerhetsnett for linjer som av
+  // en eller annen grunn mangler den i akkurat denne nettleserfanens kopi.
+  linjer.forEach(l => { if (!l.id) l.id = nyFikenLinjeId(); });
   return `<div style="display:flex;flex-direction:column;gap:8px">
-    ${linjer.map((l, i) => `
+    ${linjer.map(l => `
       <div style="display:flex;gap:6px;align-items:center">
-        <input value="${esc(l.produktnummer||'')}" placeholder="Produktnr." onchange="settFikenLinje('${o.id}',${i},'produktnummer',this.value)" style="flex:2;min-width:0">
-        <input type="number" min="1" value="${l.antall||1}" onchange="settFikenLinje('${o.id}',${i},'antall',this.value)" style="width:64px;flex-shrink:0">
-        ${l.belop!==undefined?`<input type="number" step="0.01" value="${l.belop||0}" title="Overstyrt beløp (kr) - erstatter produktets faste pris i Fiken" onchange="settFikenLinje('${o.id}',${i},'belop',this.value)" style="width:90px;flex-shrink:0">`:''}
-        <button class="btn sm" onclick="fjernFikenLinje('${o.id}',${i})" style="flex-shrink:0" title="Fjern linje">✕</button>
+        <input value="${esc(l.produktnummer||'')}" placeholder="Produktnr." onchange="settFikenLinje('${o.id}','${l.id}','produktnummer',this.value)" style="flex:2;min-width:0">
+        <input type="number" min="1" value="${l.antall||1}" onchange="settFikenLinje('${o.id}','${l.id}','antall',this.value)" style="width:64px;flex-shrink:0">
+        ${l.belop!==undefined?`<input type="number" step="0.01" value="${l.belop||0}" title="Overstyrt beløp (kr) - erstatter produktets faste pris i Fiken" onchange="settFikenLinje('${o.id}','${l.id}','belop',this.value)" style="width:90px;flex-shrink:0">`:''}
+        <button class="btn sm" onclick="fjernFikenLinje('${o.id}','${l.id}')" style="flex-shrink:0" title="Fjern linje">✕</button>
       </div>`).join('')}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
@@ -563,11 +567,7 @@ function fikenLinjerHTML(o) {
 // Skriver ÉN fakturalinje atomisk (radlås i databasen, se oppdater_ordre_fiken_linje() i
 // migrasjonen 20261022150000) i stedet for å lese/endre/skrive hele fikenLinjer-arrayet fra
 // nettleserens eget minne - brukt av de PRODUKTNUMMER-keyede skrivingene (drivstoff, "Hent
-// fra Utstyr-boksen"). Dekker IKKE den rent manuelle, indeks-baserte linjeredigeringen
-// (leggTilFikenLinje/fjernFikenLinje/settFikenLinje under) - den har ingen naturlig "nøkkel"
-// per linje (kan ha tom/duplikat produktnummer mens den skrives inn) og står foreløpig igjen
-// med samme (lavere praktiske risiko, siden det er én admin som bygger fakturaen) mønster som
-// før (funnet og vurdert 2026-10-22, se samtalen).
+// fra Utstyr-boksen").
 async function oppdaterOrdreFikenLinje(o, produktnummer, linje) {
   if (db) {
     const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', { p_ordre_id: o.id, p_produktnummer: produktnummer, p_linje: linje });
@@ -583,11 +583,33 @@ async function oppdaterOrdreFikenLinje(o, produktnummer, linje) {
   const el = document.getElementById('fikenLinjer_'+o.id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
-function leggTilFikenLinje(id) {
+function nyFikenLinjeId() {
+  return 'fl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+// Skriver ÉN fakturalinje atomisk, keyet på linjens stabile id (se oppdater_ordre_-
+// fiken_linje_ved_id() i migrasjonen 20261023120000) - brukt av den rent manuelle
+// linjeredigeringen (legg til/fjern/rediger felt i Fakturering-kortet). Kan ikke bruke
+// den PRODUKTNUMMER-keyede funksjonen over her, siden en linje kan ha tom/duplikat
+// produktnummer mens den skrives inn (funnet og vurdert 2026-10-22, fikset 2026-10-23).
+async function oppdaterOrdreFikenLinjeVedId(o, linjeId, linje) {
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_fiken_linje_ved_id', { p_ordre_id: o.id, p_linje_id: linjeId, p_linje: linje });
+    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
+  } else {
+    o.fikenLinjer = o.fikenLinjer || [];
+    const idx = o.fikenLinjer.findIndex(l=>l.id===linjeId);
+    if (linje) { if (idx!==-1) o.fikenLinjer[idx]=linje; else o.fikenLinjer.push(linje); }
+    else if (idx!==-1) o.fikenLinjer.splice(idx,1);
+  }
+  planleggLocalSpeiling();
+}
+async function leggTilFikenLinje(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer) o.fikenLinjer = [];
-  o.fikenLinjer.push({produktnummer:'', antall:1});
-  save(id);
+  const ny = {id: nyFikenLinjeId(), produktnummer:'', antall:1};
+  o.fikenLinjer.push(ny);
+  await oppdaterOrdreFikenLinjeVedId(o, ny.id, ny);
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
@@ -613,10 +635,12 @@ async function leggTilFikenLinjerFraUtstyr(id) {
     await oppdaterOrdreFikenLinje(o, produktnummer, {produktnummer, antall});
   }
 }
-function fjernFikenLinje(id, idx) {
+async function fjernFikenLinje(id, linjeId) {
   const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
+  const idx = o.fikenLinjer.findIndex(l=>l.id===linjeId);
+  if (idx===-1) return;
   o.fikenLinjer.splice(idx, 1);
-  save(id);
+  await oppdaterOrdreFikenLinjeVedId(o, linjeId, null);
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
@@ -631,12 +655,13 @@ async function leggTilFikenLinjeDrivstoff(id) {
   if (!belop) { visToast('Ingen drivstoffpris registrert på denne ordren'); return; }
   await oppdaterOrdreFikenLinje(o, FIKEN_PRODUKTNUMMER_DRIVSTOFF, {produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop});
 }
-function settFikenLinje(id, idx, felt, val) {
-  const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer || !o.fikenLinjer[idx]) return;
+async function settFikenLinje(id, linjeId, felt, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
+  const linje = o.fikenLinjer.find(l=>l.id===linjeId); if(!linje) return;
   if (felt==='antall') val = Number(val)||1;
   else if (felt==='belop') val = Number(val)||0;
-  o.fikenLinjer[idx][felt] = val;
-  save(id);
+  linje[felt] = val;
+  await oppdaterOrdreFikenLinjeVedId(o, linjeId, linje);
 }
 
 // ============================================================
