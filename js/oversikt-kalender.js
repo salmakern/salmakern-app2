@@ -503,6 +503,24 @@ async function endreStatus(id, nyStatus) {
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }
+  // Start/stopp automatisk ordre-klokka for Ombygging ('paabegynt') og Klargjøring
+  // ('vist_biltilsyn') ut fra faseovergangen, og meld av alle når fasen er over - ingen
+  // ny knapp, se ordreAktivFase()/migrasjonen 20261023140000 for fasegrensene (bekreftet av
+  // Henrik 2026-10-23: 'ikke_veid'/'klar_visning' er bevisst en "dødsone" uten klokke).
+  if (db) {
+    const feltForrige = forrigeStatus==='paabegynt' ? 'ordreTimerSessions' : (forrigeStatus==='vist_biltilsyn' ? 'klargjoringTimerSessions' : null);
+    const feltNy = ordreAktivFase(o);
+    if (feltForrige && feltForrige !== feltNy) {
+      const { data, error } = await db.rpc('oppdater_ordre_timer_fase', { p_ordre_id:id, p_felt:feltTilKolonne(feltForrige), p_handling:'avslutt_fase' });
+      if (error) console.error('Kunne ikke avslutte '+ORDRE_TIMER_LABEL[feltForrige]+'-fasen:', error.message);
+      else { o[feltForrige] = data.sessions ?? o[feltForrige]; o.ansatteSignert = data.ansatteSignert ?? o.ansatteSignert; }
+    }
+    if (feltNy && feltNy !== feltForrige) {
+      const { data, error } = await db.rpc('oppdater_ordre_timer_fase', { p_ordre_id:id, p_felt:feltTilKolonne(feltNy), p_handling:'start_alle_paameldte' });
+      if (error) console.error('Kunne ikke starte '+ORDRE_TIMER_LABEL[feltNy]+'-fasen:', error.message);
+      else o[feltNy] = data.sessions ?? o[feltNy];
+    }
+  }
   renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
 }

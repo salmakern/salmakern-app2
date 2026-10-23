@@ -403,6 +403,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
       <div class="card" id="ordretimerKort_klargjoringTimerSessions_${o.id}">
         ${ordreTimerKortHTML(o, 'klargjoringTimerSessions')}
       </div>
+      ${erAdmin?`<div class="card" id="bilEffektivitetBadge_${o.id}"><div class="small muted">Beregner brukt tid...</div></div>`:''}
 
       <div class="card">
         <div class="h">Notater</div>
@@ -485,6 +486,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
     </div>
   </div>`;
   renderOrdreLagerbruk();
+  sikreOrdreTimerTicking(o);
+  if (erAdmin) renderBilEffektivitetBadge(o);
   if (o.status === 'arkivert') {
     const detail = document.getElementById('ordreDetail');
     const header = detail.firstElementChild;

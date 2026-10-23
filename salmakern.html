@@ -822,6 +822,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn" id="merAnsatteBtn" style="display:none" onclick="visMerAnsatte()">Vis ansatte</button>
         <button class="btn" id="merDrivstoffSatser" style="display:none" onclick="visMerDrivstoffSatser()">Drivstoff-satser</button>
         <button class="btn" id="merUtstyrMaler" style="display:none" onclick="visMerUtstyrMaler()">Utstyr-maler (ankomst)</button>
+        <button class="btn" id="merStandardtiderBtn" style="display:none" onclick="visMerStandardtider()">Standardtider (bil-effektivitet)</button>
       </div>
 
       </div>
@@ -835,6 +836,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div class="muted small" style="margin-bottom:8px">Satser trekkes fra pumpepris – f.eks. 2 kr/L rabatt eller uten MVA.</div>
           <div id="drivstoffSatsListe" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="merStandardtiderView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
+        <div class="card">
+          <div class="h">Standardtider (bil-effektivitet)</div>
+          <div class="muted small" style="margin-bottom:8px">Forventet TOTAL tid (Ombygging + Klargjøring samlet) per modell - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
+          <div id="standardtiderListe" style="margin-top:10px"></div>
         </div>
       </div>
 

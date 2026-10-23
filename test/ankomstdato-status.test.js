@@ -40,6 +40,9 @@ function nyEnvironment() {
   // tvangsflyt/logChange/renderAll/buildOrdreDetail/save/visToast hører egentlig til
   // andre filer (ordre-detalj.js m.fl.) som ikke er lastet her - stubbes minimalt siden
   // endreStatus() bare trenger dem til å eksistere, ikke deres fulle ekte oppførsel.
+  // ordreAktivFase/feltTilKolonne/ORDRE_TIMER_LABEL hører til ordre-diverse.js (bil-
+  // effektivitet-klokka, lagt til 2026-10-23) - kopiert inn i ekte (ikke stub) form siden
+  // endreStatus() sin faseovergang-logikk faktisk bruker resultatet, ikke bare kaller dem.
   vm.runInContext(`
     function tvangsflyt(){ return []; }
     function logChange(o, txt){ o.endringer.push({txt}); }
@@ -48,6 +51,13 @@ function nyEnvironment() {
     function _getS(){ return S; }
     function _setS(v){ S = v; }
     function _setDb(v){ db = v; }
+    function ordreAktivFase(o) {
+      if (o.ordreStatus === 'paabegynt') return 'ordreTimerSessions';
+      if (o.ordreStatus === 'vist_biltilsyn') return 'klargjoringTimerSessions';
+      return null;
+    }
+    function feltTilKolonne(felt) { return felt==='ordreTimerSessions' ? 'ordre_timer_sessions' : 'klargjoring_timer_sessions'; }
+    var ORDRE_TIMER_LABEL = { ordreTimerSessions:'Ombygging', klargjoringTimerSessions:'Klargjøring' };
   `, sandbox);
   return sandbox;
 }
@@ -56,7 +66,10 @@ function settDbUtfall(sandbox, suksess) {
   sandbox._setDb({
     from() {
       return { update: () => ({ eq: () => Promise.resolve(suksess ? { error: null } : { error: { message: 'nettverksfeil' } }) }) };
-    }
+    },
+    // Bil-effektivitet-klokka (ordreAktivFase) kaller denne RPC-en ved faseoverganger -
+    // suksess-stub holder for disse testene, som ikke verifiserer selve klokkelogikken.
+    rpc: () => Promise.resolve({ data: { sessions: [], ansatteSignert: [] }, error: null })
   });
 }
 

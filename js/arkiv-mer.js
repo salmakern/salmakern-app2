@@ -355,6 +355,7 @@ function renderMer() {
   document.getElementById('merOrdreRapportBtn').style.display  = erAdmin ? '' : 'none';
   document.getElementById('merDrivstoffSatser').style.display = erAdmin ? '' : 'none';
   document.getElementById('merUtstyrMaler').style.display     = erAdmin ? '' : 'none';
+  document.getElementById('merStandardtiderBtn').style.display = erAdmin ? '' : 'none';
 
   renderBeskjeder();
   renderKontakter();
@@ -413,8 +414,14 @@ function visMerFravarKalender() {
   renderFravarKalender();
   window.scrollTo(0, 0);
 }
+function visMerStandardtider() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merStandardtiderView').style.display = 'block';
+  renderStandardtider();
+  window.scrollTo(0, 0);
+}
 function tilbakeFraMerDetalj() {
-  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView']
+  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView','merStandardtiderView']
     .forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('merHovedView').style.display = 'block';
 }
@@ -634,7 +641,7 @@ function fmtTid(mins) {
   return `${Math.floor(mins/60)}t ${mins%60}m`;
 }
 
-function renderTimerOversikt() {
+async function renderTimerOversikt() {
   const maanedNavn = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
   const now = new Date();
   const dato = new Date(now.getFullYear(), now.getMonth() + adminStatOffset, 1);
@@ -720,6 +727,35 @@ function renderTimerOversikt() {
     `<div class="tallrad-scroll"><div>` +
     (rader.join('') || '<div class="muted small">Ingen timer registrert denne måneden</div>') +
     `</div></div>` + totalRad;
+
+  if (erAdm) await renderBilEffektivitetOversikt(prefix, dato);
+}
+// Bil-effektivitet per ansatt for samme måned som resten av denne siden - "FERDIGSTILT i
+// perioden" (dato_klar_henting), ikke "jobbet på i perioden", siden en bil kan strekke seg
+// over flere måneder og vurderingen først gir mening når hele jobben er gjort (se
+// beregnBilEffektivitetPerAnsatt() i ordre-diverse.js, bedt om av Henrik 2026-10-23: ikke
+// karakter/bokstav, men beskrivende vurdering - God/Nokså god/Bør følges opp).
+async function renderBilEffektivitetOversikt(prefix, dato) {
+  const el = document.getElementById('adminStatInnhold'); if (!el) return;
+  const fraDato = prefix+'-01';
+  const sisteDag = new Date(dato.getFullYear(), dato.getMonth()+1, 0).getDate();
+  const tilDato = `${prefix}-${String(sisteDag).padStart(2,'0')}`;
+  const rader = await beregnBilEffektivitetPerAnsatt(fraDato, tilDato);
+  const nyEl = document.getElementById('adminStatInnhold'); if (!nyEl) return; // kan ha navigert bort mens vi ventet
+  const innhold = !rader.length
+    ? '<div class="muted small">Ingen ferdigstilte biler med satt standardtid denne måneden</div>'
+    : rader.map(r => `<div class="box" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div><b>${esc(r.navn)}</b><div class="small muted">${r.antallBiler} bil${r.antallBiler===1?'':'er'}</div></div>
+        <div style="text-align:right">
+          <div style="font-weight:700;color:${r.vurdering.farge}">${Math.round(r.snittRatio*100)}% av standard</div>
+          <div class="small" style="color:${r.vurdering.farge}">${r.vurdering.label}</div>
+        </div>
+      </div>`).join('');
+  nyEl.insertAdjacentHTML('beforeend', `<div class="card" style="margin-top:12px">
+    <div class="h">Bil-effektivitet denne måneden</div>
+    <div class="small muted" style="margin-bottom:8px">Standard settes under Mer → Standardtider. Viser kun ferdigstilte biler for modeller med satt standardtid.</div>
+    ${innhold}
+  </div>`);
 }
 
 // ════════════════════════════════════════════════════

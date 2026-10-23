@@ -217,6 +217,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.beskjeder        = S.beskjeder        || [];
     S.kontakter        = S.kontakter        || [];
     S.hms              = S.hms              || [];
+    S.standardtider    = S.standardtider    || {};
     S.flater           = S.flater           || [];
     S.lagervarer       = S.lagervarer       || [];
     S.lagerhistorikk   = S.lagerhistorikk   || [];
@@ -341,6 +342,7 @@ async function loadFromSupabase() {
     S.beskjeder      = sR.data?.beskjeder       || [];
     S.kontakter      = sR.data?.kontakter       || [];
     S.hms            = sR.data?.hms             || [];
+    S.standardtider  = sR.data?.standardtider   || {};
   }
   // Sett nextId til høyere enn alle eksisterende ID-er
   const alleIds = [
@@ -710,6 +712,7 @@ function subscribeRealtime() {
       S.beskjeder = row.beskjeder || [];
       S.kontakter = row.kontakter || [];
       S.hms = row.hms || [];
+      S.standardtider = row.standardtider || {};
       if (me) renderMer();
     })
     .subscribe(async (status, err) => {

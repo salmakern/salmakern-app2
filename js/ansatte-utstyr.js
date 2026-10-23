@@ -1055,8 +1055,40 @@ function saveInnstillinger() {
     id: 1,
     dagens_pin: S.dagensPIN,
     utstyr_maler: S.utstyrMaler||[],
-    drivstoff_satser: S.drivstoffSatser||[]
+    drivstoff_satser: S.drivstoffSatser||[],
+    standardtider: S.standardtider||{}
   }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
+}
+
+// ════════════════════════════════════════════════════
+// STANDARDTID PER MODELL (bil-effektivitet)
+// ════════════════════════════════════════════════════
+// Settes av admin som den forventede TOTALE tiden (Ombygging + Klargjøring) for en modell -
+// brukt til å vise "brukt tid vs. standard" på hver ordre og til effektivitetsoversikten per
+// ansatt (se effektivOrdreTidMs()/beregnBilEffektivitetPerAnsatt() i ordre-diverse.js og
+// samtalen 2026-10-23 for full begrunnelse på hvorfor tiden regnes ut som den gjør).
+function renderStandardtider() {
+  const el = document.getElementById('standardtiderListe'); if (!el) return;
+  const modeller = alleKjenteModeller();
+  if (!modeller.length) { el.innerHTML = '<div class="muted small">Ingen modeller funnet ennå (legges til via Lager/Utstyr-maler)</div>'; return; }
+  el.innerHTML = modeller.map(m => {
+    const rad = (S.standardtider||{})[m] || {};
+    return `<div class="box" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <div style="flex:1;min-width:120px;font-weight:700">${esc(m)}</div>
+      <label class="small muted">Ombygging (min)
+        <input type="number" min="0" value="${rad.ombygging||''}" style="width:80px;display:block" onchange="settStandardtid('${esc(m).replace(/'/g,"\\'")}','ombygging',this.value)">
+      </label>
+      <label class="small muted">Klargjøring (min)
+        <input type="number" min="0" value="${rad.klargjoring||''}" style="width:80px;display:block" onchange="settStandardtid('${esc(m).replace(/'/g,"\\'")}','klargjoring',this.value)">
+      </label>
+    </div>`;
+  }).join('');
+}
+function settStandardtid(modell, felt, val) {
+  const minutter = Math.max(0, Number(val)||0);
+  S.standardtider = S.standardtider || {};
+  S.standardtider[modell] = { ...(S.standardtider[modell]||{}), [felt]: minutter };
+  saveInnstillinger();
 }
 
 // Lagrer KUN GPS-feltene (målrettet update, ikke hele innstillinger-raden via

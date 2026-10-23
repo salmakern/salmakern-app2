@@ -125,9 +125,45 @@ function settHengerfeste(id, val) {
 // stedet for den generelle save() (full-rad-upsert fra nettleserens lokale kopi), som kunne
 // la to påmeldinger tett i tid overskrive hverandre (funnet 2026-10-22, samme rotårsak som
 // dokumenter-/fikenLinjer-kappløpet).
+// Hvilket av de to tidsfeltene (hvis noen) som skal løpe automatisk gitt ordrens NÅVÆRENDE
+// status - se migrasjonen 20261023140000 for full begrunnelse på fasegrensene (bekreftet av
+// Henrik 2026-10-23). 'ikke_veid'/'klar_visning' er bevisst en "dødsone" uten klokke.
+function ordreAktivFase(o) {
+  if (o.ordreStatus === 'paabegynt') return 'ordreTimerSessions';
+  if (o.ordreStatus === 'vist_biltilsyn') return 'klargjoringTimerSessions';
+  return null;
+}
+function feltTilKolonne(felt) { return felt==='ordreTimerSessions' ? 'ordre_timer_sessions' : 'klargjoring_timer_sessions'; }
+function ansattHarApenOrdreSesjon(o, felt, ansattId) {
+  return (o[felt]||[]).some(s=>s.ansattId===ansattId && !s.stopp);
+}
+// Finner andre ordre hvor denne ansatte har en gående klokke (glemt å melde seg av) - brukt
+// til å melde dem automatisk av derfra når de melder seg på en NY bil, slik at samme person
+// aldri får tid tikkende på to biler samtidig (bedt om av Henrik 2026-10-23).
+function finnAndreApneOrdreForAnsatt(unntattOrdreId, ansattId) {
+  return (S.ordrer||[]).filter(o => o.id !== unntattOrdreId && (
+    ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', ansattId) ||
+    ansattHarApenOrdreSesjon(o, 'klargjoringTimerSessions', ansattId)
+  ));
+}
+async function startOrdreTimerForAnsatt(o, felt, ansattId, ansattNavn) {
+  if (!db) { o[felt]=o[felt]||[]; if(!ansattHarApenOrdreSesjon(o,felt,ansattId)) o[felt].push({start:Date.now(),stopp:null,ansattId,ansatt:ansattNavn}); return; }
+  const { data, error } = await db.rpc('oppdater_ordre_timer_sesjon', { p_ordre_id:o.id, p_felt:feltTilKolonne(felt), p_handling:'start', p_ansatt_id:ansattId, p_ansatt:ansattNavn });
+  if (error) { console.error('Kunne ikke starte '+ORDRE_TIMER_LABEL[felt]+'-klokke:', error.message); return; }
+  o[felt] = data?.sessions ?? o[felt];
+}
+async function stoppOrdreTimerForAnsatt(o, felt, ansattId, ansattNavn) {
+  if (!db) { (o[felt]||[]).forEach(s=>{ if(s.ansattId===ansattId && !s.stopp) s.stopp=Date.now(); }); return; }
+  const { data, error } = await db.rpc('oppdater_ordre_timer_sesjon', { p_ordre_id:o.id, p_felt:feltTilKolonne(felt), p_handling:'stopp', p_ansatt_id:ansattId, p_ansatt:ansattNavn });
+  if (error) { console.error('Kunne ikke stoppe '+ORDRE_TIMER_LABEL[felt]+'-klokke:', error.message); return; }
+  o[felt] = data?.sessions ?? o[felt];
+}
 async function meldPaa(id) {
   const o = S.ordrer.find(x=>x.id===id);
   if (!o || o.ansatteSignert.find(a=>a.id===me.id)) return;
+  for (const annen of finnAndreApneOrdreForAnsatt(id, me.id)) {
+    await meldAv(annen.id, {stille:true});
+  }
   const ansatt = {id:me.id, navn:me.navn, tid:fmt(new Date())};
   o.ansatteSignert.push(ansatt);
   logChange(o, me.navn+' meldt på');
@@ -138,11 +174,17 @@ async function meldPaa(id) {
     o.ansatteSignert = data || o.ansatteSignert;
   }
   planleggLocalSpeiling();
+  // Starter automatisk riktig klokke (Ombygging/Klargjøring) hvis ordren akkurat nå står i
+  // en fase som skal tidtas - se ordreAktivFase(). Ingen klokke starter i "dødsonen" eller
+  // når ordren allerede er ferdig.
+  const felt = ordreAktivFase(o);
+  if (felt) { await startOrdreTimerForAnsatt(o, felt, me.id, me.navn); buildOrdreDetail(); }
 }
-async function meldAv(id) {
+async function meldAv(id, opts) {
+  const stille = opts && opts.stille;
   const o = S.ordrer.find(x=>x.id===id);
   if (!o) return;
-  if (!confirm('Vil du melde deg av denne ordren?')) return;
+  if (!stille && !confirm('Vil du melde deg av denne ordren?')) return;
   o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==me.id);
   logChange(o, me.navn+' meldt av');
   buildOrdreDetail();
@@ -152,6 +194,10 @@ async function meldAv(id) {
     o.ansatteSignert = data || o.ansatteSignert;
   }
   planleggLocalSpeiling();
+  for (const felt of ['ordreTimerSessions','klargjoringTimerSessions']) {
+    if (ansattHarApenOrdreSesjon(o, felt, me.id)) await stoppOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+  }
+  buildOrdreDetail();
 }
 // Ordretid er delt i to uavhengige tidtakere på samme ordre - Ombygging (feltet het
 // opprinnelig bare "Ordretid" og er nå gjenbrukt som Ombygging-tiden, uendret lagringsform)
@@ -159,18 +205,25 @@ async function meldAv(id) {
 // session-arrayene på ordren det gjelder) som parameter, slik at begge kan stå og gå
 // samtidig uten å påvirke hverandre.
 const ORDRE_TIMER_LABEL = { ordreTimerSessions:'Ombygging', klargjoringTimerSessions:'Klargjøring' };
-function ordreTimerLoper(o, felt) {
-  const sessions = o[felt]||[];
-  return sessions.length>0 && !sessions[sessions.length-1].stopp;
+// To eller flere ansatte kan ha hver sin økt gående samtidig på samme ordre (bedt om av
+// Henrik 2026-10-23) - "løper" sjekkes derfor PER ansatt (den som ser på siden akkurat nå),
+// ikke om NOEN økt i det hele tatt er åpen.
+function ordreTimerLoperForMeg(o, felt) {
+  return !!me && ansattHarApenOrdreSesjon(o, felt, me.id);
 }
 function ordreTimerTotalMs(o, felt) {
   const sessions = o[felt]||[];
   const now = Date.now();
   return sessions.reduce((sum,s)=>sum+(s.stopp||now)-s.start, 0);
 }
+function fmtTime(ms) {
+  const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
+  return `${h>0?h+'t ':''}${m}min`;
+}
 function ordreTimerKortHTML(o, felt) {
   const sessions = o[felt]||[];
-  const loper = ordreTimerLoper(o, felt);
+  const gaaende = sessions.filter(s=>!s.stopp);
+  const migLoper = ordreTimerLoperForMeg(o, felt);
   const totalMs = ordreTimerTotalMs(o, felt);
   const h = Math.floor(totalMs/3600000);
   const m = Math.floor((totalMs%3600000)/60000);
@@ -181,24 +234,23 @@ function ordreTimerKortHTML(o, felt) {
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
         <div class="h">${ORDRE_TIMER_LABEL[felt]}</div>
-        <div style="font-size:28px;font-weight:800;margin-top:4px;color:${loper?'#86efac':'#f4f4f5'}">${tidStr}</div>
-        ${loper?'<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå</div>':''}
+        <div style="font-size:28px;font-weight:800;margin-top:4px;color:${gaaende.length?'#86efac':'#f4f4f5'}">${tidStr}</div>
+        ${gaaende.length?`<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå: ${gaaende.map(x=>esc(x.ansatt||'?')).join(', ')}</div>`:''}
+        <div class="small muted" style="margin-top:2px">Starter/stopper normalt automatisk (meldt på + status) - knappen er en manuell nødløsning</div>
       </div>
       <div style="display:flex;gap:8px">
-        ${loper
-          ? `<button class="btn red" onclick="stoppOrdreTimer('${o.id}','${felt}')">⏹ Stopp</button>`
-          : `<button class="btn green" onclick="startOrdreTimer('${o.id}','${felt}')">▶ Start</button>`}
+        ${migLoper
+          ? `<button class="btn red" onclick="stoppOrdreTimer('${o.id}','${felt}')">⏹ Stopp min klokke</button>`
+          : `<button class="btn green" onclick="startOrdreTimer('${o.id}','${felt}')">▶ Start min klokke</button>`}
       </div>
     </div>
     ${sessions.length>0?`
     <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
-      ${sessions.slice().reverse().map((s,i)=>{
+      ${sessions.slice().reverse().map((s)=>{
         const ms=(s.stopp||Date.now())-s.start;
-        const sh=Math.floor(ms/3600000), sm=Math.floor((ms%3600000)/60000), ss=Math.floor((ms%60000)/1000);
-        const dur=`${sh>0?sh+'t ':''} ${sm}min ${ss}s`;
         return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;font-size:13px">
-          <span class="muted">${fmtTs(s.start)} → ${s.stopp?fmtTs(s.stopp):'<span style="color:#86efac">pågår</span>'}</span>
-          <span style="font-weight:700">${dur}</span>
+          <span class="muted">${esc(s.ansatt||'?')} · ${fmtTs(s.start)} → ${s.stopp?fmtTs(s.stopp):'<span style="color:#86efac">pågår</span>'}</span>
+          <span style="font-weight:700">${fmtTime(ms)}</span>
         </div>`;
       }).join('')}
     </div>`:''}`;
@@ -210,30 +262,156 @@ function startOrdreTimerTick(id, felt) {
     const o=S.ordrer.find(x=>x.id===id); if(!o) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
     const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
     if(!el) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
-    if(!ordreTimerLoper(o, felt)) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
+    if(!(o[felt]||[]).some(s=>!s.stopp)) { clearInterval(ordreTimerTicks[nokkel]); delete ordreTimerTicks[nokkel]; return; }
     el.innerHTML=ordreTimerKortHTML(o, felt);
   },1000);
 }
-function startOrdreTimer(id, felt) {
-  const o=S.ordrer.find(x=>x.id===id); if(!o||ordreTimerLoper(o, felt)) return;
+// Sikrer at klokka tikker videre på skjermen for ALLE kort med minst én åpen økt - kalt fra
+// buildOrdreDetail() ved hver visning av en ordre, siden øktene nå ofte startes automatisk
+// (meldt på + status) i stedet for kun via disse manuelle knappene.
+function sikreOrdreTimerTicking(o) {
+  ['ordreTimerSessions','klargjoringTimerSessions'].forEach(felt => {
+    if ((o[felt]||[]).some(s=>!s.stopp)) startOrdreTimerTick(o.id, felt);
+  });
+}
+async function startOrdreTimer(id, felt) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o||!me||ansattHarApenOrdreSesjon(o,felt,me.id)) return;
   if(!o[felt]) o[felt]=[];
-  o[felt].push({start:Date.now(), stopp:null});
-  logChange(o, ORDRE_TIMER_LABEL[felt]+' startet'); save(id);
+  o[felt].push({start:Date.now(), stopp:null, ansattId:me.id, ansatt:me.navn});
+  logChange(o, ORDRE_TIMER_LABEL[felt]+' startet manuelt av '+me.navn);
   const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
   if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
   startOrdreTimerTick(id, felt);
+  await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
 }
-function stoppOrdreTimer(id, felt) {
-  const o=S.ordrer.find(x=>x.id===id); if(!o||!ordreTimerLoper(o, felt)) return;
-  const sessions=o[felt]||[];
-  const last=sessions[sessions.length-1];
-  if(last&&!last.stopp) last.stopp=Date.now();
-  const nokkel = felt+'_'+id;
-  if(ordreTimerTicks[nokkel]){clearInterval(ordreTimerTicks[nokkel]);delete ordreTimerTicks[nokkel];}
-  logChange(o, ORDRE_TIMER_LABEL[felt]+' stoppet'); save(id);
+async function stoppOrdreTimer(id, felt) {
+  const o=S.ordrer.find(x=>x.id===id); if(!o||!me||!ansattHarApenOrdreSesjon(o,felt,me.id)) return;
+  (o[felt]||[]).forEach(s=>{ if(s.ansattId===me.id && !s.stopp) s.stopp=Date.now(); });
+  logChange(o, ORDRE_TIMER_LABEL[felt]+' stoppet manuelt av '+me.navn);
   const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
   if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
+  await stoppOrdreTimerForAnsatt(o, felt, me.id, me.navn);
 }
+
+// ════════════════════════════════════════════════════
+// BIL-EFFEKTIVITET: brukt tid vs. standardtid per modell
+// ════════════════════════════════════════════════════
+// Rå øktvarighet (stopp-start) er IKKE det samme som faktisk arbeidstid - en økt kan stå
+// åpen gjennom natta/en helg hvis arbeidsdagen er ferdig uten at bilen er det (se migrasjonen
+// 20261023140000 for hvorfor dette IKKE løses med sanntids-sjekk av lønnsklokka). I stedet
+// beregnes EFFEKTIV tid som overlappet mellom hver økt og den aktuelle ansattes faktiske
+// stemplede arbeidstid (timer_entries), hentet direkte fra databasen (ikke S.timer, som kun
+// holder de siste 300 radene på tvers av ALLE ansatte - for lite for en lengre periode).
+function beregnOverlappMs(sesjoner, intervaller) {
+  let totalMs = 0;
+  (sesjoner||[]).forEach(s => {
+    if (s.ansattId==null) return;
+    const mine = intervaller[s.ansattId]||[];
+    const sStart = s.start, sSlutt = s.stopp||Date.now();
+    mine.forEach(iv => {
+      const overlapStart = Math.max(sStart, iv.start);
+      const overlapSlutt = Math.min(sSlutt, iv.slutt);
+      if (overlapSlutt > overlapStart) totalMs += (overlapSlutt - overlapStart);
+    });
+  });
+  return totalMs;
+}
+async function hentArbeidsintervaller(ansattIder, fraDato, tilDato) {
+  const intervaller = {};
+  if (!db || !ansattIder.length) return intervaller;
+  const { data, error } = await db.from('timer_entries')
+    .select('ansatt_id,dato,start,stopp,type')
+    .in('ansatt_id', ansattIder).in('type', ['normal','manuell'])
+    .gte('dato', fraDato).lte('dato', tilDato);
+  if (error) { console.error('Kunne ikke hente arbeidsintervaller:', error.message); return intervaller; }
+  (data||[]).forEach(r => {
+    if (!r.start || !r.stopp || r.start==='–' || r.stopp==='–') return;
+    const start = new Date(r.dato+'T'+r.start).getTime();
+    let slutt = new Date(r.dato+'T'+r.stopp).getTime();
+    if (isNaN(start) || isNaN(slutt)) return;
+    if (slutt < start) slutt += 24*3600000; // vakt som krysser midnatt, føre var
+    (intervaller[r.ansatt_id] = intervaller[r.ansatt_id]||[]).push({start, slutt});
+  });
+  return intervaller;
+}
+async function effektivOrdreTidMs(o) {
+  const alleSesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
+  if (!alleSesjoner.length) return 0;
+  const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
+  if (!ansattIder.length || !db) return alleSesjoner.reduce((sum,s)=>sum+((s.stopp||Date.now())-s.start),0);
+  const minStart = Math.min(...alleSesjoner.map(s=>s.start));
+  const maxSlutt = Math.max(...alleSesjoner.map(s=>s.stopp||Date.now()));
+  const intervaller = await hentArbeidsintervaller(ansattIder, new Date(minStart).toISOString().split('T')[0], new Date(maxSlutt).toISOString().split('T')[0]);
+  return beregnOverlappMs(alleSesjoner, intervaller);
+}
+// Standardtid = TOTAL forventet tid for bilen (Ombygging + Klargjøring samlet), ikke delt per
+// ansatt selv når flere jobber samtidig (bekreftet av Henrik 2026-10-23) - modeller uten satt
+// standardtid gir null (ingen vurdering vises, i stedet for å late som 0 minutter er riktig).
+function ordreStandardMs(o) {
+  const rad = (S.standardtider||{})[o.modell];
+  if (!rad) return null;
+  const minutter = (Number(rad.ombygging)||0) + (Number(rad.klargjoring)||0);
+  return minutter>0 ? minutter*60000 : null;
+}
+const BIL_EFFEKTIVITET_TERSKLER = { god: 1.0, noksaaGod: 1.2 }; // forhold brukt/standard
+function bilEffektivitetVurdering(ratio) {
+  if (ratio <= BIL_EFFEKTIVITET_TERSKLER.god) return {label:'God', farge:'#4ade80'};
+  if (ratio <= BIL_EFFEKTIVITET_TERSKLER.noksaaGod) return {label:'Nokså god', farge:'#facc15'};
+  return {label:'Bør følges opp', farge:'#f87171'};
+}
+// Samlet oversikt per ansatt for en periode - "brukt" telles per FERDIGSTILT ordre
+// (dato_klar_henting i perioden) der modellen har en satt standardtid. Hver ordre teller likt
+// for alle som bidro til den, uansett hvor mange som jobbet sammen - se kommentaren i
+// migrasjonen 20261023140000 om hvorfor standardtiden ikke deles per hode.
+async function beregnBilEffektivitetPerAnsatt(fraDato, tilDato) {
+  const relevante = (S.ordrer||[]).filter(o =>
+    o.datoKlarHenting && o.datoKlarHenting>=fraDato && o.datoKlarHenting<=tilDato && ordreStandardMs(o)!=null
+  );
+  if (!relevante.length) return [];
+  const alleSesjoner = relevante.flatMap(o => [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])]);
+  const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
+  if (!ansattIder.length) return [];
+  const minStart = Math.min(...alleSesjoner.map(s=>s.start));
+  const maxSlutt = Math.max(...alleSesjoner.map(s=>s.stopp||Date.now()));
+  const intervaller = await hentArbeidsintervaller(ansattIder, new Date(minStart).toISOString().split('T')[0], new Date(maxSlutt).toISOString().split('T')[0]);
+
+  const perAnsatt = {};
+  relevante.forEach(o => {
+    const sesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
+    const brukt = beregnOverlappMs(sesjoner, intervaller);
+    if (!brukt) return;
+    const standard = ordreStandardMs(o);
+    const ratio = brukt / standard;
+    const bidragsytere = [...new Set(sesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
+    bidragsytere.forEach(ansattId => {
+      const navn = sesjoner.find(s=>s.ansattId===ansattId)?.ansatt || '?';
+      if (!perAnsatt[ansattId]) perAnsatt[ansattId] = {ansattId, navn, ratioer:[]};
+      perAnsatt[ansattId].ratioer.push(ratio);
+    });
+  });
+  return Object.values(perAnsatt).map(r => {
+    const snittRatio = r.ratioer.reduce((a,b)=>a+b,0)/r.ratioer.length;
+    return { ansattId:r.ansattId, navn:r.navn, antallBiler:r.ratioer.length, snittRatio, vurdering: bilEffektivitetVurdering(snittRatio) };
+  }).sort((a,b)=>a.snittRatio-b.snittRatio);
+}
+// Fyller "Brukt tid: Xt Ym (standard: Zt Wm)"-kortet på ordre-siden (admin-only) - asynkron
+// fordi effektiv tid krever et DB-oppslag (se effektivOrdreTidMs()), kalles fra
+// buildOrdreDetail() i ordre-detalj.js.
+async function renderBilEffektivitetBadge(o) {
+  const el = document.getElementById('bilEffektivitetBadge_'+o.id); if (!el) return;
+  const standardMs = ordreStandardMs(o);
+  if (standardMs == null) { el.innerHTML = `<div class="small muted">Ingen standardtid satt for "${esc(o.modell||'ukjent modell')}" (sett under Mer → Standardtider)</div>`; return; }
+  const bruktMs = await effektivOrdreTidMs(o);
+  const elNa = document.getElementById('bilEffektivitetBadge_'+o.id); if (!elNa) return; // kan ha forsvunnet mens vi ventet (byttet ordre)
+  const vurdering = bilEffektivitetVurdering(bruktMs/standardMs);
+  elNa.innerHTML = `<div class="h">Bil-effektivitet</div>
+    <div style="font-size:22px;font-weight:800;margin-top:4px;color:${vurdering.farge}">
+      Brukt tid ${fmtTime(bruktMs)} <span style="font-size:15px;font-weight:600;color:#a1a1aa">(standard ${fmtTime(standardMs)})</span>
+    </div>
+    <div class="small" style="color:${vurdering.farge};margin-top:2px">${vurdering.label}</div>
+    <div class="small muted" style="margin-top:4px">Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka</div>`;
+}
+
 async function arkiver(id) {
   // Ansatt skal ikke kunne arkivere ordre (bedt om av Henrik 2026-10-01) - kun godkjenner/admin.
   if (!me || !(me.rolle==='godkjenner'||me.rolle==='admin')) return;
