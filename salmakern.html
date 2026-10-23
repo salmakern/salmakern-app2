@@ -93,7 +93,15 @@ body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:10
 
 /* LAYOUT */
 #appScreen{display:none}
-.top{position:sticky;top:0;background:#09090b;border-bottom:1px solid #27272a;z-index:50;padding:12px 16px}
+/* viewport-fit=cover (se <meta name="viewport"> i <head>) lar siden tegne helt ut i
+   kantene på telefoner med hakk/status-linje (for å kunne bruke hele skjermen som PWA),
+   men krever da at innhold som skal stå ØVERST selv legger inn nok luft til å unngå å havne
+   bak telefonens egen statuslinje (klokke/batteri/signal) - uten dette landet logoen og
+   ansatt-navnet rett oppå statuslinja og ble uleselig ("logoen er borte", rapportert av
+   Henrik 2026-10-26, kun synlig i PWA-/fullskjermmodus på mobil, ikke i en vanlig nettleser-
+   fane med egen adresselinje). env(safe-area-inset-top) er 0 på enheter uten hakk/status-
+   linje-overlapp, så dette endrer ingenting der appen allerede så riktig ut.   */
+.top{position:sticky;top:0;background:#09090b;border-bottom:1px solid #27272a;z-index:50;padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
 .top-inner{max-width:1200px;margin:auto}
 .wrap{max-width:1200px;margin:auto;padding:16px}
 .wrap.full{max-width:none;padding-left:8px;padding-right:8px}
