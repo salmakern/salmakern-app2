@@ -22,8 +22,24 @@ function sorterLagerVarer(a, b) {
 // Flytter en vare opp/ned i sin kategori (retning: -1 opp, 1 ned). Normaliserer
 // rekkefølge til nåværende visningsposisjon først, slik at flyttingen alltid gir
 // en synlig endring uansett hvilken rekkefølge-verdi varene hadde fra før.
-function flyttVare(id, retning) {
+// Henter FERSK rekkefølge/antall/bestilt for gruppen fra databasen rett før den regner ut
+// den nye rekkefølgen, i stedet for kun å stole på det denne nettleserfanen tilfeldigvis har
+// liggende lokalt - gjør vinduet der to admin som omorganiserer SAMME kategori helt samtidig
+// kan overskrive hverandre MYE mindre (vurdert 2026-10-22). Kan ikke gjøres helt
+// "atomisk" som de andre fiksene samme dag - dette er to reelle, motstridende ønsker om
+// rekkefølge på samme tid, ikke data som forsvinner, så det finnes ingen fasit-løsning som
+// alltid gir "riktig" resultat for begge.
+async function flyttVare(id, retning) {
   if (!aktivKategori) return;
+  const idsIGruppen = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori')===aktivKategori && (v.modell||'')===(aktivModell||'')).map(v=>v.id);
+  if (db && idsIGruppen.length) {
+    const { data, error } = await db.from('lagervarer').select('id, rekkefolge, antall, bestilt').in('id', idsIGruppen);
+    if (error) console.error('Kunne ikke hente fersk rekkefølge, bruker lokal kopi:', error.message);
+    else data.forEach(r => {
+      const v = S.lagervarer.find(x=>x.id===r.id);
+      if (v) { v.rekkefolge = Number(r.rekkefolge)||0; v.antall = Number(r.antall)||0; v.bestilt = !!r.bestilt; }
+    });
+  }
   const gruppevarer = (S.lagervarer||[]).filter(v => (v.kategori||'Uten kategori')===aktivKategori && (v.modell||'')===(aktivModell||'')).sort(sorterLagerVarer);
   const i = gruppevarer.findIndex(v=>v.id===id);
   const j = i + retning;
