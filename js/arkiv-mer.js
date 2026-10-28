@@ -300,6 +300,9 @@ function renderMer() {
     // pågående skriving"-mønster som GPS-radiusfeltet over) - ellers "stjeler" en
     // sanntidsoppdatering fra en annen admin teksten midt i redigering.
     const fokusertNavnId = document.activeElement?.id?.startsWith('ansattNavn_') ? document.activeElement.id : null;
+    // Mobilnummer er fritekst som kan stå og skrives i akkurat som navnefeltet - samme
+    // "ikke forstyrr pågående skriving"-behov, se kommentaren over fokusertNavnId.
+    const fokusertMobilId = document.activeElement?.id?.startsWith('ansattMobil_') ? document.activeElement.id : null;
     al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px;align-items:center">
       <input id="ansattNavn_${a.id}" value="${fokusertNavnId==='ansattNavn_'+a.id?document.getElementById(fokusertNavnId).value:esc(a.navn)}" onchange="endreAnsattNavn(${a.id},this.value)" style="width:auto;max-width:170px;padding:5px 8px;font-size:12px;font-weight:700">
       ${!a.aktiv?'<span class="small err-text">Inaktiv</span>':''}
@@ -310,6 +313,8 @@ function renderMer() {
           <option value="admin" ${a.rolle==='admin'?'selected':''}>Admin</option>
         </select>
         <input type="date" value="${a.ansettelsesdato||''}" onchange="settAnsattAnsettelsesdato(${a.id},this.value)" title="Ansettelsesdato - styrer 2-månedersregelen for egenmelding. Tom = ikke sperret ennå." style="width:auto;padding:5px 8px;font-size:12px">
+        <input id="ansattMobil_${a.id}" type="tel" placeholder="Mobilnr." value="${fokusertMobilId==='ansattMobil_'+a.id?document.getElementById(fokusertMobilId).value:esc(a.mobil||'')}" onchange="endreAnsattMobil(${a.id},this.value)" title="Mobilnummer - brukes til SMS-bekreftelse ved kjøreseddel" style="width:auto;max-width:120px;padding:5px 8px;font-size:12px">
+        <input type="date" value="${a.fodselsdato||''}" onchange="settAnsattFodselsdato(${a.id},this.value)" title="Fødselsdato - trengs for å skrive kjøreseddel" style="width:auto;padding:5px 8px;font-size:12px">
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
         <button class="btn sm" onclick="adminSettNyPin(${a.id})" title="Sett en ny PIN for denne ansatte, f.eks. ved glemt PIN">🔑 Sett PIN</button>
         <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>

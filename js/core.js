@@ -258,7 +258,7 @@ async function loadFromSupabase() {
   if (aR.error) throw new Error(aR.error.message);
   if (oR.error) throw new Error(oR.error.message);
   if (tR.error) throw new Error(tR.error.message);
-  S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null}));
+  S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null, mobil: a.mobil||'', fodselsdato: a.fodselsdato||''}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
   const prevTimer  = S.timer  ? [...S.timer]  : [];
   const now = Date.now();
@@ -588,7 +588,7 @@ function subscribeRealtime() {
       }
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'ansatte'}, p => {
-      const mapA = a => ({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null});
+      const mapA = a => ({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null, mobil: a.mobil||'', fodselsdato: a.fodselsdato||''});
       if (p.eventType==='INSERT') {
         if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(mapA(p.new));
       } else if (p.eventType==='UPDATE') {

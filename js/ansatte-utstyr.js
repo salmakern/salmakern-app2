@@ -1558,6 +1558,32 @@ function settAnsattAnsettelsesdato(id, dato) {
   planleggLocalSpeiling();
 }
 
+// Mobilnummer og fødselsdato - forberedelse til kjøreseddel-integrasjonen (migrasjon
+// 20261028130000). Henrik bekreftet 2026-10-28 at begge trengs for å faktisk skrive en
+// kjøreseddel (sammen med navnet, som allerede finnes), i tillegg til at mobilnummer er
+// nyttig kontaktinfo uavhengig av kjøreseddel. Samme redigerbart-felt-mønster som navn/
+// ansettelsesdato rett over.
+function endreAnsattMobil(id, mobil) {
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
+  mobil = (mobil||'').trim();
+  a.mobil = mobil;
+  ignorerRealtimeAnsatt.add(String(id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
+  if(db) db.from('ansatte').update({mobil: mobil || null}).eq('id',id)
+    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
+  planleggLocalSpeiling();
+}
+
+function settAnsattFodselsdato(id, dato) {
+  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
+  a.fodselsdato = dato || '';
+  ignorerRealtimeAnsatt.add(String(id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
+  if(db) db.from('ansatte').update({fodselsdato: dato || null}).eq('id',id)
+    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
+  planleggLocalSpeiling();
+}
+
 function toggleAnsatt(id) {
   const a=S.ansatte.find(x=>x.id===id); if(!a) return;
   a.aktiv=!a.aktiv;
