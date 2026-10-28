@@ -591,6 +591,19 @@ async function endreStatus(id, nyStatus) {
       else o[feltNy] = data.sessions ?? o[feltNy];
     }
   }
+  // Merker "hentetVarslet" automatisk (grønn kantlinje på Hentet-knappen i Admin-ark) når
+  // status settes til "Hentet" - BEVISST uten å faktisk sende varsel-e-posten (bedt om av
+  // Henrik 2026-10-28, med et klart forbehold gitt: dette betyr at grønn IKKE lenger
+  // garantert betyr "kunden er faktisk varslet" - admin må fortsatt huske å trykke den ekte
+  // Hentet-knappen i Admin-ark for selve e-posten, se adminArkVarsleHentet()).
+  if (nyStatus === 'hentet' && o.chassis && typeof adminArkLagreFelter === 'function') {
+    const eksisterende = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, o.chassis) && !r.arkivert);
+    if (!eksisterende?.hentetVarslet) {
+      await adminArkLagreFelter({ _arkId: eksisterende?.id||null, chassisNr: o.chassis, _erOrdre: true }, { hentetVarslet: true });
+      const tabRad = (typeof adminArkTable!=='undefined' && adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, o.chassis));
+      if (tabRad) tabRad.update({ hentetVarslet: true });
+    }
+  }
   renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
 }

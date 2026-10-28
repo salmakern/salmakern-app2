@@ -190,6 +190,15 @@ function adminArkFlateNavn(o) {
 // gammel fritekst fra før dette) som eget valg - samme mønster som fargeSelectOptions().
 const FRAKTSELSKAP_HENTE_SELV = 'Hente selv';
 const FRAKTSELSKAP_LEVERING_AV_OSS = 'Levering av oss';
+// Noen fraktselskap bytter navn/merkevare uten at selve Kontakter-oppføringen (og dermed
+// alle allerede lagrede admin-ark-rader med det gamle navnet) oppdateres - dette oversetter
+// KUN visningsnavnet i selve e-postteksten til kontaktpersonen, aldri oppslaget mot Kontakter
+// sin registrerte e-postadresse (BOS sin e-post er fortsatt @bos.no - kun teksten "av BOS" i
+// hentet-varselet skal si "av Axess", bedt om av Henrik 2026-10-28: BOS byttet navn til
+// Axess). Dekker også de 150+ allerede lagrede admin-ark-radene som fortsatt har "BOS"
+// lagret fra før navnebyttet, uten å måtte rette opp hver enkelt rad.
+const FRAKTSELSKAP_VISNINGSNAVN = { 'BOS': 'Axess' };
+function fraktselskapVisningsnavn(navn) { return FRAKTSELSKAP_VISNINGSNAVN[navn] || navn; }
 function adminArkFraktselskapListe() {
   return (S.kontakter||[]).filter(k => k.type === 'Fraktselskap').map(k => k.navn).concat(FRAKTSELSKAP_HENTE_SELV, FRAKTSELSKAP_LEVERING_AV_OSS);
 }
@@ -364,7 +373,7 @@ async function adminArkVarsleHentet(chassisNr) {
   const sporsmal = erLeveringAvOss ? 'at bilen er på vei til dere' : 'at bilen er hentet';
   if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om ${sporsmal}?`)) return;
   try {
-    await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, fraktselskap: erLeveringAvOss ? '' : (rad.fraktselskap||''), avsenderNavn: me?.navn });
+    await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, fraktselskap: erLeveringAvOss ? '' : fraktselskapVisningsnavn(rad.fraktselskap||''), avsenderNavn: me?.navn });
     visToast('Varsel sendt til ' + rad.kontaktperson, 'ok');
     const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
     const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>samsvarerChassis(x.chassis,chassisNr)) };
