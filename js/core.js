@@ -520,23 +520,35 @@ let realtimeReconnectTimer = null;
 // egress-regning på over 1,9 PETABYTE på et datasett som til sammen er noen få MB.
 // Verdien forfaller (nullstilles) av seg selv etter 10 minutter uten noen ny feil - en
 // ekte, varig gjenopprettet forbindelse skal ikke holde enheten tilbake for alltid.
+//
+// OPPDATERT 2026-10-28: 5-minutters-taket over var IKKE nok til å stoppe kostnaden helt -
+// Supabase bekreftet fortsatt ~54 GB egress/døgn to dager senere. En enhet som ALDRI klarer
+// å holde en stabil forbindelse (ikke bare midlertidig ustabil) fortsatte å gjøre en full
+// nedlasting hvert eneste 5. minutt i det UENDELIGE (288 ganger/døgn × ~188 MB ≈ nøyaktig de
+// 54 GB-ene Supabase målte). Lagrer derfor nå også tidspunktet for FØRSTE feil i en
+// sammenhengende feil-rekke - har den vart over 60 minutter, gir vi opp den automatiske
+// bakgrunns-gjenoppkoblingen helt (REALTIME_GIVE_UP_MS under). Enheten faller da tilbake på
+// den vanlige "oppdater når fanen kommer i forgrunnen"-logikken (se visibilitychange under),
+// som uansett kun trigges av faktisk bruk - ikke en enhet som flapper alene i bakgrunnen uten
+// noen bruker til stede.
 const REALTIME_BACKOFF_KEY = 'realtimeBackoff_v1';
+const REALTIME_GIVE_UP_MS = 60 * 60 * 1000;
 function lesRealtimeBackoff() {
   try {
     const raw = localStorage.getItem(REALTIME_BACKOFF_KEY);
-    if (!raw) return 0;
-    const { forsok, tid } = JSON.parse(raw);
-    if (!forsok || Date.now() - tid > 10 * 60 * 1000) return 0;
-    return forsok;
-  } catch(e) { return 0; }
+    if (!raw) return { forsok: 0, forsteFeil: 0 };
+    const { forsok, tid, forsteFeil } = JSON.parse(raw);
+    if (!forsok || Date.now() - tid > 10 * 60 * 1000) return { forsok: 0, forsteFeil: 0 };
+    return { forsok, forsteFeil: forsteFeil || tid };
+  } catch(e) { return { forsok: 0, forsteFeil: 0 }; }
 }
-function lagreRealtimeBackoff(forsok) {
+function lagreRealtimeBackoff(forsok, forsteFeil) {
   try {
     if (!forsok) { localStorage.removeItem(REALTIME_BACKOFF_KEY); return; }
-    localStorage.setItem(REALTIME_BACKOFF_KEY, JSON.stringify({ forsok, tid: Date.now() }));
+    localStorage.setItem(REALTIME_BACKOFF_KEY, JSON.stringify({ forsok, tid: Date.now(), forsteFeil }));
   } catch(e) {}
 }
-let realtimeReconnectForsok = lesRealtimeBackoff();
+let { forsok: realtimeReconnectForsok, forsteFeil: realtimeForsteFeil } = lesRealtimeBackoff();
 // Nullstilles kun etter at forbindelsen har stått STABIL en liten stund (se
 // subscribeRealtime() sin 'SUBSCRIBED'-håndtering under) - en forbindelse som lykkes helt
 // kort og så umiddelbart feiler igjen ("flapper") skal IKKE få lov til å nullstille
@@ -725,19 +737,27 @@ function subscribeRealtime() {
         clearTimeout(realtimeStabilTimer);
         realtimeStabilTimer = setTimeout(() => {
           realtimeReconnectForsok = 0;
+          realtimeForsteFeil = 0;
           lagreRealtimeBackoff(0);
         }, 60000);
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn('Sanntid frakoblet:', status, err);
         clearTimeout(realtimeStabilTimer);
-        if (!realtimeReconnectTimer && db && me) {
+        if (!realtimeForsteFeil) realtimeForsteFeil = Date.now();
+        // Gir opp den automatiske bakgrunns-gjenoppkoblingen etter 60 min sammenhengende
+        // feil (se toppkommentaren på REALTIME_BACKOFF_KEY) - en enhet som aldri stabiliserer
+        // seg skal ikke fortsette å laste ned hele datasettet hvert 5. minutt i det uendelige.
+        // Faner som faktisk brukes tar seg selv opp igjen via visibilitychange-lytteren under.
+        if (Date.now() - realtimeForsteFeil > REALTIME_GIVE_UP_MS) {
+          console.warn('Sanntid: gir opp automatisk gjenoppkobling etter 60 min sammenhengende feil');
+        } else if (!realtimeReconnectTimer && db && me) {
           // Tak økt fra 30 sek til 5 min 2026-10-22 - 30 sek var ikke nok til å hindre en
           // reell løpsk kostnad (se toppkommentaren på REALTIME_BACKOFF_KEY): en enhet som
           // aldri klarer å koble stabilt til bør IKKE prøve på nytt oftere enn hvert 5.
           // minutt, siden hvert forsøk utløser en full nedlasting av hele datasettet.
           const forsinkelse = Math.min(1000 * Math.pow(2, realtimeReconnectForsok), 300000);
           realtimeReconnectForsok++;
-          lagreRealtimeBackoff(realtimeReconnectForsok);
+          lagreRealtimeBackoff(realtimeReconnectForsok, realtimeForsteFeil);
           realtimeReconnectTimer = setTimeout(async () => {
             realtimeReconnectTimer = null;
             if (db && me) {
