@@ -320,6 +320,26 @@ function doStartTimer(notat) {
   console.log('Timer startet:',notat);
   oppdaterTilstandPille();
   gjenopptaMineOrdreKlokkerVedInnstempling();
+  settStempletInnSiden(new Date().toISOString());
+}
+
+// Skriver tidspunktet jeg stemplet inn til min EGEN ansatte-rad (bedt om av Henrik
+// 2026-10-28: "se hvem av de ansatte som fortsatt er stemplet inn") - nullstilles igjen av
+// lagreTimer() sin hale når jeg stempler ut. Dette var tidligere umulig å se fra noen annen
+// økt enn den som faktisk startet klokka: "timerStart" har alltid kun levd som en ren
+// nettleser-lokal variabel + localStorage, en timer_entries-rad opprettes først når klokka
+// STOPPES (se lagreTimer()) - ingen database-tilstand fantes for en PÅGÅENDE innstempling.
+// Målrettet enkelt-kolonne-skriving på egen rad - ingen samtidighets-/låseproblematikk siden
+// det aldri er mer enn én skriver (ansatten selv) per rad, samme mønster som session_token.
+function settStempletInnSiden(iso) {
+  if (!me) return;
+  me.stempletInnSiden = iso;
+  const egen = S.ansatte?.find(a=>a.id===me.id); if (egen) egen.stempletInnSiden = iso;
+  if (!db) return;
+  ignorerRealtimeAnsatt.add(String(me.id));
+  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(me.id)), 5000);
+  db.from('ansatte').update({ stemplet_inn_siden: iso }).eq('id', me.id)
+    .then(r=>{ if(r.error) console.error('Kunne ikke oppdatere stemplet_inn_siden:', r.error.message); });
 }
 
 // Kobler den daglige lønnsklokka sammen med Ombygging-klokka (den automatiske, se
@@ -491,6 +511,11 @@ async function lagreTimer() {
   document.getElementById('clockRange').textContent='--:-- – --:--';
   document.getElementById('clockPause').textContent='';
   oppdaterKlokkeRing(0, false);
+  // VIKTIG: dette er selve koblingen som faktisk stopper Ombygging-klokka ved utstempling
+  // (funksjonen fantes fra før, men var ved en feil aldri koblet til her - oppdaget og
+  // fikset 2026-10-28 ved en ny gjennomgang, se stoppMineOrdreKlokkerVedUtstempling()).
+  stoppMineOrdreKlokkerVedUtstempling();
+  settStempletInnSiden(null);
 }
 
 function renderTimerHistorikk() {

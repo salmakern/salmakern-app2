@@ -406,6 +406,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div id="digitalKlokke" style="line-height:1;font-variant-numeric:tabular-nums">00:00:00</div>
         <div id="digitalKlokkeDato" style="margin-top:8px"></div>
       </div>
+      <div class="card" id="stempletInnNaKort" style="margin-bottom:12px;display:none">
+        <div class="h">Stemplet inn nå <span class="kort-admin-merke">ADMIN</span></div>
+        <div id="stempletInnNaListe" style="margin-top:8px"></div>
+      </div>
       <div class="grid g2" style="margin-bottom:12px">
         <div class="card" id="merMoterKort" style="margin-bottom:0;display:none">
           <div class="row">
@@ -858,7 +862,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
         <div class="card">
           <div class="h">Standardtider (bil-effektivitet)</div>
-          <div class="muted small" style="margin-bottom:8px">Forventet TOTAL tid (Ombygging + Klargjøring samlet) per modell - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
+          <div class="muted small" style="margin-bottom:8px">Forventet Ombygging-tid per modell (Klargjøring telles ikke med, siden det er en ren manuell klokke) - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
           <div id="standardtiderListe" style="margin-top:10px"></div>
         </div>
       </div>

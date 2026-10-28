@@ -341,8 +341,12 @@ async function hentArbeidsintervaller(ansattIder, fraDato, tilDato) {
 // ordren, ikke bare summen (bedt om av Henrik 2026-10-26: "hvor lang tid bruker en ansatt
 // per bil"). Henter arbeidsintervallene ÉN gang og gjenbruker dem for både total og
 // nedbrytning, i stedet for to separate DB-kall.
+// KUN Ombygging telles med her (og i standardtid/snitt-beregningen under) - Klargjøring er
+// en ren manuell klokke uten noen fast fasegrense (se ordreAktivFase()), og Henrik ba
+// eksplisitt 2026-10-28 om at den IKKE skal være med i noen gjennomsnitts-/standardtid-
+// sammenligning, kun den automatiserte og dermed pålitelig målte Ombygging-tiden.
 async function effektivOrdreTidPerAnsattMs(o) {
-  const alleSesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
+  const alleSesjoner = o.ordreTimerSessions||[];
   if (!alleSesjoner.length) return { totalMs: 0, perAnsatt: [] };
   const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
   if (!ansattIder.length) return { totalMs: 0, perAnsatt: [] };
@@ -367,13 +371,14 @@ async function effektivOrdreTidPerAnsattMs(o) {
 async function effektivOrdreTidMs(o) {
   return (await effektivOrdreTidPerAnsattMs(o)).totalMs;
 }
-// Standardtid = TOTAL forventet tid for bilen (Ombygging + Klargjøring samlet), ikke delt per
-// ansatt selv når flere jobber samtidig (bekreftet av Henrik 2026-10-23) - modeller uten satt
-// standardtid gir null (ingen vurdering vises, i stedet for å late som 0 minutter er riktig).
+// Standardtid = TOTAL forventet OMBYGGINGS-tid for bilen, ikke delt per ansatt selv når flere
+// jobber samtidig (bekreftet av Henrik 2026-10-23). Klargjøring telles bevisst IKKE med (se
+// effektivOrdreTidPerAnsattMs() over) - modeller uten satt standardtid gir null (ingen
+// vurdering vises, i stedet for å late som 0 minutter er riktig).
 function ordreStandardMs(o) {
   const rad = (S.standardtider||{})[o.modell];
   if (!rad) return null;
-  const minutter = (Number(rad.ombygging)||0) + (Number(rad.klargjoring)||0);
+  const minutter = Number(rad.ombygging)||0;
   return minutter>0 ? minutter*60000 : null;
 }
 const BIL_EFFEKTIVITET_TERSKLER = { god: 1.0, noksaaGod: 1.2 }; // forhold brukt/standard
@@ -391,7 +396,7 @@ async function beregnBilEffektivitetPerAnsatt(fraDato, tilDato) {
     o.datoKlarHenting && o.datoKlarHenting>=fraDato && o.datoKlarHenting<=tilDato && ordreStandardMs(o)!=null
   );
   if (!relevante.length) return [];
-  const alleSesjoner = relevante.flatMap(o => [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])]);
+  const alleSesjoner = relevante.flatMap(o => o.ordreTimerSessions||[]);
   const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
   if (!ansattIder.length) return [];
   const minStart = Math.min(...alleSesjoner.map(s=>s.start));
@@ -400,7 +405,7 @@ async function beregnBilEffektivitetPerAnsatt(fraDato, tilDato) {
 
   const perAnsatt = {};
   relevante.forEach(o => {
-    const sesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
+    const sesjoner = o.ordreTimerSessions||[];
     const brukt = beregnOverlappMs(sesjoner, intervaller);
     if (!brukt) return;
     const standard = ordreStandardMs(o);
@@ -443,10 +448,9 @@ async function renderBilEffektivitetBadge(o) {
 // (bedt om av Henrik 2026-10-26: "gjennomsnitt tid på modellene"). Henter arbeidsintervaller
 // ÉN gang for ALLE relevante ansatte/datoer, samme mønster som beregnBilEffektivitetPerAnsatt().
 async function beregnGjennomsnittTidPerModell() {
-  const relevante = (S.ordrer||[]).filter(o => o.modell && o.datoKlarHenting &&
-    ((o.ordreTimerSessions||[]).length || (o.klargjoringTimerSessions||[]).length));
+  const relevante = (S.ordrer||[]).filter(o => o.modell && o.datoKlarHenting && (o.ordreTimerSessions||[]).length);
   if (!relevante.length) return {};
-  const alleSesjoner = relevante.flatMap(o => [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])]);
+  const alleSesjoner = relevante.flatMap(o => o.ordreTimerSessions||[]);
   const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];
   if (!ansattIder.length) return {};
   const minStart = Math.min(...alleSesjoner.map(s=>s.start));
@@ -455,7 +459,7 @@ async function beregnGjennomsnittTidPerModell() {
 
   const perModell = {};
   relevante.forEach(o => {
-    const sesjoner = [...(o.ordreTimerSessions||[]), ...(o.klargjoringTimerSessions||[])];
+    const sesjoner = o.ordreTimerSessions||[];
     const brukt = beregnOverlappMs(sesjoner, intervaller);
     if (!brukt) return;
     (perModell[o.modell] = perModell[o.modell]||[]).push(brukt);

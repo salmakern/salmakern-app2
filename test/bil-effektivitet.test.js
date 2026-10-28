@@ -46,17 +46,19 @@ describe('bilEffektivitetVurdering() - beskrivende vurdering, ikke karakter', ()
   });
 });
 
-describe('ordreStandardMs() - standardtid er TOTAL for bilen (Ombygging + Klargjøring)', () => {
-  it('summerer ombygging og klargjøring til én total standard i millisekunder', () => {
-    env.S.standardtider = { 'KIA EV9': { ombygging: 480, klargjoring: 120 } }; // 8t + 2t
-    expect(env.ordreStandardMs({ modell: 'KIA EV9' })).toBe(600 * 60000);
+describe('ordreStandardMs() - standardtid er TOTAL forventet OMBYGGINGS-tid for bilen', () => {
+  // Klargjøring telles bevisst IKKE med (bedt om av Henrik 2026-10-28) - det er en ren
+  // manuell klokke uten fast fasegrense, og skal derfor ikke inngå i noen sammenligning.
+  it('bruker kun ombygging-minuttene, ignorerer et evt. gammelt klargjoring-felt', () => {
+    env.S.standardtider = { 'KIA EV9': { ombygging: 480, klargjoring: 120 } }; // 8t + 2t (klargjoring skal ignoreres)
+    expect(env.ordreStandardMs({ modell: 'KIA EV9' })).toBe(480 * 60000);
   });
   it('returnerer null (ingen vurdering) for en modell uten satt standardtid', () => {
-    env.S.standardtider = { 'KIA EV9': { ombygging: 480, klargjoring: 120 } };
+    env.S.standardtider = { 'KIA EV9': { ombygging: 480 } };
     expect(env.ordreStandardMs({ modell: 'VW Crafter' })).toBeNull();
   });
   it('returnerer null hvis standardtiden er satt til 0 (ikke konfigurert ennå)', () => {
-    env.S.standardtider = { 'KIA EV9': { ombygging: 0, klargjoring: 0 } };
+    env.S.standardtider = { 'KIA EV9': { ombygging: 0 } };
     expect(env.ordreStandardMs({ modell: 'KIA EV9' })).toBeNull();
   });
 });

@@ -148,6 +148,7 @@ function renderOrdreList() {
 // ════════════════════════════════════════════════════
 function renderOversikt(q) {
   renderMoterListe();
+  renderStempletInnNa();
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
   const mnd = now.getMonth(), yr = now.getFullYear();
@@ -211,6 +212,31 @@ function renderOversikt(q) {
     : '<div class="muted small">Ingen ventende ordrer</div>';
 
   renderWeek();
+}
+
+// Viser hvem av de ansatte som fortsatt er stemplet inn på sin daglige Timer akkurat nå
+// (bedt om av Henrik 2026-10-28) - admin-only. Se settStempletInnSiden()/
+// stoppMineOrdreKlokkerVedUtstempling() i js/timer.js for hvordan feltet
+// ansatt.stempletInnSiden faktisk settes/nullstilles, og core.js sitt sanntids-abonnement på
+// "ansatte"-tabellen for hvorfor dette oppdateres live på tvers av alle innloggede økter.
+function renderStempletInnNa() {
+  const kort = document.getElementById('stempletInnNaKort');
+  const liste = document.getElementById('stempletInnNaListe');
+  if (!kort || !liste) return;
+  const erAdmin = me && me.rolle === 'admin';
+  kort.style.display = erAdmin ? 'block' : 'none';
+  if (!erAdmin) return;
+  const inne = (S.ansatte||[]).filter(a => a.aktiv && a.stempletInnSiden).sort((a,b)=>a.stempletInnSiden.localeCompare(b.stempletInnSiden));
+  if (!inne.length) { liste.innerHTML = '<div class="muted small">Ingen stemplet inn akkurat nå</div>'; return; }
+  liste.innerHTML = inne.map(a => {
+    const siden = new Date(a.stempletInnSiden);
+    const minutter = Math.max(0, Math.round((Date.now()-siden.getTime())/60000));
+    const varighet = minutter>=60 ? `${Math.floor(minutter/60)}t ${minutter%60}min` : `${minutter}min`;
+    return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span>${esc(a.navn)}</span>
+      <span class="small muted">siden ${siden.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'})} (${varighet})</span>
+    </div>`;
+  }).join('');
 }
 
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }

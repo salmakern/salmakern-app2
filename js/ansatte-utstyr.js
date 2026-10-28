@@ -1081,9 +1081,6 @@ async function renderStandardtider() {
       <label class="small muted">Ombygging (min)
         <input type="number" min="0" value="${rad.ombygging||''}" style="width:80px;display:block" onchange="settStandardtid('${esc(m).replace(/'/g,"\\'")}','ombygging',this.value)">
       </label>
-      <label class="small muted">Klargjøring (min)
-        <input type="number" min="0" value="${rad.klargjoring||''}" style="width:80px;display:block" onchange="settStandardtid('${esc(m).replace(/'/g,"\\'")}','klargjoring',this.value)">
-      </label>
     </div>`;
   }).join('');
   // Faktisk historisk snitt (alle ferdigstilte biler, ikke bare denne måneden) hentes
