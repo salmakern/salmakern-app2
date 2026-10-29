@@ -980,6 +980,17 @@ function save(ordreId) {
   delete payload.status; delete payload.ordre_status;
   delete payload.godkjent; delete payload.godkjenner_navn;
   delete payload.endringer;
+  // ansatte_signert/ordre_timer_sessions/klargjoring_timer_sessions/fiken_linjer utelates av
+  // samme grunn (lagt til 2026-10-29) - alle fire har sine egne atomiske RPC-kall
+  // (oppdater_ordre_ansatt_signert/oppdater_ordre_timer_sesjon/oppdater_ordre_timer_fase/
+  // oppdater_ordre_fiken_linje(_ved_id)) som ALLTID brukes for å endre dem (bekreftet - ingen
+  // UI-sti muterer disse feltene uten å også kalle riktig RPC). Denne generelle full-rad-
+  // lagringen skrev dem likevel med, så en ansatt som lagret et helt urelatert felt (f.eks.
+  // farge) fra en litt gammel lokal kopi kunne stille overskrive en fakturalinje, påmelding
+  // eller timer-sesjon en ANNEN ansatt nettopp hadde endret via riktig vei - samme rotårsak
+  // som status/endringer-kappløpet over.
+  delete payload.ansatte_signert; delete payload.ordre_timer_sessions;
+  delete payload.klargjoring_timer_sessions; delete payload.fiken_linjer;
   return db.from('ordrer').upsert(payload)
     .then(r=>{
       if (r.error) {
