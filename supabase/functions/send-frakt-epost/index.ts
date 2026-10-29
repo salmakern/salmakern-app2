@@ -27,6 +27,64 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const FN = 'send-frakt-epost'
+// Sender ekte e-post fra post@salmaker.as: bare admin (samme rolle som ser Admin-arket i appen).
+const TILLATTE_ROLLER = ['admin']
+// ── EDGE-AUTH-GATE BEGIN (blokken er byte-lik i fiken-fakturer og send-frakt-epost; test/edge-auth-gate.test.js vokter mot avvik) ──
+// Innloggingssjekk innført 2026-10-29: kallet skal komme fra en innlogget ansatt med riktig rolle (TILLATTE_ROLLER). Samme regel som RLS bruker:
+// vi spør databasen via current_ansatt() med KALLERENS eget token (aktiv, riktig session_token, rolle slått opp live) - aldri dekoding av JWT her,
+// og aldri rolle-claimen i tokenet (den er frosset fra innloggingen). MYK MODUS til håndheving er slått på: kallet slippes alltid gjennom, men
+// utfallet logges som én JSON-linje (edge_auth: 1, aldri tokens eller andre verdier fra headerne). Håndheving slås på uten ny utrulling ved å
+// legge funksjonsnavnet (eller *) i Supabase-hemmeligheten EDGE_AUTH_ENFORCE (kommaliste) og rulles tilbake ved å fjerne det igjen.
+const HAANDHEV = (Deno.env.get('EDGE_AUTH_ENFORCE') ?? '').split(',').map((s) => s.trim()).some((s) => s === '*' || s === FN)
+const JWT_FORM = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/
+
+type Sjekk = { via: 'ansatt' | 'ikke_tillatt_rolle' | 'ingen' | 'ukjent'; grunn?: string; rolle?: string; ansattId?: number }
+
+async function sjekkAnsatt(req: Request): Promise<Sjekk> {
+  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  if (!token) return { via: 'ingen', grunn: 'ingen_header' }
+  // Den offentlige nøkkelen (sb_publishable_...) og alt annet som ikke er en JWT er aldri en ansatt-sesjon: ingen oppslag nødvendig.
+  if (token.length > 4096 || !JWT_FORM.test(token)) return { via: 'ingen', grunn: 'ikke_jwt' }
+  const url = Deno.env.get('SUPABASE_URL')
+  const apikey = Deno.env.get('SUPABASE_ANON_KEY') || req.headers.get('apikey') || ''
+  if (!url || !apikey) return { via: 'ukjent', grunn: 'mangler_miljo' }
+  const res = await fetch(`${url}/rest/v1/rpc/current_ansatt`, {
+    method: 'POST',
+    headers: { apikey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+    signal: AbortSignal.timeout(3000),
+  })
+  if (!res.ok) {
+    // Ugyldig/utløpt token er kallerens sak (ingen); alt annet (feil nøkkel hos oss, databasen nede, rate limit) er «ukjent» så vi aldri
+    // påstår at en ekte admin ikke er innlogget bare fordi selve sjekken svikter.
+    const kode = await res.json().then((b) => String(b?.code ?? '')).catch(() => '')
+    return /^PGRST30[13]$/.test(kode) ? { via: 'ingen', grunn: 'ugyldig_eller_utlopt_token' } : { via: 'ukjent', grunn: `postgrest_${res.status}` }
+  }
+  const rader = await res.json()
+  if (!Array.isArray(rader) || rader.length > 1) return { via: 'ukjent', grunn: 'uventet_svar' }
+  if (rader.length === 0) return { via: 'ingen', grunn: 'ingen_ansatt_sesjon' }
+  const { id, rolle } = rader[0] ?? {}
+  if (typeof rolle !== 'string' || !Number.isInteger(id)) return { via: 'ukjent', grunn: 'uventet_svar' }
+  return TILLATTE_ROLLER.includes(rolle) ? { via: 'ansatt', rolle, ansattId: id } : { via: 'ikke_tillatt_rolle', rolle, ansattId: id }
+}
+
+// Gir null når kallet skal slippes gjennom, ellers statuskoden og meldingen funksjonen skal svare med (i funksjonens eget svarformat).
+async function innloggingsgate(req: Request): Promise<{ status: number; melding: string } | null> {
+  let sjekk: Sjekk
+  try {
+    sjekk = await sjekkAnsatt(req)
+  } catch (e) {
+    sjekk = { via: 'ukjent', grunn: e instanceof Error ? e.name : 'feil' }
+  }
+  console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: sjekk.via, grunn: sjekk.grunn ?? '', rolle: sjekk.rolle ?? '', ansatt_id: sjekk.ansattId ?? null, haandhevet: HAANDHEV, origin: req.headers.get('origin') ?? '' }))
+  if (sjekk.via === 'ansatt' || !HAANDHEV) return null
+  if (sjekk.via === 'ukjent') return { status: 503, melding: 'Kunne ikke bekrefte innloggingen akkurat nå - prøv igjen om litt' }
+  if (sjekk.via === 'ikke_tillatt_rolle') return { status: 403, melding: 'Bare administrator kan gjøre dette' }
+  return { status: 401, melding: 'Du må være innlogget som administrator - logg inn på nytt og prøv igjen' }
+}
+// ── EDGE-AUTH-GATE END ──
+
 function escHtml(s: string) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c])
 }
@@ -121,6 +179,9 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: CORS_HEADERS })
   }
   try {
+    const avvist = await innloggingsgate(req)
+    if (avvist) return new Response(avvist.melding, { status: avvist.status, headers: CORS_HEADERS })
+
     const raw = await req.text()
     if (!raw) return new Response('tom body', { status: 400, headers: CORS_HEADERS })
     const payload = JSON.parse(raw)
