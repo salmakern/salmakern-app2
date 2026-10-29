@@ -105,7 +105,8 @@ function renderOrdreList() {
           ${o.regnr
             ? `<b style="font-size:16px;letter-spacing:-.2px;line-height:1.25">${esc(o.regnr)}</b>
                ${o.chassis?`<div class="small muted" style="margin-top:2px;display:flex;gap:4px;overflow:hidden"><span style="flex-shrink:0">Chassis</span><span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span></div>`:''}`
-            : `<b style="font-size:15px;letter-spacing:-.2px;line-height:1.25;display:flex;gap:5px;overflow:hidden">${o.chassis?`<span style="flex-shrink:0">Chassis</span><span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span>`:'Uten reg.nr'}</b>`}
+            : `<div style="font-size:9px;letter-spacing:.14em;color:#52525b">CHASSIS</div>
+               <div style="overflow:hidden;margin-top:1px">${o.chassis?`<span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.2px">${esc(o.chassis)}</span>`:'<b style="font-size:15px">Uten reg.nr</b>'}</div>`}
           ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
@@ -626,7 +627,7 @@ function hengerfesteMontertDropdown(ordreId, montert) {
     montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[montert] || FARGE.ikke_montert;
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:8px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto;max-width:92px;overflow:hidden;text-overflow:ellipsis">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -649,7 +650,7 @@ function hengerfesteBestiltDropdown(ordreId, bestilt) {
     ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[bestilt] || FARGE.ikke_bestilt;
-  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:10px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;width:auto">
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:8px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto;max-width:92px;overflow:hidden;text-overflow:ellipsis">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -667,11 +668,11 @@ function hengerfesteKortHTML(o) {
   // fet skrift i stedet for liten grå tekst) - bedt om av Henrik 2026-09-26 etter
   // skjermbilde som viste at den lette å overse mellom pillen og dropdownen.
   const forhandlerNr = o.utstyr?.forhandlerNr;
-  return `<div style="display:flex;align-items:center;gap:6px;white-space:nowrap;flex-wrap:wrap">
-    <span class="pill warn" style="font-size:11px;margin:0">Hengerfeste</span>
+  return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+    <span class="pill warn" style="font-size:10px;padding:3px 8px;margin:0;white-space:nowrap">Hengerfeste</span>
     ${hengerfesteBestiltDropdown(o.id, o.utstyr?.hengerfesteBestilt)}
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
-    ${forhandlerNr?`<span style="font-size:13px;font-weight:700;color:#f4f4f5">${esc(forhandlerNr)}</span>`:''}
+    ${forhandlerNr?`<span style="font-size:12px;font-weight:700;color:#f4f4f5;white-space:nowrap">${esc(forhandlerNr)}</span>`:''}
   </div>`;
 }
 // Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) helt til "Skal

@@ -152,16 +152,16 @@ function buildOrdreDetail() {
 
   document.getElementById('ordreDetail').innerHTML = `
   <div style="position:sticky;top:var(--top-h,0px);z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-    <button class="btn sm" onclick="tilbakeOrdreList()">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:12px;padding:8px 13px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'PRIORITERT ✕':'+ Prioriter'}</button>
-      <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:12px;padding:8px 13px">📄 PDF</button>
-      <button id="kjoreseddelBtn_${o.id}" class="btn sm" onclick="apneKjoreseddelModal('${o.id}')" title="Velg hvilket prøveskilt som er i bruk på denne bilen" style="border-radius:12px;padding:8px 13px">${o.kjoreseddelSkilt?('🔢 '+esc(o.kjoreseddelSkilt)):'🔢 Skilt'}</button>
-      <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:12px;padding:8px 11px">🔄</button>
-      ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:12px;padding:8px 13px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">🗑 Slett ordre</button>` : ''}
+    <button class="btn sm" onclick="tilbakeOrdreList()" style="padding:5px 9px;font-size:11px">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'Prioritert ✕':'+ Prioriter'}</button>
+      <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:10px;padding:5px 9px;font-size:11px">PDF</button>
+      <button id="kjoreseddelBtn_${o.id}" class="btn sm" onclick="apneKjoreseddelModal('${o.id}')" title="Velg hvilket prøveskilt som er i bruk på denne bilen" style="border-radius:10px;padding:5px 9px;font-size:11px">${o.kjoreseddelSkilt?esc(o.kjoreseddelSkilt):'Skilt'}</button>
+      <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:10px;padding:5px 9px;font-size:11px">Oppdater</button>
+      ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">Slett ordre</button>` : ''}
     </div>
   </div>
-  ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">🗄 Arkivert ordre — kun visning</div>`:''}
+  ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">Arkivert ordre — kun visning</div>`:''}
   <div class="card">
     <div class="row" style="flex-wrap:nowrap">
       <div style="min-width:0;overflow:hidden">
@@ -170,8 +170,6 @@ function buildOrdreDetail() {
              ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px;overflow:hidden">CHASSIS <span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
           : `<div style="font-size:10px;letter-spacing:.16em;color:#52525b">CHASSIS</div>
              <div style="overflow:hidden;margin-top:3px">${o.chassis?`<span class="chassis-stor" style="${CHASSIS_TRUNKER_STIL}">${esc(o.chassis)}</span>`:'Uten reg.nr'}</div>`}
-        <div class="muted" style="margin-top:6px">${esc(o.type)}${o.variant?' – '+esc(o.variant):''}</div>
-        <div class="small muted">Kontaktperson: ${o.eier?esc(o.eier):'–'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end;flex-shrink:0">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:8px 13px;border-radius:999px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')}
