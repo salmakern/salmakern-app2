@@ -35,6 +35,16 @@ function jsonSvar(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } })
 }
 
+// Dagens dato i Oslo lokaltid, uavhengig av at serveren selv kjører i UTC - new
+// Date().toISOString().slice(0,10) ga feil (gårsdagens) dato på fakturaer opprettet mellom
+// ca. 00:00-02:00 norsk tid, siden UTC da fortsatt viser forrige dag. Samme mønster som
+// osloNaa() i send-push/index.ts.
+function norskDato(): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Oslo', year: 'numeric', month: '2-digit', day: '2-digit' })
+  const deler = Object.fromEntries(fmt.formatToParts(new Date()).map(p => [p.type, p.value]))
+  return `${deler.year}-${deler.month}-${deler.day}`
+}
+
 async function fikenFetch(path: string, init: RequestInit = {}) {
   const res = await fetch(`${FIKEN_BASE}${path}`, {
     ...init,
@@ -217,7 +227,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const idag = new Date().toISOString().slice(0, 10)
+    const idag = norskDato()
     // Ordrereferanse: "<chassis> - <regnr>" hvis regnr finnes, ellers bare chassisnr.
     // Kommentar på siste linje: "Ch. nr. <chassis>" - begge deler bekreftet av Henrik.
     const ordreReferanse = chassisNr ? (regnr ? `${chassisNr} - ${regnr}` : chassisNr) : undefined
