@@ -101,7 +101,8 @@ body{background:#09090b;color:#f4f4f5;font-family:Arial,sans-serif;min-height:10
    Henrik 2026-10-26, kun synlig i PWA-/fullskjermmodus på mobil, ikke i en vanlig nettleser-
    fane med egen adresselinje). env(safe-area-inset-top) er 0 på enheter uten hakk/status-
    linje-overlapp, så dette endrer ingenting der appen allerede så riktig ut.   */
-.top{position:sticky;top:0;background:#09090b;border-bottom:1px solid #27272a;z-index:50;padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
+.top{position:sticky;top:0;background:#09090b;border-bottom:1px solid #27272a;z-index:50;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;transition:transform .25s ease}
+.top.skjult{transform:translateY(-100%)}
 .top-inner{max-width:1200px;margin:auto}
 .wrap{max-width:1200px;margin:auto;padding:16px}
 .wrap.full{max-width:none;padding-left:8px;padding-right:8px}
@@ -192,6 +193,11 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 
 /* FORMS */
 input,select,textarea{width:100%;padding:9px 12px;border-radius:12px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;font-family:Arial,sans-serif;font-size:13px;resize:vertical}
+/* iOS Safari sentrerer teksten i <input type="date"> som standard (ulikt alle andre
+   felt i appen, som er venstrejustert) - sett eksplisitt venstrejustering for å matche
+   resten av skjemaene (oppdaget av Henrik 2026-10-29, "ankomstdato ikke på linje med
+   resten"). */
+input[type="date"]{text-align:left}
 /* iOS zoomer inn på felter med under 16px tekst. 16px på telefon fjerner
    hoppet uten å måtte blokkere pinch-zoom for hele appen. !important fordi
    statuspiller o.l. (f.eks. Ordre-sidens status-dropdown) setter sin egen,

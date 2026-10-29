@@ -144,7 +144,6 @@ function buildOrdreDetail() {
   const vegvesenGjelderDenneOrdren = !!(vegvesenKilde?.nyttKjoretoy || vegvesenKilde?.bruktKjoretoy);
   const erAdmin = me && me.rolle==='admin';
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
-  const headerH = document.querySelector('.top')?.offsetHeight || 0;
   // "meldt på"/"meldt av"-hendelser vises i egen boks under Ansatte på ordren i stedet for
   // i den generelle Endringer-loggen - samme underliggende o.endringer, splittet ved visning.
   const erAnsattEndring = e => /meldt på$|meldt av$/.test(e.txt);
@@ -152,7 +151,7 @@ function buildOrdreDetail() {
   const generelleEndringer = o.endringer.filter(e => !erAnsattEndring(e));
 
   document.getElementById('ordreDetail').innerHTML = `
-  <div style="position:sticky;top:${headerH}px;z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <div style="position:sticky;top:var(--top-h,0px);z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <button class="btn sm" onclick="tilbakeOrdreList()">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:12px;padding:8px 13px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'PRIORITERT ✕':'+ Prioriter'}</button>

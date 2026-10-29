@@ -37,6 +37,44 @@ function initFeilovervaking() {
 }
 initFeilovervaking();
 
+// ════════════════════════════════════════════════════
+// AUTO-SKJUL TOPPBAR VED SCROLL
+// ════════════════════════════════════════════════════
+// Toppbaren (logo/varsler/logg ut + faneknappene) er alltid synlig (position:sticky) og tar
+// opp mye skjermplass på mobil, spesielt inne på en ordre som allerede har sin egen sticky
+// knapperad rett under. Skjuler toppbaren når brukeren scroller NEDOVER forbi en liten
+// dødsone (for å unngå flimring ved småskjelving), viser den igjen ved MINSTE oppover-
+// scroll eller nær toppen av siden - bedt om av Henrik 2026-10-29 ("skreller ned over så
+// forsvinner den, blar litt opp så kommer den fram igjen"). Ordre-detaljens egen sticky
+// knapperad (se buildOrdreDetail() i ordre-detalj.js) følger automatisk med via CSS-
+// variabelen --top-h i stedet for en fast px-verdi beregnet kun én gang ved rendering,
+// slik at den alltid flytter seg til der toppbaren faktisk er (0 når den er skjult).
+let toppbarHoyde = 0;
+let toppbarSkjult = false;
+let toppbarSisteScrollY = 0;
+function oppdaterToppbarHoyde() {
+  const el = document.querySelector('.top');
+  if (el) toppbarHoyde = el.offsetHeight;
+  document.documentElement.style.setProperty('--top-h', (toppbarSkjult ? 0 : toppbarHoyde) + 'px');
+}
+function settToppbarSkjult(skjul) {
+  if (skjul === toppbarSkjult) return;
+  toppbarSkjult = skjul;
+  document.querySelector('.top')?.classList.toggle('skjult', skjul);
+  document.documentElement.style.setProperty('--top-h', (toppbarSkjult ? 0 : toppbarHoyde) + 'px');
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', oppdaterToppbarHoyde);
+  window.addEventListener('resize', oppdaterToppbarHoyde);
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    const diff = y - toppbarSisteScrollY;
+    if (y > 80 && diff > 4) settToppbarSkjult(true);
+    else if (diff < -4 || y <= 80) settToppbarSkjult(false);
+    toppbarSisteScrollY = y;
+  }, { passive: true });
+}
+
 // Skrur av nettleserens "husk det jeg skrev sist"-forslag (autofyll) på alle felt i
 // appen - både de som finnes ved sideinnlasting og de som lages dynamisk senere
 // (skjemaer, modaler, rad-redigering i f.eks. Kontakter/Admin-ark). Rører aldri et
