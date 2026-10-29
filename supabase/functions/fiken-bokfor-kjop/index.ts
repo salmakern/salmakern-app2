@@ -177,6 +177,33 @@ Deno.serve(async (req) => {
       return jsonSvar({ antall: dokumenter.length, dokumenter })
     }
 
+    // Rent lese-verktøy: alle bokførte kjøp (?listPurchases=1, valgfritt &from=YYYY-MM-DD&to=YYYY-MM-DD) og
+    // kontoplanen (?listAccounts=1). Brukes til å LÆRE hvordan kjøp faktisk føres (leverandør, konto, mva,
+    // tekst) før Claude foreslår en føring for et nytt bilag. Ingen skriving. Vedleggslenker tas ikke med.
+    if (url.searchParams.get('listPurchases') || url.searchParams.get('listAccounts')) {
+      const fra = url.searchParams.get('from')
+      const til = url.searchParams.get('to')
+      const datoOk = (d: string | null) => d === null || /^\d{4}-\d{2}-\d{2}$/.test(d)
+      if (!datoOk(fra) || !datoOk(til)) return jsonSvar({ error: 'from/to må være på formen YYYY-MM-DD' }, 400)
+      const slugL = await hentCompanySlug()
+      const erKjop = !!url.searchParams.get('listPurchases')
+      const liste: any[] = []
+      let side = 0
+      while (side < 200) {
+        const qs = `page=${side}&pageSize=100` + (erKjop && fra ? `&dateGe=${fra}` : '') + (erKjop && til ? `&dateLe=${til}` : '')
+        const res = await fikenFetch(`/companies/${slugL}/${erKjop ? 'purchases' : 'accounts'}?${qs}`)
+        if (!res.ok) return jsonSvar({ error: `Fiken svarte ${res.status}: ${await res.text()}` }, 502)
+        const deler = await res.json()
+        for (const d of deler) {
+          if (erKjop) { const { purchaseAttachments: _v, ...rest } = d; liste.push(rest) } else liste.push(d)
+        }
+        const pageCount = Number(res.headers.get('Fiken-Api-Page-Count') || '1')
+        side++
+        if (side >= pageCount) break
+      }
+      return jsonSvar({ antall: liste.length, [erKjop ? 'kjop' : 'kontoer']: liste })
+    }
+
     const raw = await req.text()
     if (!raw) return jsonSvar({ error: 'Tom body' }, 400)
     const {
