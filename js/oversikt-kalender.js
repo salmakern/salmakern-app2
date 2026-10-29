@@ -631,7 +631,7 @@ function hengerfesteMontertDropdown(ordreId, montert) {
     montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[montert] || FARGE.ikke_montert;
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="-webkit-appearance:none;appearance:none;background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:104px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis">
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:104px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;-webkit-text-size-adjust:100%;text-size-adjust:100%">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -654,7 +654,7 @@ function hengerfesteBestiltDropdown(ordreId, bestilt) {
     ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[bestilt] || FARGE.ikke_bestilt;
-  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="-webkit-appearance:none;appearance:none;background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:104px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis">
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:104px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;-webkit-text-size-adjust:100%;text-size-adjust:100%">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
