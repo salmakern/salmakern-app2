@@ -20,9 +20,15 @@
 //
 // FIKEN_API_KEY er en personlig API-nøkkel (Bearer-token) - satt som Supabase-
 // hemmelighet, ALDRI i klientkoden (samme begrunnelse som de andre Fiken-funksjonene).
+//
+// Beskyttet med den delte hemmeligheten (FIKEN_SYNC_SECRET, sendt som x-sync-secret-header) fra 2026-10-29,
+// som fiken-oppdater-pris m.fl.: før det kunne hvem som helst med den offentlige Supabase-nøkkelen (den står i
+// js/core.js i et åpent repo) lese regnskapsinnboksen og bokføre kjøp permanent. Funksjonen kalles ikke fra
+// appen eller portalen - bare manuelt (curl) etter at Henrik har godkjent hvert bilag.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
+const SYNC_SECRET = Deno.env.get('FIKEN_SYNC_SECRET')
 const FIKEN_API_KEY = Deno.env.get('FIKEN_API_KEY')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -35,7 +41,7 @@ const FIKEN_BETALINGSKONTO = '1920:10001'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -122,6 +128,8 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (!SYNC_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet (FIKEN_SYNC_SECRET) er satt opp ennå' }, 500)
+    if (req.headers.get('x-sync-secret') !== SYNC_SECRET) return jsonSvar({ error: 'Ugyldig eller manglende x-sync-secret' }, 401)
     if (!FIKEN_API_KEY) return jsonSvar({ error: 'Ingen Fiken API-nøkkel er satt opp ennå' }, 500)
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return jsonSvar({ error: 'Mangler Supabase-tilgang i funksjonen' }, 500)
 
