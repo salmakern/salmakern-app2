@@ -8,9 +8,26 @@ const FIKEN_API_KEY = Deno.env.get('FIKEN_API_KEY')
 const FIKEN_BASE = 'https://api.fiken.no/api/v2'
 const FIKEN_SLUG = 'telemark-salmakerverksted'
 
+// Beskyttelse (innført 2026-10-29): bare server-til-server-kallere (Forhandlerportalen, nattlig QA, manuelle verktøy) bruker
+// denne funksjonen, og de kan holde en hemmelighet: x-sync-secret = FIKEN_SYNC_SECRET, som de andre Fiken-funksjonene.
+// MYK MODUS til portalen og QA-en sender hemmeligheten: kall uten den slippes gjennom, men logges (JSON-linje med
+// edge_auth: 1). Håndheving slås på uten ny utrulling ved å legge funksjonsnavnet (eller *) i Supabase-hemmeligheten
+// EDGE_AUTH_ENFORCE (kommaliste); fjern det igjen for å rulle tilbake.
+const FN = 'fiken-produkter'
+const SYNC_SECRET = Deno.env.get('FIKEN_SYNC_SECRET')
+const HAANDHEV = (Deno.env.get('EDGE_AUTH_ENFORCE') ?? '').split(',').map((s) => s.trim()).some((s) => s === '*' || s === FN)
+
+async function likt(a: string, b: string): Promise<boolean> {
+  const h = async (s: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
+  const [x, y] = await Promise.all([h(a), h(b)])
+  let d = 0
+  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i]
+  return d === 0
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
 
@@ -25,6 +42,15 @@ async function fikenFetch(path: string) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   try {
+    const sendt = req.headers.get('x-sync-secret') ?? ''
+    const godkjent = !!SYNC_SECRET && sendt !== '' && (await likt(sendt, SYNC_SECRET))
+    // Én logglinje per kall (aldri verdier): hvem som kaller uten hemmelighet vises her før håndheving slås på.
+    console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: godkjent ? 'server' : 'legacy', haandhevet: HAANDHEV, har_header: sendt !== '', origin: req.headers.get('origin') ?? '' }))
+    if (!godkjent && HAANDHEV) {
+      if (!SYNC_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet (FIKEN_SYNC_SECRET) er satt opp ennå' }, 500)
+      return jsonSvar({ error: 'Ugyldig eller manglende x-sync-secret' }, 401)
+    }
+
     if (!FIKEN_API_KEY) return jsonSvar({ error: 'Ingen Fiken API-nøkkel er satt opp ennå' }, 500)
 
     const produkter: any[] = []
