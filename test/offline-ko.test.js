@@ -31,7 +31,8 @@ function nyEnvironment(startLagret = {}) {
       // visToast() lager en toast-boks via createElement/appendChild hvis den
       // ikke finnes fra før - trenger derfor en minimal falsk DOM-node.
       createElement() { return { style: {}, classList: { add(){}, remove(){} }, appendChild(){} }; },
-      body: { appendChild() {} }
+      body: { appendChild() {} },
+      head: { appendChild() {} }
     },
     location: { hostname: 'localhost' },
     setInterval() {}, clearInterval() {}, setTimeout() { /* kjør aldri automatisk i testen */ }, clearTimeout() {},

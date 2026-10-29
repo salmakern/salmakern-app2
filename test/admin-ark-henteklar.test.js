@@ -19,7 +19,7 @@ function nyEnvironment() {
     console, Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     window: { addEventListener() {}, location: { hostname: 'localhost' } },
-    document: { addEventListener() {}, getElementById() { return null; } },
+    document: { addEventListener() {}, getElementById() { return null; }, createElement() { return { style: {}, appendChild(){} }; }, head: { appendChild() {} } },
     location: { hostname: 'localhost' },
     setInterval() {}, clearInterval() {}, setTimeout() {}, clearTimeout() {}
   };

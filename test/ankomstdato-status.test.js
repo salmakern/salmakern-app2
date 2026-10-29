@@ -29,7 +29,8 @@ function nyEnvironment() {
       getElementById() { return null; },
       activeElement: null,
       createElement() { return { style: {}, classList: { add(){}, remove(){} }, appendChild(){} }; },
-      body: { appendChild() {} }
+      body: { appendChild() {} },
+      head: { appendChild() {} }
     },
     location: { hostname: 'localhost' },
     setInterval() {}, clearInterval() {}, setTimeout() {}, clearTimeout() {}

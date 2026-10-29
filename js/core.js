@@ -9,7 +9,7 @@ const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mq
 // Feilovervåking (Sentry) - av så lenge denne er tom. For å skru på: opprett gratis konto
 // på sentry.io → nytt prosjekt (type "Browser") → lim DSN-en (ser ut som
 // "https://xxxx@xxxx.ingest.sentry.io/xxxx") inn her. Se CLAUDE.md "Feilovervåking".
-const SENTRY_DSN = '';
+const SENTRY_DSN = 'https://0d9ac7114a72a938a776e0c6adb8ce99@o4512338671828992.ingest.de.sentry.io/4512338683166800';
 
 // Sporer bilder som er lastet opp i minnet men ikke nødvendigvis bekreftet i Supabase ennå
 const inFlightFotos = {};
