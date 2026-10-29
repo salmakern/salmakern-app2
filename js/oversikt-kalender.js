@@ -631,7 +631,7 @@ function hengerfesteMontertDropdown(ordreId, montert) {
     montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[montert] || FARGE.ikke_montert;
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;width:auto;max-width:104px;overflow:hidden;text-overflow:ellipsis">
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="-webkit-appearance:none;appearance:none;background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:104px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -654,7 +654,7 @@ function hengerfesteBestiltDropdown(ordreId, bestilt) {
     ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[bestilt] || FARGE.ikke_bestilt;
-  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;width:auto;max-width:104px;overflow:hidden;text-overflow:ellipsis">
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="-webkit-appearance:none;appearance:none;background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:104px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -673,7 +673,7 @@ function hengerfesteKortHTML(o) {
   // skjermbilde som viste at den lette å overse mellom pillen og dropdownen.
   const forhandlerNr = o.utstyr?.forhandlerNr;
   return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-    <span class="pill warn" style="font-size:10px;padding:3px 8px;margin:0;white-space:nowrap">Hengerfeste</span>
+    <span class="pill warn" style="font-size:10px;line-height:14px;padding:3px 8px;margin:0;white-space:nowrap;box-sizing:border-box">Hengerfeste</span>
     ${hengerfesteBestiltDropdown(o.id, o.utstyr?.hengerfesteBestilt)}
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
     ${forhandlerNr?`<span style="font-size:12px;font-weight:700;color:#f4f4f5;white-space:nowrap">${esc(forhandlerNr)}</span>`:''}
