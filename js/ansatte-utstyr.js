@@ -1561,27 +1561,41 @@ function settAnsattAnsettelsesdato(id, dato) {
 // Mobilnummer og fødselsdato - forberedelse til kjøreseddel-integrasjonen (migrasjon
 // 20261028130000). Henrik bekreftet 2026-10-28 at begge trengs for å faktisk skrive en
 // kjøreseddel (sammen med navnet, som allerede finnes), i tillegg til at mobilnummer er
-// nyttig kontaktinfo uavhengig av kjøreseddel. Samme redigerbart-felt-mønster som navn/
-// ansettelsesdato rett over.
-function endreAnsattMobil(id, mobil) {
-  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
-  mobil = (mobil||'').trim();
-  a.mobil = mobil;
-  ignorerRealtimeAnsatt.add(String(id));
-  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
-  if(db) db.from('ansatte').update({mobil: mobil || null}).eq('id',id)
-    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
-  planleggLocalSpeiling();
+// nyttig kontaktinfo uavhengig av kjøreseddel.
+//
+// Flyttet 2026-10-29 (migrasjon 20261029123000_ansatt_kontaktinfo_isolert) til en EGEN
+// tabell (ansatte_kontaktinfo) utenfor ansatte - et rått select('*') på ansatte ga tidligere
+// ALLE innloggede ansatte ALLE andres mobilnummer/fødselsdato (ikke bare admin, som er den
+// eneste UI-en faktisk viser dette til), og Supabase Realtime sender hele raden til alle
+// abonnenter uansett kolonnevalg i selve spørringen - samme mønster som PIN-koder
+// (ansatte_pin) bruker allerede. `_ansattKontaktinfo` er en ren admin-lokal cache (ALDRI i
+// S eller speilet til localStorage), fylt via den admin-only RPC-en `admin_hent_ansatt_-
+// kontaktinfo()` og skrevet via `admin_sett_ansatt_kontaktinfo()`.
+let _ansattKontaktinfo = null;
+async function hentAnsattKontaktinfo() {
+  if (_ansattKontaktinfo) return _ansattKontaktinfo;
+  if (!db) return {};
+  const { data, error } = await db.rpc('admin_hent_ansatt_kontaktinfo');
+  if (error) { console.error('Kunne ikke hente ansatt-kontaktinfo:', error.message); return {}; }
+  _ansattKontaktinfo = {};
+  (data||[]).forEach(r => { _ansattKontaktinfo[r.ansatt_id] = { mobil: r.mobil||'', fodselsdato: r.fodselsdato||'' }; });
+  return _ansattKontaktinfo;
 }
-
+async function lagreAnsattKontaktinfo(id, mobil, fodselsdato) {
+  if (!db) return;
+  const { error } = await db.rpc('admin_sett_ansatt_kontaktinfo', { p_ansatt_id: id, p_mobil: mobil || null, p_fodselsdato: fodselsdato || null });
+  if (error) { alert('Feil ved lagring: ' + error.message); return; }
+  if (!_ansattKontaktinfo) _ansattKontaktinfo = {};
+  _ansattKontaktinfo[id] = { mobil: mobil || '', fodselsdato: fodselsdato || '' };
+}
+function endreAnsattMobil(id, mobil) {
+  mobil = (mobil||'').trim();
+  const naavarende = _ansattKontaktinfo?.[id] || {};
+  lagreAnsattKontaktinfo(id, mobil, naavarende.fodselsdato || '');
+}
 function settAnsattFodselsdato(id, dato) {
-  const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
-  a.fodselsdato = dato || '';
-  ignorerRealtimeAnsatt.add(String(id));
-  setTimeout(()=>ignorerRealtimeAnsatt.delete(String(id)), 5000);
-  if(db) db.from('ansatte').update({fodselsdato: dato || null}).eq('id',id)
-    .then(r=>{if(r.error) alert('Feil ved lagring: '+r.error.message);});
-  planleggLocalSpeiling();
+  const naavarende = _ansattKontaktinfo?.[id] || {};
+  lagreAnsattKontaktinfo(id, naavarende.mobil || '', dato || '');
 }
 
 function toggleAnsatt(id) {
