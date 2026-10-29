@@ -157,6 +157,7 @@ function buildOrdreDetail() {
     <div style="display:flex;gap:8px;align-items:center">
       <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:12px;padding:8px 13px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'PRIORITERT ✕':'+ Prioriter'}</button>
       <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:12px;padding:8px 13px">📄 PDF</button>
+      <button id="kjoreseddelBtn_${o.id}" class="btn sm" onclick="apneKjoreseddelModal('${o.id}')" title="Velg hvilket prøveskilt som er i bruk på denne bilen" style="border-radius:12px;padding:8px 13px">${o.kjoreseddelSkilt?('🔢 '+esc(o.kjoreseddelSkilt)):'🔢 Skilt'}</button>
       <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:12px;padding:8px 11px">🔄</button>
       ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:12px;padding:8px 13px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">🗑 Slett ordre</button>` : ''}
     </div>
@@ -450,8 +451,6 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
                <button class="btn sm red" style="width:100%" onclick="toggleDiagnose('${o.id}')">✔ Merk diagnose utført</button>`}
         </div>
       </div>
-
-      <div class="card" id="kjoreseddelBoks_${o.id}">${kjoreseddelBoksHTML(o)}</div>
 
       ${me&&me.rolle==='admin'?`
       <div class="card">
@@ -1086,8 +1085,8 @@ const PROVESKILT_LISTE = ['AGV 99', 'ACR 62', 'AJR 83'];
  * Bygger ett prøveskilt som en klikkbar SVG-lignende HTML-boks, visuelt tro mot et ekte
  * norsk årsprøvekjennemerke (rent rødt felt, hvit innfelt kant, hvit opphøyd skrift, to
  * svarte monteringsspor) - se referansebilde Henrik sendte 2026-10-29. Bruker `cqw`
- * (container query-enheter) for ALLE mål slik at skiltet skaleres korrekt uansett hvor bredt
- * sidepanelet er, siden `aspect-ratio` holder høyde/bredde-forholdet fast (276/1050).
+ * (container query-enheter) for ALLE mål slik at skiltet skaleres korrekt uansett hvor bred
+ * modal-boksen er, siden `aspect-ratio` holder høyde/bredde-forholdet fast (276/1050).
  * Teksten bruker 'Arial Narrow' (systemfont) i stedet for den originale Archivo-fonten i
  * design-referansen - appen er en offline-fungerende PWA, og en ekstern Google Fonts-
  * avhengighet ville enten krevd nettverk første gang eller ekstra service worker-cching for
@@ -1109,20 +1108,31 @@ function proveskiltHTML(ordreId, regnr, valgt) {
     </div>
   </div>`;
 }
-function kjoreseddelBoksHTML(o) {
+let kjoreseddelModalOrdreId = null;
+function kjoreseddelModalInnholdHTML(o) {
   const valgt = o.kjoreseddelSkilt || '';
   return `
-  <div class="h">Kjøreseddel - prøveskilt</div>
-  <div class="small muted" style="margin-top:4px">Velg hvilket av de 3 prøveskiltene som er i bruk på denne bilen. Klikk igjen for å fjerne.</div>
-  <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;align-items:center">
+  <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
     ${PROVESKILT_LISTE.map(skilt => proveskiltHTML(o.id, skilt, skilt === valgt)).join('')}
   </div>`;
+}
+function apneKjoreseddelModal(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  kjoreseddelModalOrdreId = ordreId;
+  document.getElementById('kjoreseddelModalListe').innerHTML = kjoreseddelModalInnholdHTML(o);
+  openModal('kjoreseddelModal');
 }
 function velgKjoreseddelSkilt(id, skilt) {
   if (!sf(id, 'kjoreseddelSkilt', skilt)) return;
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
-  const container = document.getElementById('kjoreseddelBoks_' + id);
-  if (container) container.innerHTML = kjoreseddelBoksHTML(o);
+  // Oppdaterer både selve modal-innholdet (ny valgt-ramme vises med en gang) og
+  // knappen i topplinjen (viser hvilket skilt som er valgt uten å måtte åpne modalen).
+  if (kjoreseddelModalOrdreId === id) {
+    const liste = document.getElementById('kjoreseddelModalListe');
+    if (liste) liste.innerHTML = kjoreseddelModalInnholdHTML(o);
+  }
+  const knapp = document.getElementById('kjoreseddelBtn_' + id);
+  if (knapp) knapp.textContent = o.kjoreseddelSkilt ? ('🔢 ' + o.kjoreseddelSkilt) : '🔢 Skilt';
 }
 
 // ════════════════════════════════════════════════════
