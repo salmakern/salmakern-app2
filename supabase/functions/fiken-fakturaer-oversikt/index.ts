@@ -1,7 +1,11 @@
 // Rent lese-verktøy: henter fakturahistorikk fra Fiken og grupperer linjene per
 // produktnummer, slik at Henrik/Claude kan se hvilke modeller som faktisk har blitt
 // fakturert med hvilket produktnummer - nyttig grunnlag for produktnummer-opprydding.
-// Ingen skriving. Samme auth/paginerings-mønster som fiken-produkter/fiken-fakturer.
+// Ingen skriving. Samme paginerings-mønster som fiken-produkter/fiken-fakturer.
+//
+// Beskyttet med den delte hemmeligheten (FIKEN_SYNC_SECRET, sendt som x-sync-secret-header) fra 2026-10-29,
+// som fiken-oppdater-pris m.fl.: svaret er hele fakturahistorikken (kundenavn, datoer, ordrereferanser), og
+// funksjonen hadde ingen kaller i appen, portalen eller planlagte oppgaver - bare manuell bruk.
 //
 // Fiken sitt LISTE-endepunkt (/invoices) returnerer linjene (inkl.
 // productId/productName/description) direkte i hvert fakturaobjekt - ingen treg
@@ -9,12 +13,13 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const FIKEN_API_KEY = Deno.env.get('FIKEN_API_KEY')
+const SYNC_SECRET = Deno.env.get('FIKEN_SYNC_SECRET')
 const FIKEN_BASE = 'https://api.fiken.no/api/v2'
 const FIKEN_SLUG = 'telemark-salmakerverksted'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-sync-secret',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 }
 
@@ -33,9 +38,20 @@ async function fikenFetch(path: string, init: RequestInit = {}) {
   })
 }
 
+// Sammenligning i konstant tid (hash først, så bytevis XOR), så svartiden ikke avslører hemmeligheten.
+async function likt(a: string, b: string): Promise<boolean> {
+  const h = async (s: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
+  const [x, y] = await Promise.all([h(a), h(b)])
+  let d = 0
+  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i]
+  return d === 0
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   try {
+    if (!SYNC_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet (FIKEN_SYNC_SECRET) er satt opp ennå' }, 500)
+    if (!(await likt(req.headers.get('x-sync-secret') ?? '', SYNC_SECRET))) return jsonSvar({ error: 'Ugyldig eller manglende x-sync-secret' }, 401)
     if (!FIKEN_API_KEY) return jsonSvar({ error: 'Ingen Fiken API-nøkkel er satt opp ennå' }, 500)
 
     // productId -> produktnummer (linjene i fakturalisten har kun productId+productName,
