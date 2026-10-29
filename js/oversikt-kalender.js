@@ -100,9 +100,12 @@ function renderOrdreList() {
       ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
-      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1">
-          <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;overflow-wrap:break-word">${ordreLabelFull(o)}</b>
+      <div style="display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1;overflow:hidden">
+          ${o.regnr
+            ? `<b style="font-size:16px;letter-spacing:-.2px;line-height:1.25">${esc(o.regnr)}</b>
+               ${o.chassis?`<div class="small muted" style="margin-top:2px;display:flex;gap:4px;overflow:hidden"><span style="flex-shrink:0">Chassis</span><span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span></div>`:''}`
+            : `<b style="font-size:15px;letter-spacing:-.2px;line-height:1.25;display:flex;gap:5px;overflow:hidden">${o.chassis?`<span style="flex-shrink:0">Chassis</span><span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span>`:'Uten reg.nr'}</b>`}
           ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>

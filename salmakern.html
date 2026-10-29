@@ -161,6 +161,13 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 
 /* TYPE */
 .title{font-size:22px;font-weight:800}
+/* Store chassisnummeret øverst i ordre-detalj når det ikke finnes reg.nr - litt mindre på
+   smale telefonskjermer (se CHASSIS_TRUNKER_STIL i ordre-detalj.js) slik at alle 17 tegn
+   alltid får plass på én linje ved siden av status-dropdownen, uten å måtte korte ned
+   nummeret (bedt om av Henrik 2026-10-29: "vise hele chassis.nr"). 480px dekker vanlige
+   telefoner i stående format; nettbrett/PC har alltid god nok plass til 19px. */
+.chassis-stor{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:19px;font-weight:800;letter-spacing:.01em}
+@media(max-width:480px){.chassis-stor{font-size:14px}}
 .h{font-size:17px;font-weight:800;margin-bottom:2px}
 .muted{color:#a1a1aa}
 .small{font-size:12px}

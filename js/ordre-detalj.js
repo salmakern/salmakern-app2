@@ -164,18 +164,18 @@ function buildOrdreDetail() {
   </div>
   ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">🗄 Arkivert ordre — kun visning</div>`:''}
   <div class="card">
-    <div class="row">
-      <div style="min-width:0">
+    <div class="row" style="flex-wrap:nowrap">
+      <div style="min-width:0;overflow:hidden">
         ${o.regnr
           ? `<div class="title" style="letter-spacing:.02em">${esc(o.regnr)}</div>
-             ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px">CHASSIS <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
+             ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px;overflow:hidden">CHASSIS <span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
           : `<div style="font-size:10px;letter-spacing:.16em;color:#52525b">CHASSIS</div>
-             <div style="font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:24px;font-weight:800;letter-spacing:.01em;margin-top:3px;word-break:break-all">${esc(o.chassis)||'Uten reg.nr'}</div>`}
+             <div style="overflow:hidden;margin-top:3px">${o.chassis?`<span class="chassis-stor" style="${CHASSIS_TRUNKER_STIL}">${esc(o.chassis)}</span>`:'Uten reg.nr'}</div>`}
         <div class="muted" style="margin-top:6px">${esc(o.type)}${o.variant?' – '+esc(o.variant):''}</div>
         <div class="small muted">Kontaktperson: ${o.eier?esc(o.eier):'–'}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end;flex-shrink:0">
-        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:8px 13px;border-radius:999px;')}
+        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:8px 13px;border-radius:999px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')}
         <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px;margin:0">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
         ${erAdmin ? `<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;white-space:nowrap">
           Vedtak
@@ -1145,6 +1145,25 @@ function velgKjoreseddelSkilt(id, skilt) {
  * @returns {string}
  */
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+// Brukes KUN der chassis skal stå på ÉN linje ved siden av statusdropdownen (ordre-detalj-
+// headeren og ordrekortene i "Ordre"-lista, se CHASSIS_TRUNKER_STIL rett under) - IKKE i
+// ordreLabel()/ordreLabelFull() selv, som fortsatt brukes uendret andre steder (PDF-tittel,
+// slette-bekreftelse, kalenderkort, flåte-etiketter) der full tekst og vanlig linjebryting er
+// riktig, ikke avkorting.
+//
+// Chassisnummeret har ingen mellomrom å bryte på i det hele tatt, så vanlig tekstbryting kan
+// enten la det flyte utenfor kortet, eller (med word-break/overflow-wrap) dele det opp midt i
+// selve nummeret - begge deler er det Henrik har bedt om å bli kvitt (2026-10-29: "det blir så
+// mye forvirring når chassis.nr deles opp"), samtidig som status-dropdownen skal stå ved siden
+// av uansett (samme krav som i kommentaren under, bare nå løst med avkorting i stedet for
+// linjebryting). Løsningen er et kjent CSS-knep: en RTL-blokk rundt LTR-innhold (bokstaver og
+// tall "speiles" ikke, bare SELVE AVKORTINGEN skjer fra venstre i stedet for høyre) - viser
+// "…" + halen av nummeret i stedet for starten, siden halen (det faktiske løpenummeret) er det
+// som faktisk skiller like biler fra hverandre, ikke de første tegnene (felles for hele
+// modellserien/fabrikken). `unicode-bidi:plain-text` sikrer at selve tegnrekkefølgen ikke
+// endres, kun avkortings-retningen.
+const CHASSIS_TRUNKER_STIL = 'direction:rtl;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:plain-text;display:inline-block;max-width:100%;vertical-align:bottom';
+
 // Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
 // regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.
 function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
