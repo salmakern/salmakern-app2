@@ -631,7 +631,7 @@ function hengerfesteMontertDropdown(ordreId, montert) {
     montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[montert] || FARGE.ikke_montert;
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:78px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;-webkit-text-size-adjust:100%;text-size-adjust:100%">
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:2px 6px;font-size:9px;line-height:12px;font-weight:600;cursor:pointer;width:auto;max-width:66px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;-webkit-text-size-adjust:100%;text-size-adjust:100%">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -654,7 +654,7 @@ function hengerfesteBestiltDropdown(ordreId, bestilt) {
     ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[bestilt] || FARGE.ikke_bestilt;
-  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;line-height:14px;font-weight:600;cursor:pointer;width:auto;max-width:78px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;-webkit-text-size-adjust:100%;text-size-adjust:100%">
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:2px 6px;font-size:9px;line-height:12px;font-weight:600;cursor:pointer;width:auto;max-width:66px;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;-webkit-text-size-adjust:100%;text-size-adjust:100%">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -672,11 +672,11 @@ function hengerfesteKortHTML(o) {
   // fet skrift i stedet for liten grå tekst) - bedt om av Henrik 2026-09-26 etter
   // skjermbilde som viste at den lette å overse mellom pillen og dropdownen.
   const forhandlerNr = o.utstyr?.forhandlerNr;
-  return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-    <span class="pill warn" style="font-size:10px;line-height:14px;padding:3px 8px;margin:0;white-space:nowrap;box-sizing:border-box">Hengerfeste</span>
+  return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+    <span class="pill warn" style="font-size:9px;line-height:12px;padding:2px 6px;margin:0;white-space:nowrap;box-sizing:border-box">Hengerfeste</span>
     ${hengerfesteBestiltDropdown(o.id, o.utstyr?.hengerfesteBestilt)}
     ${hengerfesteMontertDropdown(o.id, o.utstyr?.hengerfesteMontert)}
-    ${forhandlerNr?`<span style="font-size:12px;font-weight:700;color:#f4f4f5;white-space:nowrap">${esc(forhandlerNr)}</span>`:''}
+    ${forhandlerNr?`<span style="font-size:11px;font-weight:700;color:#f4f4f5;white-space:nowrap">${esc(forhandlerNr)}</span>`:''}
   </div>`;
 }
 // Viser et varsel på selve ordrekortet (ikke bare inne i tvangsflyt-lista) helt til "Skal
