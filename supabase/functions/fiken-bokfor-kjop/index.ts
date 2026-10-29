@@ -43,6 +43,56 @@ function jsonSvar(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } })
 }
 
+// FIKEN_API_KEY skal bare noen gang sendes til Fikens egen fillagring. downloadDoc (query) og
+// documentUrl (body) kommer fra den som kaller funksjonen, og funksjonen har ingen innlogging
+// (publishable-nøkkelen står i åpen kildekode) - uten denne sjekken kunne hvem som helst få
+// Fiken-nøkkelen sendt til en vilkårlig adresse (funnet 2026-10-29). Ekte adresser er
+// https://api.fiken.no/api/v2/files/<uuid>/<filnavn> (kontrollert mot alle 1472 innboksdokumenter;
+// filnavnet kan ha %20, parenteser osv.).
+function fikenFilAdresse(raw: string): URL | null {
+  let u: URL
+  try { u = new URL(raw) } catch { return null }
+  if (u.protocol !== 'https:' || u.hostname !== 'api.fiken.no' || u.port !== '') return null
+  if (u.username || u.password || u.search || u.hash) return null
+  const m = /^\/api\/v2\/files\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/([^\/\\]+)$/.exec(u.pathname)
+  if (!m) return null
+  // Filnavnet dekodes én gang og må være et vanlig filnavn: ellers kunne f.eks. ..%252f..%252fcompanies
+  // bli en sti-traversering til et annet Fiken-endepunkt hvis Fiken (eller en proxy) dekoder to ganger.
+  let navn: string
+  try { navn = decodeURIComponent(m[1]) } catch { return null }
+  // (også NFKC-normalisert, så fullbredde-varianter av / \ . % ikke slipper gjennom)
+  for (const n of [navn, navn.normalize('NFKC')]) {
+    if (/[\/\\\u0000-\u001f]/.test(n) || /^\.{1,2}(;.*)?$/.test(n) || /%2e|%2f|%5c|%3b|%00/i.test(n)) return null
+  }
+  return u
+}
+const erFikenFilAdresse = (raw: string) => fikenFilAdresse(raw) !== null
+
+// Henter en fil fra Fikens fillagring med nøkkelen. Det er den normaliserte adressen (u.href) som hentes,
+// ikke den rå strengen. Viderekoblinger følges manuelt og HVERT ledd må også være en Fiken-filadresse, så
+// nøkkelen aldri kan følge med til en annen vert. null = ugyldig adresse (eller viderekobling til noe
+// annet enn Fikens fillagring, eller for mange viderekoblinger).
+async function hentFikenFil(startUrl: string): Promise<Response | null> {
+  let adresse = fikenFilAdresse(startUrl)
+  for (let i = 0; i < 4 && adresse; i++) {
+    const res = await fetch(adresse.href, { headers: { 'Authorization': `Bearer ${FIKEN_API_KEY}` }, redirect: 'manual' })
+    const loc = res.headers.get('Location')
+    if (res.status >= 300 && res.status < 400 && loc) {
+      await res.body?.cancel()
+      let neste: string
+      try { neste = new URL(loc, adresse).href } catch { return null }
+      adresse = fikenFilAdresse(neste)
+      continue
+    }
+    return res
+  }
+  return null
+}
+
+// Fiken-kjøps-id er et rent tall. Ukontrollert ble verdien limt rett inn i en autentisert Fiken-adresse
+// (../ kunne peke til en annen Fiken-adresse).
+const erTallId = (v: unknown) => /^\d{1,20}$/.test(String(v))
+
 async function fikenFetch(path: string, init: RequestInit = {}) {
   const res = await fetch(`${FIKEN_BASE}${path}`, {
     ...init,
@@ -80,6 +130,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     const verifyId = url.searchParams.get('verify')
     if (verifyId) {
+      if (!erTallId(verifyId)) return jsonSvar({ error: 'verify må være et kjøps-id (tall)' }, 400)
       const slugV = await hentCompanySlug()
       const verifyRes = await fikenFetch(`/companies/${slugV}/purchases/${verifyId}`)
       if (!verifyRes.ok) return jsonSvar({ error: `Fiken svarte ${verifyRes.status}: ${await verifyRes.text()}` }, 502)
@@ -92,7 +143,9 @@ Deno.serve(async (req) => {
     // har), ikke Supabase-nøkkelen.
     const downloadDoc = url.searchParams.get('downloadDoc')
     if (downloadDoc) {
-      const fileRes = await fetch(downloadDoc, { headers: { 'Authorization': `Bearer ${FIKEN_API_KEY}` } })
+      if (!erFikenFilAdresse(downloadDoc)) return jsonSvar({ error: 'downloadDoc må være en adresse til Fikens fillagring (https://api.fiken.no/api/v2/files/...)' }, 400)
+      const fileRes = await hentFikenFil(downloadDoc)
+      if (!fileRes) return jsonSvar({ error: 'Dokumentet pekte videre til en adresse utenfor Fikens fillagring - avbrutt' }, 502)
       if (!fileRes.ok) return jsonSvar({ error: `Klarte ikke hente dokument (${fileRes.status})` }, 502)
       const contentType = fileRes.headers.get('Content-Type') || 'application/octet-stream'
       return new Response(fileRes.body, { headers: { ...CORS_HEADERS, 'Content-Type': contentType } })
@@ -131,11 +184,17 @@ Deno.serve(async (req) => {
       registrerBetaling,
     } = JSON.parse(raw)
 
+    // Før noe opprettes (et kjøp kan ikke slettes): documentUrl hentes med Fiken-nøkkelen senere
+    if (documentUrl && !erFikenFilAdresse(String(documentUrl))) {
+      return jsonSvar({ error: 'documentUrl må være en adresse til Fikens fillagring (https://api.fiken.no/api/v2/files/...)' }, 400)
+    }
+
     if (registrerBetaling) {
       const { purchaseId, betalingsdato: pDato, belop } = registrerBetaling
       if (!purchaseId || !pDato || belop === undefined) {
         return jsonSvar({ error: 'registrerBetaling krever purchaseId, betalingsdato og belop' }, 400)
       }
+      if (!erTallId(purchaseId)) return jsonSvar({ error: 'purchaseId må være et kjøps-id (tall)' }, 400)
       const slugP = await hentCompanySlug()
       const paymentBody = { date: pDato, account: FIKEN_BETALINGSKONTO, amount: Math.round(Number(belop)) }
       if (dryRun) return jsonSvar({ ok: true, dryRun: true, paymentBody })
@@ -258,8 +317,10 @@ Deno.serve(async (req) => {
     let vedleggFeil = ''
     if (documentUrl && purchaseId) {
       try {
-        const filRes = await fetch(documentUrl, { headers: { 'Authorization': `Bearer ${FIKEN_API_KEY}` } })
-        if (filRes.ok) {
+        const filRes = await hentFikenFil(String(documentUrl))
+        if (!filRes) {
+          vedleggFeil = 'Dokumentet pekte videre til en adresse utenfor Fikens fillagring - ikke lagt ved'
+        } else if (filRes.ok) {
           const blob = await filRes.blob()
           const form = new FormData()
           const navn = filename || `bilag-${documentId}`
