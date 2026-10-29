@@ -107,10 +107,10 @@ function renderOrdreList() {
                ${o.chassis?`<div class="small muted" style="margin-top:2px;display:flex;gap:4px;overflow:hidden"><span style="flex-shrink:0">Chassis</span><span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span></div>`:''}`
             : `<div style="font-size:9px;letter-spacing:.14em;color:#52525b">CHASSIS</div>
                <div style="overflow:hidden;margin-top:1px">${o.chassis?`<span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.2px">${esc(o.chassis)}</span>`:'<b style="font-size:15px">Uten reg.nr</b>'}</div>`}
-          ${o.kunde?`<div class="small muted" style="margin-top:3px">${esc(o.kunde)}</div>`:''}
+          ${o.kunde?`<div class="small muted" style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.kunde)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
-        ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:7px 11px;max-width:132px')}
+        ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:5px 10px;font-size:11px;max-width:120px')}
       </div>
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
@@ -130,6 +130,10 @@ function renderOrdreList() {
             <span class="muted" style="min-width:54px">Drivstoff</span>
             <span style="color:${drivstoffTekst?'#f4f4f5':'#71717a'}">${drivstoffTekst||'—'}</span>
           </div>
+          ${o.tidBiltilsynetSted?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
+            <span class="muted" style="min-width:54px">Sted</span>
+            <span>${esc(o.tidBiltilsynetSted)}</span>
+          </div>`:''}
         </div>
       </div>
 
@@ -627,7 +631,7 @@ function hengerfesteMontertDropdown(ordreId, montert) {
     montert:      {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[montert] || FARGE.ikke_montert;
-  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:8px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto;max-width:92px;overflow:hidden;text-overflow:ellipsis">
+  return `<select onchange="settHengerfesteMontert('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;width:auto;max-width:104px;overflow:hidden;text-overflow:ellipsis">
     ${Object.entries(HENGERFESTE_MONTERT_LBL).map(([val,lbl])=>`<option value="${val}" ${montert===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
@@ -650,7 +654,7 @@ function hengerfesteBestiltDropdown(ordreId, bestilt) {
     ankommet:     {bg:'#052e1688', txt:'#86efac', border:'#22c55e'}
   };
   const f = FARGE[bestilt] || FARGE.ikke_bestilt;
-  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:2px solid ${f.border};border-radius:8px;padding:3px 6px;font-size:10px;font-weight:700;cursor:pointer;width:auto;max-width:92px;overflow:hidden;text-overflow:ellipsis">
+  return `<select onchange="settHengerfesteBestilt('${ordreId}',this.value)" style="background:${f.bg};color:${f.txt};border:1px solid ${f.border};border-radius:999px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;width:auto;max-width:104px;overflow:hidden;text-overflow:ellipsis">
     ${Object.entries(HENGERFESTE_BESTILT_LBL).map(([val,lbl])=>`<option value="${val}" ${bestilt===val?'selected':''}>${lbl}</option>`).join('')}
   </select>`;
 }
