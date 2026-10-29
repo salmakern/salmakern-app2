@@ -32,8 +32,9 @@
 // ekte referansedokumenter for hver modell (se salmakern-app/Dokumenter til ordrer/).
 // Alt under (geometri, produsentadresse, krav-rader, særlig anmerkning) er hentet
 // direkte fra disse referansedokumentene 2026-09-18 - IKKE gjettet/interpolert.
-// Toyota Land Cruiser 250 mangler fortsatt referansedokumenter (tomme mapper) og er
-// derfor ikke med ennå.
+// Toyota Land Cruiser 250 lagt til 2026-10-29 (se egen kommentar på oppføringen) - de
+// tilsvarende mappene i "Dokumenter til ordrer" var fortsatt tomme, så dataene er i
+// stedet hentet fra en faktisk ordres egne dokumenter (chassis JTEACDBJ10K019648).
 //
 // geometri: {a,b,d,cOffset} - a=akselavstand, b=avstand sete-foraksel, d=varerommets
 // lengde (m), cOffset=konstanten i c = d/2 + cOffset (VARIERER per modell - bekreftet
@@ -292,6 +293,32 @@ const VEGVESEN_MODELLER = [
     // Henrik 2026-09-18: bruk samme fulle "standard"-tekst som KIA EV9 (inkl.
     // klimakanal-setningen) - ingen egen Panorama-variant for VW.
     egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnitt('standard', chassis, merkeModell, erBrukt)
+  },
+  {
+    // Lagt inn 2026-10-29 fra Henriks egne referansedokumenter for chassis
+    // JTEACDBJ10K019648 (Vektfordeling.xlsx - geometri lest rett ut av selve Excel-
+    // formelen c=C19/2+1.83, IKKE gjettet - samme metode som de andre modellene;
+    // Fabrikantattest.xlsx; Egenerklæring.doc). Disse dokumentene er Brukt Kjøretøy-
+    // varianten (mangler F7/merkeplate-setningen, bekreftet av Henrik) - F7-raden under
+    // er derfor gjenopprettet i grunnoppsettet siden den uansett fjernes automatisk for
+    // Brukt Kjøretøy (vegvesenFjernMerkeplateSetning/F7-ekskludering), samme mønster som
+    // alle andre modeller. Egenerklæringsteksten var ordrett lik "standard"-malen
+    // (inkl. panorama-varianten av demonterings-setningen) - ingen egen tekstfunksjon
+    // trengs, samme som KIA EV9.
+    match: /land\s*cruiser\s*250/i, navn: 'Toyota Land Cruiser 250',
+    geometri: { a: 2.85, b: 1.45, d: 1.93, cOffset: 1.83 },
+    fabrikant1: { navn: 'Toyota Motor Corporation', adresse: ['12, Toyota-Cho', 'Toyota City Aichi', 'Japan'] },
+    kravRader: [
+      ['A25', 'Sidekollisjon', 'FN-Reg. 95', 'Annex 1', 'No. 8124392177_J25M(T)', 'TÜV NORD'],
+      ['F7', 'Fabrikasjonsplate', 'EU 2021/535', 'Seksjon B', 'Egenerklæring', 'Telemark Salmakerverksted'],
+      ['F11', 'Masser og dimensjoner', 'EU 2021/535', 'Seksjon B', 'Vektfordelingsskjema', 'Telemark Salmakerverksted'],
+      ['Skilleveggens styrke', '', 'EU 2018/858', 'Punkt 3.4.2 / Annex 3', 'No. 8124392177_J25M(T)', 'TÜV NORD'],
+      ['Sideairbagers konflikt', 'med skilleveggen', 'Forskrift om engangsavgift', 'Annex 4', 'No. 8124392177_J25M(T)', 'TÜV NORD'],
+      ['Konvertering fra', 'M1 til N1', '', 'No. 8124392177_J25M(T) / Egenerklæring', '', 'TÜV NORD / Telemark Salmakerverksted']
+    ],
+    saerligAnmerkning: null,
+    antallSitteplasser: () => ({ inn: '5', ut: '2' }),
+    egenerklaering: (chassis, merkeModell, variant, erBrukt) => egenerklaeringAvsnitt(variant, chassis, merkeModell, erBrukt)
   }
 ];
 function vegvesenFinnModell(merke, modell) {

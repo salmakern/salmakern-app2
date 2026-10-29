@@ -64,6 +64,40 @@ describe('vegvesenGeometri', () => {
     expect(vegvesenGeometri('Mercedes-Benz', 'GLS')).toEqual({ a: 3.135, b: 1.510, d: 2.080, cOffset: 1.88 });
     expect(vegvesenGeometri('Mercedes-Benz', 'Geländewagen')).toEqual({ a: 2.890, b: 1.490, d: 1.620, cOffset: 1.87 });
     expect(vegvesenGeometri('Volkswagen', 'ID.Buzz')).toEqual({ a: 3.239, b: 1.180, d: 2.416, cOffset: 1.55 });
+    expect(vegvesenGeometri('Toyota', 'Land Cruiser 250')).toEqual({ a: 2.85, b: 1.45, d: 1.93, cOffset: 1.83 });
+  });
+});
+
+const LAND_CRUISER_250_GEOMETRI = { a: 2.85, b: 1.45, d: 1.93, cOffset: 1.83 };
+
+// Tallene er lest direkte ut av Henriks ekte Vektfordeling-regneark for chassis
+// JTEACDBJ10K019648 (lagt til 2026-10-29) - både inndata og Excel-arkets egne
+// hurtigbufrede resultater (C27-C29/C32-C34), ikke utledet eller gjettet. Bekrefter at
+// cOffset=1.83 (lest rett ut av formelen c=C19/2+1.83, samme metode som de andre
+// modellene) faktisk gjenskaper de eksakte tallene fra regnearket.
+describe('beregnVektfordeling (mot Henriks ekte Land Cruiser 250-eksempel, chassis JTEACDBJ10K019648)', () => {
+  const P=3100, P1=1605, P2=1860, M=2430, M1=1350, M2=1080;
+
+  it('gjenskaper de eksakte tallene fra referanseregnearket', () => {
+    const res = beregnVektfordeling(P, P1, P2, M, M1, M2, LAND_CRUISER_250_GEOMETRI);
+    expect(res.frontMaks).toBeCloseTo(255, 1);   // C10-C13 = 1605-1350
+    expect(res.bakMaks).toBeCloseTo(780, 1);     // C11-C14 = 1860-1080
+
+    expect(res.rader[0].front).toBeCloseTo(48.3246, 3);
+    expect(res.rader[1].front).toBeCloseTo(83.7193, 3);
+    expect(res.rader[2].front).toBeCloseTo(119.1140, 3);
+    expect(res.rader[0].frontOk).toBe(true);
+    expect(res.rader[1].frontOk).toBe(true);
+    expect(res.rader[2].frontOk).toBe(true);
+
+    expect(res.rader[0].bak).toBeCloseTo(621.6754, 3);
+    expect(res.rader[1].bak).toBeCloseTo(586.2807, 3);
+    expect(res.rader[2].bak).toBeCloseTo(550.8860, 3);
+    expect(res.rader[0].bakOk).toBe(true);
+    expect(res.rader[1].bakOk).toBe(true);
+    expect(res.rader[2].bakOk).toBe(true);
+
+    expect(res.oppfylt).toBe(true);
   });
 });
 
