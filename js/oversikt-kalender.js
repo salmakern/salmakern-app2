@@ -130,10 +130,6 @@ function renderOrdreList() {
             <span class="muted" style="min-width:54px">Drivstoff</span>
             <span style="color:${drivstoffTekst?'#f4f4f5':'#71717a'}">${drivstoffTekst||'—'}</span>
           </div>
-          ${o.tidBiltilsynetSted?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
-            <span class="muted" style="min-width:54px">Sted</span>
-            <span>${esc(o.tidBiltilsynetSted)}</span>
-          </div>`:''}
         </div>
       </div>
 
