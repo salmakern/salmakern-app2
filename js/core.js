@@ -495,7 +495,8 @@ function dbToOrdre(r) {
     datoKlarHenting:r.dato_klar_henting||'',
     typegodkjenning:r.typegodkjenning||'', egenvektCoc:r.egenvekt_coc||'', forhandlerOrgnr:r.forhandler_orgnr||'',
     vegvesenFingerprint:r.vegvesen_fingerprint||null,
-    bestiltFrakt:!!r.bestilt_frakt, henteKlarDato:r.hente_klar_dato||''
+    bestiltFrakt:!!r.bestilt_frakt, henteKlarDato:r.hente_klar_dato||'',
+    kjoreseddelSkilt:r.kjoreseddel_skilt||''
   };
 }
 function ordreToDb(o) {
@@ -521,6 +522,7 @@ function ordreToDb(o) {
     flate_id:o.flateId||null,
     coc:o.coc||'har_ikke', fullmakt:o.fullmakt||'har_ikke',
     typegodkjenning:o.typegodkjenning||'', egenvekt_coc:o.egenvektCoc||'', forhandler_orgnr:o.forhandlerOrgnr||'',
+    kjoreseddel_skilt:o.kjoreseddelSkilt||null,
     updated_at:new Date().toISOString()
   };
 }

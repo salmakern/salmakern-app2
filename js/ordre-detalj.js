@@ -451,6 +451,8 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </div>
       </div>
 
+      <div class="card" id="kjoreseddelBoks_${o.id}">${kjoreseddelBoksHTML(o)}</div>
+
       ${me&&me.rolle==='admin'?`
       <div class="card">
         <div class="h">Fakturering</div>
@@ -1070,6 +1072,57 @@ function sfOmbygging(id, felt, val) {
   // selve funksjonen rydder kun hvis INGEN av de to lenger er aktuelle, så dette er trygt
   // å kalle på et rent kategoribytte Nytt<->Brukt også).
   if ((felt === 'nyttKjoretoy' || felt === 'bruktKjoretoy') && !val) vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o);
+}
+
+// ════════════════════════════════════════════════════
+// KJØRESEDDEL / PRØVESKILT
+// ════════════════════════════════════════════════════
+// De 3 fysiske årsprøvekjennemerkene (prøveskilt) Henrik eier - faste, hardkodet her på
+// samme måte som VEGVESEN_MODELLER i vegvesen-dokumenter.js. Ikke en database-tabell, siden
+// dette ikke endrer seg uten at Henrik faktisk kjøper/mister et fysisk skilt.
+const PROVESKILT_LISTE = ['AGV 99', 'ACR 62', 'AJR 83'];
+
+/**
+ * Bygger ett prøveskilt som en klikkbar SVG-lignende HTML-boks, visuelt tro mot et ekte
+ * norsk årsprøvekjennemerke (rent rødt felt, hvit innfelt kant, hvit opphøyd skrift, to
+ * svarte monteringsspor) - se referansebilde Henrik sendte 2026-10-29. Bruker `cqw`
+ * (container query-enheter) for ALLE mål slik at skiltet skaleres korrekt uansett hvor bredt
+ * sidepanelet er, siden `aspect-ratio` holder høyde/bredde-forholdet fast (276/1050).
+ * Teksten bruker 'Arial Narrow' (systemfont) i stedet for den originale Archivo-fonten i
+ * design-referansen - appen er en offline-fungerende PWA, og en ekstern Google Fonts-
+ * avhengighet ville enten krevd nettverk første gang eller ekstra service worker-cching for
+ * noe som bare er et lite visuelt detalj.
+ */
+function proveskiltHTML(ordreId, regnr, valgt) {
+  const [bokstaver, tall] = regnr.split(' ');
+  const cq = v => (v/1050*100).toFixed(3) + 'cqw';
+  return `
+  <div onclick="velgKjoreseddelSkilt('${ordreId}','${valgt ? '' : regnr}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
+    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;background:#d9161c;border-radius:${cq(16)};padding:${cq(5)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
+    <div style="width:100%;height:100%;box-sizing:border-box;background:linear-gradient(180deg,#ffffff,#ececec);border-radius:${cq(12)};padding:${cq(13)}">
+      <div style="position:relative;width:100%;height:100%;box-sizing:border-box;background:linear-gradient(170deg,#e81c22 0%,#d8141a 60%,#c81218 100%);border-radius:${cq(7)};box-shadow:inset 0 0 0 ${cq(3)} #b80f14,inset 0 0 0 ${cq(5)} rgba(255,255,255,.18),inset 0 ${cq(3)} ${cq(6)} rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
+        <div style="position:absolute;top:${cq(14)};left:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
+        <div style="position:absolute;top:${cq(14)};right:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
+        <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.04em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(bokstaver)}</span>
+        <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.06em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(tall)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+function kjoreseddelBoksHTML(o) {
+  const valgt = o.kjoreseddelSkilt || '';
+  return `
+  <div class="h">Kjøreseddel - prøveskilt</div>
+  <div class="small muted" style="margin-top:4px">Velg hvilket av de 3 prøveskiltene som er i bruk på denne bilen. Klikk igjen for å fjerne.</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;align-items:center">
+    ${PROVESKILT_LISTE.map(skilt => proveskiltHTML(o.id, skilt, skilt === valgt)).join('')}
+  </div>`;
+}
+function velgKjoreseddelSkilt(id, skilt) {
+  if (!sf(id, 'kjoreseddelSkilt', skilt)) return;
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const container = document.getElementById('kjoreseddelBoks_' + id);
+  if (container) container.innerHTML = kjoreseddelBoksHTML(o);
 }
 
 // ════════════════════════════════════════════════════
