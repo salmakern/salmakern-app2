@@ -89,6 +89,56 @@ function visToast(melding, type='feil') {
   el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 5000);
 }
 
+// ════════════════════════════════════════════════════
+// KALL TIL EDGE FUNCTIONS (fiken-fakturer, send-frakt-epost, vegvesen-oppslag, send-push)
+// ════════════════════════════════════════════════════
+// ALLE kall til /functions/v1/ skal gå via denne - aldri en direkte fetch() (vokter:
+// test/ingen-direkte-edge-kall.test.js). Funksjonene krever at kalleren er en innlogget
+// ansatt: ansatt = anonym Supabase-sesjon + PIN, og access-token-et i sesjonen bærer
+// ansatt_id/rolle/session_token (custom_access_token_hook). Funksjonene verifiserer
+// token-et mot databasen (rpc/current_ansatt), så den offentlige SUPA_KEY (som står i åpen
+// kildekode og ikke er en JWT) slipper ikke lenger gjennom alene - den sendes bare som
+// apikey-header.
+// Returnerer en vanlig Response, akkurat som fetch(), så hvert kallsted beholder sin egen
+// parsing/feilhåndtering. Body må kunne sendes to ganger (streng/JSON, ikke en stream) siden
+// et 401 gir ÉN fornyelse av sesjonen og ÉTT nytt forsøk - aldri flere (ingen løkke).
+// Supabase-porten (verify_jwt) avviser et ugyldig/utløpt JWT med 401 FØR funksjonen kjører,
+// så 401 er det vanlige tegnet på utløpt sesjon. Kaster (og viser toast) hvis det ikke
+// finnes noen sesjon i det hele tatt - alle kallstedene har try/catch eller .catch().
+async function edgeFetch(funksjon, init = {}) {
+  const url = `${SUPA_URL}/functions/v1/${funksjon}`;
+  const hentToken = async (fornyet) => {
+    if (!db) return null;
+    const { data } = fornyet ? await db.auth.refreshSession() : await db.auth.getSession();
+    return data?.session?.access_token || null;
+  };
+  const kall = (token) => {
+    // Headers (ikke et vanlig objekt) slik at en Authorization fra kalleren, uansett store/små
+    // bokstaver, alltid erstattes av ansatt-token-et i stedet for å bli sendt ved siden av.
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', 'Bearer ' + token);
+    headers.set('apikey', SUPA_KEY);
+    return fetch(url, { ...init, headers });
+  };
+
+  let token = null;
+  try { token = await hentToken(false); } catch(e) { console.warn('Kunne ikke hente sesjon:', e); }
+  if (!token) {
+    const melding = 'Du er ikke innlogget - logg inn på nytt';
+    visToast(melding);
+    throw new Error(melding);
+  }
+
+  let res = await kall(token);
+  if (res.status !== 401) return res;
+
+  let nyttToken = null;
+  try { nyttToken = await hentToken(true); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
+  if (nyttToken) res = await kall(nyttToken);
+  if (res.status === 401) visToast('Innloggingen din er utløpt eller ugyldig - logg ut og inn igjen');
+  return res;
+}
+
 // Delt av dokDrop() (ordre-diverse.js) og fullmaktDrop() (ansatte-utstyr.js) - begge gjorde
 // tidligere INGENTING (ingen toast, ingen feilmelding) når en drag-og-slipp ikke inneholdt
 // noen faktisk fil, noe som så ut som appen "hang" fremfor at noe faktisk feilet. Vanligste
@@ -203,8 +253,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // hvem som spør. Selve identiteten (hvilken ansatt) knyttes først etter
     // riktig PIN i tryLogin() - uten en PIN er denne sesjonen ikke koblet
     // til noen ansatt og RLS slipper den ikke til noe som helst.
-    const { data: { session } } = await db.auth.getSession();
-    if (!session) await db.auth.signInAnonymously();
+    await sikreAnonymSesjon();
     // Data kan ikke leses uten en innlogget ansatt lenger - hentes i
     // tryLogin() i stedet for her.
   } catch(e) {
@@ -717,7 +766,7 @@ function subscribeRealtime() {
       // rammes ikke av dette - kun alle ANDRE åpne økter.
       const pinByttet = S.dagensPIN && row.dagens_pin && S.dagensPIN !== row.dagens_pin;
       S.dagensPIN = row.dagens_pin || '1234';
-      if (pinByttet && me) { visToast('Dagens PIN er byttet - logger ut'); doLogout(); return; }
+      if (pinByttet && me) { visToast('Dagens PIN er byttet - logger ut'); doLogout(true); return; }
       S.gps = {lat: row.gps_lat||null, lng: row.gps_lng||null, radius: row.gps_radius||300};
       S.utstyrMaler = row.utstyr_maler || [];
       S.drivstoffSatser = row.drivstoff_satser || [];
@@ -1033,14 +1082,24 @@ async function tryLogin() {
   // (via auth.uid()), slik at RLS og Realtime vet hvem som spør etterpå.
   let user = null;
   let forMangeForsok = false;
+  let ingenSesjon = false;
   if (db) {
     try {
-      const { data, error } = await db.rpc('logg_inn_med_pin', { kandidat_pin: pinBuf });
-      if (error) {
-        console.warn('PIN-sjekk feilet:', error.message);
-        if (error.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
+      // doLogout() avslutter Auth-sesjonen (se utforLogout) - vent til den er ferdig, ellers
+      // kunne PIN-en kobles til en sesjon som akkurat da blir slettet, og så startes en NY
+      // anonym sesjon her (logg_inn_med_pin krever auth.uid(), se migrasjon 20261029140000).
+      if (utloggingPagar) await utloggingPagar;
+      if (!(await sikreAnonymSesjon())) {
+        ingenSesjon = true;
+      } else {
+        const { data, error } = await db.rpc('logg_inn_med_pin', { kandidat_pin: pinBuf });
+        if (error) {
+          console.warn('PIN-sjekk feilet:', error.message);
+          if (error.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
+          else if (error.message?.includes('IKKE_INNLOGGET')) ingenSesjon = true;
+        }
+        else if (data && data.length) user = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
       }
-      else if (data && data.length) user = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
     } catch(e) { console.warn('PIN-sjekk feilet:', e); }
   } else {
     // Uten tilkobling: fall tilbake på ev. lokalt bufret data (dev/offline)
@@ -1089,17 +1148,92 @@ async function tryLogin() {
   } else {
     document.getElementById('pinErr').textContent = forMangeForsok
       ? 'For mange feilforsøk – vent noen minutter og prøv igjen'
-      : 'Feil PIN – prøv igjen';
+      : ingenSesjon
+        ? 'Kunne ikke starte innlogging – sjekk nettet og prøv igjen'
+        : 'Feil PIN – prøv igjen';
     pinBuf = '';
     refreshPinDots();
   }
 }
-function doLogout() {
+// Sørger for at det finnes en Auth-sesjon (anonym). Brukes ved oppstart og rett før PIN-sjekken
+// i tryLogin(): logg_inn_med_pin krever auth.uid(), og etter utlogging finnes det bevisst INGEN
+// sesjon før neste innlogging - den startes først når noen faktisk taster PIN (ikke ved
+// utlogging, så en enhet som står ulogget ikke bruker opp Supabase sin grense for anonyme
+// innlogginger per IP). Returnerer true hvis det finnes en sesjon etterpå.
+async function sikreAnonymSesjon() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) return true;
+  const { data, error } = await db.auth.signInAnonymously();
+  if (error) { console.warn('Anonym innlogging feilet:', error.message); return false; }
+  return !!data?.session;
+}
+
+// Løser med 'tidsavbrudd' hvis løftet ikke er ferdig innen ms - brukes slik at en treg
+// forbindelse ikke kan henge utloggingen (og dermed neste innlogging) i det uendelige.
+function medTidsgrense(lofte, ms) {
+  let tid;
+  const frist = new Promise(r => { tid = setTimeout(() => r('tidsavbrudd'), ms); });
+  return Promise.race([lofte, frist]).finally(() => clearTimeout(tid));
+}
+
+// Avslutter innloggingen ordentlig, ikke bare på skjermen. Før dette satt me = null og ingenting
+// mer: ansatt-token og refresh-token ble liggende i nettleseren og gjaldt videre (for kontoen med
+// flere_enheter ble de aldri ugyldiggjort av en ny innlogging heller). Nå:
+//  1. logg_ut() (migrasjon 20261029150000) fjerner ansatt_id/rolle/session_token fra DENNE Auth-
+//     brukeren - kun denne enhetens anonyme bruker, aldri ansatte-raden, så andre enheter (og
+//     flere_enheter-kontoen) berøres ikke. Også en refresh-token som skulle ha lekket gir da et
+//     token uten ansattrettigheter.
+//  2. signOut({scope:'local'}) sletter sesjonen og refresh-token på serveren og fjerner den fra
+//     nettleseren. Access-token som allerede er utstedt gjelder ut sin levetid (maks 1 time) -
+//     det kan ikke trekkes tilbake, men det ligger ikke lenger noe sted i nettleseren.
+async function avsluttSesjon() {
+  if (!db) return;
+  try {
+    const r = await medTidsgrense(db.rpc('logg_ut'), 5000);
+    if (r === 'tidsavbrudd' || r?.error) console.warn('logg_ut feilet:', r === 'tidsavbrudd' ? 'tidsavbrudd' : r.error.message);
+  } catch(e) { console.warn('logg_ut feilet:', e); }
+  let feil = null;
+  try {
+    const r = await medTidsgrense(db.auth.signOut({ scope: 'local' }), 5000);
+    feil = r === 'tidsavbrudd' ? 'tidsavbrudd' : r?.error;
+  } catch(e) { feil = e; }
+  if (feil) {
+    // supabase-js beholder sesjonen i nettleseren hvis selve utloggingskallet feiler (f.eks.
+    // uten nett) - da fjerner vi den selv, ellers ville en "utlogget" enhet fortsatt ha token-et.
+    console.warn('signOut feilet, fjerner sesjonen lokalt:', feil);
+    try { localStorage.removeItem('sb-' + new URL(SUPA_URL).hostname.split('.')[0] + '-auth-token'); } catch(e) {}
+  }
+}
+
+// Pågående utlogging (null ellers) - tryLogin() venter på den, se kommentaren der.
+let utloggingPagar = null;
+// tvungen = true når appen selv logger ut (dagens PIN byttet): ingen spørsmål om ulagrede endringer.
+function doLogout(tvungen) {
+  if (!utloggingPagar) utloggingPagar = utforLogout(!!tvungen).finally(() => { utloggingPagar = null; });
+  return utloggingPagar;
+}
+async function utforLogout(tvungen) {
+  // Endringer som ligger i offline-køen (mislykkede lagringer) får en siste sjanse nå, mens
+  // sesjonen ennå er gyldig - uten sesjon kan de ikke lagres før neste innlogging, og da
+  // erstattes S av det som ligger i databasen (loadFromSupabase), så de ulagrede endringene
+  // ville gått tapt. Lykkes det ikke, spør vi (ved vanlig utlogging) før vi logger ut.
+  await medTidsgrense(prosesserOfflineKo(), 3000);
+  if (!tvungen && offlineKo.size > 0) {
+    const n = offlineKo.size;
+    if (!confirm(`${n} endring${n===1?'':'er'} er ikke lagret ennå (ingen kontakt med serveren). Logger du ut nå kan ${n===1?'den':'de'} gå tapt. Logg ut likevel?`)) return;
+  }
   if (timerTick) clearInterval(timerTick);
   timerTick = null; timerStart = null;
   me = null;
   document.getElementById('appScreen').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
+  // Stopp sanntid: kanalen er knyttet til den innloggede ansatte og skal ikke bli stående
+  // (en ny innlogging starter den på nytt, se tryLogin()).
+  if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
+  clearTimeout(realtimeStabilTimer);
+  if (realtimeChannel && db) { try { db.removeChannel(realtimeChannel); } catch(_){} }
+  realtimeChannel = null;
+  await avsluttSesjon();
 }
 
 // ════════════════════════════════════════════════════

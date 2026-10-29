@@ -1,3 +1,6 @@
+// v13 - appen sender nå den innloggede ansattes token til edge-funksjonene (edgeFetch i
+// core.js) og utlogging avslutter Auth-sesjonen på ekte. Cache-navnet er bumpet slik at åpne
+// PWA-er henter den nye koden; uten bump ville de fortsatt sendt bare den offentlige nøkkelen.
 // v12 - HTML/JS-grenen under hentet alltid ferskt over nett (riktig), men lagret
 // ALDRI resultatet i cachen - caches.match(e.request) i catch-fallbacken hadde derfor
 // ingenting å falle tilbake på. Konsekvens: appen fungerte i praksis ikke frakoblet i
@@ -17,7 +20,7 @@
 // v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-const CACHE = 'salmakern-v12';
+const CACHE = 'salmakern-v13';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

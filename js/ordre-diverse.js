@@ -781,9 +781,9 @@ async function slaOppRegnr(ordreId) {
   try {
     // Kaller en Supabase Edge Function (vegvesen-oppslag) i stedet for Statens vegvesen
     // direkte - nøkkelen holdes server-side der, se funksjonens egen kommentar for hvorfor.
-    const res = await fetch(SUPA_URL + '/functions/v1/vegvesen-oppslag', {
+    const res = await edgeFetch('vegvesen-oppslag', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ regnr })
     });
     const data = await res.json();
@@ -811,9 +811,9 @@ async function slaOppRegnrNyOrdre() {
   if (!regnr) { if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Skriv inn reg.nr først</span>'; return; }
   if(statusEl) statusEl.innerHTML='<span style="color:#a1a1aa">Søker...</span>';
   try {
-    const res = await fetch(SUPA_URL + '/functions/v1/vegvesen-oppslag', {
+    const res = await edgeFetch('vegvesen-oppslag', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ regnr })
     });
     const data = await res.json();

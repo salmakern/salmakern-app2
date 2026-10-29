@@ -77,6 +77,20 @@ appen (Admin-ark, ordre, flåte).
 lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min
 lockout per anonym Auth-sesjon, se `20260824000000_pin_rate_limiting_og_search_path.sql`).
 
+**Kall til edge-funksjoner og utlogging (2026-10-29)**: ALLE kall til `/functions/v1/` (fiken-fakturer,
+send-frakt-epost, vegvesen-oppslag, send-push) går via `edgeFetch(funksjon, init)` i `core.js` - aldri en
+direkte `fetch()` (vokter: `test/ingen-direkte-edge-kall.test.js`). Den sender den innloggede ansattes
+access-token som `Authorization` og `SUPA_KEY` som `apikey`, og ved 401 fornyes sesjonen og kallet prøves
+ÉN gang til; funksjonene verifiserer token-et mot `current_ansatt()`. `doLogout()` avslutter nå Auth-
+sesjonen på ekte: først `logg_ut()` (migrasjon `20261029150000`, nuller ansatt_id/rolle/session_token
+KUN på denne enhetens Auth-bruker, aldri `ansatte`-raden), så `auth.signOut({scope:'local'})`. En ny
+anonym sesjon startes først når PIN tastes (`sikreAnonymSesjon()` i `tryLogin`, bevisst ikke ved
+utlogging, for å spare Supabase sin grense for anonyme innlogginger per IP). Mislykkede lagringer i
+offline-køen får en siste sjanse før utlogging, og en vanlig utlogging spør hvis noe fortsatt venter
+(ellers erstattes S av databasen ved neste innlogging). Kjent begrensning: et access-token som allerede
+er utstedt gjelder ut sin levetid (maks 1 time) etter utlogging. `CACHE` i `sw.js` ble bumpet til v13 i
+samme commit, så åpne PWA-er henter den nye koden.
+
 ## PDF-eksport
 
 `genPDF()` i `eksport-varsler.js` bygger en rik HTML/CSS-mal (logo, tabeller, bildegallerier,

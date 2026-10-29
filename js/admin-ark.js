@@ -246,8 +246,8 @@ function adminArkHentRadData(chassisNr) {
 }
 
 async function adminArkKallFraktEpost(payload) {
-  const res = await fetch(`${SUPA_URL}/functions/v1/send-frakt-epost`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY }, body: JSON.stringify(payload)
+  const res = await edgeFetch('send-frakt-epost', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   });
   if (!res.ok) throw new Error(await res.text());
 }

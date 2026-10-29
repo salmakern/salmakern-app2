@@ -638,9 +638,9 @@ function lagreLagerEndring() {
 }
 
 function varselMangelfullLevering(v, forventet, mottatt, mangler) {
-  fetch(SUPA_URL + '/functions/v1/send-push', {
+  edgeFetch('send-push', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'mangelfull_levering', vareNavn: v.navn, forventet, mottatt, mangler, enhet: v.enhet })
   }).catch(e => console.warn('Mangelfull leverings-varsel feilet:', e));
 }
@@ -691,9 +691,9 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, la
 
   // Send push kun i det øyeblikket varen krysser under grensen, ikke hver gang den er lav
   if (erLavNa && !varLavFor) {
-    fetch(SUPA_URL + '/functions/v1/send-push', {
+    edgeFetch('send-push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'lav_lager', vareNavn: v.navn, antall: v.antall, enhet: v.enhet, minAntall: v.minAntall })
     }).catch(e => console.warn('Lav lager-varsel feilet:', e));
   }

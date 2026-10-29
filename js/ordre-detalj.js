@@ -681,9 +681,9 @@ let fikenFaktureringBrukRabatt = true;
 async function kallFikenFakturer(id, ekstra) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return 'error';
   try {
-    const res = await fetch(SUPA_URL + '/functions/v1/fiken-fakturer', {
+    const res = await edgeFetch('fiken-fakturer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: o.fikenLinjer, brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
     });
     const data = await res.json();

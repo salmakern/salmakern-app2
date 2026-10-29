@@ -61,8 +61,8 @@ function nyTimerId(prefiks) {
 // tidskritiske å få vite om umiddelbart (samme vurdering som Henrik selv gjorde i samtalen).
 function varsleAdminOmFravaer(fravaerType, fraDato, tilDato, betalt) {
   if (!SUPA_URL || !SUPA_KEY) return;
-  fetch(SUPA_URL + '/functions/v1/send-push', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+  edgeFetch('send-push', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       type: 'fravaer_registrert', ansattNavn: me?.navn || '?', fravaerType, fraDato, tilDato,
       betalt: betalt === undefined ? null : betalt

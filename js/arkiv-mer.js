@@ -547,9 +547,9 @@ async function opprettMote() {
     const { error } = await db.from('moter').insert({ id:mote.id, tittel:mote.tittel, dato:mote.dato, tid:mote.tid, opprettet_av:mote.opprettetAv, varslet:false, deltaker_ider:deltakerIder, type:'møte' });
     if (error) { visToast('Kunne ikke lagre møtet: ' + error.message); S.moter = S.moter.filter(m => m.id !== mote.id); return; }
   }
-  fetch(SUPA_URL + '/functions/v1/send-push', {
+  edgeFetch('send-push', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'nytt_mote', tittel, dato, tid, deltakerIder })
   }).catch(e => console.warn('Nytt møte-varsel feilet:', e));
   closeModal('nyttMote');
@@ -622,9 +622,9 @@ async function sendGodkjennerMelding() {
     if (!error && data) {
       if (!S.godkjennerMeldinger.find(m=>m.id===data.id)) S.godkjennerMeldinger.push(dbToGodkjennerMelding(data));
       renderGodkjennerChat();
-      fetch(SUPA_URL + '/functions/v1/send-push', {
+      edgeFetch('send-push', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPA_KEY },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'godkjenner_melding', avsenderId: me.id, avsenderNavn: me.navn, tekst })
       }).catch(e => console.warn('Chat-varsel feilet:', e));
     }
