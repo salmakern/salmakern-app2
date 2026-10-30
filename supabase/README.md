@@ -43,6 +43,30 @@ npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file <sti-ti
 npx supabase backups list --project-ref qoqpenbfdxeduylxirwk
 ```
 
+## Kjent hull i migrasjonshistorikken: "ordre-push"-triggeren
+
+Triggeren `"ordre-push"` (AFTER UPDATE på `public.ordrer`, kaller edge-funksjonen
+`send-push` via `supabase_functions.http_request`) finnes live, men er bevisst IKKE lagt
+inn som en vanlig migrasjon (oppdaget 2026-10-30, se Henger igjen-lista s09-011).
+Årsak: selve trigger-definisjonen har den ekte Supabase **service_role**-nøkkelen
+hardkodet rett inn i `Authorization`-headeren (`'{"Content-type":...,"Authorization":
+"Bearer <ekte nøkkel>"}'`) - å skrive den inn i en migrasjonsfil ville ha lekket en ekte
+hemmelighet til Git-historikken for alltid.
+
+Hvis denne triggeren noen gang må gjenskapes (f.eks. gjenoppretting til et helt nytt
+prosjekt): hent `CREATE TRIGGER "ordre-push" ...`-definisjonen direkte fra det
+eksisterende prosjektet (`select pg_get_triggerdef(oid) from pg_trigger where
+tgname='ordre-push'`) og lim inn service_role-nøkkelen (Project Settings → API) manuelt i
+SQL Editor - ALDRI i en fil som committes.
+
+**Burde ryddes opp i** (lagt til Henger igjen-lista 2026-10-30): bytt ut den hardkodede
+nøkkelen med et oppslag mot Supabase sin Vault (`vault.decrypted_secrets`), som er den
+anbefalte måten å gi en trigger tilgang til en hemmelighet på uten å lagre den i klartekst
+i selve databaseskjemaet.
+
+Sjekket 2026-10-30: `ordre-push` er den ENESTE triggeren i databasen som bruker
+`http_request` med en `Bearer`-header - ingen andre har samme hull.
+
 ## Backup-status (sjekket 2026-08-24)
 
 Daglige fysiske backups er aktivert (`walg_enabled: true`) - prosjektet har
