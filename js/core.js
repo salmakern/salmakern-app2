@@ -534,7 +534,8 @@ function dbToOrdre(r) {
     typegodkjenning:r.typegodkjenning||'', egenvektCoc:r.egenvekt_coc||'', forhandlerOrgnr:r.forhandler_orgnr||'',
     vegvesenFingerprint:r.vegvesen_fingerprint||null,
     bestiltFrakt:!!r.bestilt_frakt, henteKlarDato:r.hente_klar_dato||'',
-    kjoreseddelSkilt:r.kjoreseddel_skilt||''
+    kjoreseddelSkilt:r.kjoreseddel_skilt||'',
+    fikenKladdUrl:r.fiken_kladd_url||''
   };
 }
 function ordreToDb(o) {

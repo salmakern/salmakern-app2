@@ -682,7 +682,7 @@ async function kallFikenFakturer(id, ekstra) {
     const res = await edgeFetch('fiken-fakturer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: o.fikenLinjer, brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
+      body: JSON.stringify({ ordreId: id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: o.fikenLinjer, brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
     });
     const data = await res.json();
     if (data.needsBekreftelse) {
@@ -699,17 +699,21 @@ async function kallFikenFakturer(id, ekstra) {
     }
     if (!res.ok || data.error) throw new Error(data.error || ('Fiken svarte ' + res.status));
     o.fakturert = true;
-    logChange(o, 'Fakturert - kladd opprettet i Fiken');
-    // MÅ vente på selve lagringen her - uten await fortsetter koden (og viser suksess-
-    // meldingen som ber brukeren navigere videre til Fiken) før skrivingen til databasen
-    // faktisk er bekreftet ferdig. Reell bug funnet 2026-09-17: en kladd ble opprettet i
-    // Fiken, men "fakturert" ble aldri lagret i appen - brukeren rakk trolig å navigere
-    // til Fiken før den bakgrunnsstartede lagringen fikk fullføre.
+    o.fikenKladdUrl = data.draftUrl || o.fikenKladdUrl;
+    // s09-006: edge-funksjonen lagrer nå selv fiken_kladd_url + fakturert på ordren, atomisk,
+    // i SAMME kall som kladden ble opprettet i Fiken (se fiken-fakturer/index.ts) - uavhengig
+    // av om klientens nettleser fortsatt er tilkoblet etterpå. Denne save() er nå en ufarlig
+    // duplikat-lagring (speiler lokal state), ikke lenger den eneste lagringen - men beholdes
+    // siden den også fanger opp andre lokale endringer (f.eks. brukRabatt-avkrysningen) som
+    // edge-funksjonen selv ikke skriver tilbake.
+    if (!data.alleredeOpprettet) logChange(o, 'Fakturert - kladd opprettet i Fiken');
     await save(id);
     if (o.status === 'arkivert') renderArkiv();
     else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
     else buildOrdreDetail();
-    visToast('Kladd opprettet i Fiken - gå inn og send den derfra');
+    visToast(data.alleredeOpprettet
+      ? 'Denne ordren hadde allerede en kladd i Fiken - det er ikke opprettet en ny'
+      : 'Kladd opprettet i Fiken - gå inn og send den derfra');
     return 'ok';
   } catch (e) {
     visToast('Kunne ikke opprette faktura i Fiken: ' + e.message + ' - prøv igjen');

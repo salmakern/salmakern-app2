@@ -197,11 +197,28 @@ Deno.serve(async (req) => {
       return jsonSvar({ ok: true, contactId, navn }, 201)
     }
 
-    const { kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
+    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    // Idempotens (s09-006): hvis denne ordren allerede har en lagret kladd-adresse, har en
+    // tidligere (kanskje en annen administrators) kall allerede opprettet kladden i Fiken -
+    // opprett ALDRI en ny, bare returner den eksisterende. Lukker race-vinduet der to
+    // administratorer trykker fakturer nesten samtidig fra hver sin enhet, før Realtime har
+    // rukket å vise den andres "fakturert"-endring.
+    if (ordreId) {
+      const { data: eksisterendeOrdre, error: ordreFeil } = await supabase
+        .from('ordrer')
+        .select('fiken_kladd_url')
+        .eq('id', ordreId)
+        .maybeSingle()
+      if (ordreFeil) return jsonSvar({ error: 'Kunne ikke sjekke ordren: ' + ordreFeil.message }, 500)
+      if (eksisterendeOrdre?.fiken_kladd_url) {
+        return jsonSvar({ ok: true, draftUrl: eksisterendeOrdre.fiken_kladd_url, alleredeOpprettet: true }, 200)
+      }
+    }
 
     let contactId: number | null = null
 
@@ -337,7 +354,21 @@ Deno.serve(async (req) => {
       return jsonSvar({ error: `Fiken avviste kladden (${draftRes.status}): ${feiltekst}` }, 502)
     }
 
-    return jsonSvar({ ok: true, draftUrl: draftRes.headers.get('Location') || '' }, 201)
+    const draftUrl = draftRes.headers.get('Location') || ''
+    // Lagres her, server-side, i SAMME kall som kladden faktisk ble opprettet i Fiken - ikke
+    // avhengig av at klientens nettleser fortsatt er tilkoblet og rekker sitt eget save()-kall
+    // etterpå (se s09-006: "kladd-adressen kastes" var nettopp symptomet på at den eneste
+    // lagringen var klient-initiert). fakturert settes også her av samme grunn; klientens egen
+    // save() rett etter gjør det samme, men er nå en ufarlig duplikat, ikke den eneste lagringen.
+    if (ordreId && draftUrl) {
+      const { error: lagreFeil } = await supabase
+        .from('ordrer')
+        .update({ fiken_kladd_url: draftUrl, fakturert: true })
+        .eq('id', ordreId)
+      if (lagreFeil) console.error('Kunne ikke lagre fiken_kladd_url på ordren:', lagreFeil.message)
+    }
+
+    return jsonSvar({ ok: true, draftUrl }, 201)
   } catch (e) {
     return jsonSvar({ error: String(e) }, 500)
   }
