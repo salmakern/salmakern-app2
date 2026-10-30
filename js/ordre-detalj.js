@@ -1102,14 +1102,17 @@ function proveskiltHTML(regnr, valgt) {
   // ingen skygge - skarpere/enklere hjørner. overflow:hidden beholdt (se forrige fiks,
   // "bilde må følge den hvite kanten") siden lagene fortsatt er nøstet inni hverandre.
   return `
-  <div onclick="velgKjoreseddelILista('${regnr.replace(/'/g,"\\'")}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
-    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#e5231b;border-radius:${cq(10)};padding:${cq(16)};cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
-    <div style="position:relative;width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:#e5231b;border:${cq(9)} solid #fff;border-radius:${cq(6)};display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
-      <div style="position:absolute;top:${cq(10)};left:${cq(40)};width:${cq(90)};height:${cq(20)};border-radius:${cq(4)};background:#151313"></div>
-      <div style="position:absolute;top:${cq(10)};right:${cq(40)};width:${cq(90)};height:${cq(20)};border-radius:${cq(4)};background:#151313"></div>
-      <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(190)};line-height:1;letter-spacing:.02em;color:#fff">${esc(bokstaver)}</span>
-      <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(190)};line-height:1;letter-spacing:.02em;color:#fff">${esc(tall)}</span>
+  <div style="position:relative;width:100%;max-width:320px;container-type:inline-size;aspect-ratio:1050/276;box-sizing:border-box;cursor:pointer" onclick="velgKjoreseddelILista('${regnr.replace(/'/g,"\\'")}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}">
+    <div style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:#e5231b;border-radius:${cq(10)};${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
+      <div style="width:100%;height:100%;box-sizing:border-box;padding:${cq(16)}">
+        <div style="width:100%;height:100%;box-sizing:border-box;border:${cq(9)} solid #fff;border-radius:${cq(6)};display:flex;align-items:center;justify-content:center;gap:${cq(80)};overflow:hidden">
+          <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(130)};line-height:1;letter-spacing:.02em;color:#fff">${esc(bokstaver)}</span>
+          <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(130)};line-height:1;letter-spacing:.02em;color:#fff">${esc(tall)}</span>
+        </div>
+      </div>
     </div>
+    <div style="position:absolute;top:${cq(6)};left:${cq(40)};width:${cq(90)};height:${cq(20)};border-radius:${cq(4)};background:#151313"></div>
+    <div style="position:absolute;top:${cq(6)};right:${cq(40)};width:${cq(90)};height:${cq(20)};border-radius:${cq(4)};background:#151313"></div>
   </div>`;
 }
 let kjoreseddelModalOrdreId = null;
