@@ -1096,20 +1096,19 @@ const PROVESKILT_LISTE = ['AGV 99', 'ACR 62', 'AJR 83'];
 function proveskiltHTML(regnr, valgt) {
   const [bokstaver, tall] = regnr.split(' ');
   const cq = v => (v/1050*100).toFixed(3) + 'cqw';
-  // overflow:hidden på alle tre nivåene (lagt til 2026-10-30, Henrik: "bilde må følge den
-  // hvite kanten") - uten dette ble ikke de indre lagene klippet til sin egen avrundede
-  // form, så det kunne vises skarpe/firkantede hjørner som stakk ut forbi selve den hvite/
-  // røde avrundede kanten i stedet for å følge den.
+  // Flatet ut 2026-10-30 (Henrik, side-om-side-sammenligning: "de er fortsatt ikke like") -
+  // forrige versjon hadde glanset gradient, 3D-skygger og en smal ("Narrow") font som ikke
+  // matchet referansebildet. Nå: flat rødfarge, flat hvit kant, vanlig bred fet skrift,
+  // ingen skygge - skarpere/enklere hjørner. overflow:hidden beholdt (se forrige fiks,
+  // "bilde må følge den hvite kanten") siden lagene fortsatt er nøstet inni hverandre.
   return `
   <div onclick="velgKjoreseddelILista('${regnr.replace(/'/g,"\\'")}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
-    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#d9161c;border-radius:${cq(16)};padding:${cq(5)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
-    <div style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(180deg,#ffffff,#ececec);border-radius:${cq(12)};padding:${cq(13)}">
-      <div style="position:relative;width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(170deg,#e81c22 0%,#d8141a 60%,#c81218 100%);border-radius:${cq(7)};box-shadow:inset 0 0 0 ${cq(3)} #b80f14,inset 0 0 0 ${cq(5)} rgba(255,255,255,.18),inset 0 ${cq(3)} ${cq(6)} rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
-        <div style="position:absolute;top:${cq(14)};left:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
-        <div style="position:absolute;top:${cq(14)};right:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
-        <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.04em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(bokstaver)}</span>
-        <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.06em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(tall)}</span>
-      </div>
+    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#e5231b;border-radius:${cq(10)};padding:${cq(16)};cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
+    <div style="position:relative;width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:#e5231b;border:${cq(9)} solid #fff;border-radius:${cq(6)};display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
+      <div style="position:absolute;top:${cq(10)};left:${cq(40)};width:${cq(90)};height:${cq(20)};border-radius:${cq(4)};background:#151313"></div>
+      <div style="position:absolute;top:${cq(10)};right:${cq(40)};width:${cq(90)};height:${cq(20)};border-radius:${cq(4)};background:#151313"></div>
+      <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(190)};line-height:1;letter-spacing:.02em;color:#fff">${esc(bokstaver)}</span>
+      <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(190)};line-height:1;letter-spacing:.02em;color:#fff">${esc(tall)}</span>
     </div>
   </div>`;
 }
