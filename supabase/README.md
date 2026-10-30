@@ -80,6 +80,32 @@ committes.
 Sjekket 2026-10-30 (før fiksen): `ordre-push` var den ENESTE triggeren i databasen som
 brukte `http_request` med en `Bearer`-header - ingen andre hadde samme hull.
 
+## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)
+
+Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandler, selger, modell) hit. Tre lag, alle testet hver for seg:
+
+1. **Tabeller og kolonner** (`20261030200000_portal_bestilling_grunnlag.sql`): `portal_bestillinger` (ett utfall per bestilling), `portal_modell_kobling`
+   (portalens modell-slug til appens merke/modell, godkjent av Henrik), og tre nullable kolonner på `ordrer`. Bare admin leser dem.
+2. **Postgres-funksjonen `portal_koble_bestilling(p jsonb)`** (`20261030210000_portal_koble_bestilling.sql`): all forretningslogikk. Kobler til en eksisterende
+   ordre, oppretter ny ordre «På vei» (ikke bekreftet fra portal, i nøyaktig samme form som appen lager den), lager en løs rad i Admin-ark (serienummer) eller
+   legger bestillingen til avklaring. Idempotent på portalens bestilling-id; en slettet portal-ordre gjenopplives aldri (gravstein). Kan KUN kalles av
+   `service_role`. Test: `tester/portal_koble_bestilling_TEST_body.sql` (43 sjekker, alltid i en transaksjon som rulles tilbake; kjøring står øverst i filen).
+   Rollback: `rollback-referanser/portal_koble_bestilling_ROLLBACK.sql`.
+3. **Edge-funksjonen `portal-bestilling`** (`functions/portal-bestilling/`: `index.ts` er døra inn, `logikk.ts` er ren validering/avgrensning). Egen hemmelighet
+   `PORTAL_BESTILLING_SECRET` (Supabase-hemmelighet; samme verdi i portalens miljø som `x-sync-secret`, og aldri `FIKEN_SYNC_SECRET`), sammenlignet i
+   konstant tid, håndhevet fra dag én (ingen myk modus: det finnes ingen gamle kallere). Funksjonen er utrullet med standard `verify_jwt`, så portalen må
+   også sende anon-nøkkelen som `apikey`/`Authorization`. Bare ti navngitte felt slippes gjennom til databasen (`kjor_pa_nytt` kastes alltid), og svaret
+   er bare `{kode, status, ordre_id?}` (aldri detaljer eller databasefeil). Logger én JSON-linje per kall uten verdier. Rull ut på nytt etter endring:
+   `npx supabase functions deploy portal-bestilling --project-ref qoqpenbfdxeduylxirwk --use-api` (begge filene lastes opp; relativ import virker).
+   Rollback: `npx supabase functions delete portal-bestilling --project-ref qoqpenbfdxeduylxirwk` (øyeblikkelig). Å bare fjerne hemmeligheten
+   (`secrets unset`) er IKKE nok alene: hemmeligheten leses når funksjonen starter, så kjørende kopier kan huske den gamle verdien en stund
+   (ved mistanke om lekkasje: sett en NY verdi, rull ut på nytt og oppdater portalens miljø).
+   Tester: `test/portal-bestilling.test.js` (31 enhetstester: validering, svaravgrensning og hele håndtereren mot falsk Deno og falsk database; kjører i
+   `npm test`) og `tester/portal_bestilling_differensialtest.mjs` (sammenligner edge-valideringen med Postgres-valideringen på 356 grensetilfeller;
+   kjøres for hånd når valideringen i en av dem endres; egenskapen er at det edge godtar, godtar Postgres også).
+   **Funksjonen er utrullet, men INGENTING kaller den ennå** (portalen sender først når koblingen slås på, G11). Livetest 2026-10-30: uten nøkkel 401 (porten),
+   uten/med feil hemmelighet 401, GET 405, ugyldig chassis/JSON 400, for stor body 413, ukjent kontakt 200 `venter_forhandler` (og samme svar ved gjentatt kall).
+
 ## Backup-status (sjekket 2026-08-24)
 
 Daglige fysiske backups er aktivert (`walg_enabled: true`) - prosjektet har
