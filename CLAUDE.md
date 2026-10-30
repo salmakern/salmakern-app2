@@ -81,7 +81,9 @@ lockout per anonym Auth-sesjon, se `20260824000000_pin_rate_limiting_og_search_p
 send-frakt-epost, vegvesen-oppslag, send-push) går via `edgeFetch(funksjon, init)` i `core.js` - aldri en
 direkte `fetch()` (vokter: `test/ingen-direkte-edge-kall.test.js`). Den sender den innloggede ansattes
 access-token som `Authorization` og `SUPA_KEY` som `apikey`, og ved 401 fornyes sesjonen og kallet prøves
-ÉN gang til; funksjonene verifiserer token-et mot `current_ansatt()`. `doLogout()` avslutter nå Auth-
+ÉN gang til. Serversiden: fiken-fakturer og send-frakt-epost verifiserer token-et mot `current_ansatt()`
+(foreløpig i MYK modus: logger `edge_auth`, blokkerer ikke, til `EDGE_AUTH_ENFORCE` slås på);
+vegvesen-oppslag og send-push har ennå ingen sjekk. `doLogout()` avslutter nå Auth-
 sesjonen på ekte: først `logg_ut()` (migrasjon `20261029150000`, nuller ansatt_id/rolle/session_token
 KUN på denne enhetens Auth-bruker, aldri `ansatte`-raden), så `auth.signOut({scope:'local'})`. En ny
 anonym sesjon startes først når PIN tastes (`sikreAnonymSesjon()` i `tryLogin`, bevisst ikke ved

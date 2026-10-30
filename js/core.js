@@ -131,12 +131,13 @@ function visToast(melding, type='feil') {
 // KALL TIL EDGE FUNCTIONS (fiken-fakturer, send-frakt-epost, vegvesen-oppslag, send-push)
 // ════════════════════════════════════════════════════
 // ALLE kall til /functions/v1/ skal gå via denne - aldri en direkte fetch() (vokter:
-// test/ingen-direkte-edge-kall.test.js). Funksjonene krever at kalleren er en innlogget
+// test/ingen-direkte-edge-kall.test.js). Funksjonene skal kreve at kalleren er en innlogget
 // ansatt: ansatt = anonym Supabase-sesjon + PIN, og access-token-et i sesjonen bærer
 // ansatt_id/rolle/session_token (custom_access_token_hook). Funksjonene verifiserer
-// token-et mot databasen (rpc/current_ansatt), så den offentlige SUPA_KEY (som står i åpen
-// kildekode og ikke er en JWT) slipper ikke lenger gjennom alene - den sendes bare som
-// apikey-header.
+// token-et mot databasen (rpc/current_ansatt): i dag gjør fiken-fakturer og send-frakt-epost
+// det, men i MYK modus (logger, blokkerer ikke) til EDGE_AUTH_ENFORCE slås på; vegvesen-oppslag
+// og send-push har ennå ingen sjekk. Den offentlige SUPA_KEY (som står i åpen kildekode og
+// ikke er en JWT) skal ikke lenger være nok alene - den sendes bare som apikey-header.
 // Returnerer en vanlig Response, akkurat som fetch(), så hvert kallsted beholder sin egen
 // parsing/feilhåndtering. Body må kunne sendes to ganger (streng/JSON, ikke en stream) siden
 // et 401 gir ÉN fornyelse av sesjonen og ÉTT nytt forsøk - aldri flere (ingen løkke).
