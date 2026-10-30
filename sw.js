@@ -20,7 +20,8 @@
 // v8 - push-varsler + aldri cache HTML + cache Supabase Storage-filer selv
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
-const CACHE = 'salmakern-v14';
+// v15 - PORTAL-merke, filter og Bekreft/Avvis for ordre fra Forhandlerportalen (2026-10-30)
+const CACHE = 'salmakern-v15';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

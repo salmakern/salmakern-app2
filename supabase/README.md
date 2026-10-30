@@ -82,14 +82,14 @@ brukte `http_request` med en `Bearer`-header - ingen andre hadde samme hull.
 
 ## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)
 
-Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandler, selger, modell) hit. Tre lag, alle testet hver for seg:
+Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandler, selger, modell) hit. Fire lag, alle testet hver for seg:
 
 1. **Tabeller og kolonner** (`20261030200000_portal_bestilling_grunnlag.sql`): `portal_bestillinger` (ett utfall per bestilling), `portal_modell_kobling`
    (portalens modell-slug til appens merke/modell, godkjent av Henrik), og tre nullable kolonner på `ordrer`. Bare admin leser dem.
 2. **Postgres-funksjonen `portal_koble_bestilling(p jsonb)`** (`20261030210000_portal_koble_bestilling.sql`): all forretningslogikk. Kobler til en eksisterende
    ordre, oppretter ny ordre «På vei» (ikke bekreftet fra portal, i nøyaktig samme form som appen lager den), lager en løs rad i Admin-ark (serienummer) eller
    legger bestillingen til avklaring. Idempotent på portalens bestilling-id; en slettet portal-ordre gjenopplives aldri (gravstein). Kan KUN kalles av
-   `service_role`. Test: `tester/portal_koble_bestilling_TEST_body.sql` (47 sjekker, alltid i en transaksjon som rulles tilbake; kjøring står øverst i filen).
+   `service_role`. Test: `tester/portal_koble_bestilling_TEST_body.sql` (47 sjekker, alltid i en transaksjon som rulles tilbake; kjøring står øverst i filen). Et nytt kall etter at en ansatt har bekreftet svarer fortsatt `ok` med status `bekreftet`.
    Utfall `venter_*` og `avklaring_*` er endelige sett fra portalen: et nytt kall på samme bestilling-id endrer ingenting. Når årsaken er rettet (rad i
    `portal_modell_kobling`, rettet org.nr/kontakt-id i Kontakter, manuell avklaring) kjøres funksjonen på nytt av admin med `kjor_pa_nytt` (SQL som
    postgres/service_role, senere G8-RPC-ene), med de lagrede feltene fra `portal_bestillinger`.
@@ -125,6 +125,11 @@ Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandle
    med en gyldig bestilling uten at Henrik har sagt ja. Rollback for push: rull ut funksjonen uten `push.ts`-kallet, deretter `rollback-referanser/portal_bestilling_push_ROLLBACK.sql`.
    **Funksjonen er utrullet, men INGENTING kaller den ennå** (portalen sender først når koblingen slås på, G11). Livetest 2026-10-30: uten nøkkel 401 (porten),
    uten/med feil hemmelighet 401, GET 405, ugyldig chassis/JSON 400, for stor body 413, ukjent kontakt 200 `venter_forhandler` (og samme svar ved gjentatt kall).
+4. **Bekreft og Avvis i appen** (`20261030230000_portal_bekreft_avvis.sql`): RPC-ene `portal_bekreft_ordre(p_ordre_id)` (alle innloggede ansatte; idempotent; setter bekreftet-tidspunkt/-navn, én logglinje og
+   `portal_bestillinger.status = 'bekreftet'`) og `portal_avvis_ordre(p_ordre_id)` (bare admin og godkjenner; sletter bare en URØRT, ubekreftet portal-ordre, se `v_urort` i filen, og markerer alle bestillinger som
+   peker på ordren som `avvist` = gravstein). Begge er SECURITY DEFINER og sjekker `current_ansatt()` selv; `anon` kan ikke kalle dem. Rolle- og urørt-sjekken er et sikkerhetsnett mot misforståelser i appen, IKKE en
+   grense mot en ansatt som går forbi appen (RLS på `ordrer` tillater alle innloggede ansatte å endre/slette direkte). Test: `tester/portal_bekreft_avvis_TEST_body.sql` (43 sjekker, rullet tilbake). Rollback:
+   `rollback-referanser/portal_bekreft_avvis_ROLLBACK.sql` (appkoden må rulles tilbake først). Appdelen (merke, filter, banner, knapper) står i rotens CLAUDE.md og testes av `test/portal-ordre-visning.test.js`.
 
 ## Backup-status (sjekket 2026-08-24)
 

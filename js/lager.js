@@ -1555,8 +1555,9 @@ async function toggleOppskriftPaaOrdre(oppskriftId, huket) {
 // o.utstyr.skalHa, uten å røre annen tekst som er skrevet inn for hånd. Siden dette er det
 // SAMME feltet som allerede vises på ordrekort, i kalenderen og i PDF-rapporten, trengs
 // ingen egen kode noe annet sted for at valgt Ekstra utstyr skal synes der også.
-function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa) {
-  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+// `ordreId` er valgfri (standard: åpen ordre): kalles med id eksplisitt når handlingen kan fullføres etter at brukeren har gått til en annen ordre (autoVelgUtstyrMal etter Bekreft av portal-ordre).
+function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa, ordreId = activeOrdreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   const linjer = (o.utstyr?.skalHa||'').split('\n').map(l=>l.trim()).filter(Boolean);
   const finnes = linjer.includes(oppskriftNavn);
   if (skalStaa === finnes) return;
@@ -1570,8 +1571,8 @@ function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa) {
 // å gå via fritekstboksen og stole på at noen henter tallet derfra etterpå. Én linje per
 // oppskrift (antall 1) - trenger oppskriften flere enheter samtidig, juster antallet
 // manuelt i Fakturering-kortet etterpå.
-async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa) {
-  const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa, ordreId = activeOrdreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   const finnes = (o.fikenLinjer||[]).some(l=>l.produktnummer===produktnummer);
   if (skalStaa === finnes) return;
   // Skriver nå ATOMISK via oppdater_ordre_fiken_linje() (radlås i databasen) i stedet for

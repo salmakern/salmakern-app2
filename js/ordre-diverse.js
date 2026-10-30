@@ -1178,3 +1178,121 @@ async function slettDokument(id, idx) {
   planleggLocalSpeiling();
 }
 
+
+// ════════════════════════════════════════════════════
+// BESTILLING FRA FORHANDLERPORTALEN: Bekreft / Avvis (G6)
+// ════════════════════════════════════════════════════
+// En ordre opprettet av portalen (portal_koble_bestilling) står som «PORTAL · IKKE BEKREFTET» til en ansatt har sett over chassis.nr og trykket Bekreft.
+// Begge handlingene går via databasefunksjonene portal_bekreft_ordre / portal_avvis_ordre (supabase/migrations/20261030230000_portal_bekreft_avvis.sql):
+// de sjekker innlogget ansatt og rolle selv, og Avvis kan bare slette en URØRT, ubekreftet portal-ordre (aldri en ekte ordre). Alle ansatte kan bekrefte;
+// bare administrator og godkjenner kan avvise. Ordre som er endret etter opprettelsen slettes som vanlig («Slett ordre», administrator).
+const PORTAL_FEILTEKSTER = {
+  IKKE_INNLOGGET: 'Du er ikke innlogget. Logg inn på nytt og prøv igjen.',
+  IKKE_TILLATT: 'Bare administrator og godkjenner kan avvise en bestilling.',
+  ORDRE_FINNES_IKKE: 'Ordren finnes ikke lenger (kanskje slettet av en kollega).',
+  IKKE_PORTAL_ORDRE: 'Dette er ikke en ordre fra Forhandlerportalen.',
+  ALLEREDE_BEKREFTET: 'Bestillingen er allerede bekreftet, og kan ikke avvises.',
+  IKKE_URORT: 'Ordren er endret etter at den ble opprettet, så den kan ikke avvises her. En administrator kan slette den som en vanlig ordre.'
+};
+function portalFeilTekst(error) {
+  const melding = String(error?.message || '');
+  const kode = Object.keys(PORTAL_FEILTEKSTER).find(k => melding.includes(k));
+  return kode ? PORTAL_FEILTEKSTER[kode] : 'Noe gikk galt. Sjekk nettforbindelsen og prøv igjen.';
+}
+// Forventede forretningsfeil (f.eks. IKKE_URORT) er ikke feil i appen: de logges som advarsel, ikke som feil (konsollen skal bare ha ekte feil).
+function portalLoggFeil(hva, error) {
+  const kjent = Object.keys(PORTAL_FEILTEKSTER).some(k => String(error?.message || '').includes(k));
+  (kjent ? console.warn : console.error)(hva, error?.message || error);
+}
+let portalHandlingPagar = false; // hindrer dobbeltklikk og to handlinger samtidig
+const PORTAL_OPPTATT_TEKST = 'En annen bekreftelse eller avvisning pågår. Vent et øyeblikk og prøv igjen.';
+// Ordren er borte i databasen (slettet av en kollega): fjern den også her og gå tilbake til lista, så vi ikke står på en ordre som ikke finnes.
+function portalFjernLokalt(id) {
+  S.ordrer = S.ordrer.filter(x => x.id !== id);
+  planleggLocalSpeiling();
+  if (activeOrdreId === id) tilbakeOrdreList();
+  planleggRenderAll();
+}
+
+function portalBekreftBannerHTML(o) {
+  if (!erUbekreftetPortalOrdre(o) || o.status !== 'aktiv') return '';
+  const opprettet = (o.endringer || []).find(e => e && e.av === 'Forhandlerportalen');
+  const kanAvvise = me?.rolle === 'admin' || me?.rolle === 'godkjenner';
+  const mangler = !o.eier
+    ? 'Ingen kontaktperson er satt på ordren (selgeren finnes ikke som kontaktperson hos forhandleren i Kontakter).'
+    : (!adminArkFinnKontaktEpost(o.eier) ? `Fant ingen e-postadresse til «${esc(o.eier)}» i Kontakter. Frakt- og hentet-e-post fra Admin-ark finner ingen mottaker før kontaktpersonen er lagt inn.` : '');
+  return `<div id="portalBanner_${o.id}" style="background:#1c1008;border:1px solid #b45309;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px">
+    <div style="font-weight:700;color:#fbbf24;margin-bottom:4px">Bestilt i Forhandlerportalen - ikke bekreftet</div>
+    ${opprettet ? `<div class="small" style="color:#a1a1aa;margin-bottom:4px">${esc(opprettet.txt || '')}</div>` : ''}
+    <div style="color:#e4e4e7;margin-bottom:8px">Sjekk at chassis.nr stemmer, og trykk Bekreft.${kanAvvise ? ' Er chassis.nr feil, avvis og slett ordren.' : ' Er chassis.nr feil, be en administrator avvise ordren.'}</div>
+    ${mangler ? `<div class="small" style="color:#fca5a5;margin-bottom:8px">${mangler}</div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="portalBekreftBtn_${o.id}" class="btn sm" onclick="portalBekreftOrdre('${o.id}')" style="background:rgba(34,197,94,.15);border-color:#22c55e;color:#86efac;font-weight:700">Bekreft bestilling</button>
+      ${kanAvvise ? `<button id="portalAvvisBtn_${o.id}" class="btn sm" onclick="portalAvvisOrdre('${o.id}')" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">Avvis og slett</button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function portalBekreftOrdre(id) {
+  const o = S.ordrer.find(x => x.id === id);
+  if (!o || !db) return;
+  if (portalHandlingPagar) { visToast(PORTAL_OPPTATT_TEKST, 'feil'); return; }
+  portalHandlingPagar = true;
+  for (const b of ['portalBekreftBtn_', 'portalAvvisBtn_']) { const k = document.getElementById(b + id); if (k) k.disabled = true; }
+  // Funksjonen oppdaterer ordre-raden: marker den, så vårt eget Realtime-ekko ikke re-rendrer siden (samme mønster som alle andre lagringer; oppdateres lokalt under).
+  ignorerRealtimeFor.add(id);
+  setTimeout(() => ignorerRealtimeFor.delete(id), 10000);
+  try {
+    const { data, error } = await db.rpc('portal_bekreft_ordre', { p_ordre_id: id });
+    if (error) {
+      ignorerRealtimeFor.delete(id);
+      portalLoggFeil('Bekreft portal-ordre feilet:', error);
+      visToast(portalFeilTekst(error), 'feil');
+      if (String(error.message || '').includes('ORDRE_FINNES_IKKE')) portalFjernLokalt(id);
+      return;
+    }
+    const nyBekreftelse = data?.kode === 'ok';
+    o.portalBekreftetAt = data?.portal_bekreftet_at || new Date().toISOString();
+    o.portalBekreftetAv = data?.portal_bekreftet_av || me?.navn || '';
+    if (Array.isArray(data?.endringer)) o.endringer = data.endringer;
+    visToast(nyBekreftelse ? 'Bestillingen er bekreftet' : 'Bestillingen var allerede bekreftet', 'ok');
+    // Ordren ble opprettet i databasen, ikke av appen, så utstyrsmalen (som opprettOrdre() ellers velger ved opprettelse) velges først nå ved bekreftelse. Kalles også når
+    // svaret på første forsøk gikk tapt og ordren allerede var bekreftet (autoVelgUtstyrMal gjør ingenting hvis malen allerede er valgt).
+    autoVelgUtstyrMal(id);
+    planleggRenderAll();
+    if (activeOrdreId === id) buildOrdreDetail();
+  } catch (e) {
+    ignorerRealtimeFor.delete(id);
+    console.error('Bekreft portal-ordre feilet:', e);
+    visToast('Noe gikk galt. Sjekk nettforbindelsen og prøv igjen.', 'feil');
+  } finally {
+    portalHandlingPagar = false;
+    for (const b of ['portalBekreftBtn_', 'portalAvvisBtn_']) { const k = document.getElementById(b + id); if (k) k.disabled = false; }
+  }
+}
+
+async function portalAvvisOrdre(id) {
+  const o = S.ordrer.find(x => x.id === id);
+  if (!o || !db) return;
+  if (portalHandlingPagar) { visToast(PORTAL_OPPTATT_TEKST, 'feil'); return; }
+  if (!confirm(`Avvise og slette bestillingen for ${ordreLabel(o)}?\n\nOrdren slettes, og bestillingen i portalen markeres som avvist (den opprettes ikke på nytt). Ta kontakt med selgeren selv hvis noe skal rettes.\n\nDette kan ikke angres.`)) return;
+  portalHandlingPagar = true;
+  for (const b of ['portalBekreftBtn_', 'portalAvvisBtn_']) { const k = document.getElementById(b + id); if (k) k.disabled = true; }
+  try {
+    const { error } = await db.rpc('portal_avvis_ordre', { p_ordre_id: id });
+    if (error) {
+      portalLoggFeil('Avvis portal-ordre feilet:', error);
+      visToast(portalFeilTekst(error), 'feil');
+      if (String(error.message || '').includes('ORDRE_FINNES_IKKE')) portalFjernLokalt(id);
+      return;
+    }
+    visToast('Bestillingen er avvist og ordren slettet', 'ok');
+    portalFjernLokalt(id);
+  } catch (e) {
+    console.error('Avvis portal-ordre feilet:', e);
+    visToast('Noe gikk galt. Sjekk nettforbindelsen og prøv igjen.', 'feil');
+  } finally {
+    portalHandlingPagar = false;
+    for (const b of ['portalBekreftBtn_', 'portalAvvisBtn_']) { const k = document.getElementById(b + id); if (k) k.disabled = false; }
+  }
+}

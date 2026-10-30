@@ -158,6 +158,37 @@ Løsningen (brukt i `test/offline-ko.test.js`): kjør en liten ekstra `vm.runInC
 SAMME context rett etter kildefilen, med hjelpe-funksjoner som `function _getS(){return S;}` -
 de deler toppnivå-scope med første kjøring og kan derfor lese/skrive de "usynlige" bindingene.
 
+## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)
+
+Forhandlerportalens Bestill-knapp (se portalens CLAUDE.md, «Bestill») sender en bestilling med chassis.nr eller serienummer. Her lander den slik (Henriks avgjørelser: Salmaker'n/Kontakter er
+fasit; chassis.nr gir automatisk ordre «På vei» merket «ikke bekreftet», ansatte bekrefter etterpå; serienummer gir en løs rad i Admin-ark; «Bestill frakt» og Admin-arkets e-poster røres ikke).
+Hele kjeden og begrunnelsene står i `supabase/README.md` («Bestillinger fra Forhandlerportalen»); her det du må vite når du rører appen:
+
+- **Tre lag i databasen**: tabellene `portal_bestillinger` (ett utfall per bestilling, bare admin leser) og `portal_modell_kobling` (portalens modell til appens merke/modell, 14 rader godkjent av Henrik 2026-10-30)
+  samt tre kolonner på `ordrer` (`portal_bestilling_id`, `portal_bekreftet_at`, `portal_bekreftet_av`); Postgres-funksjonen `portal_koble_bestilling` (kun service_role) som lager/kobler ordren; edge-funksjonen
+  `portal-bestilling` (egen hemmelighet) som er døra inn; og RPC-ene `portal_bekreft_ordre` / `portal_avvis_ordre` som appen kaller. **Portalen sender ennå ingenting** (slås på i portalen, G11): uten portal-ordre er alt
+  nedenfor usynlig i appen.
+- **`portal_*`-kolonnene LESES av `dbToOrdre` men skrives ALDRI av `ordreToDb`/`save()`** (vokter: `test/portal-ordre-visning.test.js`). Da kan en ansatt som lagrer et annet felt aldri nullstille bekreftelsen.
+  Skriv aldri disse kolonnene fra klienten; bruk RPC-ene.
+- **Visning (G5)**: `portalBadgeHTML(o)` (core.js): amber «PORTAL · IKKE BEKREFTET» før bekreftelse og blå «PORTAL» etter, på Ordre-lista og begge Oversikt-listene (i ordredetaljen vises bare kort «PORTAL» i fargen,
+  `portalBadgeHTML(o, true)`, så chassis.nr ikke presses på små telefoner; banneret sier «ikke bekreftet») (ikke på ukekalenderens
+  kort, og ikke på vanlige ordre som en portal-bestilling bare er koblet til). Filteret `Fra portal, ikke bekreftet (N)` i `#ordreStatusFilter` (verdi `portal_ubekreftet`; N oppdateres i `renderOrdreList`).
+  `sw.js` CACHE ble bumpet til v15; bump den igjen ved hver appendring.
+- **Bekreft / Avvis (G6)** (seksjonen nederst i `js/ordre-diverse.js`, banner i ordredetaljen): Alle ansatte kan trykke **Bekreft** (setter bekreftet-tidspunkt og -navn, skriver én logglinje, kjører `autoVelgUtstyrMal`
+  siden ordren ikke ble opprettet av appen; `autoVelgUtstyrMal` og hjelperne `oppdaterSkalHaForOppskrift`/`oppdaterFikenLinjeForOppskrift` tar nå en valgfri `ordreId`, siden Bekreft kjører etter en await og
+  brukeren kan ha gått til en annen ordre). Bare **admin og godkjenner** ser **Avvis og slett**, og RPC-en sletter bare en URØRT, ubekreftet portal-ordre (fortsatt «På vei», uten flåte/kalender/ankomstdato/
+  bilder/timer/signatur/Fiken-linjer/lagerbruk/godkjenning, uten utfylt utstyr/vekter/ombygging/drivstoff/regnr/farge/notater, og med bare opprettelseslinjen i loggen; en NULL gir «ikke urørt»); ellers `IKKE_URORT` og
+  en administrator sletter den som vanlig ordre («Slett ordre»). **Dette er et sikkerhetsnett mot misforståelser i appen, ikke en grense mot en ansatt som går forbi appen**: RLS på `ordrer` (`krever_innlogget_ansatt`,
+  FOR ALL) lar alle innloggede ansatte slette og endre ordrer direkte, for alle ordrer (fantes før portalen). En avvist bestilling står igjen som «avvist» i `portal_bestillinger` (gravstein): et nytt kall fra
+  portalen gjenskaper aldri ordren; en bekreftet bestilling svarer fortsatt `ok` ved nytt kall. Klienten legger ordre-id i `ignorerRealtimeFor` før Bekreft (eget Realtime-ekko), og en handling mens en annen pågår gir en beskjed.
+- **Banneret advarer** hvis ordrens kontaktperson (`eier`) mangler eller ikke har e-post i Kontakter: Admin-ark finner e-postmottakere på NAVN (`adminArkFinnKontaktEpost`), og koblingsfunksjonen lar derfor selgerens
+  navn stå som kontaktperson bare når det ikke tilhører noen annen kontakt/kontaktperson (ellers tom). Merk at appen ellers slår opp e-post på navn på tvers av alle forhandlere.
+- **Test**: SQL-testene (`supabase/tester/*_TEST_body.sql`) kjøres ALLTID i en transaksjon som rulles tilbake (kjøring står øverst i filene). Nettlesertest: lokal server (`python -m http.server 8099` i rotmappen) + headless
+  Edge mot den ekte databasen med TEST-ansatte (id 990001/990002, `ansatte` + `ansatte_pin`, tilfeldig ledig PIN) og TEST-bestillinger (chassis `TESTWXYZ0000000xx`, lagd med `portal_koble_bestilling`), alt slettet etterpå.
+  Merk: nye ansatte-/ordre-rader vises i sanntid for ansatte som har appen åpen, så gjør det utenom arbeidstid og rydd straks.
+- **Kjent, ikke gjort**: «Bestilt frakt»-valget i ordrefilteret (`salmakern.html`, `bestilt_frakt`) matcher ingenting (filteret sammenligner bare `ordreStatus`); fantes før portal-arbeidet. Push-varsel til administratorer når en ny
+  portal-bestilling kommer er bygget (G9, i edge-funksjonen `portal-bestilling`; se `supabase/README.md`: test aldri mot den utrullede funksjonen uten Henriks ja, det sender ekte varsler), og avklaringer (`venter_*`/`avklaring_*` i `portal_bestillinger`) har ingen visning ennå (G8): Claude utfører dem via SQL på Henriks ord.
+
 ## Daglig automatisk QA-gjennomgang
 
 En planlagt oppgave (`salmakern-booking-daglig-qa`, kl. 04:00 hver natt) gjør en full

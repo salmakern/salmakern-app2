@@ -1,4 +1,4 @@
--- Kjørt: 2026-10-30 (v1, etter test 43/43 i en transaksjon som ble rullet tilbake og gjennomgang av en annen økt), omkjørt samme dag som v2 etter uavhengig gjennomgang av edge-funksjonen
+-- Kjørt: 2026-10-30 (v1, etter test 43/43 i en transaksjon som ble rullet tilbake og gjennomgang av en annen økt), omkjørt samme dag som v2 etter uavhengig gjennomgang av edge-funksjonen v3 samme dag: «bekreftet» er et ferdig utfall i idempotensgrenen (nytt kall etter Bekreft svarer ok); test 47/47.
 -- (navnekollisjon på kontaktperson/eier, lås per forhandler rundt taket, kommentarer; test 47/47). Begge ganger var ordrer/admin_ark/innstillinger byte-identiske før og etter.
 -- Fase 2 av «Bestill»-koblingen, STEG 3 (G3 i C:/Users/GroAnitaMartinsen/.claude/bestill-fase2/plan-salmakern.md): funksjonen som tar imot EN bestilling fra
 -- Forhandlerportalen og enten kobler den til en eksisterende ordre, oppretter en ny ordre «På vei» (ikke bekreftet fra portal), lager en løs rad i
@@ -118,7 +118,8 @@ begin
   select * into v_rad from public.portal_bestillinger where portal_bestilling_id = v_id;
   if found then
     -- Ferdige utfall endres aldri. Slettet ordre = gravstein (avvist), aldri gjenoppliving.
-    if v_rad.status in ('ny_ordre', 'koblet') then
+    -- «bekreftet» (satt av portal_bekreft_ordre) er et ferdig utfall som «ny_ordre»: et nytt forsøk fra portalen etter at en ansatt har bekreftet skal fortsatt svare ok.
+    if v_rad.status in ('ny_ordre', 'koblet', 'bekreftet') then
       if v_rad.ordre_id is not null and not exists (select 1 from public.ordrer where id = v_rad.ordre_id) then
         update public.portal_bestillinger
            set status = 'avvist', detalj = 'Ordren ble slettet i Salmaker''n etter at bestillingen var koblet. Ingen ny ordre opprettes.', oppdatert_at = now()

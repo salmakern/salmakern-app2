@@ -77,9 +77,17 @@ function renderOrdreList() {
   const sorterFn = sorterValg === 'nyest' ? (a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||'')
     : sorterValg === 'eldst' ? (a,b) => (a.ankomstdato||'').localeCompare(b.ankomstdato||'')
     : sorterOrdre;
+  // «Fra portal, ikke bekreftet (N)»: ordre som Forhandlerportalen har opprettet og som en ansatt ennå ikke har bekreftet. Tallet i valget holdes oppdatert her
+  // (bare når teksten faktisk endres, så et åpent nedtrekk ikke forstyrres).
+  const portalValg = document.querySelector('#ordreStatusFilter option[value="portal_ubekreftet"]');
+  if (portalValg) {
+    const portalTekst = `Fra portal, ikke bekreftet (${S.ordrer.filter(o => o.status === 'aktiv' && erUbekreftetPortalOrdre(o)).length})`;
+    if (portalValg.textContent !== portalTekst) portalValg.textContent = portalTekst;
+  }
   const alle = S.ordrer.filter(o => {
     if (o.status !== 'aktiv') return false;
-    if (statusFilter && o.ordreStatus !== statusFilter) return false;
+    if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }
+    else if (statusFilter && o.ordreStatus !== statusFilter) return false;
     if (!sokTekst) return true;
     return (o.regnr||'').toLowerCase().includes(sokTekst) ||
            (o.kunde||'').toLowerCase().includes(sokTekst) ||
@@ -108,6 +116,7 @@ function renderOrdreList() {
             : `<div style="font-size:9px;letter-spacing:.14em;color:#52525b">CHASSIS</div>
                <div style="overflow:hidden;margin-top:1px">${o.chassis?`<span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.2px">${esc(o.chassis)}</span>`:'<b style="font-size:15px">Uten reg.nr</b>'}</div>`}
           ${o.kunde?`<div class="small muted" style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.kunde)}</div>`:''}
+          ${o.portalBestillingId?`<div style="margin-top:5px">${portalBadgeHTML(o)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:5px 10px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
@@ -182,7 +191,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
@@ -203,7 +212,7 @@ function renderOversikt(q) {
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}

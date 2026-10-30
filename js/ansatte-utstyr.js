@@ -1221,9 +1221,10 @@ function autoVelgUtstyrMal(ordreId) {
   // ikke 501 på de ordrene som ikke får panorama huket av på"). Samme opprydding av en
   // ev. tidligere "501" som i applyUtstyrMal() - se kommentaren der.
   if (erKiaEv9(o) && o.utstyrSjekkliste.some(p => /panorama/i.test(p.punkt || ''))) {
-    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true);
-    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false);
-    oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false);
+    // ordreId sendes med (ikke bare «åpen ordre»): autoVelgUtstyrMal kan kjøres etter en await (Bekreft av portal-ordre), da brukeren kan ha gått til en annen ordre.
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true, ordreId);
+    oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false, ordreId);
+    oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false, ordreId);
   }
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);
   if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');

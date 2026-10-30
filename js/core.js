@@ -246,6 +246,21 @@ function bestiltFraktBadgeHTML(o, offsetCss) {
   const tekst = o.henteKlarDato ? `HENTEKLAR ${fmtDatoKort(o.henteKlarDato)}` : 'BESTILT FRAKT';
   return `<span style="position:absolute;top:-9px;${offsetCss};background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:${BESTILT_FRAKT_BADGE_FARGE};letter-spacing:.03em">${tekst}</span>`;
 }
+// Ordre som kom fra Forhandlerportalen (Bestill-knappen): «PORTAL» (blå) når Salmakerverksted har bekreftet, og «PORTAL · IKKE BEKREFTET» (gul/amber)
+// til en ansatt har sett over chassis.nr og trykket Bekreft i ordredetaljen. Selve merket er KUN visning og står i kortets egen rad (ikke absolutt-
+// posisjonert: hjørnene er opptatt av PRIORITERT og BESTILT FRAKT). `kort` gir bare «PORTAL» (fargen viser fortsatt bekreftet/ikke): brukes i ordredetaljens smale
+// høyrekolonne, der en lang tekst kunne presse chassis.nr smalere enn 17 tegn på en liten telefon (banneret sier «ikke bekreftet» tydelig der). erUbekreftetPortalOrdre
+// brukes også av filteret «Fra portal, ikke bekreftet».
+function erUbekreftetPortalOrdre(o) { return !!o.portalBestillingId && !o.portalBekreftetAt; }
+function portalBadgeHTML(o, kort) {
+  if (!o.portalBestillingId) return '';
+  const ubekreftet = !o.portalBekreftetAt;
+  const stil = ubekreftet
+    ? 'background:#1c1008;border:1px solid #b45309;color:#fbbf24'
+    : 'background:#172554;border:1px solid #1d4ed8;color:#93c5fd';
+  const tittel = ubekreftet ? 'Bestilt i Forhandlerportalen - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt i Forhandlerportalen' + (o.portalBekreftetAv ? ' - bekreftet av ' + esc(o.portalBekreftetAv) : '');
+  return `<span title="${tittel}" style="display:inline-flex;align-items:center;${stil};border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">${ubekreftet && !kort ? 'PORTAL · IKKE BEKREFTET' : 'PORTAL'}</span>`;
+}
 function sorterOrdre(a,b) {
   const pd = (b.prioritert?1:0) - (a.prioritert?1:0);
   if (pd !== 0) return pd;
@@ -603,7 +618,11 @@ function dbToOrdre(r) {
     vegvesenFingerprint:r.vegvesen_fingerprint||null,
     bestiltFrakt:!!r.bestilt_frakt, henteKlarDato:r.hente_klar_dato||'',
     kjoreseddelSkilt:r.kjoreseddel_skilt||'',
-    fikenKladdUrl:r.fiken_kladd_url||''
+    fikenKladdUrl:r.fiken_kladd_url||'',
+    // Bestilling fra Forhandlerportalen (se supabase/migrations/20261030200000_portal_bestilling_grunnlag.sql). Disse tre kolonnene LESES bare her og står
+    // bevisst IKKE i ordreToDb(): en ansatt som lagrer et annet felt kan aldri nullstille bekreftelsen. De settes bare av koblingsfunksjonen i databasen
+    // (portal_koble_bestilling) og av portal_bekreft_ordre / portal_avvis_ordre.
+    portalBestillingId:r.portal_bestilling_id||null, portalBekreftetAt:r.portal_bekreftet_at||null, portalBekreftetAv:r.portal_bekreftet_av||''
   };
 }
 function ordreToDb(o) {
