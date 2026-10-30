@@ -187,7 +187,7 @@ function renderOversikt(q) {
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           ${bestiltFraktBadgeHTML(o, 'right:12px')}
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:6px">
             <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
@@ -208,7 +208,7 @@ function renderOversikt(q) {
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           ${bestiltFraktBadgeHTML(o, 'right:12px')}
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
+          <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px">
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
@@ -633,7 +633,11 @@ function statusDropdown(ordreId, currentStatus, extraStyle='', extraClass='') {
   // pilStil legges ETTER extraStyle slik at padding-right alltid vinner - ordre-status-
   // dropdown (brukt i ordre-detalj.js og ukeoversikten) setter sin egen padding-snarvei for
   // en annen boks-fasong, som ellers ville nullstilt den reserverte plassen til pilen.
-  const pilStil = `appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url('${statusDropdownPilSvg(si.txt)}');background-repeat:no-repeat;background-position:right 7px center;background-size:10px;padding-right:22px`;
+  // min-width:0 + overflow/ellipsis er ALLTID med her (ikke bare i de to extraStyle-kallene
+  // som fra før hadde dette selv) - meldt av Henrik 30.10: uten dette kunne boksen (bredere nå
+  // som pilen trenger plass) presse seg utenfor kortets egen ramme på smale telefonskjermer,
+  // siden en <select> ellers ikke krymper under sin egen tekstbredde i en flex-rad.
+  const pilStil = `appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url('${statusDropdownPilSvg(si.txt)}');background-repeat:no-repeat;background-position:right 7px center;background-size:10px;padding-right:22px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
   return `<select class="${extraClass}" onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle};${pilStil}">
     ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
   </select>`;

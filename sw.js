@@ -23,7 +23,9 @@
 // v15 - PORTAL-merke, filter og Bekreft/Avvis for ordre fra Forhandlerportalen (2026-10-30)
 // v16 - status-nedtrekket (statusDropdown) fikk egen SVG-pil + appearance:none, mot
 // mobilnettlesere som tegnet sin egen pil klemt inntil lang statustekst (2026-10-30)
-const CACHE = 'salmakern-v16';
+// v17 - status-boksen i Oversikt (Aktive ordrer/Ikke påbegynt) kunne presse seg utenfor
+// kortets ramme på smale skjermer - radene manglet flex-wrap (2026-10-30)
+const CACHE = 'salmakern-v17';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
