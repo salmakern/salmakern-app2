@@ -43,29 +43,42 @@ npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file <sti-ti
 npx supabase backups list --project-ref qoqpenbfdxeduylxirwk
 ```
 
-## Kjent hull i migrasjonshistorikken: "ordre-push"-triggeren
+## "ordre-push"-triggeren og Vault (s00-021, løst 2026-10-30)
 
-Triggeren `"ordre-push"` (AFTER UPDATE på `public.ordrer`, kaller edge-funksjonen
-`send-push` via `supabase_functions.http_request`) finnes live, men er bevisst IKKE lagt
-inn som en vanlig migrasjon (oppdaget 2026-10-30, se Henger igjen-lista s09-011).
-Årsak: selve trigger-definisjonen har den ekte Supabase **service_role**-nøkkelen
-hardkodet rett inn i `Authorization`-headeren (`'{"Content-type":...,"Authorization":
-"Bearer <ekte nøkkel>"}'`) - å skrive den inn i en migrasjonsfil ville ha lekket en ekte
-hemmelighet til Git-historikken for alltid.
+Triggeren `"ordre-push"` (AFTER UPDATE på `public.ordrer`) varsler ansatte om
+statusendringer via edge-funksjonen `send-push`. Den brukte opprinnelig
+`supabase_functions.http_request` DIREKTE som trigger-funksjon, med den ekte Supabase
+**service_role**-nøkkelen hardkodet i klartekst i selve `CREATE TRIGGER`-definisjonen
+(synlig for alle med SQL Editor/direkte spørretilgang - IKKE nåbar via appens offentlige
+PostgREST-API). Dette var årsaken til at triggeren bevisst ikke lå i en vanlig
+migrasjonsfil (ville ha lekket en ekte hemmelighet til Git-historikken for alltid).
 
-Hvis denne triggeren noen gang må gjenskapes (f.eks. gjenoppretting til et helt nytt
-prosjekt): hent `CREATE TRIGGER "ordre-push" ...`-definisjonen direkte fra det
-eksisterende prosjektet (`select pg_get_triggerdef(oid) from pg_trigger where
-tgname='ordre-push'`) og lim inn service_role-nøkkelen (Project Settings → API) manuelt i
-SQL Editor - ALDRI i en fil som committes.
+**Løsning (migrasjon `20261030180000_ordre_push_vault_nokkel.sql`):** `supabase_functions.
+http_request` tar kun STATISKE argumenter (bakt inn i trigger-definisjonen ved `CREATE
+TRIGGER`, ikke slått opp på nytt per rad), så et rent "bytt ut nøkkelen i samme
+triggerfunksjon"-grep var ikke mulig. Erstattet med en egen trigger-funksjon
+(`public.ordre_push_trigger_fn()`) som slår opp nøkkelen DYNAMISK fra Supabase sin Vault
+(`vault.decrypted_secrets`, hemmelighetens navn: `ordre_push_service_role_key`) ved hver
+kjøring, og selv bygger samme nyttelast-form (`old_record`/`record`/`type`/`table`/
+`schema`) og kaller `net.http_post` direkte - `send-push` (som leser
+`payload.record`/`old_record`) merker ingen forskjell. Hele push-varselet er pakket i en
+`exception when others`-blokk: et feilende varsel kan ALDRI rulle tilbake selve
+ordre-oppdateringen, som uansett kjører i samme transaksjon som AFTER UPDATE-triggeren.
 
-**Burde ryddes opp i** (lagt til Henger igjen-lista 2026-10-30): bytt ut den hardkodede
-nøkkelen med et oppslag mot Supabase sin Vault (`vault.decrypted_secrets`), som er den
-anbefalte måten å gi en trigger tilgang til en hemmelighet på uten å lagre den i klartekst
-i selve databaseskjemaet.
+Selve hemmeligheten ble flyttet til Vault via en engangskommando som ALDRI ble committet
+(kun migrasjonen som slår den opp etter navn ligger i Git). Live-verifisert 30.10 med en
+TEST-ordre (opprettet og slettet i samme test): triggeren kjører, legger inn forventet
+rad i `supabase_functions.hooks`, og `send-push` svarer `200 ok` - identisk oppførsel som
+før, uten noen hemmelighet synlig i databaseskjemaet.
 
-Sjekket 2026-10-30: `ordre-push` er den ENESTE triggeren i databasen som bruker
-`http_request` med en `Bearer`-header - ingen andre har samme hull.
+Hvis denne triggeren noen gang må gjenskapes fra bunnen (f.eks. et helt nytt prosjekt):
+kjør migrasjonen, lagre deretter en gyldig service_role-nøkkel (Project Settings → API) i
+Vault under navnet `ordre_push_service_role_key` via `select vault.create_secret('<ekte
+nøkkel>', 'ordre_push_service_role_key', '...')` i SQL Editor - ALDRI i en fil som
+committes.
+
+Sjekket 2026-10-30 (før fiksen): `ordre-push` var den ENESTE triggeren i databasen som
+brukte `http_request` med en `Bearer`-header - ingen andre hadde samme hull.
 
 ## Backup-status (sjekket 2026-08-24)
 
