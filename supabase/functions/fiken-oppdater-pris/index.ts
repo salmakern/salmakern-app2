@@ -43,6 +43,7 @@ type FikenProduct = {
   vatType: string
   active: boolean
   productNumber: string
+  note?: string
 }
 
 Deno.serve(async (req) => {
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
       return jsonSvar({ synced: false, reason: `Fant ikke produktnummer ${productNumber} i Fiken` }, 404)
     }
 
-    const oppdatertProdukt = {
+    const oppdatertProdukt: Record<string, unknown> = {
       name: found.name,
       unitPrice: Math.round(unitPriceKr * 100),
       incomeAccount: found.incomeAccount,
@@ -87,6 +88,10 @@ Deno.serve(async (req) => {
       active: found.active,
       productNumber: found.productNumber,
     }
+    // Har produktet et notat i Fiken, tas det med (PUT erstatter hele produktet - ellers
+    // ville notatet blitt tomt ved hver prisoppdatering). Samme fiks som fiken-endre-produkt
+    // allerede har (s04-004 i Henger igjen-lista).
+    if (typeof found.note === 'string' && found.note !== '') oppdatertProdukt.note = found.note
 
     const putRes = await fikenFetch(`/companies/${FIKEN_SLUG}/products/${found.productId}`, {
       method: 'PUT',
