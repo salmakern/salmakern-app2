@@ -36,9 +36,11 @@ function renderHms() {
   if (document.getElementById('hmsHandbokView')?.style.display === 'block') renderHmsHandbok();
 }
 function renderHmsHubBadger() {
-  const el = document.getElementById('hmsAvvikBadge'); if (!el) return;
   const apne = (S.hmsAvvik||[]).filter(a => a.status !== 'lukket').length;
-  el.innerHTML = apne ? `<span class="pill warn">${apne} åpne</span>` : '<span class="pill ok">Ingen åpne</span>';
+  const hubEl = document.getElementById('hmsAvvikBadge');
+  if (hubEl) hubEl.innerHTML = apne ? `<span class="pill warn">${apne} åpne</span>` : '<span class="pill ok">Ingen åpne</span>';
+  const merEl = document.getElementById('merHmsBadge');
+  if (merEl) merEl.innerHTML = apne ? `<span class="pill warn">${apne} åpne avvik</span>` : '<span class="pill ok">Ingen åpne avvik</span>';
 }
 
 // ════════════════════════════════════════════════════

@@ -412,7 +412,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="tab" id="timerTab" onclick="showPage('timer',this)">Timer</button>
         <button class="tab" onclick="showPage('arkiv',this)">Ordrearkiv</button>
         <button class="tab" id="lagerTab" onclick="showPage('lager',this)">Lager</button>
-        <button class="tab" id="hmsTab" onclick="showPage('hms',this)">HMS</button>
         <button class="tab" onclick="showPage('mer',this)">Mer</button>
         <button class="tab" id="adminTab" style="display:none" onclick="showPage('admin',this)">Admin</button>
       </div>
@@ -790,110 +789,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
     </section>
 
-    <!-- ── HMS ── -->
-    <section id="hms" class="page">
-      <div id="hmsHubView">
-        <div class="card">
-          <div class="h">HMS</div>
-          <div class="muted small" style="margin-top:2px">Helse, miljø og sikkerhet - internkontroll etter internkontrollforskriften</div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
-          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('avvik')">
-            <div class="h" style="font-size:16px">⚠️ Avvik</div>
-            <div class="muted small" style="margin-top:4px">Meld og følg opp uønskede hendelser</div>
-            <div id="hmsAvvikBadge" class="small" style="margin-top:8px"></div>
-          </div>
-          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('risiko')">
-            <div class="h" style="font-size:16px">📋 Risikovurderinger</div>
-            <div class="muted small" style="margin-top:4px">Farer, sannsynlighet, konsekvens og tiltak</div>
-          </div>
-          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('stoffkartotek')">
-            <div class="h" style="font-size:16px">🧪 Stoffkartotek</div>
-            <div class="muted small" style="margin-top:4px">Kjemikalier og sikkerhetsdatablad</div>
-          </div>
-          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('vernerunde')">
-            <div class="h" style="font-size:16px">✅ Vernerunder</div>
-            <div class="muted small" style="margin-top:4px">Sjekklister og gjennomførte runder</div>
-          </div>
-          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('handbok')">
-            <div class="h" style="font-size:16px">📖 HMS-håndbok</div>
-            <div class="muted small" style="margin-top:4px">Mål, ansvar og årlig gjennomgang</div>
-          </div>
-        </div>
-      </div>
-
-      <div id="hmsAvvikView" style="display:none">
-        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
-        <div class="card">
-          <div class="row">
-            <div class="h">Avvik</div>
-            <button class="btn red" onclick="apneNyAvvikModal()">+ Meld avvik</button>
-          </div>
-          <div class="muted small" style="margin-top:4px">Alle kan melde - admin/verneombud følger opp og lukker.</div>
-        </div>
-        <div id="hmsAvvikListe" style="margin-top:12px"></div>
-      </div>
-
-      <div id="hmsRisikoView" style="display:none">
-        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
-        <div class="card">
-          <div class="row">
-            <div class="h">Risikovurderinger</div>
-            <button class="btn red" id="nyRisikoBtn" onclick="apneNyRisikoModal()">+ Ny risikovurdering</button>
-          </div>
-        </div>
-        <div id="hmsRisikoListe" style="margin-top:12px"></div>
-      </div>
-
-      <div id="hmsStoffkartotekView" style="display:none">
-        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
-        <div class="card">
-          <div class="row">
-            <div class="h">Stoffkartotek</div>
-            <button class="btn red" id="nyStoffBtn" onclick="apneNyStoffModal()">+ Nytt kjemikalie</button>
-          </div>
-        </div>
-        <div id="hmsStoffkartotekListe" style="margin-top:12px"></div>
-      </div>
-
-      <div id="hmsVernerundeView" style="display:none">
-        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
-        <div class="card">
-          <div class="row">
-            <div class="h">Sjekkliste</div>
-            <div style="display:flex;gap:6px">
-              <button class="btn sm" id="redigerVernerundeMalBtn" onclick="apneRedigerVernerundeMal()">✎ Rediger</button>
-              <button class="btn red" onclick="apneStartVernerunde()">+ Gjennomfør vernerunde</button>
-            </div>
-          </div>
-          <div id="hmsVernerundeSjekkpunkter" style="margin-top:10px"></div>
-        </div>
-        <div class="card" style="margin-top:12px">
-          <div class="h">Historikk</div>
-          <div id="hmsVernerundeHistorikk" style="margin-top:10px"></div>
-        </div>
-      </div>
-
-      <div id="hmsHandbokView" style="display:none">
-        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
-        <div class="card">
-          <div class="h">Mål for HMS-arbeidet</div>
-          <textarea id="handbokMal" rows="4" style="width:100%;margin-top:8px" onchange="lagreHandbokFelt('mal',this.value)"></textarea>
-        </div>
-        <div class="card" style="margin-top:12px">
-          <div class="h">Ansvarsfordeling</div>
-          <textarea id="handbokAnsvar" rows="4" style="width:100%;margin-top:8px" onchange="lagreHandbokFelt('ansvarsfordeling',this.value)"></textarea>
-        </div>
-        <div class="card" style="margin-top:12px">
-          <div class="row">
-            <div class="h">Årlig gjennomgang</div>
-            <button class="btn sm red" id="handbokGjennomgangBtn" onclick="apneRegistrerGjennomgang()">+ Registrer</button>
-          </div>
-          <div id="handbokGjennomgangLogg" style="margin-top:10px"></div>
-        </div>
-      </div>
-    </section>
-
     <!-- ── MER ── -->
     <section id="mer" class="page">
       <div id="merHovedView">
@@ -941,6 +836,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
         </div>
+        <div class="card" id="merHmsKort">
+          <div class="h">HMS</div>
+          <div id="merHmsBadge" class="small muted" style="margin:6px 0"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+            <button class="btn sm" onclick="visMerHms()">Se HMS</button>
+            <button class="btn sm red" onclick="apneNyAvvikModal()">+ Meld avvik</button>
+          </div>
+        </div>
       </div>
 
       <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeTid')"><span class="mer-seksjon-chevron">▾</span>Tid og rapporter</div>
@@ -958,6 +861,110 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn" id="merStandardtiderBtn" style="display:none" onclick="visMerStandardtider()">Standardtider (bil-effektivitet)</button>
       </div>
 
+      </div>
+
+      <div id="merHmsView" style="display:none">
+        <div id="hmsHubView">
+          <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Mer</button>
+          <div class="card">
+            <div class="h">HMS</div>
+            <div class="muted small" style="margin-top:2px">Helse, miljø og sikkerhet - internkontroll etter internkontrollforskriften</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
+            <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('avvik')">
+              <div class="h" style="font-size:16px">⚠️ Avvik</div>
+              <div class="muted small" style="margin-top:4px">Meld og følg opp uønskede hendelser</div>
+              <div id="hmsAvvikBadge" class="small" style="margin-top:8px"></div>
+            </div>
+            <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('risiko')">
+              <div class="h" style="font-size:16px">📋 Risikovurderinger</div>
+              <div class="muted small" style="margin-top:4px">Farer, sannsynlighet, konsekvens og tiltak</div>
+            </div>
+            <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('stoffkartotek')">
+              <div class="h" style="font-size:16px">🧪 Stoffkartotek</div>
+              <div class="muted small" style="margin-top:4px">Kjemikalier og sikkerhetsdatablad</div>
+            </div>
+            <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('vernerunde')">
+              <div class="h" style="font-size:16px">✅ Vernerunder</div>
+              <div class="muted small" style="margin-top:4px">Sjekklister og gjennomførte runder</div>
+            </div>
+            <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('handbok')">
+              <div class="h" style="font-size:16px">📖 HMS-håndbok</div>
+              <div class="muted small" style="margin-top:4px">Mål, ansvar og årlig gjennomgang</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="hmsAvvikView" style="display:none">
+          <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+          <div class="card">
+            <div class="row">
+              <div class="h">Avvik</div>
+              <button class="btn red" onclick="apneNyAvvikModal()">+ Meld avvik</button>
+            </div>
+            <div class="muted small" style="margin-top:4px">Alle kan melde - admin/verneombud følger opp og lukker.</div>
+          </div>
+          <div id="hmsAvvikListe" style="margin-top:12px"></div>
+        </div>
+
+        <div id="hmsRisikoView" style="display:none">
+          <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+          <div class="card">
+            <div class="row">
+              <div class="h">Risikovurderinger</div>
+              <button class="btn red" id="nyRisikoBtn" onclick="apneNyRisikoModal()">+ Ny risikovurdering</button>
+            </div>
+          </div>
+          <div id="hmsRisikoListe" style="margin-top:12px"></div>
+        </div>
+
+        <div id="hmsStoffkartotekView" style="display:none">
+          <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+          <div class="card">
+            <div class="row">
+              <div class="h">Stoffkartotek</div>
+              <button class="btn red" id="nyStoffBtn" onclick="apneNyStoffModal()">+ Nytt kjemikalie</button>
+            </div>
+          </div>
+          <div id="hmsStoffkartotekListe" style="margin-top:12px"></div>
+        </div>
+
+        <div id="hmsVernerundeView" style="display:none">
+          <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+          <div class="card">
+            <div class="row">
+              <div class="h">Sjekkliste</div>
+              <div style="display:flex;gap:6px">
+                <button class="btn sm" id="redigerVernerundeMalBtn" onclick="apneRedigerVernerundeMal()">✎ Rediger</button>
+                <button class="btn red" onclick="apneStartVernerunde()">+ Gjennomfør vernerunde</button>
+              </div>
+            </div>
+            <div id="hmsVernerundeSjekkpunkter" style="margin-top:10px"></div>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="h">Historikk</div>
+            <div id="hmsVernerundeHistorikk" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div id="hmsHandbokView" style="display:none">
+          <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+          <div class="card">
+            <div class="h">Mål for HMS-arbeidet</div>
+            <textarea id="handbokMal" rows="4" style="width:100%;margin-top:8px" onchange="lagreHandbokFelt('mal',this.value)"></textarea>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="h">Ansvarsfordeling</div>
+            <textarea id="handbokAnsvar" rows="4" style="width:100%;margin-top:8px" onchange="lagreHandbokFelt('ansvarsfordeling',this.value)"></textarea>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="row">
+              <div class="h">Årlig gjennomgang</div>
+              <button class="btn sm red" id="handbokGjennomgangBtn" onclick="apneRegistrerGjennomgang()">+ Registrer</button>
+            </div>
+            <div id="handbokGjennomgangLogg" style="margin-top:10px"></div>
+          </div>
+        </div>
       </div>
 
       <div id="merDrivstoffSatserView" style="display:none">

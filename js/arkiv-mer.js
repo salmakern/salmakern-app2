@@ -371,6 +371,7 @@ function renderMer() {
 
   renderBeskjeder();
   renderKontakter();
+  renderHmsHubBadger();
   renderMoterListe();
   renderGodkjennerChat();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
@@ -397,6 +398,13 @@ function visMerUtstyrMaler() {
   document.getElementById('merHovedView').style.display = 'none';
   document.getElementById('merUtstyrMalerView').style.display = 'block';
   renderUtstyrMaler();
+  window.scrollTo(0, 0);
+}
+function visMerHms() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merHmsView').style.display = 'block';
+  tilbakeHmsHub();
+  renderHms();
   window.scrollTo(0, 0);
 }
 function visMerAnsatte() {
@@ -432,7 +440,7 @@ function visMerStandardtider() {
   window.scrollTo(0, 0);
 }
 function tilbakeFraMerDetalj() {
-  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView','merStandardtiderView']
+  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView','merStandardtiderView','merHmsView']
     .forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('merHovedView').style.display = 'block';
 }
