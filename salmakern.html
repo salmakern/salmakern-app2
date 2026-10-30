@@ -169,6 +169,13 @@ button{cursor:pointer;font-family:Arial,sans-serif}
    telefoner i stående format; nettbrett/PC har alltid god nok plass til 19px. */
 .chassis-stor{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:19px;font-weight:800;letter-spacing:.01em}
 @media(max-width:480px){.chassis-stor{font-size:14px}}
+/* Status-dropdownen øverst i ordre-detalj-headeren - kappet til 100px på smale
+   telefonskjermer (samme grunn som chassis-stor over: gir plass til hele chassisnummeret
+   ved siden av), men det gjorde statusnavnet uleselig avkortet ("Vist p...") på
+   bredere skjermer der det er rikelig plass (Henrik 2026-10-30: "gjør sånn status boksen
+   er sånn at vi kan lese statusen"). God bredde som standard, kappet kun under 480px. */
+.ordre-status-dropdown{max-width:220px}
+@media(max-width:480px){.ordre-status-dropdown{max-width:100px}}
 .h{font-size:17px;font-weight:800;margin-bottom:2px}
 .muted{color:#a1a1aa}
 .small{font-size:12px}

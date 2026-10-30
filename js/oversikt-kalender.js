@@ -612,9 +612,9 @@ async function endreStatus(id, nyStatus) {
   if (activeOrdreId===id) buildOrdreDetail();
 }
 
-function statusDropdown(ordreId, currentStatus, extraStyle='') {
+function statusDropdown(ordreId, currentStatus, extraStyle='', extraClass='') {
   const si = statusInfo(currentStatus);
-  return `<select onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
+  return `<select class="${extraClass}" onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
     ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
   </select>`;
 }

@@ -162,8 +162,8 @@ function buildOrdreDetail() {
     </div>
   </div>
   ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">Arkivert ordre — kun visning</div>`:''}
-  <div class="card">
-    <div class="row" style="flex-wrap:nowrap">
+  <div class="card" style="padding:12px 16px;margin-bottom:0">
+    <div class="row" style="flex-wrap:nowrap;align-items:center">
       <div style="min-width:0;overflow:hidden">
         ${o.regnr
           ? `<div class="title" style="letter-spacing:.02em">${esc(o.regnr)}</div>
@@ -171,8 +171,8 @@ function buildOrdreDetail() {
           : `<div style="font-size:10px;letter-spacing:.16em;color:#52525b">CHASSIS</div>
              <div style="overflow:hidden;margin-top:3px">${o.chassis?`<span class="chassis-stor" style="${CHASSIS_TRUNKER_STIL}">${esc(o.chassis)}</span>`:'Uten reg.nr'}</div>`}
       </div>
-      <div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end;flex-shrink:0">
-        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:8px 13px;border-radius:999px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap')}
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0">
+        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:6px 11px;border-radius:999px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
         <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px;margin:0">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
         ${erAdmin ? `<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;white-space:nowrap">
           Vedtak
