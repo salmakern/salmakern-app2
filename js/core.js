@@ -252,7 +252,7 @@ const FOTO_SIDER = {
 };
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], hms:[], utstyrMaler:[], drivstoffSatser:[], moter:[], godkjennerMeldinger:[]};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null};
 let me = null;
 // Satt av et klikk på et push-varsel om en bestemt ordre (postMessage fra sw.js) - kan
 // komme inn før innlogging/datahenting er ferdig, derfor mellomlagres den her og
@@ -304,8 +304,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.drivstoffSatser  = S.drivstoffSatser  || [];
     S.beskjeder        = S.beskjeder        || [];
     S.kontakter        = S.kontakter        || [];
-    S.hms              = S.hms              || [];
     S.standardtider    = S.standardtider    || {};
+    S.hmsAvvik             = S.hmsAvvik             || [];
+    S.hmsRisikovurderinger = S.hmsRisikovurderinger || [];
+    S.hmsStoffkartotek     = S.hmsStoffkartotek     || [];
+    S.hmsVernerunder       = S.hmsVernerunder       || [];
+    S.hmsVernerundeMal     = S.hmsVernerundeMal     || null;
+    S.hmsHandbok           = S.hmsHandbok           || null;
     S.flater           = S.flater           || [];
     S.lagervarer       = S.lagervarer       || [];
     S.lagerhistorikk   = S.lagerhistorikk   || [];
@@ -429,7 +434,6 @@ async function loadFromSupabase() {
     S.drivstoffSatser= sR.data?.drivstoff_satser|| [];
     S.beskjeder      = sR.data?.beskjeder       || [];
     S.kontakter      = sR.data?.kontakter       || [];
-    S.hms            = sR.data?.hms             || [];
     S.standardtider  = sR.data?.standardtider   || {};
   }
   // Sett nextId til høyere enn alle eksisterende ID-er
@@ -501,6 +505,29 @@ async function loadFromSupabase() {
     const gR = await db.from('godkjenner_meldinger').select('*').order('created_at');
     if (!gR.error) S.godkjennerMeldinger = (gR.data||[]).map(dbToGodkjennerMelding);
   } catch(_) {}
+  // HMS - tabellene finnes kanskje ikke ennå (krever eget SQL-oppsett, se migrasjon 20261030150000)
+  try {
+    const [havR, hriR, hstR, hvmR, hvgR, hhbR] = await Promise.all([
+      db.from('hms_avvik').select('*').order('created_at', {ascending:false}),
+      db.from('hms_risikovurdering').select('*').order('created_at', {ascending:false}),
+      db.from('hms_stoffkartotek').select('*').order('produktnavn'),
+      db.from('hms_vernerunde_mal').select('*').eq('id', 1).maybeSingle(),
+      db.from('hms_vernerunde_gjennomforing').select('*').order('dato', {ascending:false}),
+      db.from('hms_handbok').select('*').eq('id', 1).maybeSingle()
+    ]);
+    if (!havR.error) S.hmsAvvik = (havR.data||[]).map(dbToHmsAvvik);
+    else console.error('Feil ved henting av hms_avvik:', havR.error);
+    if (!hriR.error) S.hmsRisikovurderinger = (hriR.data||[]).map(dbToHmsRisiko);
+    else console.error('Feil ved henting av hms_risikovurdering:', hriR.error);
+    if (!hstR.error) S.hmsStoffkartotek = (hstR.data||[]).map(dbToHmsStoff);
+    else console.error('Feil ved henting av hms_stoffkartotek:', hstR.error);
+    if (!hvmR.error) S.hmsVernerundeMal = hvmR.data ? dbToHmsVernerundeMal(hvmR.data) : null;
+    else console.error('Feil ved henting av hms_vernerunde_mal:', hvmR.error);
+    if (!hvgR.error) S.hmsVernerunder = (hvgR.data||[]).map(dbToHmsVernerundeGjennomforing);
+    else console.error('Feil ved henting av hms_vernerunde_gjennomforing:', hvgR.error);
+    if (!hhbR.error) S.hmsHandbok = hhbR.data ? dbToHmsHandbok(hhbR.data) : null;
+    else console.error('Feil ved henting av hms_handbok:', hhbR.error);
+  } catch(e) { console.error('Feil ved henting av HMS-data:', e); }
 }
 
 function dbToOrdre(r) {
@@ -814,7 +841,6 @@ function subscribeRealtime() {
       S.drivstoffSatser = row.drivstoff_satser || [];
       S.beskjeder = row.beskjeder || [];
       S.kontakter = row.kontakter || [];
-      S.hms = row.hms || [];
       S.standardtider = row.standardtider || {};
       if (me) renderMer();
     })

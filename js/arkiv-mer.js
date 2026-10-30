@@ -316,6 +316,7 @@ function renderMer() {
         <select onchange="endreAnsattRolle(${a.id},this.value)" style="width:auto;padding:5px 8px;font-size:12px">
           <option value="ansatt" ${a.rolle==='ansatt'?'selected':''}>Ansatt</option>
           <option value="godkjenner" ${a.rolle==='godkjenner'?'selected':''}>Godkjenner</option>
+          <option value="verneombud" ${a.rolle==='verneombud'?'selected':''}>Verneombud</option>
           <option value="admin" ${a.rolle==='admin'?'selected':''}>Admin</option>
         </select>
         <input type="date" value="${a.ansettelsesdato||''}" onchange="settAnsattAnsettelsesdato(${a.id},this.value)" title="Ansettelsesdato - styrer 2-månedersregelen for egenmelding. Tom = ikke sperret ennå." style="width:auto;padding:5px 8px;font-size:12px">
@@ -359,7 +360,7 @@ function renderMer() {
   // js/oversikt-kalender.js.
 
   // Rollebasert synlighet for knappene i "Tid og rapporter"/"Administrasjon"
-  // Ansatt: Beskjeder, Kontakter, HMS-logg
+  // Ansatt: Beskjeder, Kontakter
   // Godkjenner: + Timer og overtid
   // Admin: alt
   document.getElementById('merTimerBtn').style.display        = erGodkjenner ? '' : 'none';
@@ -370,7 +371,6 @@ function renderMer() {
 
   renderBeskjeder();
   renderKontakter();
-  renderHMS();
   renderMoterListe();
   renderGodkjennerChat();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }

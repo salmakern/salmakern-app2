@@ -412,6 +412,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="tab" id="timerTab" onclick="showPage('timer',this)">Timer</button>
         <button class="tab" onclick="showPage('arkiv',this)">Ordrearkiv</button>
         <button class="tab" id="lagerTab" onclick="showPage('lager',this)">Lager</button>
+        <button class="tab" id="hmsTab" onclick="showPage('hms',this)">HMS</button>
         <button class="tab" onclick="showPage('mer',this)">Mer</button>
         <button class="tab" id="adminTab" style="display:none" onclick="showPage('admin',this)">Admin</button>
       </div>
@@ -789,6 +790,110 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       </div>
     </section>
 
+    <!-- ── HMS ── -->
+    <section id="hms" class="page">
+      <div id="hmsHubView">
+        <div class="card">
+          <div class="h">HMS</div>
+          <div class="muted small" style="margin-top:2px">Helse, miljø og sikkerhet - internkontroll etter internkontrollforskriften</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
+          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('avvik')">
+            <div class="h" style="font-size:16px">⚠️ Avvik</div>
+            <div class="muted small" style="margin-top:4px">Meld og følg opp uønskede hendelser</div>
+            <div id="hmsAvvikBadge" class="small" style="margin-top:8px"></div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('risiko')">
+            <div class="h" style="font-size:16px">📋 Risikovurderinger</div>
+            <div class="muted small" style="margin-top:4px">Farer, sannsynlighet, konsekvens og tiltak</div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('stoffkartotek')">
+            <div class="h" style="font-size:16px">🧪 Stoffkartotek</div>
+            <div class="muted small" style="margin-top:4px">Kjemikalier og sikkerhetsdatablad</div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('vernerunde')">
+            <div class="h" style="font-size:16px">✅ Vernerunder</div>
+            <div class="muted small" style="margin-top:4px">Sjekklister og gjennomførte runder</div>
+          </div>
+          <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('handbok')">
+            <div class="h" style="font-size:16px">📖 HMS-håndbok</div>
+            <div class="muted small" style="margin-top:4px">Mål, ansvar og årlig gjennomgang</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="hmsAvvikView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+        <div class="card">
+          <div class="row">
+            <div class="h">Avvik</div>
+            <button class="btn red" onclick="apneNyAvvikModal()">+ Meld avvik</button>
+          </div>
+          <div class="muted small" style="margin-top:4px">Alle kan melde - admin/verneombud følger opp og lukker.</div>
+        </div>
+        <div id="hmsAvvikListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="hmsRisikoView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+        <div class="card">
+          <div class="row">
+            <div class="h">Risikovurderinger</div>
+            <button class="btn red" id="nyRisikoBtn" onclick="apneNyRisikoModal()">+ Ny risikovurdering</button>
+          </div>
+        </div>
+        <div id="hmsRisikoListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="hmsStoffkartotekView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+        <div class="card">
+          <div class="row">
+            <div class="h">Stoffkartotek</div>
+            <button class="btn red" id="nyStoffBtn" onclick="apneNyStoffModal()">+ Nytt kjemikalie</button>
+          </div>
+        </div>
+        <div id="hmsStoffkartotekListe" style="margin-top:12px"></div>
+      </div>
+
+      <div id="hmsVernerundeView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+        <div class="card">
+          <div class="row">
+            <div class="h">Sjekkliste</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn sm" id="redigerVernerundeMalBtn" onclick="apneRedigerVernerundeMal()">✎ Rediger</button>
+              <button class="btn red" onclick="apneStartVernerunde()">+ Gjennomfør vernerunde</button>
+            </div>
+          </div>
+          <div id="hmsVernerundeSjekkpunkter" style="margin-top:10px"></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h">Historikk</div>
+          <div id="hmsVernerundeHistorikk" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="hmsHandbokView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeHmsHub()">← HMS</button>
+        <div class="card">
+          <div class="h">Mål for HMS-arbeidet</div>
+          <textarea id="handbokMal" rows="4" style="width:100%;margin-top:8px" onchange="lagreHandbokFelt('mal',this.value)"></textarea>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="h">Ansvarsfordeling</div>
+          <textarea id="handbokAnsvar" rows="4" style="width:100%;margin-top:8px" onchange="lagreHandbokFelt('ansvarsfordeling',this.value)"></textarea>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="row">
+            <div class="h">Årlig gjennomgang</div>
+            <button class="btn sm red" id="handbokGjennomgangBtn" onclick="apneRegistrerGjennomgang()">+ Registrer</button>
+          </div>
+          <div id="handbokGjennomgangLogg" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ── MER ── -->
     <section id="mer" class="page">
       <div id="merHovedView">
@@ -843,18 +948,6 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn" id="merTimerBtn" style="display:none" onclick="visMerTimer()">⏱ Timer og overtid</button>
         <button class="btn" onclick="visMerFravarKalender()">📅 Se fraværskalender</button>
         <button class="btn" id="merOrdreRapportBtn" style="display:none" onclick="visMerOrdreRapport()">📊 Ordrerapport</button>
-      </div>
-
-      <div class="mer-seksjon-label mer-lukket" onclick="toggleMerSeksjon(this,'merGruppeDrift')"><span class="mer-seksjon-chevron">▾</span>Drift og avvik</div>
-      <div class="grid g3" id="merGruppeDrift" style="display:none">
-        <div class="card">
-          <div class="row">
-            <div class="h">HMS-logg</div>
-            <button class="btn sm red" onclick="openModal('nyHMS')">+ Registrer</button>
-          </div>
-          <div class="muted small" style="margin-top:4px">Registrerte avvik og tiltak.</div>
-          <div id="hmsListe" style="margin-top:10px"></div>
-        </div>
       </div>
 
       <div class="mer-seksjon-label mer-har-badge" id="merSeksjonOppsett" style="display:none" onclick="toggleMerSeksjon(this,'merGruppeOppsett')"><span class="mer-seksjon-chevron">▾</span>Administrasjon <span class="mer-kun-admin">Kun admin</span></div>
@@ -1319,6 +1412,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <select id="na_rolle">
         <option value="ansatt">Ansatt</option>
         <option value="godkjenner">Godkjenner</option>
+        <option value="verneombud">Verneombud</option>
         <option value="admin">Admin</option>
       </select>
     </div>
@@ -1470,26 +1564,141 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
-<div class="modal" id="nyHMS">
+<div class="modal" id="nyAvvik">
   <div class="modal-box">
-    <div class="h">Registrer HMS-avvik</div>
+    <div class="h">Meld avvik</div>
     <div style="margin-top:12px">
-      <label>Type</label>
-      <select id="hmsType">
+      <label>Tittel *</label>
+      <input id="avvikTittel">
+      <label>Kategori</label>
+      <select id="avvikKategori">
         <option>Nesten-ulykke</option>
-        <option>Avvik</option>
+        <option selected>Avvik</option>
         <option>Skade</option>
         <option>HMS-tiltak</option>
         <option>Annet</option>
       </select>
       <label>Beskrivelse *</label>
-      <textarea id="hmsBesk" rows="4"></textarea>
-      <label>Tiltak</label>
-      <textarea id="hmsTiltak" rows="3"></textarea>
+      <textarea id="avvikBeskrivelse" rows="4"></textarea>
+      <label>Sted</label>
+      <input id="avvikSted" placeholder="F.eks. verkstedet, lager...">
+      <label>Bilder</label>
+      <input type="file" accept="image/*" multiple capture="environment" onchange="avvikVelgBilder(event)">
+      <div id="avvikBilderValgt" class="small muted" style="margin-top:4px"></div>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
-      <button class="btn red" onclick="lagreHMS()">Registrer</button>
-      <button class="btn" onclick="closeModal('nyHMS')">Avbryt</button>
+      <button class="btn red" onclick="lagreAvvik()">Registrer</button>
+      <button class="btn" onclick="closeModal('nyAvvik')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyRisiko">
+  <div class="modal-box">
+    <div class="h">Ny risikovurdering</div>
+    <div style="margin-top:12px">
+      <label>Aktivitet/oppgave *</label>
+      <input id="risikoAktivitet" placeholder="F.eks. liming med kontaktlim">
+      <label>Fare *</label>
+      <textarea id="risikoFare" rows="2" placeholder="Hva kan gå galt?"></textarea>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <label>Sannsynlighet (1-5)</label>
+          <select id="risikoSannsynlighet">
+            <option value="1">1 - Svært lite sannsynlig</option>
+            <option value="2" selected>2 - Lite sannsynlig</option>
+            <option value="3">3 - Middels</option>
+            <option value="4">4 - Sannsynlig</option>
+            <option value="5">5 - Svært sannsynlig</option>
+          </select>
+        </div>
+        <div style="flex:1">
+          <label>Konsekvens (1-5)</label>
+          <select id="risikoKonsekvens">
+            <option value="1">1 - Ubetydelig</option>
+            <option value="2" selected>2 - Mindre alvorlig</option>
+            <option value="3">3 - Alvorlig</option>
+            <option value="4">4 - Meget alvorlig</option>
+            <option value="5">5 - Svært alvorlig</option>
+          </select>
+        </div>
+      </div>
+      <label>Tiltak</label>
+      <textarea id="risikoTiltak" rows="3"></textarea>
+      <label>Ansvarlig</label>
+      <select id="risikoAnsvarlig"></select>
+      <label>Neste gjennomgang</label>
+      <input type="date" id="risikoNesteGjennomgang">
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreRisikovurdering()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyRisiko')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyStoff">
+  <div class="modal-box">
+    <div class="h">Nytt kjemikalie</div>
+    <div style="margin-top:12px">
+      <label>Produktnavn *</label>
+      <input id="stoffProduktnavn">
+      <label>Leverandør</label>
+      <input id="stoffLeverandor">
+      <label>Bruksområde</label>
+      <input id="stoffBruksomrade" placeholder="Hvor/hvordan brukes det hos oss?">
+      <label>Anbefalt verneutstyr</label>
+      <input id="stoffVerneutstyr" placeholder="F.eks. hansker, briller, ventilasjon">
+      <label>Oppbevaring</label>
+      <input id="stoffOppbevaring">
+      <label>Sikkerhetsdatablad (PDF)</label>
+      <input type="file" accept="application/pdf" onchange="stoffVelgSikkerhetsdatablad(event)">
+      <div id="stoffSdbValgt" class="small muted" style="margin-top:4px"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreStoffkartotek()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyStoff')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="redigerVernerundeMal">
+  <div class="modal-box">
+    <div class="h">Rediger sjekkliste</div>
+    <div style="margin-top:12px">
+      <label>Ett sjekkpunkt per linje</label>
+      <textarea id="vernerundeMalTekst" rows="10" style="width:100%"></textarea>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreVernerundeMal()">Lagre</button>
+      <button class="btn" onclick="closeModal('redigerVernerundeMal')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="startVernerunde">
+  <div class="modal-box">
+    <div class="h">Gjennomfør vernerunde</div>
+    <div id="vernerundeSkjema" style="margin-top:12px"></div>
+    <label>Notat</label>
+    <textarea id="vernerundeNotat" rows="2"></textarea>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreVernerundeGjennomforing()">Registrer vernerunde</button>
+      <button class="btn" onclick="closeModal('startVernerunde')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="registrerGjennomgang">
+  <div class="modal-box">
+    <div class="h">Registrer årlig gjennomgang</div>
+    <div style="margin-top:12px">
+      <label>Notat (hva ble gjennomgått/endret?)</label>
+      <textarea id="gjennomgangNotat" rows="4"></textarea>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreGjennomgang()">Registrer</button>
+      <button class="btn" onclick="closeModal('registrerGjennomgang')">Avbryt</button>
     </div>
   </div>
 </div>
@@ -1506,6 +1715,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <script src="js/lager.js"></script>
 <script src="js/admin-ark.js"></script>
 <script src="js/vegvesen-dokumenter.js"></script>
+<script src="js/hms.js"></script>
 <!-- Ansatt-detalj modal -->
 <div class="modal" id="ansattDetaljModal">
   <div class="modal-box" style="max-width:520px;width:95%">

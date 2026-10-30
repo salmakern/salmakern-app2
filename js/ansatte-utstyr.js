@@ -1043,14 +1043,14 @@ function saveInnstillinger() {
   // overskrevet med en utdatert GPS-verdi fra minnet hver gang NOEN lagret noe helt
   // urelatert (f.eks. genererte en ny PIN) på en enhet som ikke hadde fått med seg en
   // fersk GPS-endring via sanntid ennå - reell bug rapportert 2026-09-04.
-  // beskjeder/kontakter/hms er av SAMME grunn fjernet herfra 2026-10-22 - kontakter hadde
+  // beskjeder/kontakter er av SAMME grunn fjernet herfra 2026-10-22 - kontakter hadde
   // allerede egne atomiske funksjoner (kontakter_upsert/kontakter_slett), men ble likevel
-  // sendt på nytt i DENNE payloaden fra hver eneste beskjed-/HMS-lagring, og kunne dermed
-  // stille overskrive en ANNEN admins nylig lagrede/slettede kontakt. beskjeder/hms/
+  // sendt på nytt i DENNE payloaden fra hver eneste beskjed-lagring, og kunne dermed
+  // stille overskrive en ANNEN admins nylig lagrede/slettede kontakt. beskjeder/
   // kontaktpersoner har nå sine egne atomiske funksjoner (se lagreBeskjed/slettBeskjed/
-  // lagreHMS/toggleHMSLukket/lagreKontaktperson/slettKontaktperson og migrasjonen
-  // 20261022170000) - denne funksjonen brukes nå kun til dagens_pin/utstyr_maler/
-  // drivstoff_satser.
+  // lagreKontaktperson/slettKontaktperson og migrasjonen 20261022170000) - denne
+  // funksjonen brukes nå kun til dagens_pin/utstyr_maler/drivstoff_satser.
+  // (HMS flyttet 2026-10-30 fra et jsonb-felt her til egne hms_*-tabeller, se js/hms.js.)
   db.from('innstillinger').upsert({
     id: 1,
     dagens_pin: S.dagensPIN,
@@ -1368,71 +1368,6 @@ function toggleUtstyrPunkt(ordreId, idx) {
   // layout-hopp midt i trykket som kan gjøre at neste trykk treffer feil boks.
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);
   if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');
-}
-
-// ════════════════════════════════════════════════════
-// HMS-LOGG
-// ════════════════════════════════════════════════════
-// Lagres nå atomisk via hms_upsert() (radlås i databasen, se migrasjonen 20261022170000) i
-// stedet for saveInnstillinger() sin blinde full-rad-skriving (samme rotårsak som
-// lagreBeskjed() - funnet 2026-10-22).
-async function lagreHMS() {
-  const besk = document.getElementById('hmsBesk').value.trim();
-  if (!besk) { alert('Beskrivelse er påkrevd'); return; }
-  const sak = {
-    id:'h'+Date.now()+'_'+Math.random().toString(36).slice(2,7), av:me.navn, avId:me.id,
-    dato:new Date().toISOString(),
-    type:document.getElementById('hmsType').value,
-    beskrivelse:besk,
-    tiltak:document.getElementById('hmsTiltak').value.trim(),
-    lukket:false
-  };
-  S.hms.unshift(sak);
-  planleggLocalSpeiling();
-  closeModal('nyHMS');
-  ['hmsBesk','hmsTiltak'].forEach(i=>document.getElementById(i).value='');
-  renderHMS();
-  if (db) {
-    const { data, error } = await db.rpc('hms_upsert', { p_sak: sak });
-    if (error) { console.error('Kunne ikke lagre HMS-sak:', error.message); return; }
-    S.hms = data || S.hms;
-    renderHMS();
-  }
-}
-
-async function toggleHMSLukket(id) {
-  const h = S.hms.find(x=>x.id===id); if(!h) return;
-  h.lukket=!h.lukket;
-  planleggLocalSpeiling();
-  renderHMS();
-  if (db) {
-    const { data, error } = await db.rpc('hms_upsert', { p_sak: h });
-    if (error) { console.error('Kunne ikke oppdatere HMS-sak:', error.message); return; }
-    S.hms = data || S.hms;
-    renderHMS();
-  }
-}
-
-function renderHMS() {
-  const el = document.getElementById('hmsListe'); if(!el) return;
-  const erAdmin = me && me.rolle==='admin';
-  const vis = erAdmin ? S.hms : S.hms.filter(h=>!h.lukket);
-  if (!vis.length) { el.innerHTML='<div class="muted small">Ingen HMS-registreringer</div>'; return; }
-  el.innerHTML = vis.slice(0,20).map(h=>`
-    <div class="box" style="margin-bottom:8px;${h.lukket?'opacity:0.5':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
-        <div style="flex:1">
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
-            <span class="pill warn" style="font-size:11px">${esc(h.type)}</span>
-            ${h.lukket?'<span class="pill ok" style="font-size:11px">Lukket</span>':''}
-          </div>
-          <div class="small">${esc(h.beskrivelse)}</div>
-          ${h.tiltak?`<div class="small muted" style="margin-top:4px">Tiltak: ${esc(h.tiltak)}</div>`:''}
-          <div class="small muted" style="margin-top:4px">${esc(h.av)} · ${new Date(h.dato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
-        </div>
-        ${erAdmin?`<button class="btn sm" onclick="toggleHMSLukket('${h.id}')">${h.lukket?'Gjenåpne':'Lukk'}</button>`:''}
-      </div>
-    </div>`).join('');
 }
 
 function genPIN() {

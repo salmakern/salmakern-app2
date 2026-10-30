@@ -7,7 +7,7 @@
 interface Ansatt {
   id: number;
   navn: string;
-  rolle: 'admin' | 'godkjenner' | 'ansatt';
+  rolle: 'admin' | 'godkjenner' | 'verneombud' | 'ansatt';
   aktiv: boolean;
   kanForeLonn: boolean;
 }
@@ -25,8 +25,13 @@ declare let S: {
   drivstoffSatser: any[];
   beskjeder: any[];
   kontakter: any[];
-  hms: any[];
   utstyrMaler: any[];
+  hmsAvvik: any[];
+  hmsRisikovurderinger: any[];
+  hmsStoffkartotek: any[];
+  hmsVernerunder: any[];
+  hmsVernerundeMal: any | null;
+  hmsHandbok: any | null;
   dagensPIN: string;
   gps: { lat: number | null; lng: number | null; radius: number };
   nextId: number;
@@ -46,6 +51,7 @@ declare function openModal(id: string): void;
 declare function closeModal(id: string): void;
 declare function save(id: string): void;
 declare function saveInnstillinger(): void;
+declare function saveGPS(): void;
 declare function renderAll(): void;
 declare function renderMer(): void;
 declare function buildOrdreDetail(): void;
