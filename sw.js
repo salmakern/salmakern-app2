@@ -21,7 +21,9 @@
 // (Storage sender Cache-Control: no-cache uansett opplastingsinnstilling,
 //  men bilde/signatur-filnavn er unike/uforanderlige - trygt å cache for alltid)
 // v15 - PORTAL-merke, filter og Bekreft/Avvis for ordre fra Forhandlerportalen (2026-10-30)
-const CACHE = 'salmakern-v15';
+// v16 - status-nedtrekket (statusDropdown) fikk egen SVG-pil + appearance:none, mot
+// mobilnettlesere som tegnet sin egen pil klemt inntil lang statustekst (2026-10-30)
+const CACHE = 'salmakern-v16';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

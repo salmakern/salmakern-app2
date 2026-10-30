@@ -621,9 +621,20 @@ async function endreStatus(id, nyStatus) {
   if (activeOrdreId===id) buildOrdreDetail();
 }
 
+// Egen SVG-pil for status-nedtrekket (meldt av Henrik 30.10: lang tekst som "Vist på
+// biltilsynet" presset mot telefonens EGEN nedtrekkspil, siden ingen appearance:none var
+// satt - mobilnettlesere tegner da sin egen pil oppå den fargede pillen uten reservert
+// plass). Fargen følger statusens egen tekstfarge for kontrast mot bakgrunnen.
+function statusDropdownPilSvg(farge) {
+  return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 7.5l4.5 4.5 4.5-4.5z' fill='${encodeURIComponent(farge)}'/%3E%3C/svg%3E`;
+}
 function statusDropdown(ordreId, currentStatus, extraStyle='', extraClass='') {
   const si = statusInfo(currentStatus);
-  return `<select class="${extraClass}" onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle}">
+  // pilStil legges ETTER extraStyle slik at padding-right alltid vinner - ordre-status-
+  // dropdown (brukt i ordre-detalj.js og ukeoversikten) setter sin egen padding-snarvei for
+  // en annen boks-fasong, som ellers ville nullstilt den reserverte plassen til pilen.
+  const pilStil = `appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url('${statusDropdownPilSvg(si.txt)}');background-repeat:no-repeat;background-position:right 7px center;background-size:10px;padding-right:22px`;
+  return `<select class="${extraClass}" onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle};${pilStil}">
     ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
   </select>`;
 }
