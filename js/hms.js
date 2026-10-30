@@ -37,10 +37,55 @@ function renderHms() {
 }
 function renderHmsHubBadger() {
   const apne = (S.hmsAvvik||[]).filter(a => a.status !== 'lukket').length;
-  const hubEl = document.getElementById('hmsAvvikBadge');
-  if (hubEl) hubEl.innerHTML = apne ? `<span class="pill warn">${apne} åpne</span>` : '<span class="pill ok">Ingen åpne</span>';
   const merEl = document.getElementById('merHmsBadge');
   if (merEl) merEl.innerHTML = apne ? `<span class="pill warn">${apne} åpne avvik</span>` : '<span class="pill ok">Ingen åpne avvik</span>';
+  renderHmsHubStats();
+}
+
+// Status-dashboard-kortene på selve HMS-hub-siden (valgt av Henrik 2026-10-30
+// blant 4 designforslag) - hvert kort viser et tall/status i stedet for bare
+// en beskrivelse, så siden fungerer som et raskt helseblikk i tillegg til
+// navigasjon.
+function renderHmsHubStats() {
+  const elAvvik = document.getElementById('hmsStatAvvik');
+  if (elAvvik) {
+    const apne = (S.hmsAvvik||[]).filter(a => a.status !== 'lukket').length;
+    elAvvik.textContent = apne;
+    elAvvik.style.color = apne ? '#fde68a' : '#86efac';
+  }
+  const elRisiko = document.getElementById('hmsStatRisiko');
+  if (elRisiko) elRisiko.textContent = (S.hmsRisikovurderinger||[]).length;
+
+  const elStoff = document.getElementById('hmsStatStoff');
+  if (elStoff) {
+    const antall = (S.hmsStoffkartotek||[]).filter(s => s.aktiv).length;
+    elStoff.textContent = antall;
+    elStoff.style.color = antall ? '#f4f4f5' : '#fde68a';
+  }
+
+  const elVerne = document.getElementById('hmsStatVernerunde');
+  const elVerneLabel = document.getElementById('hmsStatVernerundeLabel');
+  if (elVerne) {
+    const liste = S.hmsVernerunder || [];
+    if (!liste.length) {
+      elVerne.textContent = '–';
+      elVerne.style.color = '#fde68a';
+      if (elVerneLabel) elVerneLabel.textContent = 'ingen gjennomført ennå';
+    } else {
+      const dager = Math.max(0, Math.floor((Date.now() - new Date(liste[0].dato)) / 86400000));
+      elVerne.textContent = dager;
+      elVerne.style.color = '#f4f4f5';
+      if (elVerneLabel) elVerneLabel.textContent = dager === 1 ? 'dag siden siste runde' : 'dager siden siste runde';
+    }
+  }
+
+  const elHandbok = document.getElementById('hmsStatHandbok');
+  if (elHandbok) {
+    const h = S.hmsHandbok;
+    const utfylt = !!(h && h.mal && h.mal.trim() && h.ansvarsfordeling && h.ansvarsfordeling.trim());
+    elHandbok.textContent = utfylt ? 'Fylt ut' : 'Ikke fylt ut';
+    elHandbok.style.color = utfylt ? '#86efac' : '#fde68a';
+  }
 }
 
 // ════════════════════════════════════════════════════

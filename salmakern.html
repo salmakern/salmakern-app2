@@ -872,25 +872,29 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
             <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('avvik')">
-              <div class="h" style="font-size:16px">⚠️ Avvik</div>
-              <div class="muted small" style="margin-top:4px">Meld og følg opp uønskede hendelser</div>
-              <div id="hmsAvvikBadge" class="small" style="margin-top:8px"></div>
+              <div class="muted small">⚠️ AVVIK</div>
+              <div id="hmsStatAvvik" style="font-size:30px;font-weight:800;margin-top:4px">–</div>
+              <div class="muted small" style="margin-top:2px">åpne avvik</div>
             </div>
             <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('risiko')">
-              <div class="h" style="font-size:16px">📋 Risikovurderinger</div>
-              <div class="muted small" style="margin-top:4px">Farer, sannsynlighet, konsekvens og tiltak</div>
+              <div class="muted small">📋 RISIKOVURDERINGER</div>
+              <div id="hmsStatRisiko" style="font-size:30px;font-weight:800;margin-top:4px">–</div>
+              <div class="muted small" style="margin-top:2px">registrert</div>
             </div>
             <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('stoffkartotek')">
-              <div class="h" style="font-size:16px">🧪 Stoffkartotek</div>
-              <div class="muted small" style="margin-top:4px">Kjemikalier og sikkerhetsdatablad</div>
+              <div class="muted small">🧪 STOFFKARTOTEK</div>
+              <div id="hmsStatStoff" style="font-size:30px;font-weight:800;margin-top:4px">–</div>
+              <div class="muted small" style="margin-top:2px">kjemikalier registrert</div>
             </div>
             <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('vernerunde')">
-              <div class="h" style="font-size:16px">✅ Vernerunder</div>
-              <div class="muted small" style="margin-top:4px">Sjekklister og gjennomførte runder</div>
+              <div class="muted small">✅ VERNERUNDER</div>
+              <div id="hmsStatVernerunde" style="font-size:30px;font-weight:800;margin-top:4px">–</div>
+              <div id="hmsStatVernerundeLabel" class="muted small" style="margin-top:2px">ingen gjennomført ennå</div>
             </div>
             <div class="card" style="cursor:pointer" onclick="visHmsSeksjon('handbok')">
-              <div class="h" style="font-size:16px">📖 HMS-håndbok</div>
-              <div class="muted small" style="margin-top:4px">Mål, ansvar og årlig gjennomgang</div>
+              <div class="muted small">📖 HMS-HÅNDBOK</div>
+              <div id="hmsStatHandbok" style="font-size:20px;font-weight:800;margin-top:8px">–</div>
+              <div class="muted small" style="margin-top:2px">mål og ansvar</div>
             </div>
           </div>
         </div>
