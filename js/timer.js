@@ -124,7 +124,7 @@ function setTimerType(t) {
   // Egenmelding dekker alltid 3 virkedager fra og med i dag automatisk (se lagreTimer()) -
   // intet eget datofelt lenger (det forrige datofeltet ble aldri faktisk lest/brukt, bare
   // stående og misvisende - fjernet 2026-10-08).
-  vis('ferieFelt', t==='ferie'||t==='permisjon'||t==='syk');
+  vis('ferieFelt', t==='ferie'||t==='permisjon'||t==='syk'||t==='ugyldig_fravaer');
   vis('sykFelt', t==='egenmelding');
   const today=new Date().toISOString().split('T')[0];
   if(t==='manuell'){
@@ -133,7 +133,7 @@ function setTimerType(t) {
   if(t==='egenmelding'){
     visEgenmeldingKvoteInfo();
   }
-  if(t==='ferie'||t==='permisjon'||t==='syk'){
+  if(t==='ferie'||t==='permisjon'||t==='syk'||t==='ugyldig_fravaer'){
     document.getElementById('fFra').value=today;
     document.getElementById('fTil').value=today;
   }
@@ -161,7 +161,7 @@ function visEgenmeldingKvoteInfo() {
 }
 
 function highlightTimerType() {
-  ['normal','manuell','syk','egenmelding','ferie','permisjon'].forEach(t=>{
+  ['normal','manuell','syk','egenmelding','ferie','permisjon','ugyldig_fravaer'].forEach(t=>{
     const el=document.getElementById('ttype_'+t);
     if(el) el.style.borderColor=t===timerType?'#ef4444':'#27272a';
   });
@@ -407,7 +407,7 @@ async function lagreTimer() {
     mins=beregnNettoMinutter(Math.floor(ms/60000)).netto;
     start=new Date(timerStart).toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
     stopp=new Date().toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'});
-  } else if (['ferie','permisjon','syk'].includes(timerType)) {
+  } else if (['ferie','permisjon','syk','ugyldig_fravaer'].includes(timerType)) {
     // Date range — create one entry per weekday
     const fra=document.getElementById('fFra').value;
     const til=document.getElementById('fTil').value;
@@ -435,8 +435,10 @@ async function lagreTimer() {
       .then(r=>{if(r.error) { console.error('Timer lagringsfeil:',r.error.message); visToast('Kunne ikke lagre registreringen - prøv igjen'); } });
     planleggLocalSpeiling();
     renderTimerHistorikk(); renderTimerMaaned();
-    // Kun syk varsler admin med en gang - ferie/permisjon er normalt planlagt i god tid.
-    if (timerType === 'syk') varsleAdminOmFravaer('syk', entries[0].dato, entries[entries.length-1].dato);
+    // Syk og ugyldig fravær varsler admin med en gang - ferie/permisjon er normalt planlagt
+    // i god tid. Ugyldig fravær er i praksis et varsel om et problem (ikke møtt/ikke gyldig
+    // grunn), så admin bør få beskjed like raskt som ved sykdom.
+    if (timerType === 'syk' || timerType === 'ugyldig_fravaer') varsleAdminOmFravaer(timerType, entries[0].dato, entries[entries.length-1].dato);
     return;
   } else if (timerType==='egenmelding') {
     // Se genererEgenmeldingDager/egenmeldingEpisoderSisteAar lenger opp i filen for
@@ -664,6 +666,7 @@ function renderTimerMaaned() {
   const sykDager=mine.filter(t=>t.type==='syk'||t.type==='egenmelding').length;
   const ferieDager=mine.filter(t=>t.type==='ferie').length;
   const permDager=mine.filter(t=>t.type==='permisjon').length;
+  const ugyldigDager=mine.filter(t=>t.type==='ugyldig_fravaer').length;
 
   let totNormal = 0, totOt50 = 0, totOt100 = 0;
   mine.filter(t=>t.mins>0).forEach(t => {
@@ -701,6 +704,10 @@ function renderTimerMaaned() {
     ${ferieDager+permDager>0?`<div class="box" style="text-align:center">
       <div class="muted small">Ferie / Permisjon</div>
       <div class="title">${ferieDager>0?ferieDager+'d ferie':''}${ferieDager>0&&permDager>0?' · ':''}${permDager>0?permDager+'d perm':''}</div>
+    </div>`:''}
+    ${ugyldigDager>0?`<div class="box" style="text-align:center;background:#431407;border:1px solid #ea580c">
+      <div class="small" style="color:#fdba74">⚠ Ugyldig fravær</div>
+      <div class="title" style="color:#fb923c">${ugyldigDager}</div>
     </div>`:''}
   </div>`;
 

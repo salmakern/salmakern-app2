@@ -162,7 +162,9 @@ Deno.serve(async (req) => {
       if (adminErr) console.error('Henting av admin-liste feilet:', adminErr.message)
       const adminIder = (adminer ?? []).map((a: any) => a.id)
       if (adminIder.length) {
-        const typeTekst = payload.fravaerType === 'syk' ? 'sykmeldt' : 'har registrert egenmelding'
+        const typeTekst = payload.fravaerType === 'syk' ? 'sykmeldt'
+          : payload.fravaerType === 'ugyldig_fravaer' ? 'har registrert UGYLDIG FRAVÆR'
+          : 'har registrert egenmelding'
         const periodeTekst = payload.fraDato === payload.tilDato
           ? fmtDatoKort(payload.fraDato)
           : `${fmtDatoKort(payload.fraDato)}-${fmtDatoKort(payload.tilDato)}`

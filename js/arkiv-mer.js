@@ -685,6 +685,7 @@ async function renderTimerOversikt() {
     const sykDager = timer.filter(t=>['syk','egenmelding'].includes(t.type)).length;
     const ferieDager = timer.filter(t=>t.type==='ferie').length;
     const permDager = timer.filter(t=>t.type==='permisjon').length;
+    const ugyldigDager = timer.filter(t=>t.type==='ugyldig_fravaer').length;
     let normal=0, ot50=0, ot100=0;
     arbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); normal+=ot.normal; ot50+=ot.ot50; ot100+=ot.ot100; });
     totalNormal+=normal; totalOt50+=ot50; totalOt100+=ot100; totalMins+=totMins;
@@ -701,7 +702,8 @@ async function renderTimerOversikt() {
     const fravarTxt = [
       sykDager>0?`<span style="color:#fca5a5">${sykDager}d syk</span>`:'',
       ferieDager>0?`<span style="color:#86efac">${ferieDager}d ferie</span>`:'',
-      permDager>0?`<span style="color:#93c5fd">${permDager}d perm</span>`:''
+      permDager>0?`<span style="color:#93c5fd">${permDager}d perm</span>`:'',
+      ugyldigDager>0?`<span style="color:#fb923c;font-weight:700">⚠ ${ugyldigDager}d ugyldig</span>`:''
     ].filter(Boolean).join(' · ') || '<span class="muted">—</span>';
 
     return `<div class="box" style="margin-bottom:7px;padding:12px 14px;${erAdm?'cursor:pointer':''}" ${erAdm?`onclick="visAnsattDetalj(${a.id})"`:''}>

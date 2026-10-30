@@ -8,7 +8,7 @@ function eksportFiken() {
   const timer = S.timer.filter(t=>t.dato?.startsWith(prefix));
   if (!timer.length) { alert('Ingen timer registrert denne måneden.'); return; }
 
-  const linjer = [['Ansatt','Normal tid (t)','50% overtid (t)','100% overtid (t)','Syk (dager)','Egenmelding (dager)','Ferie (dager)','Permisjon (dager)']];
+  const linjer = [['Ansatt','Normal tid (t)','50% overtid (t)','100% overtid (t)','Syk (dager)','Egenmelding (dager)','Ferie (dager)','Permisjon (dager)','Ugyldig fravær (dager)']];
   S.ansatte.filter(a=>a.aktiv && a.kanForeLonn!==false).forEach(a => {
     const aTimer = timer.filter(t=>t.ansattId===a.id);
     const arbTimer = aTimer.filter(t=>t.mins>0);
@@ -23,7 +23,8 @@ function eksportFiken() {
       aTimer.filter(t=>t.type==='syk').length,
       aTimer.filter(t=>t.type==='egenmelding').length,
       aTimer.filter(t=>t.type==='ferie').length,
-      aTimer.filter(t=>t.type==='permisjon').length
+      aTimer.filter(t=>t.type==='permisjon').length,
+      aTimer.filter(t=>t.type==='ugyldig_fravaer').length
     ]);
   });
 

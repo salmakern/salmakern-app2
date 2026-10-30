@@ -1634,10 +1634,11 @@ function renderAnsattDetalj() {
   const egenmDager = timer.filter(t=>t.type==='egenmelding').length;
   const ferieDager = timer.filter(t=>t.type==='ferie').length;
   const permDager  = timer.filter(t=>t.type==='permisjon').length;
+  const ugyldigDager = timer.filter(t=>t.type==='ugyldig_fravaer').length;
   const arbDager   = [...new Set(arbTimer.map(t=>t.dato))].length;
 
   // Alle dager i måneden med registrering
-  const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
+  const fraværTyper = ['syk','egenmelding','ferie','permisjon','ugyldig_fravaer'];
   const dagsRader = timer.sort((a,b)=>a.dato?.localeCompare(b.dato)).map(t=>{
     const fType = fraværTyper.includes(t.type);
     // "Betalt" settes nå automatisk til false av lagreTimer() selv når en egenmelding er
@@ -1678,6 +1679,7 @@ function renderAnsattDetalj() {
   const aarEgenm   = aarTimer.filter(t=>t.type==='egenmelding').length;
   const aarFerie   = aarTimer.filter(t=>t.type==='ferie').length;
   const aarPerm    = aarTimer.filter(t=>t.type==='permisjon').length;
+  const aarUgyldig = aarTimer.filter(t=>t.type==='ugyldig_fravaer').length;
   let aarNormal=0, aarOt50=0, aarOt100=0;
   aarArbTimer.forEach(t=>{ const ot=beregnOvertid(t.mins,t.dato); aarNormal+=ot.normal; aarOt50+=ot.ot50; aarOt100+=ot.ot100; });
 
@@ -1707,6 +1709,10 @@ function renderAnsattDetalj() {
       ${ferieDager+permDager>0?`<div style="background:#18181b;border-radius:10px;padding:10px;text-align:center">
         <div class="small muted">Ferie/Perm</div>
         <div style="font-size:18px;font-weight:700;color:#a1a1aa;margin-top:2px">${ferieDager+permDager} dager</div>
+      </div>`:''}
+      ${ugyldigDager>0?`<div style="background:#431407;border-radius:10px;padding:10px;text-align:center;border:1px solid #ea580c">
+        <div class="small" style="color:#fdba74">⚠ Ugyldig fravær</div>
+        <div style="font-size:18px;font-weight:700;color:#fb923c;margin-top:2px">${ugyldigDager} dager</div>
       </div>`:''}
     </div>
 
@@ -1740,6 +1746,10 @@ function renderAnsattDetalj() {
         ${aarPerm>0?`<div style="background:#18181b;border-radius:10px;padding:10px;text-align:center">
           <div class="small muted">Permisjon</div>
           <div style="font-size:18px;font-weight:700;color:#a1a1aa;margin-top:2px">${aarPerm} dager</div>
+        </div>`:''}
+        ${aarUgyldig>0?`<div style="background:#431407;border-radius:10px;padding:10px;text-align:center;border:1px solid #ea580c">
+          <div class="small" style="color:#fdba74">⚠ Ugyldig fravær</div>
+          <div style="font-size:18px;font-weight:700;color:#fb923c;margin-top:2px">${aarUgyldig} dager</div>
         </div>`:''}
       </div>
     </div>
@@ -1805,7 +1815,7 @@ function adminNyTimer() {
 
 function adminTimerTypeToggle() {
   const type = document.getElementById('adminTimerType').value;
-  const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
+  const fraværTyper = ['syk','egenmelding','ferie','permisjon','ugyldig_fravaer'];
   document.getElementById('adminTimerTidWrap').style.display = fraværTyper.includes(type)?'none':'block';
 }
 
@@ -1815,7 +1825,7 @@ function adminLagreTimer() {
   const type = document.getElementById('adminTimerType').value;
   const fra  = document.getElementById('adminTimerFra').value;
   const til  = document.getElementById('adminTimerTil').value;
-  const fraværTyper = ['syk','egenmelding','ferie','permisjon'];
+  const fraværTyper = ['syk','egenmelding','ferie','permisjon','ugyldig_fravaer'];
   let mins = 0, start = '–', stopp = '–';
   if (!fraværTyper.includes(type) && fra && til) {
     const [sh,sm]=fra.split(':').map(Number);
