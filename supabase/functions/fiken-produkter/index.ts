@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
         produktnummer: p.productNumber,
         navn: p.name || '',
         prisKr: typeof p.unitPrice === 'number' ? p.unitPrice / 100 : null,
+        mva: p.vatType || null,
         aktiv: p.active !== false,
         konto: p.incomeAccount || null,
         productId: p.productId,
