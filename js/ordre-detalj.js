@@ -1110,8 +1110,8 @@ function proveskiltHTML(regnr, valgt) {
     <div style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:#e5231b;border-radius:${cq(8)};${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
       <div style="width:100%;height:100%;box-sizing:border-box;padding:${cq(12)}">
         <div style="width:100%;height:100%;box-sizing:border-box;border:${cq(12)} solid #fff;border-radius:${cq(5)};display:flex;align-items:center;justify-content:center;gap:${cq(80)};overflow:hidden">
-          <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(155)};line-height:1;letter-spacing:.02em;color:#fff">${esc(bokstaver)}</span>
-          <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(155)};line-height:1;letter-spacing:.02em;color:#fff">${esc(tall)}</span>
+          <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(217)};line-height:.85;letter-spacing:.02em;color:#fff">${esc(bokstaver)}</span>
+          <span style="font-family:Arial,Helvetica,sans-serif;font-weight:700;font-size:${cq(217)};line-height:.85;letter-spacing:.02em;color:#fff">${esc(tall)}</span>
         </div>
       </div>
     </div>
