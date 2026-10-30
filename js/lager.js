@@ -422,6 +422,8 @@ function apneNyVare() {
   document.getElementById('nyVareModell').value = '';
   document.getElementById('nyVareKategori').value = '';
   document.getElementById('nyVareTegningsnummer').value = '';
+  document.getElementById('nyVareLeverandor').value = '';
+  document.getElementById('nyVareKostpris').value = '';
   document.getElementById('nyVareForventet').value = '';
   document.getElementById('nyVareForventetWrap').style.display = 'block';
   document.getElementById('nyVareAntallLabel').textContent = 'Mottatt antall';
@@ -441,6 +443,8 @@ function apneRedigerVare() {
   document.getElementById('nyVareModell').value = v.modell||'';
   document.getElementById('nyVareKategori').value = v.kategori||'';
   document.getElementById('nyVareTegningsnummer').value = v.tegningsnummer||'';
+  document.getElementById('nyVareLeverandor').value = v.leverandor||'';
+  document.getElementById('nyVareKostpris').value = v.kostpris==null ? '' : v.kostpris;
   document.getElementById('nyVareForventetWrap').style.display = 'none';
   document.getElementById('nyVareAntallLabel').textContent = 'Antall på lager';
   document.getElementById('nyVareAntall').value = v.antall;
@@ -458,14 +462,17 @@ function lagreVare() {
   const modell     = document.getElementById('nyVareModell').value.trim();
   const kategori   = document.getElementById('nyVareKategori').value.trim();
   const tegningsnummer = document.getElementById('nyVareTegningsnummer').value.trim();
+  const leverandor = document.getElementById('nyVareLeverandor').value.trim();
+  const kostprisRaw = document.getElementById('nyVareKostpris').value;
+  const kostpris = kostprisRaw === '' ? null : Number(kostprisRaw);
   const enhet      = document.getElementById('nyVareEnhet').value.trim() || 'stk';
   const minAntall  = Number(document.getElementById('nyVareMinAntall').value) || 0;
   const notat      = document.getElementById('nyVareNotat').value.trim();
 
   if (redigerId) {
     const v = (S.lagervarer||[]).find(x=>x.id===redigerId); if (!v) return;
-    v.navn = navn; v.modell = modell; v.kategori = kategori; v.tegningsnummer = tegningsnummer; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
-    if (db) db.from('lagervarer').update({navn, modell, kategori, tegningsnummer, enhet, min_antall:minAntall, notat}).eq('id', v.id)
+    v.navn = navn; v.modell = modell; v.kategori = kategori; v.tegningsnummer = tegningsnummer; v.leverandor = leverandor; v.kostpris = kostpris; v.enhet = enhet; v.minAntall = minAntall; v.notat = notat;
+    if (db) db.from('lagervarer').update({navn, modell, kategori, tegningsnummer, leverandor, kostpris, enhet, min_antall:minAntall, notat}).eq('id', v.id)
       .then(r=>{if(r.error) console.error('Lagervare-oppdatering feilet:', r.error.message);});
     closeModal('nyVareModal');
     renderVareDetalj();
@@ -479,10 +486,10 @@ function lagreVare() {
       notatMedAvvik = notat ? notat + ' — ' + manglerTekst : manglerTekst;
     }
     const id = 'vare_' + Date.now();
-    const vare = { id, navn, modell, kategori, tegningsnummer, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
+    const vare = { id, navn, modell, kategori, tegningsnummer, leverandor, kostpris, antall, enhet, minAntall, notat:notatMedAvvik, createdAt:new Date().toISOString() };
     S.lagervarer = S.lagervarer || [];
     S.lagervarer.push(vare);
-    if (db) db.from('lagervarer').insert({id, navn, modell, kategori, tegningsnummer, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
+    if (db) db.from('lagervarer').insert({id, navn, modell, kategori, tegningsnummer, leverandor, kostpris, antall, enhet, min_antall:minAntall, notat:notatMedAvvik})
       .then(r=>{if(r.error) console.error('Lagervare-lagring feilet:', r.error.message);});
     if (mangler > 0) varselMangelfullLevering({navn, enhet}, forventet, antall, mangler);
     closeModal('nyVareModal');
@@ -545,6 +552,16 @@ function renderVareDetalj() {
   if (!v) { tilbakeLagerListe(); return; }
   document.getElementById('vareDetaljNavn').textContent = v.navn;
   document.getElementById('vareDetaljUndertekst').textContent = [v.modell, v.kategori, v.tegningsnummer].filter(Boolean).join(' · ');
+  const innkjopBoks = document.getElementById('vareInnkjopBoks');
+  const innkjopEl = document.getElementById('vareDetaljInnkjop');
+  if (innkjopBoks && innkjopEl) {
+    const harInnkjop = v.leverandor || v.kostpris != null;
+    innkjopBoks.style.display = harInnkjop ? 'block' : 'none';
+    innkjopEl.textContent = [
+      v.leverandor || null,
+      v.kostpris != null ? `${v.kostpris.toLocaleString('no')} kr/${v.enhet}` : null
+    ].filter(Boolean).join(' · ');
+  }
   document.getElementById('vareDetaljAntall').textContent = fmtAntall(v.antall);
   document.getElementById('vareDetaljEnhet').textContent = v.enhet;
   const lavtLager = v.minAntall > 0 && v.antall <= v.minAntall;

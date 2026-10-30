@@ -778,6 +778,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <button class="btn" onclick="taUtFraLager()" style="padding:13px;font-size:15px">− Ta ut</button>
             </div>
           </div>
+          <div class="box" id="vareInnkjopBoks" style="display:none">
+            <div class="muted small" style="letter-spacing:.6px;margin-bottom:4px">INNKJØP</div>
+            <div id="vareDetaljInnkjop"></div>
+          </div>
           <div class="box" id="vareNotatBoks" style="display:none">
             <div class="muted small" style="letter-spacing:.6px;margin-bottom:4px">NOTAT</div>
             <div id="vareDetaljNotat"></div>
@@ -1851,7 +1855,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <datalist id="lagerKategoriListe"></datalist>
         </div>
       </div>
-      <div style="margin-top:8px"><label>Tegningsnummer <span class="muted">(valgfritt)</span></label><input id="nyVareTegningsnummer" placeholder="41-0982-B"></div>
+      <div class="grid g2" style="margin-top:8px">
+        <div><label>Tegningsnummer <span class="muted">(valgfritt)</span></label><input id="nyVareTegningsnummer" placeholder="41-0982-B"></div>
+        <div><label>Leverandør <span class="muted">(valgfritt)</span></label><input id="nyVareLeverandor" placeholder="f.eks. Norengros"></div>
+      </div>
+      <div style="margin-top:8px"><label>Kostpris per enhet <span class="muted">(valgfritt, kr eks. mva)</span></label><input type="number" id="nyVareKostpris" step="any" placeholder="—"></div>
       <div class="small muted" style="margin-top:6px">Sett Modell for varer som hører til én bilmodell (f.eks. EV9) - da grupperes de under modellen i lageroversikten, med Kategori som underkategori (f.eks. Modul-system, Kasse). La Modell stå tom for generelle deler som ikke hører til én bestemt modell.</div>
     </div>
 
