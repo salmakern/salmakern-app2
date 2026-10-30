@@ -1108,7 +1108,7 @@ function proveskiltHTML(regnr, valgt) {
   // kanten") - uten dette klippes ikke de indre lagene til sin egen avrundede form.
   return `
   <div onclick="velgKjoreseddelILista('${regnr.replace(/'/g,"\\'")}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
-    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#d9161c;border-radius:${cq(6)};padding:${cq(5)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
+    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#d9161c;border-radius:${cq(6)};padding:${cq(3)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
     <div style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(180deg,#ffffff,#ececec);border-radius:${cq(4)};padding:${cq(13)}">
       <div style="position:relative;width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(170deg,#e81c22 0%,#d8141a 60%,#c81218 100%);border-radius:${cq(2)};box-shadow:inset 0 0 0 ${cq(3)} #b80f14,inset 0 0 0 ${cq(5)} rgba(255,255,255,.18),inset 0 ${cq(3)} ${cq(6)} rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
         <div style="position:absolute;top:${cq(14)};left:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
