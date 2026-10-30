@@ -319,10 +319,22 @@ Deno.serve(async (req) => {
       // ("incomeAccount") ved å lese en ekte faktura tilbake fra Fiken.
       line.incomeAccount = produkt.konto
       const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
+      // Prislås (s09-023): en linje som har fått pris+mva frosset da den ble lagt til/endret
+      // på ordren (se oppdater_ordre_fiken_linje(_ved_id) i migrasjon 20261030220000) bruker
+      // DEN prisen her, ikke Fikens pris slik den er akkurat denne dagen - ellers kunne en
+      // prisendring i Fiken (prissynk) mellom bestilling og fakturering endre det kunden
+      // faktureres uten at noen merket det. Linjer uten frosset pris (lagt til før denne
+      // migrasjonen, eller produktnummer uten rad i fiken_priser) er uendret: ingen unitPrice
+      // satt her, Fiken fyller inn produktets pris slik den er i dag - akkurat som før.
+      const erLaastPris = !erOverstyrtBelop && l.pris !== undefined && l.pris !== null && l.mva
       if (erOverstyrtBelop) {
         line.unitPrice = Math.round(Number(l.belop) * 100)
         line.vatType = 'high' // 25% - alltid, uavhengig av drivstoff-satsen som ga beløpet (bekreftet av Henrik)
       } else {
+        if (erLaastPris) {
+          line.unitPrice = Math.round(Number(l.pris) * 100)
+          line.vatType = l.mva
+        }
         // Drivstoff (overstyrt beløp) skal ALDRI ha rabatt - alt annet får kundens avtalte
         // sats, valgt ut fra om Fiken-produktnavnet er en ombygging-linje eller ekstra utstyr.
         const rabatt = erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr
