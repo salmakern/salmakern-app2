@@ -12,13 +12,46 @@
 //    portal_bestillinger.detalj (bare admin). 200 er endelig (også kode «trenger_avklaring»: mottatt, ikke feil, ikke retry); 400/401/405/413 er permanente;
 //    500 ikke_konfigurert og 502 intern_feil betyr «prøv igjen med SAMME bestilling_id» (idempotent, også etter tidsavbrudd midt i en transaksjon).
 //  * Logger én JSON-linje per kall uten verdier (ingen chassis, e-poster eller navn).
+//  * Push-varsel til ADMINISTRATORER (push.ts, G9) når en ny bestilling kommer inn eller venter på avklaring: best-effort ETTER at bestillingen er behandlet, nøyaktig én gang
+//    per bestilling (claim på portal_bestillinger.push_sendt_at), tekst bygget av databaseraden, og kan aldri endre svaret til portalen (tidsavbrudd 6 s).
 //  * Ingen CORS: nettlesere skal aldri kalle denne.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { MAKS_BODY_BYTES, mapFeil, mapSvar, parseInnkommende } from './logikk.ts'
+import { sendPushTilAdmin } from './push.ts'
 
 const FN = 'portal-bestilling'
 const SECRET = Deno.env.get('PORTAL_BESTILLING_SECRET')
 const RPC_TIDSAVBRUDD_MS = 25_000
+const PUSH_TIDSAVBRUDD_MS = 6_000
+
+// web-push lastes først når et varsel faktisk skal sendes (og bare hvis VAPID-hemmelighetene er satt opp), så en feil her aldri kan ramme selve bestillingen.
+// Samme pakke og hemmeligheter som send-push (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL).
+async function hentWebPushSender() {
+  const offentlig = Deno.env.get('VAPID_PUBLIC_KEY')
+  const privat = Deno.env.get('VAPID_PRIVATE_KEY')
+  const epost = Deno.env.get('VAPID_EMAIL')
+  if (!offentlig || !privat || !epost) return null
+  const webpush = (await import('npm:web-push@3.6.7')).default
+  webpush.setVapidDetails(`mailto:${epost}`, offentlig, privat)
+  return async (sub: { endpoint: string; p256dh: string; auth: string }, melding: string) => {
+    await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, melding)
+  }
+}
+
+// Push-varsel til administratorer (G9). Best-effort: alle feil og tidsavbrudd svelges, og resultatet er bare tall til loggen (aldri verdier).
+async function pushBestEffort(supabase: unknown, bestillingId: string, status: string): Promise<Record<string, unknown>> {
+  let timer: number | undefined
+  try {
+    return await Promise.race([
+      sendPushTilAdmin(supabase, bestillingId, status, hentWebPushSender) as Promise<Record<string, unknown>>,
+      new Promise<Record<string, unknown>>((fullfor) => { timer = setTimeout(() => fullfor({ feil: 'tidsavbrudd' }), PUSH_TIDSAVBRUDD_MS) }),
+    ])
+  } catch (e) {
+    return { feil: e instanceof Error ? e.name : 'ukjent' }
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
 
 async function likt(a: string, b: string): Promise<boolean> {
   const h = async (s: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
@@ -108,7 +141,9 @@ Deno.serve(async (req) => {
       logg('uventet_svar', start, { ignorerte: input.ignorerte })
       return svar({ kode: 'intern_feil' }, 502)
     }
-    logg(ut.status, start, { kode: ut.kode, ignorerte: input.ignorerte })
+    // Push-varsel til administratorer (G9): best-effort, ETTER at bestillingen er behandlet, og kan aldri endre svaret til portalen.
+    const push = await pushBestEffort(supabase, input.p.bestilling_id.replace(/^ +| +$/g, ''), ut.status)
+    logg(ut.status, start, { kode: ut.kode, ignorerte: input.ignorerte, push })
     return svar(ut)
   } catch (e) {
     // Aldri feilteksten til portalen (kan inneholde nøkler/URL-er); bare til loggen, uten verdier fra input.

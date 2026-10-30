@@ -3,7 +3,7 @@
 //  2) index.ts kjøres mot falsk Deno og falsk supabase-klient: kildefilen kopieres til en midlertidig .ts-modul med de to importlinjene byttet ut
 //     (samme teknikk som edge-auth-gate.test.js), så HELE håndtereren testes: autentisering, grenser, allowlist, svaravgrensning, feil, logging.
 // Postgres-funksjonen bak (portal_koble_bestilling) har sin egen test: supabase/tester/portal_koble_bestilling_TEST_body.sql.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
@@ -204,17 +204,40 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
   afterEach(() => { while (tmpFiler.length) { try { unlinkSync(tmpFiler.pop()); } catch { /* allerede borte */ } } });
 
   // Laster index.ts med gitt miljø og et svar fra «databasen». Gir { kall: (init) => Response, rpcKall, klientKall, logger }.
-  async function last({ env = {}, rpc = { data: { kode: 'ok', status: 'ny_ordre', ordre_id: 'ord_1788100000000' }, error: null }, rpcKaster = null } = {}) {
+  async function last({ env = {}, rpc = { data: { kode: 'ok', status: 'ny_ordre', ordre_id: 'ord_1788100000000' }, error: null }, rpcKaster = null, tabeller = null, sendFeil = null } = {}) {
     const fullEnv = { PORTAL_BESTILLING_SECRET: HEMMELIGHET, SUPABASE_URL: 'https://test.supabase.invalid', SUPABASE_SERVICE_ROLE_KEY: TJENESTE_NOKKEL, ...env };
     const rpcKall = [];
     const klientKall = [];
     const logger = [];
+    const sporringer = [];
+    const vapid = [];
+    const sendt = [];
     const logOrig = console.log;
     let handler = null;
+    // Push (G9): falsk tabell-kjede som støtter select/update/delete/eq/is/in og kan awaites; standard er «alt er allerede sendt» (claim gir ingen rader), så ingen push går i tester som ikke ber om det.
+    const standardTabeller = () => ({ data: [], error: null });
+    const fraTabell = (tabell) => {
+      const q = { tabell, ops: [], eq: [], is: [] };
+      const b = {
+        select(c) { q.ops.push('select'); q.kolonner = c; return b; },
+        update(v) { q.ops.push('update'); q.verdi = v; return b; },
+        delete() { q.ops.push('delete'); return b; },
+        eq(k, v) { q.eq.push([k, v]); return b; },
+        is(k, v) { q.is.push([k, v]); return b; },
+        in(k, v) { q.in = [k, v]; return b; },
+        then(ok, nei) { sporringer.push(q); return Promise.resolve().then(() => (tabeller || standardTabeller)(tabell, q)).then(ok, nei); },
+      };
+      return b;
+    };
+    globalThis.__fakeWebPush = {
+      setVapidDetails: (...a) => { vapid.push(a); },
+      sendNotification: async (sub, melding) => { sendt.push([sub, melding]); if (sendFeil) { const f = sendFeil(sub); if (f) throw f; } },
+    };
     globalThis.Deno = { env: { get: (k) => fullEnv[k] }, serve: (h) => { handler = h; } };
     globalThis.__fakeCreateClient = (url, nokkel, opts) => {
       klientKall.push({ url, nokkel, opts });
       return {
+        from: fraTabell,
         rpc: (navn, args) => {
           rpcKall.push({ navn, args });
           return { abortSignal: (signal) => { rpcKall[rpcKall.length - 1].signal = !!signal; if (rpcKaster) return Promise.reject(rpcKaster); return Promise.resolve(rpc); } };
@@ -227,7 +250,9 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
       .replace("import { MAKS_BODY_BYTES, mapFeil, mapSvar, parseInnkommende } from './logikk.ts'", `import { MAKS_BODY_BYTES, mapFeil, mapSvar, parseInnkommende } from ${JSON.stringify(pathToFileURL(path.join(FUNKSJON, 'logikk.ts')).href)}`);
     const fil = path.resolve(__dirname, `_pb_tmp_${Math.random().toString(36).slice(2)}.ts`);
     tmpFiler.push(fil);
-    writeFileSync(fil, kode);
+    writeFileSync(fil, kode
+      .replace("import { sendPushTilAdmin } from './push.ts'", `import { sendPushTilAdmin } from ${JSON.stringify(pathToFileURL(path.join(FUNKSJON, 'push.ts')).href)}`)
+      .replace("import('npm:web-push@3.6.7')", 'Promise.resolve({ default: globalThis.__fakeWebPush })'));
     try {
       await import(/* @vite-ignore */ pathToFileURL(fil).href);
     } finally {
@@ -243,7 +268,7 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
         console.log = logOrig2;
       }
     };
-    return { kall, rpcKall, klientKall, logger };
+    return { kall, rpcKall, klientKall, logger, sporringer, vapid, sendt };
   }
   const medNokkel = { 'x-sync-secret': HEMMELIGHET };
 
@@ -437,5 +462,128 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
       expect(linje.portal_bestilling, b.navn).toBe(1);
       for (const hemmelig of hemmelige) expect(t.logger[0], `${b.navn}: ${hemmelig}`).not.toContain(hemmelig);
     }
+  });
+
+  // ===== Push-varsel til administratorer (G9) =====
+  // Databasen (falsk) gir: raden som claimes, to admin-ansatte, to abonnement.
+  const radFraDb = { forhandler_navn: 'AK Auto AS', merke: 'KIA', modell: 'EV9', ident: 'TESTWXYZ000000001', ident_type: 'CHASSIS', ordre_id: 'ord_1788100000000' };
+  const SUBS = [
+    { endpoint: 'https://push.example.test/a', p256dh: 'p256-a', auth: 'auth-a' },
+    { endpoint: 'https://push.example.test/b', p256dh: 'p256-b', auth: 'auth-b' },
+  ];
+  const pushTabeller = (over = {}) => (tabell, q) => {
+    if (over[tabell]) return over[tabell](q);
+    if (tabell === 'portal_bestillinger') return { data: [radFraDb], error: null };
+    if (tabell === 'ansatte') return { data: [{ id: 7 }, { id: 9 }], error: null };
+    if (tabell === 'push_abonnement' && q.ops.includes('delete')) return { data: null, error: null };
+    if (tabell === 'push_abonnement') return { data: SUBS, error: null };
+    return { data: [], error: null };
+  };
+  const VAPID = { VAPID_PUBLIC_KEY: 'offentlig-test', VAPID_PRIVATE_KEY: 'privat-test', VAPID_EMAIL: 'test@example.test' };
+  const bare = (status, kode = 'ok') => ({ data: { kode, status, ordre_id: 'ord_1788100000000' }, error: null });
+
+  it('push: ny ordre gir ÉTT varsel til hver admin-enhet, bygget av databaseraden (ikke av det portalen sendte), og svaret til portalen er uendret', async () => {
+    const t = await last({ env: VAPID, tabeller: pushTabeller() });
+    const res = await t.kall({ headers: medNokkel, body: { ...GYLDIG, forhandler_navn: 'FALSK Forhandler fra portalen', selger_navn: 'Selger som skriver fritt' } });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ kode: 'ok', status: 'ny_ordre', ordre_id: 'ord_1788100000000' });
+    expect(t.sendt).toHaveLength(2);
+    const varsel = JSON.parse(t.sendt[0][1]);
+    expect(varsel).toEqual({ title: 'Ny bestilling fra portalen', body: 'AK Auto AS · KIA EV9 · TESTWXYZ000000001 (ikke bekreftet)', url: '/salmakern.html?ordre=ord_1788100000000' });
+    expect(t.sendt[0][1]).not.toMatch(/FALSK|fritt/);
+    expect(t.sendt.map((x) => x[0])).toEqual([
+      { endpoint: SUBS[0].endpoint, keys: { p256dh: 'p256-a', auth: 'auth-a' } },
+      { endpoint: SUBS[1].endpoint, keys: { p256dh: 'p256-b', auth: 'auth-b' } },
+    ]);
+    expect(t.vapid).toEqual([['mailto:test@example.test', 'offentlig-test', 'privat-test']]);
+    const claim = t.sporringer.find((q) => q.tabell === 'portal_bestillinger');
+    expect(claim.ops).toEqual(['update', 'select']);
+    expect(claim.eq).toEqual([['portal_bestilling_id', GYLDIG.bestilling_id]]);
+    expect(claim.is).toEqual([['push_sendt_at', null]]);
+    expect(typeof claim.verdi.push_sendt_at).toBe('string');
+    const adm = t.sporringer.find((q) => q.tabell === 'ansatte');
+    expect(adm.eq).toEqual([['rolle', 'admin'], ['aktiv', true]]);
+    expect(t.sporringer.find((q) => q.tabell === 'push_abonnement').in).toEqual(['ansatt_id', [7, 9]]);
+    expect(JSON.parse(t.logger[0]).push).toEqual({ sendt: 2, feilet: 0, fjernet: 0 });
+  });
+
+  it('push: allerede sendt for denne bestillingen (claim gir ingen rad): ingen varsel og ingen oppslag av mottakere', async () => {
+    const t = await last({ env: VAPID, tabeller: pushTabeller({ portal_bestillinger: () => ({ data: [], error: null }) }) });
+    const res = await t.kall({ headers: medNokkel, body: GYLDIG });
+    expect(res.status).toBe(200);
+    expect(t.sendt).toHaveLength(0);
+    expect(t.sporringer.map((q) => q.tabell)).toEqual(['portal_bestillinger']);
+    expect(JSON.parse(t.logger[0]).push).toMatchObject({ hoppet: 'allerede_sendt', sendt: 0 });
+  });
+
+  it('push: bare statuser en admin skal gjøre noe med; koblet/avvist/bekreftet rører hverken databasen eller web-push', async () => {
+    for (const status of ['koblet', 'avvist', 'bekreftet']) {
+      const t = await last({ env: VAPID, rpc: bare(status, status === 'avvist' ? 'trenger_avklaring' : 'ok'), tabeller: pushTabeller() });
+      const res = await t.kall({ headers: medNokkel, body: GYLDIG });
+      expect(res.status, status).toBe(200);
+      expect(t.sporringer, status).toHaveLength(0);
+      expect(t.vapid, status).toHaveLength(0);
+      expect(JSON.parse(t.logger[0]).push, status).toMatchObject({ hoppet: 'ikke_aktuell' });
+    }
+    for (const status of ['admin_ark', 'venter_forhandler', 'venter_modell', 'avklaring_chassis', 'avklaring_annen_forhandler', 'avklaring_tak']) {
+      const t = await last({ env: VAPID, rpc: bare(status, status === 'admin_ark' ? 'ok' : 'trenger_avklaring'), tabeller: pushTabeller() });
+      await t.kall({ headers: medNokkel, body: GYLDIG });
+      expect(t.sendt.length, status).toBe(2);
+    }
+  });
+
+  it('push: uten VAPID-hemmeligheter hoppes det over UTEN å bruke opp claimet (varselet kan sendes når oppsettet er på plass)', async () => {
+    const t = await last({ env: {}, tabeller: pushTabeller() });
+    const res = await t.kall({ headers: medNokkel, body: GYLDIG });
+    expect(res.status).toBe(200);
+    expect(t.sporringer).toHaveLength(0);
+    expect(JSON.parse(t.logger[0]).push).toMatchObject({ hoppet: 'ingen_vapid' });
+  });
+
+  it('push: en enhet som feiler (410 utløpt) ryddes bort, de andre får varselet, og svaret er uendret', async () => {
+    const t = await last({ env: VAPID, tabeller: pushTabeller(), sendFeil: (sub) => (sub.endpoint.endsWith('/a') ? Object.assign(new Error('gone'), { statusCode: 410 }) : null) });
+    const res = await t.kall({ headers: medNokkel, body: GYLDIG });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ kode: 'ok', status: 'ny_ordre', ordre_id: 'ord_1788100000000' });
+    const slett = t.sporringer.find((q) => q.tabell === 'push_abonnement' && q.ops.includes('delete'));
+    expect(slett.eq).toEqual([['endpoint', SUBS[0].endpoint]]);
+    expect(JSON.parse(t.logger[0]).push).toEqual({ sendt: 1, feilet: 1, fjernet: 1 });
+  });
+
+  it('push: databasefeil eller kastet feil i push-steget kan aldri endre svaret til portalen (200 med samme kropp), og loggen har bare en feilkode', async () => {
+    for (const tabeller of [
+      () => ({ data: null, error: { message: 'boom med TESTWXYZ000000001 og secrets' } }),
+      () => { throw new Error('kastet med test.selger@example.test'); },
+    ]) {
+      const t = await last({ env: VAPID, tabeller });
+      const res = await t.kall({ headers: medNokkel, body: GYLDIG });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ kode: 'ok', status: 'ny_ordre', ordre_id: 'ord_1788100000000' });
+      expect(t.logger[0]).not.toMatch(/TESTWXYZ|secrets|example\.test/);
+      expect(JSON.parse(t.logger[0]).push.feil).toBeTruthy();
+    }
+  });
+
+  it('push: henger databasen, gir push-steget opp etter 6 s og portalen får likevel sitt svar', async () => {
+    vi.useFakeTimers();
+    try {
+      const t = await last({ env: VAPID, tabeller: () => new Promise(() => { /* aldri ferdig */ }) });
+      const p = t.kall({ headers: medNokkel, body: GYLDIG });
+      // Tidsavbruddet registreres først når håndtereren er kommet til push-steget (etter RPC): skyv klokka i små steg til svaret er ute.
+      let ferdig = false;
+      p.then(() => { ferdig = true; });
+      for (let i = 0; i < 20 && !ferdig; i++) await vi.advanceTimersByTimeAsync(1000);
+      const res = await p;
+      expect(res.status).toBe(200);
+      expect(JSON.parse(t.logger[0]).push).toEqual({ feil: 'tidsavbrudd' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('push: bestilling_id med mellomrom i kantene claimes på samme trimmede verdi som Postgres bruker', async () => {
+    const t = await last({ env: VAPID, tabeller: pushTabeller() });
+    await t.kall({ headers: medNokkel, body: { ...GYLDIG, bestilling_id: '  ' + GYLDIG.bestilling_id + ' ' } });
+    expect(t.sporringer.find((q) => q.tabell === 'portal_bestillinger').eq).toEqual([['portal_bestilling_id', GYLDIG.bestilling_id]]);
   });
 });

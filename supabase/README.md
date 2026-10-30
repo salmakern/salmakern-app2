@@ -115,6 +115,14 @@ Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandle
    Tester: `test/portal-bestilling.test.js` (34 enhetstester: validering, svaravgrensning og hele håndtereren mot falsk Deno og falsk database, inkl. størrelsesgrensen på byte-nivå og at ingen
    logglinje fra noen bane inneholder verdier; kjører i `npm test`) og `tester/portal_bestilling_differensialtest.mjs` (sammenligner edge-valideringen med Postgres-valideringen på 356 grensetilfeller;
    kjøres for hånd når valideringen i en av dem endres; egenskapen er at det edge godtar, godtar Postgres også).
+   **Push-varsel til administratorer (G9, 2026-10-30; Henrik: «admin bare»):** etter at bestillingen er behandlet sender funksjonen et web-push-varsel til alle aktive ansatte med rolle
+   `admin` som har et abonnement (`push_abonnement`), for utfallene ny ordre, ny løs Admin-ark-rad (serienummer) og alt som venter på avklaring (`venter_*`, `avklaring_*`); aldri for `koblet`,
+   `avvist` eller `bekreftet`. Nøyaktig ÉN gang per bestilling: raden i `portal_bestillinger` claimes med `push_sendt_at` (migrasjon `20261030240000`) FØR sendingen, så retry eller to samtidige kall aldri gir to
+   varsler (prisen: feiler sendingen etter claimet, prøves den ikke på nytt). Teksten bygges av databaseraden (Kontakter-navn, merke/modell fra oversettelsen, chassis/serienummer), aldri av noe selgeren har skrevet.
+   Best-effort: feil og tidsavbrudd (6 s) svelges og endrer aldri svaret til portalen; utløpte abonnement (404/410) ryddes bort som i `send-push`. Bruker samme VAPID-hemmeligheter som `send-push`
+   (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`); mangler de, hoppes push over uten å bruke opp claimet. Logikken ligger i `push.ts` (testet i `test/portal-bestilling-push.test.js` og i håndtererens
+   tester). **OBS ved testing:** ethvert kall som gir et av varselutfallene sender ET EKTE varsel til admin-telefonene, også «venter_forhandler» for en ukjent kontakt - test aldri mot den utrullede funksjonen
+   med en gyldig bestilling uten at Henrik har sagt ja. Rollback for push: rull ut funksjonen uten `push.ts`-kallet, deretter `rollback-referanser/portal_bestilling_push_ROLLBACK.sql`.
    **Funksjonen er utrullet, men INGENTING kaller den ennå** (portalen sender først når koblingen slås på, G11). Livetest 2026-10-30: uten nøkkel 401 (porten),
    uten/med feil hemmelighet 401, GET 405, ugyldig chassis/JSON 400, for stor body 413, ukjent kontakt 200 `venter_forhandler` (og samme svar ved gjentatt kall).
 
