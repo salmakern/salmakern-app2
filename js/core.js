@@ -144,38 +144,58 @@ function visToast(melding, type='feil') {
 // Supabase-porten (verify_jwt) avviser et ugyldig/utløpt JWT med 401 FØR funksjonen kjører,
 // så 401 er det vanlige tegnet på utløpt sesjon. Kaster (og viser toast) hvis det ikke
 // finnes noen sesjon i det hele tatt - alle kallstedene har try/catch eller .catch().
-async function edgeFetch(funksjon, init = {}) {
-  const url = `${SUPA_URL}/functions/v1/${funksjon}`;
-  const hentToken = async (fornyet) => {
-    if (!db) return null;
-    const { data } = fornyet ? await db.auth.refreshSession() : await db.auth.getSession();
-    return data?.session?.access_token || null;
-  };
-  const kall = (token) => {
-    // Headers (ikke et vanlig objekt) slik at en Authorization fra kalleren, uansett store/små
-    // bokstaver, alltid erstattes av ansatt-token-et i stedet for å bli sendt ved siden av.
-    const headers = new Headers(init.headers);
-    headers.set('Authorization', 'Bearer ' + token);
-    headers.set('apikey', SUPA_KEY);
-    return fetch(url, { ...init, headers });
-  };
+// `stille` (s00-022 punkt 3) - for kall som er rene bakgrunnsvarsler (send-push-kallene i
+// timer.js/lager.js/arkiv-mer.js) der kalleren allerede har sin egen .catch() og en feilende
+// toast bare forvirrer en ansatt som ikke selv ba om noe. `navigator.onLine` brukes til å
+// skille "faktisk ikke innlogget" fra "bare offline akkurat nå" - uten det viste et vanlig
+// nettbrudd samme skremmende "logg inn på nytt"-melding som en reelt utløpt sesjon.
+// typeof-vakt siden `navigator` ikke finnes i de isolerte vm-testmiljøene (se
+// test/edge-fetch-og-utlogging.test.js) - i en ekte nettleser finnes den alltid.
+function erOffline() { return typeof navigator !== 'undefined' && navigator.onLine === false; }
+let edgeFetchAktive = 0;
+async function edgeFetch(funksjon, init = {}, { stille = false } = {}) {
+  edgeFetchAktive++;
+  try {
+    const url = `${SUPA_URL}/functions/v1/${funksjon}`;
+    const hentToken = async (fornyet) => {
+      if (!db) return null;
+      const { data } = fornyet ? await db.auth.refreshSession() : await db.auth.getSession();
+      return data?.session?.access_token || null;
+    };
+    const kall = (token) => {
+      // Headers (ikke et vanlig objekt) slik at en Authorization fra kalleren, uansett store/små
+      // bokstaver, alltid erstattes av ansatt-token-et i stedet for å bli sendt ved siden av.
+      const headers = new Headers(init.headers);
+      headers.set('Authorization', 'Bearer ' + token);
+      headers.set('apikey', SUPA_KEY);
+      return fetch(url, { ...init, headers });
+    };
 
-  let token = null;
-  try { token = await hentToken(false); } catch(e) { console.warn('Kunne ikke hente sesjon:', e); }
-  if (!token) {
-    const melding = 'Du er ikke innlogget - logg inn på nytt';
-    visToast(melding);
-    throw new Error(melding);
+    let token = null;
+    try { token = await hentToken(false); } catch(e) { console.warn('Kunne ikke hente sesjon:', e); }
+    if (!token) {
+      const melding = erOffline()
+        ? 'Ingen nettforbindelse akkurat nå - prøv igjen når du er tilkoblet'
+        : 'Du er ikke innlogget - logg inn på nytt';
+      if (!stille) visToast(melding);
+      throw new Error(melding);
+    }
+
+    let res = await kall(token);
+    if (res.status !== 401) return res;
+
+    let nyttToken = null;
+    try { nyttToken = await hentToken(true); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
+    if (nyttToken) res = await kall(nyttToken);
+    if (res.status === 401 && !stille) {
+      visToast(erOffline()
+        ? 'Ingen nettforbindelse akkurat nå - prøv igjen når du er tilkoblet'
+        : 'Innloggingen din er utløpt eller ugyldig - logg ut og inn igjen');
+    }
+    return res;
+  } finally {
+    edgeFetchAktive--;
   }
-
-  let res = await kall(token);
-  if (res.status !== 401) return res;
-
-  let nyttToken = null;
-  try { nyttToken = await hentToken(true); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
-  if (nyttToken) res = await kall(nyttToken);
-  if (res.status === 401) visToast('Innloggingen din er utløpt eller ugyldig - logg ut og inn igjen');
-  return res;
 }
 
 // Delt av dokDrop() (ordre-diverse.js) og fullmaktDrop() (ansatte-utstyr.js) - begge gjorde
@@ -288,6 +308,26 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('loadingOverlay').style.display = 'flex';
   try {
     db = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+    // En vanlig utlogging i ÉN fane/PWA-vindu avslutter Auth-sesjonen for HELE enheten (samme
+    // localStorage), men andre åpne faner/vinduer visste ikke om det (funnet i sikkerhets-
+    // gjennomgangen 29.10, s00-022 punkt 4) - PIN-bytte hadde allerede sin egen varsling via
+    // innstillinger-sanntid over, men en vanlig utlogging hadde ingen tilsvarende. Supabase sin
+    // egen onAuthStateChange fanger SIGNED_OUT på tvers av faner (via localStorage-hendelsen
+    // supabase-js lytter på). `me` er allerede null i fanen som selv logget ut (se utforLogout,
+    // som nuller den FØR selve signOut-kallet) - denne håndteringen rammer derfor kun de ANDRE.
+    // typeof-vakt: den falske test-klienten (vm-testmiljøet) har ikke onAuthStateChange.
+    if (typeof db.auth.onAuthStateChange === 'function') {
+      db.auth.onAuthStateChange((event) => {
+        // Kaller IKKE doLogout()/avsluttSesjon() her - sesjonen er allerede avsluttet et
+        // annet sted (derav SIGNED_OUT), så et nytt logg_ut/signOut-kall herfra ville bare
+        // vært et virkningsløst, forvirrende dobbelt-kall mot en allerede død sesjon.
+        if (event === 'SIGNED_OUT' && me) {
+          visToast('Du ble logget ut i en annen fane/økt på denne enheten');
+          nullstillLokalOkt();
+          sikkerReload();
+        }
+      });
+    }
     // Anonym Auth-sesjon kreves for at databasen (RLS + Realtime) skal vite
     // hvem som spør. Selve identiteten (hvilken ansatt) knyttes først etter
     // riktig PIN i tryLogin() - uten en PIN er denne sesjonen ikke koblet
@@ -1284,6 +1324,39 @@ async function avsluttSesjon() {
   }
 }
 
+// Nullstiller all lokal tilstand knyttet til den innloggede ansatte og laster siden på nytt -
+// delt av den vanlige utloggingsflyten (utforLogout, som i tillegg selv avslutter Auth-
+// sesjonen) og onAuthStateChange sin SIGNED_OUT-håndtering (der sesjonen allerede ER
+// avsluttet et annet sted, så den skal IKKE kalle logg_ut/signOut en gang til).
+function nullstillLokalOkt() {
+  if (timerTick) clearInterval(timerTick);
+  timerTick = null; timerStart = null;
+  me = null;
+  document.getElementById('appScreen').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  // Stopp sanntid: kanalen er knyttet til den innloggede ansatte og skal ikke bli stående
+  // (en ny innlogging starter den på nytt, se tryLogin()).
+  if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
+  clearTimeout(realtimeStabilTimer);
+  if (realtimeChannel && db) { try { db.removeChannel(realtimeChannel); } catch(_){} }
+  realtimeChannel = null;
+  // Nullstill backoff-telleren for DENNE sideøkten (s00-022 punkt 2) - uten dette kunne en
+  // ansatt som logget ut og inn igjen uten å laste siden på nytt arve en gammel
+  // realtimeForsteFeil fra FORRIGE innlogging, og sanntiden kunne da feilaktig tro den
+  // allerede hadde stått frakoblet lenge og gi opp den automatiske gjenoppkoblingen med en
+  // gang ved første feil i den nye økten.
+  realtimeReconnectForsok = 0;
+  realtimeForsteFeil = 0;
+}
+// Fullstendig omlasting i stedet for bare å bytte skjerm (s00-022 punkt 6) - uten dette kunne
+// forrige ansatts åpne modaler/skjermtilstand bli stående synlig til neste ansatt logget inn.
+// En frisk side garanterer at ingenting av forrige økt henger igjen. Kalles ETTER at
+// avsluttSesjon() (nettverkskall) er ferdig, ellers kan omlastingen avbryte dem midt i.
+// typeof-vakt: location.reload finnes ikke i de isolerte vm-testmiljøene.
+function sikkerReload() {
+  if (typeof location !== 'undefined' && typeof location.reload === 'function') location.reload();
+}
+
 // Pågående utlogging (null ellers) - tryLogin() venter på den, se kommentaren der.
 let utloggingPagar = null;
 // tvungen = true når appen selv logger ut (dagens PIN byttet): ingen spørsmål om ulagrede endringer.
@@ -1301,18 +1374,18 @@ async function utforLogout(tvungen) {
     const n = offlineKo.size;
     if (!confirm(`${n} endring${n===1?'':'er'} er ikke lagret ennå (ingen kontakt med serveren). Logger du ut nå kan ${n===1?'den':'de'} gå tapt. Logg ut likevel?`)) return;
   }
-  if (timerTick) clearInterval(timerTick);
-  timerTick = null; timerStart = null;
-  me = null;
-  document.getElementById('appScreen').style.display='none';
-  document.getElementById('loginScreen').style.display='flex';
-  // Stopp sanntid: kanalen er knyttet til den innloggede ansatte og skal ikke bli stående
-  // (en ny innlogging starter den på nytt, se tryLogin()).
-  if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
-  clearTimeout(realtimeStabilTimer);
-  if (realtimeChannel && db) { try { db.removeChannel(realtimeChannel); } catch(_){} }
-  realtimeChannel = null;
+  // Vent på pågående Fiken-/frakt-kall (s00-022 punkt 5) - signOut midt i et slikt kall kan gi
+  // at edge-funksjonens EGET oppfølgende databasekall (f.eks. å lagre fiken_kladd_url) feiler
+  // fordi RLS-sesjonen er død. 10 sek er god margin for et enkelt edge-kall; venter vi forgjeves
+  // logger vi ut likevel i stedet for å låse brukeren fast.
+  if (edgeFetchAktive > 0) {
+    await medTidsgrense(new Promise(r => {
+      const sjekk = setInterval(() => { if (edgeFetchAktive <= 0) { clearInterval(sjekk); r(); } }, 200);
+    }), 10000);
+  }
+  nullstillLokalOkt();
   await avsluttSesjon();
+  sikkerReload();
 }
 
 // ════════════════════════════════════════════════════

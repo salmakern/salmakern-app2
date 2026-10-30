@@ -559,7 +559,7 @@ async function opprettMote() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'nytt_mote', tittel, dato, tid, deltakerIder })
-  }).catch(e => console.warn('Nytt møte-varsel feilet:', e));
+  }, { stille: true }).catch(e => console.warn('Nytt møte-varsel feilet:', e));
   closeModal('nyttMote');
   document.getElementById('mote_tittel').value = '';
   document.getElementById('mote_dato').value = '';
@@ -634,7 +634,7 @@ async function sendGodkjennerMelding() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'godkjenner_melding', avsenderId: me.id, avsenderNavn: me.navn, tekst })
-      }).catch(e => console.warn('Chat-varsel feilet:', e));
+      }, { stille: true }).catch(e => console.warn('Chat-varsel feilet:', e));
     }
   }
   input.disabled = false;

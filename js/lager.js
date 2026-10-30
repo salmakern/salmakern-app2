@@ -642,7 +642,7 @@ function varselMangelfullLevering(v, forventet, mottatt, mangler) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'mangelfull_levering', vareNavn: v.navn, forventet, mottatt, mangler, enhet: v.enhet })
-  }).catch(e => console.warn('Mangelfull leverings-varsel feilet:', e));
+  }, { stille: true }).catch(e => console.warn('Mangelfull leverings-varsel feilet:', e));
 }
 
 // Endrer beholdning for én vare og logger det i historikken. Sendes et lagerBatch-
@@ -695,7 +695,7 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, la
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'lav_lager', vareNavn: v.navn, antall: v.antall, enhet: v.enhet, minAntall: v.minAntall })
-    }).catch(e => console.warn('Lav lager-varsel feilet:', e));
+    }, { stille: true }).catch(e => console.warn('Lav lager-varsel feilet:', e));
   }
   return hist;
 }

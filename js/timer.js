@@ -67,7 +67,7 @@ function varsleAdminOmFravaer(fravaerType, fraDato, tilDato, betalt) {
       type: 'fravaer_registrert', ansattNavn: me?.navn || '?', fravaerType, fraDato, tilDato,
       betalt: betalt === undefined ? null : betalt
     })
-  }).catch(e => console.warn('Fravær-varsel feilet:', e));
+  }, { stille: true }).catch(e => console.warn('Fravær-varsel feilet:', e));
 }
 
 function initTimerPage() {
