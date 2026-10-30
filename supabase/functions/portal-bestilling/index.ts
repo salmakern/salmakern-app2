@@ -8,7 +8,9 @@
 //    `kjor_pa_nytt` kastes alltid.
 //  * Databasen nås med service_role-nøkkelen fra miljøet (SUPABASE_SERVICE_ROLE_KEY, satt av Supabase): ingenting hardkodes. Postgres-funksjonen kan
 //    BARE kalles av service_role.
-//  * Svaret til portalen er bare {kode, status, ordre_id?}. Detaljer (også andre forhandleres navn) står kun i portal_bestillinger.detalj (bare admin).
+//  * Et vellykket svar til portalen er bare {kode, status, ordre_id?}; feilsvar er bare {kode, felt?}. Detaljer (også andre forhandleres navn) står kun i
+//    portal_bestillinger.detalj (bare admin). 200 er endelig (også kode «trenger_avklaring»: mottatt, ikke feil, ikke retry); 400/401/405/413 er permanente;
+//    500 ikke_konfigurert og 502 intern_feil betyr «prøv igjen med SAMME bestilling_id» (idempotent, også etter tidsavbrudd midt i en transaksjon).
 //  * Logger én JSON-linje per kall uten verdier (ingen chassis, e-poster eller navn).
 //  * Ingen CORS: nettlesere skal aldri kalle denne.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
@@ -91,7 +93,14 @@ Deno.serve(async (req) => {
 
     if (error) {
       const feil = mapFeil(error)
-      logg(feil.kode, start, { http: feil.status, felt: feil.felt, ignorerte: input.ignorerte })
+      // Bare SQLSTATE/PGRST-koden (aldri meldingen eller detaljene, som kan inneholde verdier) og om det var et tidsavbrudd, så en feil i loggen kan
+      // skilles fra en annen uten å røpe noe: 57014 = statement timeout, 40P01 = vranglås, PGRST* = PostgREST, tom kode + tidsavbrudd = vår egen 25 s.
+      const melding = typeof error.message === 'string' ? error.message : ''
+      logg(feil.kode, start, {
+        http: feil.status, felt: feil.felt, ignorerte: input.ignorerte,
+        sqlstate: typeof error.code === 'string' ? error.code.slice(0, 12) : '',
+        tidsavbrudd: /^(TimeoutError|AbortError)\b/.test(melding),
+      })
       return svar({ kode: feil.kode, ...(feil.felt ? { felt: feil.felt } : {}) }, feil.status)
     }
     const ut = mapSvar(data)

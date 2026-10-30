@@ -1,8 +1,9 @@
--- Kjørt: 2026-10-30 (etter test 43/43 i en transaksjon som ble rullet tilbake og uavhengig gjennomgang av en annen økt; ordrer/admin_ark/innstillinger var byte-identiske før og etter)
+-- Kjørt: 2026-10-30 (v1, etter test 43/43 i en transaksjon som ble rullet tilbake og gjennomgang av en annen økt), omkjørt samme dag som v2 etter uavhengig gjennomgang av edge-funksjonen
+-- (navnekollisjon på kontaktperson/eier, lås per forhandler rundt taket, kommentarer; test 47/47). Begge ganger var ordrer/admin_ark/innstillinger byte-identiske før og etter.
 -- Fase 2 av «Bestill»-koblingen, STEG 3 (G3 i C:/Users/GroAnitaMartinsen/.claude/bestill-fase2/plan-salmakern.md): funksjonen som tar imot EN bestilling fra
 -- Forhandlerportalen og enten kobler den til en eksisterende ordre, oppretter en ny ordre «På vei» (ikke bekreftet fra portal), lager en løs rad i
--- Admin-ark (serienummer) eller legger den til manuell avklaring. INGENTING kaller funksjonen ennå (edge-funksjonen kommer i G4), og den kan KUN
--- kalles av service_role. Alt den skriver omgår dermed ikke appens regler: ordren lages i EXAKT samme form som appen lager den selv (js/core.js mkOrdre +
+-- Admin-ark (serienummer) eller legger den til manuell avklaring. Den kalles bare av edge-funksjonen portal-bestilling (G4, utrullet 2026-10-30; portalen
+-- sender først når koblingen slås på, G11), og den kan KUN kalles av service_role. Alt den skriver omgår dermed ikke appens regler: ordren lages i EXAKT samme form som appen lager den selv (js/core.js mkOrdre +
 -- ordreToDb, js/ordre-diverse.js opprettOrdre, js/admin-ark.js adminArkLagreFelter).
 --
 -- Regler (Henriks avgjørelser 2026-10-30, kritikernes funn lagt inn):
@@ -16,12 +17,19 @@
 --    store/små) og ikke «hentet»: koblet, ordren RØRES IKKE (ingen UPDATE: gir ingen push og ingen historikkrad). Én, annen forhandler: avklaring_annen_forhandler.
 --    Hentet-men-ikke-arkivert, eller flere aktive: avklaring_chassis (manuelt). Chassis på bare arkivert ordre gir ny ordre.
 --  * Modell: portal_modell_kobling (portalens slug til appens merke/modell) MÅ ha en rad, ellers venter_modell (ingen ordre med feil/tomt modellnavn).
---  * Tak: maks 10 ubekreftede portal-ordrer per forhandler (c_tak). Over det: avklaring_tak (ingen ordre) så en feil, en test eller et angrep ikke kan fylle
---    ordrelisten hos alle ansatte.
+--  * Tak: maks 10 ubekreftede portal-ORDRER per forhandler (c_tak; lås per forhandler så taket holder ved samtidige kall). Over det: avklaring_tak (ingen ordre)
+--    så en feil, en test eller et angrep ikke kan fylle ordrelisten hos alle ansatte. Taket gjelder bare chassis-banen: serienummer-rader (Admin-ark, bare
+--    administratorer ser dem) og rader i portal_bestillinger har ingen egen grense her; portalens grenser (20/time per selger, 100/time og 300/døgn totalt)
+--    og at bare portalen har hemmeligheten er det som begrenser dem. Kjent og bevisst ikke dedupet: samme serienummer sendt to ganger med ulik bestilling-id gir to rader.
 --  * SERIENUMMER: løs rad i admin_ark (chassis_nr = ''), forhandler = Kontakter-navnet, kontaktperson = kontaktperson under DENNE forhandleren med samme
---    e-post (ellers samme navn), ellers selgerens navn. Ingen ordre.
---  * Fritekst fra portalen saniteres (kontrolltegn, retningstegn og < > fjernes, lengde kappes). Selgerens KOMMENTAR tas ikke imot og havner aldri i ordrenotater
---    (notater kan skrives ut på dokumenter).
+--    e-post (ellers samme navn), ellers selgerens navn, MEN bare hvis navnet ikke tilhører noen annen kontakt/kontaktperson i Kontakter (ellers tom, og selgeren
+--    står i merknaden: Admin-ark slår opp e-post på navn på tvers av alle forhandlere). Samme regel gir ordrens eier. Ingen ordre.
+--  * Fritekst fra portalen: selger_navn og selger_epost saniteres (kontrolltegn, retningstegn og < > fjernes, lengde kappes). Øvrige felt (forhandler_navn,
+--    kontakt_id, modell_slug) lagres i portal_bestillinger (bare admin leser) bare med kappet lengde: en visning av dem MÅ bruke esc() på alle felt.
+--    Selgerens KOMMENTAR tas ikke imot og havner aldri i ordrenotater (notater kan skrives ut på dokumenter).
+--  * Utfall som venter_* og avklaring_* er endelige sett fra portalen: et nytt kall på samme bestilling-id endrer ingenting. Etter at årsaken er rettet (rad i
+--    portal_modell_kobling, rettet org.nr/kontakt-id i Kontakter, manuell avklaring) kjøres funksjonen på nytt av admin med `kjor_pa_nytt` (via SQL som
+--    postgres/service_role, eller G8-RPC-ene). Edge-funksjonen slipper aldri `kjor_pa_nytt` gjennom fra portalen.
 --  * Returnerer BARE en grov kode til portalen: {kode: ok | trenger_avklaring, status, ordre_id?}. Detaljert utfall (inkl. andre forhandleres navn) står kun i
 --    portal_bestillinger.detalj som bare admin leser. Portalen skal aldri vise utfallet til selgeren.
 --
@@ -164,7 +172,22 @@ begin
      or lower(btrim(coalesce(kp->>'navn', ''))) = lower(v_selger)
   order by (v_epost <> '' and lower(btrim(coalesce(kp->>'epost', ''))) = v_epost) desc
   limit 1;
-  v_kp_navn := coalesce(nullif(btrim(v_kp_navn), ''), v_selger);
+  if nullif(btrim(v_kp_navn), '') is null then
+    -- Ingen kontaktperson under denne forhandleren treffer. Selgerens eget navn brukes bare hvis det IKKE tilhører noen annen kontakt eller kontaktperson i Kontakter:
+    -- Admin-ark slår opp e-postadresse på NAVN på tvers av alle kontakter og forhandlere (adminArkFinnKontaktEpost), så et sammenfallende navn hos en annen
+    -- forhandler ville sendt frakt-/hentet-e-post (med chassis.nr, forhandler og dato) til feil person. Ved sammenfall står kontaktpersonen tom (appen viser
+    -- «mangler kontakt») og selgerens navn står i merknaden/endringsloggen i stedet.
+    if exists (
+      select 1 from public.innstillinger i, jsonb_array_elements(i.kontakter) k
+      where i.id = 1
+        and (lower(btrim(coalesce(k->>'navn', ''))) = lower(v_selger)
+             or exists (select 1 from jsonb_array_elements(coalesce(k->'kontaktpersoner', '[]'::jsonb)) kp where lower(btrim(coalesce(kp->>'navn', ''))) = lower(v_selger)))
+    ) then
+      v_kp_navn := '';
+    else
+      v_kp_navn := v_selger;
+    end if;
+  end if;
 
   -- ---------- 4a. SERIENUMMER: løs rad i Admin-ark, ingen ordre ----------
   if v_type = 'SERIENUMMER' then
@@ -174,7 +197,8 @@ begin
     v_epoch := (extract(epoch from clock_timestamp()) * 1000)::bigint;
     v_ark_id := 'ark_' || v_epoch::text || '_' || substr(md5(v_id), 1, 5);
     insert into public.admin_ark (id, chassis_nr, aar, rekkefolge, forhandler, kontaktperson, serienummer, merknader)
-    values (v_ark_id, '', v_aar, v_rek, left(v_kunde, 200), left(v_kp_navn, 120), v_ident, 'Fra portalen ' || v_nr);
+    values (v_ark_id, '', v_aar, v_rek, left(v_kunde, 200), left(v_kp_navn, 120), v_ident,
+            'Fra portalen ' || v_nr || case when v_kp_navn = '' then ' (selger: ' || v_selger || ', finnes ikke som kontaktperson hos forhandleren)' else '' end);
     update public.portal_bestillinger
        set status = 'admin_ark', admin_ark_id = v_ark_id, forhandler_navn = v_kunde, detalj = 'Løs rad i Admin-ark opprettet.', oppdatert_at = now()
      where portal_bestilling_id = v_id;
@@ -209,6 +233,9 @@ begin
       v_status := 'venter_modell';
       v_detalj := 'Portalmodellen «' || v_slug || '» har ingen oversettelse i portal_modell_kobling.';
     else
+      -- Lås per forhandler: uten den kunne to samtidige bestillinger (ulike chassis, ulike chassis-låser) begge se 9 ubekreftede og begge opprette, og taket ble 11.
+      -- Rekkefølge på låsene er alltid bestilling, så chassis, så forhandler: ingen syklus, ingen vranglås.
+      perform pg_advisory_xact_lock(hashtextextended('portal_forhandler:' || lower(v_kunde), 0));
       select count(*) into v_ukonf from public.ordrer
        where status = 'aktiv' and portal_bestilling_id is not null and portal_bekreftet_at is null and lower(btrim(coalesce(kunde, ''))) = lower(v_kunde);
       if v_ukonf >= c_tak then

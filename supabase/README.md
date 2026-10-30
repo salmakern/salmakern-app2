@@ -89,19 +89,31 @@ Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandle
 2. **Postgres-funksjonen `portal_koble_bestilling(p jsonb)`** (`20261030210000_portal_koble_bestilling.sql`): all forretningslogikk. Kobler til en eksisterende
    ordre, oppretter ny ordre «På vei» (ikke bekreftet fra portal, i nøyaktig samme form som appen lager den), lager en løs rad i Admin-ark (serienummer) eller
    legger bestillingen til avklaring. Idempotent på portalens bestilling-id; en slettet portal-ordre gjenopplives aldri (gravstein). Kan KUN kalles av
-   `service_role`. Test: `tester/portal_koble_bestilling_TEST_body.sql` (43 sjekker, alltid i en transaksjon som rulles tilbake; kjøring står øverst i filen).
+   `service_role`. Test: `tester/portal_koble_bestilling_TEST_body.sql` (47 sjekker, alltid i en transaksjon som rulles tilbake; kjøring står øverst i filen).
+   Utfall `venter_*` og `avklaring_*` er endelige sett fra portalen: et nytt kall på samme bestilling-id endrer ingenting. Når årsaken er rettet (rad i
+   `portal_modell_kobling`, rettet org.nr/kontakt-id i Kontakter, manuell avklaring) kjøres funksjonen på nytt av admin med `kjor_pa_nytt` (SQL som
+   postgres/service_role, senere G8-RPC-ene), med de lagrede feltene fra `portal_bestillinger`.
+   Kjent og bevisst: taket på 10 gjelder bare ordrer (chassis-banen); serienummer-rader og rader i `portal_bestillinger` har ingen egen grense her (portalens
+   grenser og at bare portalen har hemmeligheten begrenser dem), og samme serienummer sendt to ganger gir to Admin-ark-rader.
    Rollback: `rollback-referanser/portal_koble_bestilling_ROLLBACK.sql`.
 3. **Edge-funksjonen `portal-bestilling`** (`functions/portal-bestilling/`: `index.ts` er døra inn, `logikk.ts` er ren validering/avgrensning). Egen hemmelighet
    `PORTAL_BESTILLING_SECRET` (Supabase-hemmelighet; samme verdi i portalens miljø som `x-sync-secret`, og aldri `FIKEN_SYNC_SECRET`), sammenlignet i
    konstant tid, håndhevet fra dag én (ingen myk modus: det finnes ingen gamle kallere). Funksjonen er utrullet med standard `verify_jwt`, så portalen må
-   også sende anon-nøkkelen som `apikey`/`Authorization`. Bare ti navngitte felt slippes gjennom til databasen (`kjor_pa_nytt` kastes alltid), og svaret
-   er bare `{kode, status, ordre_id?}` (aldri detaljer eller databasefeil). Logger én JSON-linje per kall uten verdier. Rull ut på nytt etter endring:
+   også sende anon-nøkkelen som `apikey`/`Authorization`. Bare ti navngitte felt slippes gjennom til databasen (`kjor_pa_nytt` kastes alltid), og et
+   vellykket svar er bare `{kode, status, ordre_id?}`, feilsvar bare `{kode, felt?}` (aldri detaljer eller databasefeil). Logger én JSON-linje per kall uten
+   verdier (utfall, HTTP-status, tid, SQLSTATE-kode og tidsavbrudd-flagg ved databasefeil).
+   **Kontrakten for portalen:** påkrevd `bestilling_id` (8-64 tegn A-Za-z0-9_-, portalens id), `nr`, `ident_type` (`CHASSIS` | `SERIENUMMER`), `ident`; valgfri
+   `kontakt_id`, `orgnr`, `forhandler_navn`, `selger_navn`, `selger_epost`, `modell_slug` (uten kontakt-id og org.nr blir utfallet `venter_forhandler`, uten
+   `modell_slug` på en ny chassis-ordre `venter_modell`). Svar: `200 {kode:'ok'|'trenger_avklaring', status, ordre_id?}` er ENDELIG (også `trenger_avklaring`:
+   mottatt, ikke feil, ikke retry; vis aldri `status` til selgeren, den kan røpe at chassis.nr finnes hos en annen forhandler); `400 ugyldig_input`/`401`/`405`/`413`
+   er permanente (rett feilen); `500 ikke_konfigurert` og `502 intern_feil` betyr prøv igjen med SAMME `bestilling_id` (idempotent, også etter tidsavbrudd
+   midt i en transaksjon). Portalens fetch-tidsavbrudd og Vercels `maxDuration` må ligge over funksjonens 25 s. Rull ut på nytt etter endring:
    `npx supabase functions deploy portal-bestilling --project-ref qoqpenbfdxeduylxirwk --use-api` (begge filene lastes opp; relativ import virker).
    Rollback: `npx supabase functions delete portal-bestilling --project-ref qoqpenbfdxeduylxirwk` (øyeblikkelig). Å bare fjerne hemmeligheten
    (`secrets unset`) er IKKE nok alene: hemmeligheten leses når funksjonen starter, så kjørende kopier kan huske den gamle verdien en stund
    (ved mistanke om lekkasje: sett en NY verdi, rull ut på nytt og oppdater portalens miljø).
-   Tester: `test/portal-bestilling.test.js` (31 enhetstester: validering, svaravgrensning og hele håndtereren mot falsk Deno og falsk database; kjører i
-   `npm test`) og `tester/portal_bestilling_differensialtest.mjs` (sammenligner edge-valideringen med Postgres-valideringen på 356 grensetilfeller;
+   Tester: `test/portal-bestilling.test.js` (34 enhetstester: validering, svaravgrensning og hele håndtereren mot falsk Deno og falsk database, inkl. størrelsesgrensen på byte-nivå og at ingen
+   logglinje fra noen bane inneholder verdier; kjører i `npm test`) og `tester/portal_bestilling_differensialtest.mjs` (sammenligner edge-valideringen med Postgres-valideringen på 356 grensetilfeller;
    kjøres for hånd når valideringen i en av dem endres; egenskapen er at det edge godtar, godtar Postgres også).
    **Funksjonen er utrullet, men INGENTING kaller den ennå** (portalen sender først når koblingen slås på, G11). Livetest 2026-10-30: uten nøkkel 401 (porten),
    uten/med feil hemmelighet 401, GET 405, ugyldig chassis/JSON 400, for stor body 413, ukjent kontakt 200 `venter_forhandler` (og samme svar ved gjentatt kall).

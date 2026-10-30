@@ -15,7 +15,7 @@ declare
   v_n int; v_max int; v_aar int; v_id text; v_oid text; v_ok boolean; v_feil text; i int;
   c_a constant text := 'k_portal_akauto'; c_org_a constant text := '831862122';
   c_b constant text := 'k2';              c_org_b constant text := '927975564';
-  function_args jsonb; v_fk_id text; v_fk_org text;
+  function_args jsonb; v_fk_id text; v_fk_org text; v_other text;
 begin
   select * into v_real from public.ordrer where status = 'aktiv' order by created_at desc limit 1;
 
@@ -170,6 +170,32 @@ begin
     insert into _res(navn, ok, info) values ('T15 kontakt MED fullmakt-fil: dokumenter har fullmakten og fullmakt = har',
       r->>'status' = 'ny_ordre' and o.fullmakt = 'har' and jsonb_array_length(o.dokumenter) = 1 and o.dokumenter->0->>'lastetOppAv' = 'Automatisk (forhandlerfullmakt)' and (o.dokumenter->0->>'url') <> '', r::text || ' / ' || coalesce(o.fullmakt, ''));
   end if;
+
+  -- ===== T16 Navnekollisjon: selgerens navn tilhører en kontaktperson hos EN ANNEN forhandler (navnet hentes fra AK Auto og brukes mot Autostrada Seljord; tak-testen T11 har fylt AK Auto) =====
+  -- Admin-ark slår opp e-post på navn på tvers av alle forhandlere, så et slikt navn skal ikke bli kontaktperson/eier (ville sendt e-post til feil person).
+  select kp->>'navn' into v_other
+  from public.innstillinger i, jsonb_array_elements(i.kontakter) k, jsonb_array_elements(coalesce(k->'kontaktpersoner', '[]'::jsonb)) kp
+  where i.id = 1 and k->>'id' = c_a and btrim(coalesce(kp->>'navn', '')) <> ''
+    and lower(btrim(kp->>'navn')) not in (select lower(btrim(coalesce(kp2->>'navn', ''))) from public.innstillinger i2, jsonb_array_elements(i2.kontakter) k2, jsonb_array_elements(coalesce(k2->'kontaktpersoner', '[]'::jsonb)) kp2 where i2.id = 1 and k2->>'id' = c_b)
+  limit 1;
+  if v_other is null then
+    insert into _res(navn, ok, info) values ('T16 navnekollisjon: hoppet over (fant ingen kontaktperson hos AK Auto som ikke også finnes hos Autostrada Seljord)', true, '');
+  else
+    r := public.portal_koble_bestilling(jsonb_build_object('bestilling_id', 'testbest0070', 'nr', 'B-TEST-0070', 'ident_type', 'CHASSIS', 'ident', 'TESTWXYZ000000070',
+          'kontakt_id', c_b, 'orgnr', c_org_b, 'selger_navn', upper(v_other), 'modell_slug', 'testmodell'));
+    select * into o from public.ordrer where portal_bestilling_id = 'testbest0070';
+    insert into _res(navn, ok, info) values ('T16 navn som tilhører en kontaktperson hos en annen forhandler (selv med andre store/små bokstaver): ordrens eier blir TOM', r->>'status' = 'ny_ordre' and o.eier = '', coalesce(o.eier, 'null'));
+    insert into _res(navn, ok, info) values ('T16 selgeren står likevel i endringsloggen', o.endringer->0->>'txt' like '%' || upper(v_other) || '%', '');
+    r := public.portal_koble_bestilling(jsonb_build_object('bestilling_id', 'testbest0071', 'nr', 'B-TEST-0071', 'ident_type', 'SERIENUMMER', 'ident', 'KOLL 7071',
+          'kontakt_id', c_b, 'orgnr', c_org_b, 'selger_navn', v_other, 'modell_slug', 'testmodell'));
+    select * into a from public.admin_ark where id = (select admin_ark_id from public.portal_bestillinger where portal_bestilling_id = 'testbest0071');
+    insert into _res(navn, ok, info) values ('T16 serienummer med kollisjon: Admin-ark-raden har tom kontaktperson og selgeren i merknaden', a.kontaktperson = '' and a.merknader like 'Fra portalen B-TEST-0071 (selger: %', a.merknader);
+  end if;
+  -- Et navn som INGEN kontakt har, brukes som før (kontaktperson/eier = selgerens eget navn).
+  r := public.portal_koble_bestilling(jsonb_build_object('bestilling_id', 'testbest0072', 'nr', 'B-TEST-0072', 'ident_type', 'CHASSIS', 'ident', 'TESTWXYZ000000072',
+        'kontakt_id', c_b, 'orgnr', c_org_b, 'selger_navn', 'Zzyzx Qwertyuiop Testperson', 'modell_slug', 'testmodell'));
+  select * into o from public.ordrer where portal_bestilling_id = 'testbest0072';
+  insert into _res(navn, ok, info) values ('T16 navn som ingen kontakt har: eier = selgerens eget navn (som før)', o.eier = 'Zzyzx Qwertyuiop Testperson', coalesce(o.eier, 'null'));
 
   -- ===== T14 Rettigheter =====
   insert into _res(navn, ok, info) values ('T14 bare service_role kan kalle funksjonen (ikke anon, authenticated eller public)',

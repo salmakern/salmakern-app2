@@ -309,14 +309,32 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
     expect(rpcKall).toHaveLength(0);
   });
 
-  it('for stor body: 413 (både ved content-length og uten), og ugyldig JSON/felt: 400, uten database', async () => {
+  it('størrelsesgrensen: nøyaktig 8192 byte slippes gjennom, 8193 gir 413; grensen teller byte (ikke tegn) og content-length alene kan utløse den', async () => {
+    expect(MAKS_BODY_BYTES).toBe(8192);
+    const { kall, rpcKall, logger } = await last();
+    const grunn = JSON.stringify(GYLDIG);
+    const polstret = (n) => grunn + ' '.repeat(n - new TextEncoder().encode(grunn).length);
+    // a) nøyaktig på grensen: gyldig JSON med mellomrom på slutten, ikke 413
+    let res = await kall({ headers: medNokkel, body: polstret(8192) });
+    expect(res.status).toBe(200);
+    // b) én byte over: 413 uten database
+    const rpcFoer = rpcKall.length;
+    res = await kall({ headers: medNokkel, body: polstret(8193) });
+    expect(res.status).toBe(413);
+    // c) 5000 × «æ» er 5000 tegn men 10000 byte, uten content-length-header fra klienten: bytetellingen må ta den
+    res = await kall({ headers: medNokkel, body: JSON.stringify({ ...GYLDIG, selger_navn: 'æ'.repeat(5000) }) });
+    expect(res.status).toBe(413);
+    // d) liten body men content-length 20000: content-length-grenen alene (leser aldri body) og eget loggutfall
+    res = await kall({ headers: { ...medNokkel, 'content-length': '20000' }, body: GYLDIG });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ kode: 'ugyldig_input', felt: 'body' });
+    expect(rpcKall.length).toBe(rpcFoer);
+    expect(logger.map((l) => JSON.parse(l).utfall).slice(-3)).toEqual(['for_stor', 'for_stor', 'for_stor']);
+  });
+
+  it('ugyldig JSON/felt: 400, uten database', async () => {
     const { kall, rpcKall } = await last();
-    const stor = JSON.stringify({ ...GYLDIG, nr: 'x'.repeat(MAKS_BODY_BYTES + 10) });
-    let res = await kall({ headers: { ...medNokkel, 'content-length': String(stor.length) }, body: stor });
-    expect(res.status).toBe(413);
-    res = await kall({ headers: medNokkel, body: stor });
-    expect(res.status).toBe(413);
-    res = await kall({ headers: medNokkel, body: '{ikke json' });
+    let res = await kall({ headers: medNokkel, body: '{ikke json' });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ kode: 'ugyldig_input', felt: 'body' });
     res = await kall({ headers: medNokkel, body: { ...GYLDIG, ident: 'TESTWXIZ000000001' } });
@@ -341,18 +359,35 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
     expect(tekst).not.toMatch(/password|postgres|internal/);
   });
 
-  it('uventet svar fra databasen (feil form) og kastet unntak (tidsavbrudd): 502 intern_feil', async () => {
+  it('uventet svar fra databasen (feil form) og et kastet unntak fra klienten: 502 intern_feil', async () => {
     let t = await last({ rpc: { data: { kode: 'noe_nytt', status: 'x' }, error: null } });
     let res = await t.kall({ headers: medNokkel, body: GYLDIG });
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ kode: 'intern_feil' });
+    expect(JSON.parse(t.logger[0]).utfall).toBe('uventet_svar');
 
-    t = await last({ rpcKaster: new DOMException('The operation was aborted due to timeout https://test.supabase.invalid/rest/v1/rpc', 'TimeoutError') });
+    t = await last({ rpcKaster: new DOMException('Noe kastet https://test.supabase.invalid/rest/v1/rpc', 'TimeoutError') });
     res = await t.kall({ headers: medNokkel, body: GYLDIG });
     expect(res.status).toBe(502);
     const tekst = await res.text();
     expect(JSON.parse(tekst)).toEqual({ kode: 'intern_feil' });
     expect(tekst).not.toMatch(/supabase|timeout|aborted/i);
+    expect(JSON.parse(t.logger[0])).toMatchObject({ utfall: 'unntak', feiltype: 'TimeoutError' });
+  });
+
+  it('tidsavbrudd slik supabase-js rapporterer det (feil i svaret, ikke kastet): 502, ingen tekst videre, og loggen har flagget og SQLSTATE', async () => {
+    // supabase-js kaster ikke ved et avbrutt/utløpt kall: rpc() resolver med { data: null, error: { message, details, hint, code } }.
+    const t = await last({ rpc: { data: null, error: { message: 'TimeoutError: The operation was aborted due to timeout', details: 'TimeoutError: ... at https://test.supabase.invalid/rest/v1/rpc/portal_koble_bestilling', hint: 'Request was aborted (timeout or manual cancellation)', code: '' } } });
+    const res = await t.kall({ headers: medNokkel, body: GYLDIG });
+    expect(res.status).toBe(502);
+    const tekst = await res.text();
+    expect(JSON.parse(tekst)).toEqual({ kode: 'intern_feil' });
+    expect(tekst).not.toMatch(/supabase|timeout|aborted|hint|details/i);
+    expect(JSON.parse(t.logger[0])).toMatchObject({ utfall: 'intern_feil', http: 502, sqlstate: '', tidsavbrudd: true });
+
+    const t2 = await last({ rpc: { data: null, error: { message: 'canceling statement due to statement timeout', code: '57014' } } });
+    await t2.kall({ headers: medNokkel, body: GYLDIG });
+    expect(JSON.parse(t2.logger[0])).toMatchObject({ utfall: 'intern_feil', sqlstate: '57014', tidsavbrudd: false });
   });
 
   it('loggen har én JSON-linje per kall og aldri chassis, e-post, navn, hemmelighet eller nøkkel', async () => {
@@ -374,5 +409,33 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
       expect(typeof l.ms).toBe('number');
     }
     expect(linjer[2].felt).toBe('ident');
+  });
+
+  it('ingen logglinje fra NOEN bane inneholder verdier fra bestillingen, hemmeligheten eller nøkkelen (selv når feilmeldinger fra databasen gjør det)', async () => {
+    const hemmelige = [GYLDIG.ident, GYLDIG.selger_epost, GYLDIG.selger_navn, GYLDIG.forhandler_navn, GYLDIG.bestilling_id, GYLDIG.kontakt_id, GYLDIG.orgnr, GYLDIG.modell_slug, HEMMELIGHET, TJENESTE_NOKKEL];
+    const lekk = `${GYLDIG.ident} ${GYLDIG.selger_epost} ${GYLDIG.selger_navn} ${HEMMELIGHET} ${TJENESTE_NOKKEL}`;
+    const baner = [
+      { navn: 'ny_ordre', env: {}, init: { headers: medNokkel, body: GYLDIG }, forventet: 'ny_ordre' },
+      { navn: 'metode', env: {}, init: { method: 'GET', headers: medNokkel }, forventet: 'metode' },
+      { navn: 'uautorisert', env: {}, init: { headers: { 'x-sync-secret': HEMMELIGHET + 'x' }, body: GYLDIG }, forventet: 'uautorisert' },
+      { navn: 'ikke_konfigurert (hemmelighet)', env: { PORTAL_BESTILLING_SECRET: undefined }, init: { headers: medNokkel, body: GYLDIG }, forventet: 'ikke_konfigurert' },
+      { navn: 'ikke_konfigurert (nøkkel)', env: { SUPABASE_SERVICE_ROLE_KEY: undefined }, init: { headers: medNokkel, body: GYLDIG }, forventet: 'ikke_konfigurert' },
+      { navn: 'for_stor', env: {}, init: { headers: { ...medNokkel, 'content-length': '20000' }, body: GYLDIG }, forventet: 'for_stor' },
+      { navn: 'ugyldig_json', env: {}, init: { headers: medNokkel, body: '{ikke json ' + GYLDIG.ident }, forventet: 'ugyldig_json' },
+      { navn: 'ugyldig_input', env: {}, init: { headers: medNokkel, body: { ...GYLDIG, ident: 'TESTWXIZ000000001' } }, forventet: 'ugyldig_input' },
+      { navn: 'databasefeil som siterer verdiene', env: {}, rpc: { data: null, error: { message: `invalid input ${lekk}`, details: lekk, hint: lekk, code: '22P02' } }, init: { headers: medNokkel, body: GYLDIG }, forventet: 'intern_feil' },
+      { navn: 'UGYLDIG_INPUT fra databasen', env: {}, rpc: { data: null, error: { message: 'UGYLDIG_INPUT: chassis', code: 'P0001' } }, init: { headers: medNokkel, body: GYLDIG }, forventet: 'ugyldig_input' },
+      { navn: 'uventet svar', env: {}, rpc: { data: { kode: 'ok', status: 'ny_ordre', ordre_id: lekk }, error: null }, init: { headers: medNokkel, body: GYLDIG }, forventet: 'uventet_svar' },
+      { navn: 'kastet unntak som siterer verdiene', env: {}, rpcKaster: new Error(lekk), init: { headers: medNokkel, body: GYLDIG }, forventet: 'unntak' },
+    ];
+    for (const b of baner) {
+      const t = await last({ env: b.env, rpc: b.rpc, rpcKaster: b.rpcKaster });
+      await t.kall(b.init);
+      expect(t.logger, b.navn).toHaveLength(1);
+      const linje = JSON.parse(t.logger[0]);
+      expect(linje.utfall, b.navn).toBe(b.forventet);
+      expect(linje.portal_bestilling, b.navn).toBe(1);
+      for (const hemmelig of hemmelige) expect(t.logger[0], `${b.navn}: ${hemmelig}`).not.toContain(hemmelig);
+    }
   });
 });
