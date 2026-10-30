@@ -544,6 +544,7 @@ function tilbakeLagerListe() {
   document.getElementById('vareDetaljView').style.display = 'none';
   document.getElementById('oppskriftModellerView').style.display = 'none';
   document.getElementById('oppskriftModellDetaljView').style.display = 'none';
+  document.getElementById('materialbehovView').style.display = 'none';
   renderLagerListe();
 }
 
@@ -1068,6 +1069,57 @@ function visOppskriftModeller() {
   document.getElementById('oppskriftModellerView').style.display = 'block';
   renderOppskriftModellerListe();
   window.scrollTo(0, 0);
+}
+
+function visMaterialbehov() {
+  document.getElementById('lagerListeView').style.display = 'none';
+  document.getElementById('modellDetaljView').style.display = 'none';
+  document.getElementById('kategoriDetaljView').style.display = 'none';
+  document.getElementById('vareDetaljView').style.display = 'none';
+  document.getElementById('oppskriftModellerView').style.display = 'none';
+  document.getElementById('oppskriftModellDetaljView').style.display = 'none';
+  document.getElementById('materialbehovView').style.display = 'block';
+  renderMaterialbehov();
+  window.scrollTo(0, 0);
+}
+
+// Materialbehov (s09-003, del 2 - Henrik: "kun det som blir huket av") - summerer KUN
+// faktiske uttak gjort via en huket oppskrift (lagerhistorikk.oppskriftId satt, se
+// registrerLagerEndring/toggleOppskriftPaaOrdre) på ordrer som fortsatt er "i arbeid"
+// (alt unntatt status 'hentet'). Viser altså hvor mye av hver del som allerede er bundet
+// opp i biler som står i verkstedet nå - bevisst IKKE alt som bare matcher modellen
+// (oppskriftMatcherOrdre), siden valgfritt tilleggsutstyr ikke nødvendigvis blir valgt.
+function renderMaterialbehov() {
+  const el = document.getElementById('materialbehovListe'); if (!el) return;
+  const aktiveOrdreIder = new Set((S.ordrer||[]).filter(o => o.ordreStatus !== 'hentet').map(o => o.id));
+  const behovPerVare = {};
+  (S.lagerhistorikk||[]).forEach(h => {
+    if (!h.oppskriftId || !h.ordreId || !aktiveOrdreIder.has(h.ordreId) || h.endring >= 0) return;
+    behovPerVare[h.vareId] = (behovPerVare[h.vareId] || 0) + (-h.endring);
+  });
+  const rader = Object.entries(behovPerVare)
+    .map(([vareId, trengt]) => ({ v: (S.lagervarer||[]).find(x => x.id === vareId), trengt }))
+    .filter(r => r.v)
+    .sort((a, b) => b.trengt - a.trengt || a.v.navn.localeCompare(b.v.navn, 'no'));
+  if (!rader.length) {
+    el.innerHTML = '<div class="box" style="text-align:center;padding:24px"><div class="muted small">Ingen deler er bundet opp i pågående arbeid ennå - huk av en oppskrift på en ordre for å se den her.</div></div>';
+    return;
+  }
+  // Ingen "mangel"-sammenligning mot antall på lager her med vilje - trengt er en SUM av
+  // allerede trukne uttak (de skjedde idet oppskriften ble huket av), så antall på lager
+  // har allerede disse trukket fra. trengt > antall ville derfor IKKE bety en reell
+  // mangel/fremtidig underskudd, bare at samme vare er brukt mye på tvers av flere aktive
+  // ordrer - en slik sammenligning ville sett ut som et varsel uten å faktisk være ett.
+  el.innerHTML = `<div class="lager-grid">${rader.map(({v, trengt}) => `
+    <div class="box" style="cursor:pointer" onclick="visVareDetalj('${v.id}')">
+      <b style="font-size:15px">${esc(v.navn)}</b>
+      ${v.modell || v.kategori ? `<div class="small" style="font-size:11px;color:#8f8f96;margin-top:2px">${[v.modell, v.kategori].filter(Boolean).map(esc).join(' › ')}</div>` : ''}
+      <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin-top:8px">
+        <span style="font-size:22px;font-weight:800;letter-spacing:-.5px">${fmtAntall(trengt)}</span>
+        <span class="muted" style="font-size:12px">${esc(v.enhet)} bundet opp i aktive ordrer</span>
+      </div>
+      <div class="small muted" style="margin-top:4px">${fmtAntall(v.antall)} ${esc(v.enhet)} på lager nå</div>
+    </div>`).join('')}</div>`;
 }
 
 function renderOppskriftModellerListe() {
