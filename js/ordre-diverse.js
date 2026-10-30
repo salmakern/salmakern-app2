@@ -582,6 +582,13 @@ function opprettOrdre() {
     if (ny.dokumenter && ny.dokumenter.length) db.from('ordrer').update({dokumenter:ny.dokumenter}).eq('id', id)
       .then(r2=>{if(r2.error) console.error('Fullmakt-auto-vedlegg feilet:', r2.error.message);});
   });
+  // Push-varsel til alle ansatte om at en ny ordre er registrert (s09-017, bedt om av
+  // Henrik 30.10) - dekker kun manuelt opprettede ordrer; ordrer som kommer automatisk fra
+  // Forhandlerportalen har sitt eget varsel (se portal-bestilling-funksjonen).
+  edgeFetch('send-push', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'ny_ordre', ordreId: id, bil: ny.chassis || ny.regnr || ny.kunde, ansattNavn: me?.navn || '?' })
+  }, { stille: true }).catch(e => console.warn('Ny ordre-varsel feilet:', e));
   planleggLocalSpeiling();
   closeModal('nyOrdre'); renderAll();
   ['n_regnr','n_chassis','n_kunde','n_eier','n_merke','n_type','n_modell','n_variant','n_farge','n_versjon','n_dato'].forEach(i=>document.getElementById(i).value='');

@@ -279,6 +279,16 @@ Deno.serve(async (req) => {
       title = `Mangelfull levering: ${payload.vareNavn}`
       body = `Forventet ${payload.forventet}, fikk kun ${payload.mottatt} ${payload.enhet} (mangler ${payload.mangler})`
 
+    } else if (payload.type === 'ny_ordre') {
+      // Sendes fra klienten (ordre-diverse.js, opprettOrdre()) idet en ansatt oppretter en
+      // ny ordre manuelt - bedt om av Henrik 30.10 (s09-017), samme begrunnelse som
+      // fravaer_registrert: skal vite med en gang i stedet for å oppdage det tilfeldigvis i
+      // listene senere. Dekker IKKE ordrer som kommer automatisk fra Forhandlerportalen -
+      // den har sitt eget push-varsel (se portal-bestilling-funksjonen).
+      ordreId = payload.ordreId
+      title = 'Ny ordre'
+      body = `${payload.bil || 'Bil'} er registrert av ${payload.ansattNavn || '?'}`
+
     } else {
       console.log('Ukjent type, payload:', JSON.stringify(payload).slice(0, 200))
     }
