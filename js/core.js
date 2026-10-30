@@ -1082,6 +1082,17 @@ function save(ordreId) {
   // som status/endringer-kappløpet over.
   delete payload.ansatte_signert; delete payload.ordre_timer_sessions;
   delete payload.klargjoring_timer_sessions; delete payload.fiken_linjer;
+  // vekter utelates av samme grunn (lagt til 2026-10-30, s09-005) - har to egne atomiske
+  // skrivesteder (oppdater_ordre_vekter_felt() for direkte redigering via sv(), og
+  // oppdater_ordre_fra_primaer() for flåte-synkronisering via synkroniserFraPrimaer()) -
+  // denne generelle full-rad-lagringen skrev den likevel med fra nettleserens lokale kopi,
+  // så en ansatt som lagret et urelatert felt (f.eks. farge) fra en litt gammel kopi kunne
+  // stille overskrive en vekt nettopp satt av en av de to atomiske rutene (samme rotårsak
+  // som de andre feltene over).
+  delete payload.vekter;
+  // fiken_kladd_url utelates likeledes (lagt til 2026-10-30, s09-006) - skrives KUN av
+  // fiken-fakturer-funksjonen selv, server-side, aldri av klienten.
+  delete payload.fiken_kladd_url;
   return db.from('ordrer').upsert(payload)
     .then(r=>{
       if (r.error) {

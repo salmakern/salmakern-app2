@@ -1586,14 +1586,17 @@ async function sv(id,k,col,val) {
   if (k === 'totalvekt' && col === 'a') oppdaterTvangsflytBoks(o);
   synkroniserFraPrimaer(id);
 }
-function synkroniserFraPrimaer(id) {
+// ASYNC siden 2026-10-30 (s09-005) - skriver nå sekundærbilenes type/variant/versjon/
+// vekter/typegodkjenning/ombygging atomisk via oppdater_ordre_fra_primaer() i stedet for
+// den generelle save() (full-rad-upsert fra nettleserens lokale kopi, som også skriver
+// o.vekter - se kommentaren på sv() lenger opp). Kallerne (sv()/sf()) avventer den IKKE
+// (samme fire-and-forget-mønster som før), bare selve funksjonen er nå async.
+async function synkroniserFraPrimaer(id) {
   const primaer = S.ordrer.find(x=>x.id===id); if (!primaer) return;
   const flater = (S.flater||[]).filter(f => f.primaerOrdreId === id);
   if (!flater.length) return;
-  flater.forEach(f => {
-    (S.ordrer||[]).filter(o => o.flateId===f.id && o.id!==id).forEach(o => {
-      o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
-      o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+  for (const f of flater) {
+    for (const o of (S.ordrer||[]).filter(x => x.flateId===f.id && x.id!==id)) {
       // En flåte er alltid Nytt Kjøretøy, og typegodkjenningsnummeret er likt for alle
       // bilene i den (bekreftet av Henrik 2026-10-15) - uten dette måtte Nytt Kjøretøy
       // krysses av for hånd på hver enkelt sekundærbil for at DENS EGEN Fiken-fakturalinje
@@ -1602,12 +1605,24 @@ function synkroniserFraPrimaer(id) {
       // vegvesen-dokumenter.js sin vegvesenAutoGenererHvisKomplett, som måtte omgå dette
       // ved å sjekke PRIMÆRENS ombygging i stedet for bilens egen, funnet i test
       // 2026-09-21 - denne fiksen fjerner selve årsaken i stedet for bare workarounden).
-      o.typegodkjenning = primaer.typegodkjenning;
-      o.ombygging = o.ombygging || {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
-      o.ombygging.nyttKjoretoy = true;
-      save(o.id);
-    });
-  });
+      if (db) {
+        const { data, error } = await db.rpc('oppdater_ordre_fra_primaer', {
+          p_sekundaer_id: o.id, p_type: primaer.type, p_variant: primaer.variant,
+          p_versjon: primaer.versjon, p_vekter: primaer.vekter, p_typegodkjenning: primaer.typegodkjenning
+        });
+        if (error) { console.error('Kunne ikke synkronisere fra primærkjøretøy:', error.message); continue; }
+        Object.assign(o, data);
+      } else {
+        // Offline/uten db - oppdater kun lokalt, som før.
+        o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
+        o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+        o.typegodkjenning = primaer.typegodkjenning;
+        o.ombygging = o.ombygging || {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
+        o.ombygging.nyttKjoretoy = true;
+      }
+      planleggLocalSpeiling();
+    }
+  }
 }
 function oppdaterVektFarge(id,k) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
