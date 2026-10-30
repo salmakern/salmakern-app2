@@ -1093,14 +1093,18 @@ const PROVESKILT_LISTE = ['AGV 99', 'ACR 62', 'AJR 83'];
  * avhengighet ville enten krevd nettverk første gang eller ekstra service worker-cching for
  * noe som bare er et lite visuelt detalj.
  */
-function proveskiltHTML(ordreId, regnr, valgt) {
+function proveskiltHTML(regnr, valgt) {
   const [bokstaver, tall] = regnr.split(' ');
   const cq = v => (v/1050*100).toFixed(3) + 'cqw';
+  // overflow:hidden på alle tre nivåene (lagt til 2026-10-30, Henrik: "bilde må følge den
+  // hvite kanten") - uten dette ble ikke de indre lagene klippet til sin egen avrundede
+  // form, så det kunne vises skarpe/firkantede hjørner som stakk ut forbi selve den hvite/
+  // røde avrundede kanten i stedet for å følge den.
   return `
-  <div onclick="velgKjoreseddelSkilt('${ordreId}','${valgt ? '' : regnr}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
-    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;background:#d9161c;border-radius:${cq(16)};padding:${cq(5)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
-    <div style="width:100%;height:100%;box-sizing:border-box;background:linear-gradient(180deg,#ffffff,#ececec);border-radius:${cq(12)};padding:${cq(13)}">
-      <div style="position:relative;width:100%;height:100%;box-sizing:border-box;background:linear-gradient(170deg,#e81c22 0%,#d8141a 60%,#c81218 100%);border-radius:${cq(7)};box-shadow:inset 0 0 0 ${cq(3)} #b80f14,inset 0 0 0 ${cq(5)} rgba(255,255,255,.18),inset 0 ${cq(3)} ${cq(6)} rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
+  <div onclick="velgKjoreseddelILista('${regnr.replace(/'/g,"\\'")}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
+    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#d9161c;border-radius:${cq(16)};padding:${cq(5)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
+    <div style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(180deg,#ffffff,#ececec);border-radius:${cq(12)};padding:${cq(13)}">
+      <div style="position:relative;width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(170deg,#e81c22 0%,#d8141a 60%,#c81218 100%);border-radius:${cq(7)};box-shadow:inset 0 0 0 ${cq(3)} #b80f14,inset 0 0 0 ${cq(5)} rgba(255,255,255,.18),inset 0 ${cq(3)} ${cq(6)} rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
         <div style="position:absolute;top:${cq(14)};left:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
         <div style="position:absolute;top:${cq(14)};right:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
         <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.04em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(bokstaver)}</span>
@@ -1110,30 +1114,37 @@ function proveskiltHTML(ordreId, regnr, valgt) {
   </div>`;
 }
 let kjoreseddelModalOrdreId = null;
-function kjoreseddelModalInnholdHTML(o) {
-  const valgt = o.kjoreseddelSkilt || '';
+// Lokalt, ikke-lagret valg mens modalen er åpen - lagres først når "Bruk" trykkes (bedt om
+// av Henrik 2026-10-30: "det må være en knapp som heter bruk"). Tidligere lagret et klikk
+// på et skilt med en gang, uten noen bekreftelse.
+let kjoreseddelModalValgt = '';
+function kjoreseddelModalInnholdHTML() {
   return `
   <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
-    ${PROVESKILT_LISTE.map(skilt => proveskiltHTML(o.id, skilt, skilt === valgt)).join('')}
-  </div>`;
+    ${PROVESKILT_LISTE.map(skilt => proveskiltHTML(skilt, skilt === kjoreseddelModalValgt)).join('')}
+  </div>
+  <button class="btn red" style="margin-top:14px;width:100%" onclick="bekreftKjoreseddelSkilt()">Bruk</button>`;
 }
 function apneKjoreseddelModal(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   kjoreseddelModalOrdreId = ordreId;
-  document.getElementById('kjoreseddelModalListe').innerHTML = kjoreseddelModalInnholdHTML(o);
+  kjoreseddelModalValgt = o.kjoreseddelSkilt || '';
+  document.getElementById('kjoreseddelModalListe').innerHTML = kjoreseddelModalInnholdHTML();
   openModal('kjoreseddelModal');
 }
-function velgKjoreseddelSkilt(id, skilt) {
-  if (!sf(id, 'kjoreseddelSkilt', skilt)) return;
+// Oppdaterer kun den lokale, ikke-lagrede markeringen i modalen - se bekreftKjoreseddelSkilt().
+function velgKjoreseddelILista(skilt) {
+  kjoreseddelModalValgt = (kjoreseddelModalValgt === skilt) ? '' : skilt;
+  const liste = document.getElementById('kjoreseddelModalListe');
+  if (liste) liste.innerHTML = kjoreseddelModalInnholdHTML();
+}
+function bekreftKjoreseddelSkilt() {
+  const id = kjoreseddelModalOrdreId; if (!id) return;
+  if (!sf(id, 'kjoreseddelSkilt', kjoreseddelModalValgt)) return;
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
-  // Oppdaterer både selve modal-innholdet (ny valgt-ramme vises med en gang) og
-  // knappen i topplinjen (viser hvilket skilt som er valgt uten å måtte åpne modalen).
-  if (kjoreseddelModalOrdreId === id) {
-    const liste = document.getElementById('kjoreseddelModalListe');
-    if (liste) liste.innerHTML = kjoreseddelModalInnholdHTML(o);
-  }
   const knapp = document.getElementById('kjoreseddelBtn_' + id);
   if (knapp) knapp.textContent = o.kjoreseddelSkilt ? ('🔢 ' + o.kjoreseddelSkilt) : '🔢 Skilt';
+  closeModal('kjoreseddelModal');
 }
 
 // ════════════════════════════════════════════════════
