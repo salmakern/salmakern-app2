@@ -46,6 +46,15 @@ type FikenProduct = {
   note?: string
 }
 
+// ── PRIS-AVVIK-SJEKK BEGIN (test/fiken-pris-avvik.test.js henter ut denne funksjonen og tester den isolert) ──
+// Sammenligner i kroner (ikke øre) - begge sider kan ha blitt avrundet på vei gjennom en UI-visning, så
+// en terskel på 1 øre unngår falske avvik fra ren flyttallsunøyaktighet uten å skjule ekte avvik (disse er
+// i praksis alltid hele kroner i Fiken-produktlista).
+function erPrisAvvik(forventetKr: number, faktiskKr: number): boolean {
+  return Math.abs(forventetKr - faktiskKr) > 0.01
+}
+// ── PRIS-AVVIK-SJEKK END ──
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   try {
@@ -59,6 +68,16 @@ Deno.serve(async (req) => {
     const productNumber = typeof body?.productNumber === 'string' ? body.productNumber.trim() : ''
     const unitPriceKr =
       typeof body?.unitPriceKr === 'number' && Number.isFinite(body.unitPriceKr) ? body.unitPriceKr : null
+    // forventetGammelPrisKr er valgfri (s04-005): sender kalleren den (prisen den selv TROR står i Fiken
+    // fra før, f.eks. portalens egen lagrede verdi for produktet), sjekkes den mot Fikens FAKTISKE pris
+    // før vi skriver. Avviker de, skrives INGENTING - svaret sier fra i stedet, slik at kalleren kan
+    // spørre brukeren "Fiken-prisen er X, du skriver Y, fortsett?" og sende på nytt med bekreftAvvik:true.
+    // Uten feltet (gamle/andre kallere) er oppførselen UENDRET - skriver alltid, akkurat som før.
+    const forventetGammelPrisKr =
+      typeof body?.forventetGammelPrisKr === 'number' && Number.isFinite(body.forventetGammelPrisKr)
+        ? body.forventetGammelPrisKr
+        : null
+    const bekreftAvvik = body?.bekreftAvvik === true
 
     if (!productNumber || unitPriceKr === null || unitPriceKr < 0) {
       return jsonSvar({ error: 'Mangler eller ugyldig productNumber/unitPriceKr' }, 400)
@@ -78,6 +97,17 @@ Deno.serve(async (req) => {
 
     if (!found) {
       return jsonSvar({ synced: false, reason: `Fant ikke produktnummer ${productNumber} i Fiken` }, 404)
+    }
+
+    const faktiskGammelPrisKr = found.unitPrice / 100
+    if (forventetGammelPrisKr !== null && !bekreftAvvik && erPrisAvvik(forventetGammelPrisKr, faktiskGammelPrisKr)) {
+      // Skriver INGENTING - produktnummeret kan peke på feil produkt (skrivefeil), eller noen har endret
+      // prisen direkte i Fiken siden sist. Kalleren spør brukeren og sender samme kall på nytt med
+      // bekreftAvvik:true for å overstyre, eller lar være.
+      return jsonSvar(
+        { synced: false, avvik: true, productNumber, faktiskGammelPrisKr, forventetGammelPrisKr, nyPrisKr: unitPriceKr },
+        409
+      )
     }
 
     const oppdatertProdukt: Record<string, unknown> = {
