@@ -1,13 +1,10 @@
 -- Test av migrasjon 20261031160000 (ordre-status-utboks-triggeren filtrert til portal-ordre).
 -- ALLTID i en transaksjon som rulles tilbake: ingenting blir stående.
--- Kjøring (fra rotmappen, trenger portal_koble_bestilling for å lage en TEST portal-ordre):
+-- Kjøring (fra rotmappen - alle migrasjonene under er kjørt mot produksjon 31.10, trenger
+-- derfor bare testen selv og en rulle-tilbake, men portal_koble_bestilling tas med for å
+-- kunne lage en TEST portal-ordre uten en ekte Fiken/edge-funksjon i veien):
 --   (echo "begin;"; cat supabase/migrations/20261030210000_portal_koble_bestilling.sql; cat supabase/migrations/20261031160000_ordre_status_utboks_kun_portal.sql; cat supabase/tester/ordre_status_utboks_kun_portal_TEST_body.sql; echo "rollback;") > /tmp/t.sql
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file /tmp/t.sql
--- MIDLERTIDIG (til 20261031150000 er kjørt mot produksjon, s09-012 steg 2): 20261030210000 på
--- disk er nå v4 og setter portal_modell_slug i INSERT-en, så frem til DEN kolonnen finnes
--- live må 20261031150000_portal_modell_slug_matching.sql også ligge FØRST i samme kjeden
--- over, ellers feiler funksjonen med "column portal_modell_slug does not exist". Fjern det
--- leddet fra kommandoen igjen når 20261031150000 er kjørt mot produksjon.
 
 create temp table _res (n serial, navn text, ok boolean, info text);
 

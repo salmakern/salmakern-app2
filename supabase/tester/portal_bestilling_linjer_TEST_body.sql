@@ -1,7 +1,8 @@
 -- Test av linjer-feltet i portal_koble_bestilling (v5, s08-048, migrasjon
 -- 20261031170000_portal_bestilling_linjer.sql + 20261030210000 v5). ALLTID i en transaksjon
--- som rulles tilbake. Kjøring (fra rotmappen, 20261031150000 trengs midlertidig til den er
--- kjørt mot produksjon - se samme forbehold i ordre_status_utboks_kun_portal_TEST_body.sql):
+-- som rulles tilbake. Alle migrasjonene under er kjørt mot produksjon 31.10 - tas likevel med
+-- i kjeden under slik at testen kan kjøres uendret selv om noen kjører den fra en frisk kopi
+-- av databasen. Kjøring (fra rotmappen):
 --   (echo "begin;"; cat supabase/migrations/20261031150000_portal_modell_slug_matching.sql; cat supabase/migrations/20261031170000_portal_bestilling_linjer.sql; cat supabase/migrations/20261030210000_portal_koble_bestilling.sql; cat supabase/tester/portal_bestilling_linjer_TEST_body.sql; echo "rollback;") > /tmp/t.sql
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file /tmp/t.sql
 
