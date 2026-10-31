@@ -26,16 +26,29 @@ const MAKS_LENGDE: Record<Felt, number> = {
 
 const PAAKREVD: Felt[] = ['bestilling_id', 'nr', 'ident_type', 'ident']
 
-export type Innkommende =
-  | { ok: true; p: Record<string, string>; ignorerte: number }
-  | { ok: false; felt: string }
-
 const ER_OBJEKT = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+// s08-048: valgfri produktliste (Henrik: produktnummeret og portalens rabatt skal med inn i
+// Salmaker'n/Fiken). Egen gren utenfor TILLATTE_FELT-løkken over, siden den forventer
+// strenger - "linjer" er en liste av objekter. Samme prinsipp som resten av filen: bare det
+// åpenbart ugyldige avvises her (antall, grunnform, typer), Postgres-funksjonen
+// (portal_koble_bestilling v5) gjør den fulle saneringen/valideringen.
+export const LINJER_MAKS_ANTALL = 30
+export type LinjeInput = { produktnummer: string; navn: string; rabatt_prosent: number }
+const LINJE_ER_GYLDIG = (v: unknown): v is LinjeInput =>
+  ER_OBJEKT(v) &&
+  typeof v.produktnummer === 'string' && v.produktnummer.length > 0 && v.produktnummer.length <= 40 && !v.produktnummer.includes('\u0000') &&
+  typeof v.navn === 'string' && v.navn.length > 0 && v.navn.length <= 200 && !v.navn.includes('\u0000') &&
+  typeof v.rabatt_prosent === 'number' && Number.isFinite(v.rabatt_prosent) && v.rabatt_prosent >= 0 && v.rabatt_prosent <= 100
+
+export type Innkommende =
+  | { ok: true; p: Record<string, string> & { linjer?: LinjeInput[] }; ignorerte: number }
+  | { ok: false; felt: string }
 
 export function parseInnkommende(raw: unknown): Innkommende {
   if (!ER_OBJEKT(raw)) return { ok: false, felt: 'body' }
 
-  const p: Record<string, string> = {}
+  const p: Record<string, string> & { linjer?: LinjeInput[] } = {}
   for (const felt of TILLATTE_FELT) {
     const v = raw[felt]
     if (v === undefined || v === null) continue
@@ -46,6 +59,12 @@ export function parseInnkommende(raw: unknown): Innkommende {
     p[felt] = v
   }
   for (const felt of PAAKREVD) if (p[felt] === undefined) return { ok: false, felt }
+
+  if (raw.linjer !== undefined && raw.linjer !== null) {
+    if (!Array.isArray(raw.linjer) || raw.linjer.length > LINJER_MAKS_ANTALL) return { ok: false, felt: 'linjer' }
+    if (!raw.linjer.every(LINJE_ER_GYLDIG)) return { ok: false, felt: 'linjer' }
+    if (raw.linjer.length > 0) p.linjer = raw.linjer
+  }
 
   // Samme regler som Postgres-funksjonen (steg 1 i portal_koble_bestilling), men bevisst ASCII-strenge: det som slipper gjennom her skal ALLTID også
   // godtas av Postgres (en differensialtest på 356 grensetilfeller viste at JavaScript og Postgres ellers tolker «mellomrom» ulikt: `\s` og trim() tar med
@@ -65,7 +84,7 @@ export function parseInnkommende(raw: unknown): Innkommende {
     if (!/^[A-Za-z0-9._/ -]{3,40}$/.test(serie)) return { ok: false, felt: 'ident' }
   }
 
-  const ignorerte = Object.keys(raw).filter((k) => !(TILLATTE_FELT as readonly string[]).includes(k)).length
+  const ignorerte = Object.keys(raw).filter((k) => k !== 'linjer' && !(TILLATTE_FELT as readonly string[]).includes(k)).length
   return { ok: true, p, ignorerte }
 }
 

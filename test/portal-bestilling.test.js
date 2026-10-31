@@ -7,7 +7,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { parseInnkommende, mapSvar, mapFeil, TILLATTE_FELT, MAKS_BODY_BYTES } from '../supabase/functions/portal-bestilling/logikk.ts';
+import { parseInnkommende, mapSvar, mapFeil, TILLATTE_FELT, MAKS_BODY_BYTES, LINJER_MAKS_ANTALL } from '../supabase/functions/portal-bestilling/logikk.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FUNKSJON = path.resolve(__dirname, '../supabase/functions/portal-bestilling');
@@ -160,6 +160,82 @@ describe('parseInnkommende: avvises tidlig (400) uten å røre databasen', () =>
     for (const v of ['abc', 'a'.repeat(40), 'AB 12.3/4_5-6', 'abc\ndef', ' bn-4711/a ']) expect(b(v).ok, v).toBe(true);
     // Feilen peker på feltet «ident» (portalen får det aldri tilbake som noe annet).
     expect(b('ab')).toEqual({ ok: false, felt: 'ident' });
+  });
+});
+
+describe('parseInnkommende: linjer (s08-048, valgfri produktliste)', () => {
+  const LINJE = { produktnummer: '501', navn: 'Takluke', rabatt_prosent: 10 };
+
+  it('mangler helt: p.linjer er undefined, ikke en tom liste (uendret oppførsel for en bestilling uten linjer)', () => {
+    const r = parseInnkommende({ ...GYLDIG });
+    expect(r.ok && r.p.linjer).toBeUndefined();
+  });
+
+  it('null: behandles som fraværende', () => {
+    const r = parseInnkommende({ ...GYLDIG, linjer: null });
+    expect(r.ok && r.p.linjer).toBeUndefined();
+  });
+
+  it('tom liste: godtas, men lagres ikke (ingen grunn til å sende en tom liste videre)', () => {
+    const r = parseInnkommende({ ...GYLDIG, linjer: [] });
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.p.linjer).toBeUndefined();
+  });
+
+  it('gyldig liste med to linjer: sendes videre uendret', () => {
+    const to = [LINJE, { produktnummer: '502', navn: '4-seter', rabatt_prosent: 15.5 }];
+    const r = parseInnkommende({ ...GYLDIG, linjer: to });
+    expect(r).toEqual({ ok: true, p: { ...GYLDIG, linjer: to }, ignorerte: 0 });
+  });
+
+  it(`over ${LINJER_MAKS_ANTALL} linjer avvises`, () => {
+    const mange = Array.from({ length: LINJER_MAKS_ANTALL + 1 }, (_, i) => ({ ...LINJE, produktnummer: String(i) }));
+    expect(parseInnkommende({ ...GYLDIG, linjer: mange })).toEqual({ ok: false, felt: 'linjer' });
+  });
+
+  it(`nøyaktig ${LINJER_MAKS_ANTALL} linjer godtas`, () => {
+    const akkurat = Array.from({ length: LINJER_MAKS_ANTALL }, (_, i) => ({ ...LINJE, produktnummer: String(i) }));
+    expect(parseInnkommende({ ...GYLDIG, linjer: akkurat }).ok).toBe(true);
+  });
+
+  it('linjer som ikke er en liste (objekt, streng, tall) avvises', () => {
+    for (const v of [{ produktnummer: '501' }, 'tekst', 5, true]) {
+      expect(parseInnkommende({ ...GYLDIG, linjer: v })).toEqual({ ok: false, felt: 'linjer' });
+    }
+  });
+
+  it('et element uten produktnummer, uten navn, eller med ugyldig rabatt_prosent avvises - hele kallet, ikke bare det elementet', () => {
+    for (const ugyldigElement of [
+      { ...LINJE, produktnummer: '' },
+      { ...LINJE, produktnummer: 'a'.repeat(41) },
+      { ...LINJE, navn: '' },
+      { ...LINJE, navn: 'a'.repeat(201) },
+      { ...LINJE, rabatt_prosent: -1 },
+      { ...LINJE, rabatt_prosent: 101 },
+      { ...LINJE, rabatt_prosent: '10' },
+      { ...LINJE, rabatt_prosent: NaN },
+      { ...LINJE, produktnummer: 501 },
+      { navn: 'Uten produktnummer', rabatt_prosent: 10 },
+      null,
+      'tekst',
+    ]) {
+      expect(parseInnkommende({ ...GYLDIG, linjer: [LINJE, ugyldigElement] }), JSON.stringify(ugyldigElement)).toEqual({ ok: false, felt: 'linjer' });
+    }
+  });
+
+  it('rabatt_prosent 0 og 100 (grenseverdier) godtas', () => {
+    expect(parseInnkommende({ ...GYLDIG, linjer: [{ ...LINJE, rabatt_prosent: 0 }] }).ok).toBe(true);
+    expect(parseInnkommende({ ...GYLDIG, linjer: [{ ...LINJE, rabatt_prosent: 100 }] }).ok).toBe(true);
+  });
+
+  it('NUL-byte i produktnummer eller navn avvises (ville gitt databasefeil)', () => {
+    expect(parseInnkommende({ ...GYLDIG, linjer: [{ ...LINJE, produktnummer: '501\u0000' }] })).toEqual({ ok: false, felt: 'linjer' });
+    expect(parseInnkommende({ ...GYLDIG, linjer: [{ ...LINJE, navn: 'Takluke\u0000' }] })).toEqual({ ok: false, felt: 'linjer' });
+  });
+
+  it('linjer telles ikke som «ignorert felt» når den godtas', () => {
+    const r = parseInnkommende({ ...GYLDIG, linjer: [LINJE] });
+    expect(r.ok && r.ignorerte).toBe(0);
   });
 });
 
