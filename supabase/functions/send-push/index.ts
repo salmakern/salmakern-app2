@@ -83,23 +83,24 @@ async function innloggingsgate(req: Request): Promise<{ status: number; melding:
 // ── EDGE-AUTH-GATE END ──
 
 // ── SERVER-KALLER BEGIN (bare send-push - ligger bevisst UTENFOR den delte blokken over, som dermed er byte-lik i alle fire funksjonene; test/edge-auth-gate.test.js vokter begge) ──
-// send-push har to slags legitime kallere: innloggede ansatte i nettleseren (den delte gaten) og SERVER-til-server-kall som aldri har en ansatt-sesjon.
-// Triggeren «ordre-push» (public.ordre_push_trigger_fn, migrasjon 20261030180000) sender service_role-nøkkelen fra Vault. Et kall med den nøkkelen er en egen,
-// gyldig kategori (via: 'server'): den sammenlignes direkte mot SUPABASE_SERVICE_ROLE_KEY (ingen oppslag mot databasen, samme «ingen oppslag nødvendig»-prinsipp
-// som for den offentlige nøkkelen i den delte blokken), slippes gjennom også når håndheving er på, og logges som én edge_auth-linje som resten (aldri nøkkelen).
-// Sammenligningen går på SHA-256 av begge sider med en løkke uten tidlig avbrudd, så verken lengde eller første avvikende tegn lekker. Manglende/tomt miljø gir aldri treff.
-// VIKTIG FØR send-push (eller *) LEGGES I EDGE_AUTH_ENFORCE: kategorien TREFFER IKKE i dag (31.10). Cron-jobbene «paaminnelser-sjekk» og «daglig-paaminnelse» og ordre-push sender
-// service_role-nøkkelen fra Vault, men den er en ANNEN verdi enn SUPABASE_SERVICE_ROLE_KEY i funksjonen (bekreftet med SHA-256-sammendrag; loggene viser via=ingen), så de ville fått 401 og
-// alle påminnelser og statusvarsler stoppet. Må løses først (s00-027 i Henger igjen-lista, supabase/README.md). Rollback = fjern navnet fra EDGE_AUTH_ENFORCE.
+// send-push har to slags legitime kallere: innloggede ansatte i nettleseren (den delte gaten) og SERVER-til-server-kall som aldri har en ansatt-sesjon: cron-jobbene
+// «paaminnelser-sjekk» og «daglig-paaminnelse» og triggeren «ordre-push» (public.ordre_push_trigger_fn). De sender en EGEN delt hemmelighet i headeren x-server-secret
+// (funksjonshemmeligheten SEND_PUSH_SERVER_SECRET, og Vault-hemmeligheten send_push_server_secret i databasen). Et kall med riktig hemmelighet er en egen, gyldig kategori
+// (via: 'server'): ingen oppslag mot databasen, slippes gjennom også når håndheving er på, og logges som én edge_auth-linje som resten (aldri hemmeligheten).
+// Hvorfor ikke service_role-nøkkelen i Authorization (første forsøk 31.10): nøkkelen i Vault er en ANNEN verdi enn SUPABASE_SERVICE_ROLE_KEY funksjonen ser (bekreftet med
+// SHA-256-sammendrag), så en sammenligning mot den traff aldri. En egen hemmelighet er uavhengig av hva plattformen legger i de innebygde nøklene. Authorization er uendret og
+// brukes bare av Supabase-porten (verify_jwt); x-server-secret er ikke i CORS-listen, så en nettleser kan ikke engang sende den.
+// Sammenligningen går på SHA-256 av begge sider med en løkke uten tidlig avbrudd, så verken lengde eller første avvikende tegn lekker. Manglende eller for kort
+// hemmelighet (under 32 tegn) i miljøet gir aldri treff. Rollback = fjern SEND_PUSH_SERVER_SECRET (da regnes alle som vanlige kallere; i myk modus endres ingenting) eller fjern navnet fra EDGE_AUTH_ENFORCE.
 async function sha256(s: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
 }
 
 async function erServerKall(req: Request): Promise<boolean> {
-  const noekkel = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
-  if (!noekkel || !token) return false
-  const [a, b] = await Promise.all([sha256(token), sha256(noekkel)])
+  const hemmelighet = Deno.env.get('SEND_PUSH_SERVER_SECRET') ?? ''
+  const sendt = (req.headers.get('x-server-secret') ?? '').trim()
+  if (hemmelighet.length < 32 || !sendt) return false
+  const [a, b] = await Promise.all([sha256(sendt), sha256(hemmelighet)])
   let avvik = 0
   for (let i = 0; i < a.length; i++) avvik |= a[i] ^ b[i]
   return avvik === 0
@@ -114,7 +115,7 @@ async function sendPushGate(req: Request): Promise<{ status: number; melding: st
     // Selve sammenligningen feilet (skal ikke skje): la den delte gaten avgjøre i stedet for å anta server.
   }
   if (!server) return innloggingsgate(req)
-  console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: 'server', grunn: 'service_role', rolle: '', ansatt_id: null, haandhevet: HAANDHEV, origin: req.headers.get('origin') ?? '' }))
+  console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: 'server', grunn: 'delt_hemmelighet', rolle: '', ansatt_id: null, haandhevet: HAANDHEV, origin: req.headers.get('origin') ?? '' }))
   return null
 }
 // ── SERVER-KALLER END ──

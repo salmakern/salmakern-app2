@@ -80,7 +80,7 @@ committes.
 Sjekket 2026-10-30 (før fiksen): `ordre-push` var den ENESTE triggeren i databasen som
 brukte `http_request` med en `Bearer`-header - ingen andre hadde samme hull.
 
-## send-push: innloggingssjekk (s00-006, myk modus fra 2026-10-31)
+## send-push: innloggingssjekk (s00-006/s00-027, myk modus fra 2026-10-31)
 
 `send-push` har samme innloggingssjekk som fiken-fakturer, send-frakt-epost og vegvesen-oppslag (den delte blokken
 `EDGE-AUTH-GATE`, byte-lik i alle fire; `test/edge-auth-gate.test.js` vokter det), i MYK modus: utfallet logges som én
@@ -89,37 +89,42 @@ Alle kjente roller slipper gjennom (klient-varslene kommer fra enhver ansatt: go
 
 **Hvem kaller `send-push`** (kartlagt mot live-databasen 31.10, bare navn og ja/nei, aldri nøkler):
 
-| Kaller | Sender som `Authorization` | Kategori i gaten |
+| Kaller | Sender | Kategori i gaten |
 |---|---|---|
-| Nettleseren (alle `edgeFetch('send-push', ...)` i appen) | innlogget ansatts access-token | `ansatt` |
-| Triggeren `ordre-push` (`public.ordre_push_trigger_fn`, nøkkelen fra Vault) | service_role-nøkkelen (JWT) | tiltenkt `server`; i dag `ingen` (se OBS under) |
-| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | service_role-nøkkelen fra Vault (flyttet 31.10, `20261031113000_send_push_cron_vault_nokkel.sql`; før det den OFFENTLIGE nøkkelen `sb_publishable_...`) | tiltenkt `server`; i dag `ingen` (se OBS under) |
+| Nettleseren (alle `edgeFetch('send-push', ...)` i appen) | innlogget ansatts access-token i `Authorization` | `ansatt` |
+| Triggeren `ordre-push` (`public.ordre_push_trigger_fn`) | `Authorization`: service_role-nøkkelen fra Vault (bare for Supabase-porten) og `x-server-secret` fra Vault | `server` |
+| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | de samme to headerne (`20261031124000_send_push_server_hemmelighet.sql`; før det den offentlige nøkkelen `sb_publishable_...`, så service_role-nøkkelen via `20261031113000_send_push_cron_vault_nokkel.sql`) | `server` |
 
 `portal-bestilling` kaller IKKE `send-push` (den sender sine egne varsler fra `push.ts`), og ingen andre triggere eller funksjoner i
 databasen nevner `send-push`.
 
-**Server-kall** er en egen gyldig kategori som bare finnes i `send-push` (blokken `SERVER-KALLER`, utenfor den delte blokken): token-et
-sammenlignes direkte mot `SUPABASE_SERVICE_ROLE_KEY` (SHA-256 av begge sider, løkke uten tidlig avbrudd, tom nøkkel gir aldri treff), uten
-oppslag mot databasen, og slippes gjennom også når håndheving er på. Loggføres som `via: 'server', grunn: 'service_role'`.
+**Server-kall** er en egen gyldig kategori som bare finnes i `send-push` (blokken `SERVER-KALLER`, utenfor den delte blokken): headeren
+`x-server-secret` sammenlignes mot funksjonshemmeligheten `SEND_PUSH_SERVER_SECRET` (SHA-256 av begge sider, løkke uten tidlig avbrudd; mangler den eller er den
+under 32 tegn gir den aldri treff), uten oppslag mot databasen, og slippes gjennom også når håndheving er på. Loggføres som `via: 'server', grunn: 'delt_hemmelighet'`.
+Samme verdi ligger i Vault (`send_push_server_secret`); cron-jobbene og triggeren slår den opp ved HVER kjøring, så den står aldri i en fil, i Git eller i selve cron-jobben.
+Headeren står ikke i CORS-listen, så en nettleser kan ikke sende den.
 
-**OBS 31.10: server-kategorien TREFFER IKKE i dag.** Loggene viser at kall med Vault-nøkkelen (cron etter flyttingen) står som `via: 'ingen'`, ikke `server`. SHA-256-sammendrag viser at
-nøkkelen i Vault (`ordre_push_service_role_key`) er en ANNEN verdi enn funksjonens `SUPABASE_SERVICE_ROLE_KEY` (funksjonen har også `SUPABASE_SECRET_KEYS`/`SUPABASE_PUBLISHABLE_KEYS`, det
-nye nøkkelsystemet). Harmløst i myk modus, men håndheving for send-push (eller `*`) ville gitt 401 til cron-jobbene og ordre-push-triggeren. **Ikke slå på håndheving før dette er løst** (s00-027 i
-Henger igjen-lista; forslag: en egen delt hemmelighet som sendes som egen header, i stedet for å sammenligne mot plattformens service-nøkkel). Slik leser du loggene: Supabase → Edge Functions →
-funksjonen → Logs, filtrer Event message på `haandhevet` (et søk på `edge_auth` gir falskt «ingen treff» på grunn av understreken).
+**Hvorfor ikke service_role-nøkkelen i `Authorization` (første forsøk 31.10):** nøkkelen i Vault (`ordre_push_service_role_key`) er en ANNEN verdi enn funksjonens
+`SUPABASE_SERVICE_ROLE_KEY` (funksjonen har også `SUPABASE_SECRET_KEYS`/`SUPABASE_PUBLISHABLE_KEYS`, det nye nøkkelsystemet). Bekreftet med SHA-256-sammendrag, og loggene viste at cron-kall
+sto som `via: 'ingen'`. En egen delt hemmelighet er uavhengig av hva plattformen legger i de innebygde nøklene.
 
-**FØR håndheving slås på for send-push - ting som må være på plass (OBS-punktet over må løses først):**
-1. **GJORT 31.10 (Henriks ja): cron-jobbene er flyttet til service_role-nøkkelen fra Vault** (`20261031113000_send_push_cron_vault_nokkel.sql`, `cron.alter_job`,
-   samme hemmelighet som `ordre-push`). De sendte før den offentlige nøkkelen, som står i åpen kildekode og aldri er et server-kall; med håndheving på ville de
-   fått 401, og alle biltilsyn-, møte- og «Husk å starte timer»-påminnelser ville stoppet stille. Nøkkelen slås opp ved hver kjøring og står aldri i selve jobben.
-   Mangler hemmeligheten i Vault stopper påminnelsene STILLE (cron-kjøringen står som «succeeded», porten svarer 401): se spørringen under. Rollback: kjør
-   `20260808095154_paaminnelser_cron.sql` og `20260903000000_daglig_paaminnelse_kl_0655.sql` på nytt (da må håndheving for send-push ikke være på).
-2. **Logg-vinduet må vise at ekte kall kommer riktig fram:** `via: 'ansatt'` for varsler fra appen og `via: 'server'` for ordre-push (bekrefter at
-   Vault-nøkkelen er lik `SUPABASE_SERVICE_ROLE_KEY` i funksjonen; det kan bare sees live, ikke i test). Cron-linjene skal da vise `via: 'server'` (etter punkt 1), ikke `ingen`.
+**Bekreftet i produksjon 31.10:** et kall med riktig hemmelighet ble logget `via: 'server'`, kall med feil hemmelighet og uten ble `ingen`, og den første planlagte cron-kjøringen etter
+migrasjonen (kl. 13:10 norsk tid) ble logget `via: 'server'`. **Ikke sett ennå:** triggeren `ordre-push` i en ekte ordreoppdatering (en tilbakerullet test viste at forespørselen den køer får riktig
+header; første ekte ordreoppdatering skal vise `via: 'server'`), og `via: 'ansatt'` for appens varsler (krever ekte bruk).
 
-Ikke bruk `*` i `EDGE_AUTH_ENFORCE` før punkt 2 er bekreftet; da rammes `send-push` også. Rollback = fjern navnet fra `EDGE_AUTH_ENFORCE`.
-Telle utfallene i loggene: søk etter `edge_auth` i Supabase → Edge Functions → send-push → Logs.
-Se at påminnelsene faktisk når funksjonen (skal ikke vise 401 etter 31.10): `select status_code, left(content, 24), count(*) from net._http_response where created > now() - interval '1 day' group by 1, 2;`
+**Slik lages eller byttes hemmeligheten** (verdien skal aldri stå i en fil i Git eller OneDrive, eller i en samtale): generer en tilfeldig verdi (minst 32 tegn), sett den som funksjonshemmelighet
+(`npx supabase secrets set --env-file <midlertidig fil utenfor OneDrive> --project-ref qoqpenbfdxeduylxirwk`) og lagre SAMME verdi i Vault (`select vault.create_secret('<verdi>', 'send_push_server_secret', '...')`,
+ved bytte `vault.update_secret`), og slett så den midlertidige filen. Kontroll uten å vise verdier: `npx supabase secrets list` viser et SHA-256-sammendrag av funksjonshemmeligheten; sammenlign de 8 første tegnene
+med `left(encode(extensions.digest(decrypted_secret, 'sha256'), 'hex'), 8)` for Vault-hemmeligheten.
+
+**Tester:** `test/edge-auth-gate.test.js` (enhetstester av gaten, mutasjonstestet) og `supabase/tester/send_push_server_hemmelighet_TEST_body.sql` (rulles tilbake; sjekker cron-jobbene, at `ordre-push` køer en
+forespørsel med riktig header, og at varselet fortsatt går hvis Vault-hemmeligheten mangler).
+
+**Slik leser du loggene:** Supabase → Edge Functions → funksjonen → Logs, filtrer Event message på `haandhevet` (et søk på `edge_auth` gir falskt «ingen treff» på grunn av understreken), og klikk en rad for å se `via`/`grunn`.
+
+**Før håndheving slås på for send-push:** loggene må vise `via: 'ansatt'` for appens varsler og `via: 'server'` for cron og `ordre-push` (se «Ikke sett ennå» over). Rollback = fjern navnet fra `EDGE_AUTH_ENFORCE`.
+Mangler Vault-hemmeligheten, eller fjernes `SEND_PUSH_SERVER_SECRET`, regnes cron og `ordre-push` som vanlige kallere: i myk modus endres ingenting, men med håndheving ville de fått 401 og påminnelser og statusvarsler stoppet STILLE
+(cron-kjøringen står som «succeeded»). Se at påminnelsene faktisk når funksjonen (skal ikke vise 401): `select status_code, left(content, 24), count(*) from net._http_response where created > now() - interval '1 day' group by 1, 2;`
 og `select status, count(*) from cron.job_run_details where start_time > now() - interval '1 day' group by 1;`.
 
 ## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)

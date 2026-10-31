@@ -3,10 +3,11 @@
 // skal oppføre seg likt uansett hvilken funksjon den ligger i. TILLATTE_ROLLER (utenfor blokken) velger hvem som faktisk
 // slipper gjennom: bare admin for fiken-fakturer/send-frakt-epost, alle ansatte for vegvesen-oppslag (hvem som helst
 // kan slå opp et reg.nr i ordre-detalj) og send-push (klient-varslene kommer fra enhver ansatt).
-// send-push har i tillegg SERVER-til-server-kall som aldri har en ansatt-sesjon (triggeren «ordre-push» sender service_role-
-// nøkkelen), så den har en liten ekstra blokk «SERVER-KALLER BEGIN/END» UTENFOR den delte blokken: server-kall slippes gjennom
-// som egen kategori, alt annet går til den delte gaten. Den delte blokken er dermed fortsatt byte-lik overalt, og de tre andre
-// funksjonene skal aldri ha en server-kaller-blokk (en admin-funksjon skal ikke kunne kalles med service-nøkkelen via denne veien).
+// send-push har i tillegg SERVER-til-server-kall som aldri har en ansatt-sesjon (cron-jobbene og triggeren «ordre-push»). De sender en
+// egen delt hemmelighet i headeren x-server-secret (service_role-nøkkelen i Authorization kan ikke brukes: den i Vault er en annen verdi
+// enn funksjonens egen). Derfor har send-push en liten ekstra blokk «SERVER-KALLER BEGIN/END» UTENFOR den delte blokken: riktig hemmelighet
+// slippes gjennom som egen kategori, alt annet går til den delte gaten. Den delte blokken er dermed fortsatt byte-lik overalt, og de tre
+// andre funksjonene skal aldri ha en server-kaller-blokk (en admin-funksjon skal ikke kunne kalles med en hemmelighet via denne veien).
 // Funksjonene kjører i Deno og kan ikke lastes direkte her, så testen trekker ut selve blokken, legger den i en
 // midlertidig .ts-modul (Vite fjerner typene) og kjører den mot falske Deno/fetch. Hele funksjonene (A/B mot
 // originalene) er testet manuelt - se supabase/README.md, «send-push: innloggingssjekk».
@@ -60,11 +61,16 @@ describe('innloggingssjekk i edge-funksjonene: oppsett', () => {
     }
   });
 
-  it('send-push: server-kall er bare service_role-nøkkelen - aldri den offentlige nøkkelen eller anon-nøkkelen', () => {
-    // Kommentarene nevner den offentlige nøkkelen (som advarsel); selve koden skal ikke røre den.
+  it('send-push: server-kall er bare den egne hemmeligheten i x-server-secret - aldri service-nøkkelen, den offentlige nøkkelen, anon-nøkkelen eller Authorization', () => {
+    // Kommentarene nevner nøklene (som forklaring); selve koden skal ikke røre dem.
     const kode = serverBlokk(kilde('send-push')).split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
-    expect(kode).toContain("Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')");
-    expect(kode).not.toMatch(/publishable|SUPABASE_ANON_KEY|apikey/);
+    expect(kode).toContain("Deno.env.get('SEND_PUSH_SERVER_SECRET')");
+    expect(kode).toContain("req.headers.get('x-server-secret')");
+    expect(kode).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|publishable|SUPABASE_ANON_KEY|apikey|authorization/i);
+  });
+
+  it('send-push: x-server-secret står IKKE i CORS-listen, så en nettleser kan ikke sende den', () => {
+    expect(kilde('send-push')).not.toMatch(/Access-Control-Allow-Headers[^\n]*x-server-secret/i);
   });
 });
 
@@ -191,85 +197,104 @@ describe('innloggingssjekk: oppførsel (blokken kjørt mot falsk Deno og fetch)'
     expect(t).not.toContain('ANON-ENV-KEY');
   });
 
-  describe('send-push: server-kall med service_role-nøkkelen er en egen gyldig kategori', () => {
-    const SERVICE = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.sig_service_aaaaaaa';
+  describe('send-push: server-kall med egen delt hemmelighet (x-server-secret) er en egen gyldig kategori', () => {
+    const HEMMELIGHET = 'test-delt-hemmelighet-0123456789-abcdefghij-XYZ';
     const OFFENTLIG = 'sb_publishable_46JAdcBUbQYS8NbDwP';
-    const ENV = { ...BASE, SUPABASE_SERVICE_ROLE_KEY: SERVICE };
+    const SERVICE = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.sig_service_aaaaaaa';
+    const ENV = { ...BASE, SEND_PUSH_SERVER_SECRET: HEMMELIGHET, SUPABASE_SERVICE_ROLE_KEY: SERVICE };
     const SP = { fn: 'send-push' };
     const sp = (env, headers) => med(env, headers, SP);
 
-    it('service_role-nøkkelen slippes gjennom UTEN oppslag i myk modus, håndhevet modus og med *, og logges som server', async () => {
+    it('riktig hemmelighet slippes gjennom UTEN oppslag i myk modus, håndhevet modus og med *, uansett hva Authorization er, og logges som server', async () => {
       for (const [enforce, haandhevet] of [['', false], ['send-push', true], ['*', true], ['fiken-fakturer', false]]) {
-        const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: enforce }, { authorization: `Bearer ${SERVICE}`, apikey: 'KALLERS-APIKEY' });
-        expect(r.avvist).toBeNull();
-        expect(r.kall.length).toBe(0);
-        expect(r.logg).toMatchObject({ edge_auth: 1, fn: 'send-push', via: 'server', grunn: 'service_role', rolle: '', ansatt_id: null, haandhevet });
+        for (const auth of [`Bearer ${SERVICE}`, `Bearer ${OFFENTLIG}`, undefined]) {
+          const hdr = { 'x-server-secret': HEMMELIGHET, apikey: 'KALLERS-APIKEY' };
+          if (auth) hdr.authorization = auth;
+          const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: enforce }, hdr);
+          expect(r.avvist).toBeNull();
+          expect(r.kall.length).toBe(0);
+          expect(r.logg).toMatchObject({ edge_auth: 1, fn: 'send-push', via: 'server', grunn: 'delt_hemmelighet', rolle: '', ansatt_id: null, haandhevet });
+        }
       }
     });
 
-    it('«Bearer»-prefikset er ikke versalfølsomt, men resten av nøkkelen må være eksakt lik', async () => {
-      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `bearer ${SERVICE}` });
+    it('mellomrom rundt hemmeligheten i headeren trimmes, men resten må være eksakt lik', async () => {
+      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { 'x-server-secret': `  ${HEMMELIGHET}  ` });
       expect(r.avvist).toBeNull();
       expect(r.logg.via).toBe('server');
-      const feil = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `Bearer ${SERVICE.toUpperCase()}` });
-      expect(feil.logg.via).not.toBe('server');
     });
 
-    it('logglinjen for server-kall inneholder aldri nøkkelen eller apikey-headeren', async () => {
-      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `Bearer ${SERVICE}`, apikey: 'KALLERS-APIKEY' });
+    it('logglinjen for server-kall inneholder aldri hemmeligheten, nøkler eller apikey-headeren', async () => {
+      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { 'x-server-secret': HEMMELIGHET, authorization: `Bearer ${SERVICE}`, apikey: 'KALLERS-APIKEY' });
+      expect(r.loggTekst).not.toContain(HEMMELIGHET);
       expect(r.loggTekst).not.toContain(SERVICE);
       expect(r.loggTekst).not.toContain('KALLERS-APIKEY');
       expect(r.loggTekst).not.toContain('ANON-ENV-KEY');
-      expect(r.loggTekst).not.toContain(SERVICE.split('.')[2]);
     });
 
-    it('nesten-lik nøkkel (ett tegn feil, avkortet, forlenget, annen nøkkel) er IKKE server-kall: går til ansatt-sjekken og avvises når håndhevet', async () => {
-      const nesten = [
-        SERVICE.replace(/a$/, 'b'),
-        SERVICE.slice(0, -1),
-        `${SERVICE}x`,
-        SERVICE.replace('eyJyb2xlIjoic2VydmljZV9yb2xlIn0', 'eyJyb2xlIjoiYW5vbiJ9'),
-      ];
+    it('service_role-nøkkelen i Authorization uten hemmeligheten er IKKE et server-kall (første forsøk traff aldri): går til ansatt-sjekken og avvises når håndhevet', async () => {
+      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `Bearer ${SERVICE}` });
+      expect(r.logg.via).toBe('ingen');
+      expect(r.avvist.status).toBe(401);
+      expect(r.kall.length).toBe(1);
+    });
+
+    it('nesten-lik hemmelighet (ett tegn feil, avkortet, forlenget, versaler, annen) er IKKE server-kall og avvises når håndhevet', async () => {
+      const nesten = [HEMMELIGHET.replace(/Z$/, 'Y'), HEMMELIGHET.slice(0, -1), `${HEMMELIGHET}x`, HEMMELIGHET.toUpperCase(), 'en-helt-annen-hemmelighet-som-er-lang-nok-men-feil'];
       for (const tok of nesten) {
-        const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `Bearer ${tok}` });
+        const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { 'x-server-secret': tok, authorization: `Bearer ${OFFENTLIG}` });
         expect(r.logg.via).toBe('ingen');
         expect(r.avvist.status).toBe(401);
-        expect(r.kall.length).toBe(1);
-        expect(r.kall[0].auth).toBe(`Bearer ${tok}`);
+        expect(r.kall.length).toBe(0);
       }
     });
 
-    it('en annen nøkkel hvis SHA-256 begynner likt som service-nøkkelens er likevel IKKE server-kall (hele sammendraget sammenlignes, ikke bare starten)', async () => {
+    it('feil hemmelighet hindrer ikke en ekte ansatt: ansatt-token i Authorization gjelder som før', async () => {
+      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { 'x-server-secret': 'feil-hemmelighet-som-er-lang-nok-til-aa-vaere-gyldig-form', authorization: `Bearer ${TOK.admin}` });
+      expect(r.avvist).toBeNull();
+      expect(r.logg.via).toBe('ansatt');
+    });
+
+    it('en annen hemmelighet hvis SHA-256 begynner likt som den riktigstes er likevel IKKE server-kall (hele sammendraget sammenlignes, ikke bare starten)', async () => {
       const { createHash } = await import('node:crypto');
       const hash = (s) => createHash('sha256').update(s).digest();
-      const start = hash(SERVICE).subarray(0, 2);
+      const start = hash(HEMMELIGHET).subarray(0, 2);
       let kandidat = null;
       for (let i = 0; i < 2_000_000 && !kandidat; i++) {
-        const k = `${SERVICE.slice(0, -1)}${i}`;
-        if (k !== SERVICE && hash(k).subarray(0, 2).equals(start)) kandidat = k;
+        const k = `${HEMMELIGHET.slice(0, -1)}${i}`;
+        if (k !== HEMMELIGHET && hash(k).subarray(0, 2).equals(start)) kandidat = k;
       }
       expect(kandidat).toBeTruthy();
-      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `Bearer ${kandidat}` });
+      const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { 'x-server-secret': kandidat, authorization: `Bearer ${OFFENTLIG}` });
       expect(r.logg.via).not.toBe('server');
       expect(r.avvist.status).toBe(401);
     });
 
-    it('den offentlige nøkkelen (som cron-jobbene sender i dag) er aldri et server-kall: 401 når håndhevet, og ingen oppslag', async () => {
-      for (const env of [ENV, { ...BASE }, { ...BASE, SUPABASE_SERVICE_ROLE_KEY: '' }]) {
+    it('manglende eller for kort hemmelighet i miljøet gir aldri treff, heller ikke når headeren er lik (tom == tom og kort == kort teller ikke)', async () => {
+      for (const hemmelig of [undefined, '', 'kort', 'a'.repeat(31)]) {
+        for (const sendt of [hemmelig ?? '', hemmelig ? hemmelig : 'x', HEMMELIGHET]) {
+          const env = { ...BASE, EDGE_AUTH_ENFORCE: 'send-push', ...(hemmelig === undefined ? {} : { SEND_PUSH_SERVER_SECRET: hemmelig }) };
+          const r = await sp(env, { 'x-server-secret': sendt, authorization: `Bearer ${OFFENTLIG}` });
+          expect(r.logg.via).toBe('ingen');
+          expect(r.avvist.status).toBe(401);
+        }
+      }
+    });
+
+    it('manglende eller tom header er aldri et server-kall, selv om hemmeligheten finnes i miljøet', async () => {
+      for (const hdr of [{}, { 'x-server-secret': '' }, { 'x-server-secret': '    ' }]) {
+        const r = await sp({ ...ENV, EDGE_AUTH_ENFORCE: 'send-push' }, { ...hdr, authorization: `Bearer ${OFFENTLIG}` });
+        expect(r.avvist.status).toBe(401);
+        expect(r.logg.via).toBe('ingen');
+      }
+    });
+
+    it('den offentlige nøkkelen alene er aldri et server-kall: 401 når håndhevet, og ingen oppslag', async () => {
+      for (const env of [ENV, { ...BASE }]) {
         const r = await sp({ ...env, EDGE_AUTH_ENFORCE: 'send-push' }, { authorization: `Bearer ${OFFENTLIG}`, apikey: OFFENTLIG });
         expect(r.avvist.status).toBe(401);
         expect(r.logg.via).toBe('ingen');
         expect(r.kall.length).toBe(0);
-      }
-    });
-
-    it('manglende eller tom header er aldri et server-kall, heller ikke når service-nøkkelen mangler i miljøet (tom == tom teller ikke)', async () => {
-      for (const env of [ENV, { ...BASE }, { ...BASE, SUPABASE_SERVICE_ROLE_KEY: '' }]) {
-        for (const hdr of [{}, { authorization: '' }, { authorization: 'Bearer ' }, { authorization: 'Bearer    ' }]) {
-          const r = await sp({ ...env, EDGE_AUTH_ENFORCE: 'send-push' }, hdr);
-          expect(r.avvist.status).toBe(401);
-          expect(r.logg.via).toBe('ingen');
-        }
       }
     });
 
@@ -284,7 +309,7 @@ describe('innloggingssjekk: oppførsel (blokken kjørt mot falsk Deno og fetch)'
       expect((await sp(env, { authorization: `Bearer ${TOK.kaster}` })).avvist.status).toBe(503);
     });
 
-    it('myk modus: alt slippes gjennom og logges som før (bare server-kall får via: server)', async () => {
+    it('myk modus: alt slippes gjennom og logges som før (bare riktig hemmelighet får via: server)', async () => {
       for (const [hdr, via] of [
         [{ authorization: `Bearer ${OFFENTLIG}` }, 'ingen'],
         [{}, 'ingen'],
@@ -292,7 +317,8 @@ describe('innloggingssjekk: oppførsel (blokken kjørt mot falsk Deno og fetch)'
         [{ authorization: `Bearer ${TOK.godkjenner}` }, 'ansatt'],
         [{ authorization: `Bearer ${TOK.gjest}` }, 'ikke_tillatt_rolle'],
         [{ authorization: `Bearer ${TOK.db500}` }, 'ukjent'],
-        [{ authorization: `Bearer ${SERVICE}` }, 'server'],
+        [{ authorization: `Bearer ${SERVICE}` }, 'ingen'],
+        [{ 'x-server-secret': HEMMELIGHET, authorization: `Bearer ${OFFENTLIG}` }, 'server'],
       ]) {
         const r = await sp({ ...ENV }, hdr);
         expect(r.avvist).toBeNull();

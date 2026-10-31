@@ -137,9 +137,9 @@ function visToast(melding, type='feil') {
 // token-et mot databasen (rpc/current_ansatt): fiken-fakturer, send-frakt-epost og
 // vegvesen-oppslag gjør det i dag, i MYK modus (logger, blokkerer ikke) til EDGE_AUTH_ENFORCE
 // slås på. send-push har samme gate, deployet 31.10 også i myk modus. Den har en egen server-
-// kategori (service_role) for ordre-push-triggeren og cron-jobbene (flyttet til Vault-nøkkelen
-// 31.10), men den treffer IKKE ennå: nøkkelen i Vault er ikke funksjonens SUPABASE_SERVICE_ROLE_KEY
-// (se supabase/README.md). Håndheving for send-push må derfor ikke slås på før det er løst.
+// kategori for ordre-push-triggeren og cron-jobbene (egen delt hemmelighet i headeren
+// x-server-secret, se supabase/README.md). Håndheving slås på først når loggene viser via=ansatt
+// for appens varsler og via=server for cron og ordre-push.
 // Den offentlige SUPA_KEY (som står i åpen kildekode og
 // ikke er en JWT) skal ikke lenger være nok alene - den sendes bare som apikey-header.
 // Returnerer en vanlig Response, akkurat som fetch(), så hvert kallsted beholder sin egen
