@@ -29,7 +29,10 @@
 // gjenkjennes og Egenerklæringen må bruke en generisk mal (2026-10-31)
 // v20 - felles ord for kontaktpersonen hos forhandleren (s08-054): "selger" byttet til
 // "kontaktperson" i teksten brukerne ser på portal-bestillinger (2026-10-31)
-const CACHE = 'salmakern-v20';
+// v21 - s09-012 steg 2: Fiken-ombygging-matching bruker nå modellen fra portal-bestillingen
+// (portal_modell_slug) i stedet for ordrens frie merke/modell-tekst når de finnes, pluss et
+// varsel i ordredetaljen hvis de avviker (2026-10-31)
+const CACHE = 'salmakern-v21';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

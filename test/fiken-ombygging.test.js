@@ -203,3 +203,106 @@ describe('synkroniserOmbyggingFikenLinjer - KGM Rexton "Lafinto" (2401) erstatte
     expect(o.fikenLinjer.some(l => l.produktnummer === '2401')).toBe(false);
   });
 });
+
+// s09-012 steg 2 (2026-10-31): modell-nøkkelen fra en portal-bestilling (o.portalModellSlug,
+// slått opp i S.portalModellKobling) skal nå faktisk BRUKES i Fiken-matchingen i stedet for
+// ordrens egen fritekst merke/modell - en ansatt som retter en skrivefeil i Merke/Modell i
+// etterkant skal ikke kunne endre eller stoppe matchingen. Ordre uten slug (ingen av testene
+// over) skal fortsette å fungere helt uendret, bekreftet av at de 28 testene over fortsatt
+// er grønne uten noen endring.
+describe('kanoniskMerkeModell (s09-012 steg 2: modell-nøkkel foran fritekst)', () => {
+  it('ordre uten portalModellSlug: fallback til fritekst, uendret', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = { merke: 'Toyota', modell: 'Yaris' };
+    expect(env.kanoniskMerkeModell(o)).toEqual({ merke: 'Toyota', modell: 'Yaris' });
+  });
+
+  it('portalModellSlug satt og funnet: bruker den kanoniske teksten, IKKE fritekst', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = { merke: 'kia (feilstavet)', modell: 'ev9??', portalModellSlug: 'kia-ev9' };
+    expect(env.kanoniskMerkeModell(o)).toEqual({ merke: 'KIA', modell: 'EV9' });
+  });
+
+  it('portalModellSlug satt men IKKE funnet i S.portalModellKobling: fallback til fritekst (ikke kast feil)', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = { merke: 'KGM', modell: 'Rexton', portalModellSlug: 'finnes-ikke' };
+    expect(env.kanoniskMerkeModell(o)).toEqual({ merke: 'KGM', modell: 'Rexton' });
+  });
+
+  it('S.portalModellKobling ikke lastet ennå (undefined): fallback til fritekst, kaster ikke', () => {
+    const env = nyEnvironment();
+    const o = { merke: 'KIA', modell: 'EV9', portalModellSlug: 'kia-ev9' };
+    expect(() => env.kanoniskMerkeModell(o)).not.toThrow();
+    expect(env.kanoniskMerkeModell(o)).toEqual({ merke: 'KIA', modell: 'EV9' });
+  });
+});
+
+describe('synkroniserOmbyggingFikenLinjer med slug (s09-012 steg 2)', () => {
+  it('fritekst er UKJENT, men slugen peker på en kjent modell: riktig Fiken-linje legges likevel til', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = {
+      id: 'ord_1', merke: 'Ukjent skrivefeil', modell: 'xyz', portalModellSlug: 'kia-ev9',
+      ombygging: { nyttKjoretoy: true, bruktKjoretoy: false, lafinto: false, personbil: false },
+      fikenLinjer: [],
+    };
+    env.S.ordrer = [o];
+    env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '500')).toBe(true);
+  });
+
+  it('fritekst matcher en ANNEN kjent modell enn slugen: slugen vinner (kanonisk tekst brukes)', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kgm-rexton', merke: 'KGM', modell: 'Rexton' }];
+    const o = {
+      id: 'ord_1', merke: 'KIA', modell: 'EV9', portalModellSlug: 'kgm-rexton', // fritekst sier EV9, slugen sier Rexton
+      ombygging: { nyttKjoretoy: true, bruktKjoretoy: false, lafinto: false, personbil: false },
+      fikenLinjer: [],
+    };
+    env.S.ordrer = [o];
+    env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '2400')).toBe(true); // Rexton, ikke EV9 (500)
+    expect(o.fikenLinjer.some(l => l.produktnummer === '500')).toBe(false);
+  });
+});
+
+describe('ombyggingBoksHTML: varsel når Merke/Modell avviker fra portalens modell (s09-012 steg 2)', () => {
+  it('ingen slug: ingen avviksvarsel, uendret oppførsel', () => {
+    const env = nyEnvironment();
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: true } };
+    expect(env.ombyggingBoksHTML(o)).not.toMatch(/stemmer ikke med modellen/);
+  });
+
+  it('slug satt og fritekst STEMMER med kanonisk tekst: ingen avviksvarsel', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', portalModellSlug: 'kia-ev9', ombygging: { nyttKjoretoy: true } };
+    expect(env.ombyggingBoksHTML(o)).not.toMatch(/stemmer ikke med modellen/);
+  });
+
+  it('slug satt men fritekst AVVIKER: viser et tydelig, men ikke-blokkerende varsel', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = { id: 'ord_1', merke: 'KIA (rettet)', modell: 'EV9', portalModellSlug: 'kia-ev9', ombygging: { nyttKjoretoy: true } };
+    const html = env.ombyggingBoksHTML(o);
+    expect(html).toMatch(/stemmer ikke med modellen fra portal-bestillingen/);
+    expect(html).toMatch(/KIA \(rettet\)/); // fritekst-verdien som faktisk står på ordren
+    expect(html).toMatch(/KIA EV9/); // den kanoniske teksten fra portal-bestillingen
+  });
+
+  it('«mangler Fiken-modell»-varselet bruker den kanoniske teksten, ikke fritekst som tilfeldigvis er ukjent', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = { id: 'ord_1', merke: 'Skrivefeil', modell: 'xyz', portalModellSlug: 'kia-ev9', ombygging: { nyttKjoretoy: true } };
+    const html = env.ombyggingBoksHTML(o);
+    // Kanonisk tekst (KIA EV9) ER en kjent Fiken-modell, så "mangler"-varselet skal IKKE vises -
+    // bare avviks-varselet, siden fakturering uansett bruker kanonisk tekst og fungerer fint.
+    expect(html).not.toMatch(/Ingen kjent Fiken-produktlinje/);
+    expect(html).toMatch(/stemmer ikke med modellen fra portal-bestillingen/);
+  });
+});

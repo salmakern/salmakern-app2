@@ -962,12 +962,21 @@ function ombyggingBoksHTML(o) {
   // tilstanden varer helt til modellen legges inn - en toast som bare vises én gang (f.eks.
   // ved avkryssing) ville vært glemt igjen neste gang noen åpner ordren dager senere.
   const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
-  const manglerFikenModell = erOmbyggingValgt && !finnFikenOmbyggingModell(o.merke, o.modell);
-  const varselHTML = manglerFikenModell
-    ? `<div style="margin-top:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fca5a5">
-        ⚠ Ingen kjent Fiken-produktlinje for "${esc(o.merke||'')} ${esc(o.modell||'')}" - ombyggingslinjen mangler i fakturagrunnlaget. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil.
-      </div>`
-    : '';
+  const kan = kanoniskMerkeModell(o);
+  const manglerFikenModell = erOmbyggingValgt && !finnFikenOmbyggingModell(kan.merke, kan.modell);
+  // s09-012 steg 2: fritekst-feltene kan ha blitt rettet (eller feilskrevet) i etterkant av at
+  // ordren kom fra portalen - selve Fiken-matchingen bruker alltid den kanoniske teksten over,
+  // men en ansatt bør få vite at det som vises i Merke/Modell ikke er det som faktisk faktureres.
+  const slugRad = o.portalModellSlug && Array.isArray(S.portalModellKobling) ? S.portalModellKobling.find(r => r.portal_modell_slug === o.portalModellSlug) : null;
+  const slugAvviker = !!slugRad && (
+    (kan.merke||'').trim().toLowerCase() !== (o.merke||'').trim().toLowerCase() ||
+    (kan.modell||'').trim().toLowerCase() !== (o.modell||'').trim().toLowerCase()
+  );
+  const varselHTML = `${manglerFikenModell ? `<div style="margin-top:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fca5a5">
+        ⚠ Ingen kjent Fiken-produktlinje for "${esc(kan.merke||'')} ${esc(kan.modell||'')}" - ombyggingslinjen mangler i fakturagrunnlaget. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil.
+      </div>` : ''}${slugAvviker ? `<div style="margin-top:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fbbf24">
+        ⚠ Merke/Modell («${esc(o.merke||'')} ${esc(o.modell||'')}») stemmer ikke med modellen fra portal-bestillingen («${esc(kan.merke||'')} ${esc(kan.modell||'')}»). Fakturering bruker modellen fra bestillingen.
+      </div>` : ''}`;
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
       <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
@@ -1020,6 +1029,20 @@ function finnFikenOmbyggingModell(merke, modell) {
   return FIKEN_OMBYGGING_MODELLER.find(r => r.match.test(tekst)) || null;
 }
 
+// s09-012 steg 2: for en ordre som kom fra en portal-bestilling (o.portalModellSlug satt av
+// portal_koble_bestilling) brukes den KANONISKE merke/modell-teksten fra portal_modell_kobling
+// (S.portalModellKobling, hentet én gang ved innlogging via hent_portal_modell_kobling) i stedet
+// for ordrens egne fritekst-felt - en ansatt som retter en skrivefeil i Merke/Modell i etterkant
+// skal ikke kunne stoppe eller endre Fiken-matchingen. Ordre UTEN slug (alle manuelt opprettede,
+// og alle ordre fra før dette ble bygget) faller tilbake til fritekst - helt uendret oppførsel.
+function kanoniskMerkeModell(o) {
+  if (o.portalModellSlug && Array.isArray(S.portalModellKobling)) {
+    const rad = S.portalModellKobling.find(r => r.portal_modell_slug === o.portalModellSlug);
+    if (rad) return { merke: rad.merke, modell: rad.modell };
+  }
+  return { merke: o.merke, modell: o.modell };
+}
+
 // Sørger for at o.fikenLinjer faktisk stemmer med det ombygging-boksene sier akkurat nå.
 // Kalles både fra selve avkryssingen (sfOmbygging) OG fra buildOrdreDetail() ved hver
 // åpning/rerendring av ordren - sistnevnte fanger opp ordre der boksen ble huket av (eller
@@ -1030,7 +1053,8 @@ function finnFikenOmbyggingModell(merke, modell) {
 function synkroniserOmbyggingFikenLinjer(o) {
   if (!o.ombygging) return;
   const erOmbyggingValgt = !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy);
-  const modell = finnFikenOmbyggingModell(o.merke, o.modell);
+  const kan = kanoniskMerkeModell(o);
+  const modell = finnFikenOmbyggingModell(kan.merke, kan.modell);
   if (!modell) return;
   // "lafinto" (kun Rexton per nå) er en ALTERNATIV variant av samme ombygging, ikke et
   // tillegg - de to fakturalinjene er derfor gjensidig utelukkende.

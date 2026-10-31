@@ -68,12 +68,12 @@ const portalOrdre = (over = {}) => ({
 });
 
 describe('dbToOrdre / ordreToDb: portal-kolonnene leses, men skrives ALDRI av appens lagring', () => {
-  it('dbToOrdre leser de tre kolonnene, og vanlige ordre får null/tomt', () => {
+  it('dbToOrdre leser de fire kolonnene (inkl. portal_modell_slug, s09-012 steg 2), og vanlige ordre får null/tomt', () => {
     const { sandbox } = nyttMiljo();
-    const p = sandbox.dbToOrdre({ id: 'a', portal_bestilling_id: 'cm9x', portal_bekreftet_at: '2026-10-30T18:00:00Z', portal_bekreftet_av: 'Ola' });
-    expect(p).toMatchObject({ portalBestillingId: 'cm9x', portalBekreftetAt: '2026-10-30T18:00:00Z', portalBekreftetAv: 'Ola' });
+    const p = sandbox.dbToOrdre({ id: 'a', portal_bestilling_id: 'cm9x', portal_bekreftet_at: '2026-10-30T18:00:00Z', portal_bekreftet_av: 'Ola', portal_modell_slug: 'kia-ev9' });
+    expect(p).toMatchObject({ portalBestillingId: 'cm9x', portalBekreftetAt: '2026-10-30T18:00:00Z', portalBekreftetAv: 'Ola', portalModellSlug: 'kia-ev9' });
     const v = sandbox.dbToOrdre({ id: 'b' });
-    expect(v).toMatchObject({ portalBestillingId: null, portalBekreftetAt: null, portalBekreftetAv: '' });
+    expect(v).toMatchObject({ portalBestillingId: null, portalBekreftetAt: null, portalBekreftetAv: '', portalModellSlug: null });
   });
 
   it('ordreToDb sender ALDRI portal_*-kolonnene (en ansatt som lagrer et annet felt kan ikke nullstille bekreftelsen)', () => {

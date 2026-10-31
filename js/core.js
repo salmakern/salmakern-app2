@@ -398,11 +398,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadFromSupabase() {
-  const [aR,oR,tR,sR] = await Promise.all([
+  const [aR,oR,tR,sR,pmkR] = await Promise.all([
     db.from('ansatte').select('*').order('id'),
     db.from('ordrer').select('*').order('created_at'),
     db.from('timer_entries').select('*').order('created_at',{ascending:false}).limit(300),
-    db.from('innstillinger').select('*').eq('id',1).maybeSingle()
+    db.from('innstillinger').select('*').eq('id',1).maybeSingle(),
+    db.rpc('hent_portal_modell_kobling')
   ]);
   // VIKTIG: må sjekkes for ALLE spørringer, ikke bare ansatte - hvis f.eks. ordre-
   // spørringen feiler forbigående (nettverksglipp, sesjonsfornyelse etter lang pause
@@ -413,6 +414,12 @@ async function loadFromSupabase() {
   if (aR.error) throw new Error(aR.error.message);
   if (oR.error) throw new Error(oR.error.message);
   if (tR.error) throw new Error(tR.error.message);
+  // Modell-nøkkelen (s09-012 steg 2) - en liten, sjeldent endret oversettelsestabell (14 rader).
+  // Feiler kallet (f.eks. en gammel, ikke-oppdatert PWA-cache uten funksjonen ennå), faller
+  // kanoniskMerkeModell() i ordre-detalj.js automatisk tilbake til fritekst-matching som før -
+  // ikke kritisk nok til å kaste og blokkere hele innlastingen for det.
+  if (pmkR.error) console.error('Henting av portal-modellkobling feilet:', pmkR.error.message);
+  S.portalModellKobling = pmkR.data || [];
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
   const prevTimer  = S.timer  ? [...S.timer]  : [];
@@ -626,10 +633,13 @@ function dbToOrdre(r) {
     bestiltFrakt:!!r.bestilt_frakt, henteKlarDato:r.hente_klar_dato||'',
     kjoreseddelSkilt:r.kjoreseddel_skilt||'',
     fikenKladdUrl:r.fiken_kladd_url||'',
-    // Bestilling fra Forhandlerportalen (se supabase/migrations/20261030200000_portal_bestilling_grunnlag.sql). Disse tre kolonnene LESES bare her og står
-    // bevisst IKKE i ordreToDb(): en ansatt som lagrer et annet felt kan aldri nullstille bekreftelsen. De settes bare av koblingsfunksjonen i databasen
-    // (portal_koble_bestilling) og av portal_bekreft_ordre / portal_avvis_ordre.
-    portalBestillingId:r.portal_bestilling_id||null, portalBekreftetAt:r.portal_bekreftet_at||null, portalBekreftetAv:r.portal_bekreftet_av||''
+    // Bestilling fra Forhandlerportalen (se supabase/migrations/20261030200000_portal_bestilling_grunnlag.sql). Disse fire kolonnene LESES bare her og står
+    // bevisst IKKE i ordreToDb(): en ansatt som lagrer et annet felt kan aldri nullstille bekreftelsen eller modell-nøkkelen. De settes bare av
+    // koblingsfunksjonen i databasen (portal_koble_bestilling) og av portal_bekreft_ordre / portal_avvis_ordre.
+    portalBestillingId:r.portal_bestilling_id||null, portalBekreftetAt:r.portal_bekreftet_at||null, portalBekreftetAv:r.portal_bekreftet_av||'',
+    // Modell-nøkkelen fra portal_modell_kobling (s09-012 steg 2) - brukes av kanoniskMerkeModell() i ordre-detalj.js til å gi stabil Fiken-matching
+    // uavhengig av om noen retter fritekst-feltene Merke/Modell i etterkant. null for alle ordre uten portal-opprinnelse.
+    portalModellSlug:r.portal_modell_slug||null
   };
 }
 function ordreToDb(o) {

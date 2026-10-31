@@ -1,8 +1,8 @@
 -- Test av portal_koble_bestilling (migrasjon 20261030210000). ALLTID i en transaksjon som rulles tilbake: ingenting blir stående, og ingen åpen app ser noe
 -- (realtime sender først ved commit). Funksjonen opprettes INNI transaksjonen, så testen kan kjøres før den er kjørt for alvor.
 -- Bruker EKTE kontakter bare til lesing (AK Auto AS = k_portal_akauto, Autostrada Seljord AS = k2) og en midlertidig modell-oversettelse.
--- Kjøring (fra rotmappen):
---   (echo "begin;"; cat supabase/migrations/20261030210000_portal_koble_bestilling.sql; cat supabase/tester/portal_koble_bestilling_TEST_body.sql; echo "rollback;") > /tmp/t.sql
+-- Kjøring (fra rotmappen, nå to migrasjoner - 20261031150000 legger til portal_modell_slug/hent_portal_modell_kobling, se s09-012 steg 2):
+--   (echo "begin;"; cat supabase/migrations/20261031150000_portal_modell_slug_matching.sql; cat supabase/migrations/20261030210000_portal_koble_bestilling.sql; cat supabase/tester/portal_koble_bestilling_TEST_body.sql; echo "rollback;") > /tmp/t.sql
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file /tmp/t.sql
 -- Siste setning før rollback skriver ut resultatlinjene: alle skal ha ok = true.
 
@@ -16,6 +16,7 @@ declare
   c_a constant text := 'k_portal_akauto'; c_org_a constant text := '831862122';
   c_b constant text := 'k2';              c_org_b constant text := '927975564';
   function_args jsonb; v_fk_id text; v_fk_org text; v_other text;
+  v_ans bigint; v_ans_tok text; v_rpc_n int;
 begin
   select * into v_real from public.ordrer where status = 'aktiv' order by created_at desc limit 1;
 
@@ -27,6 +28,7 @@ begin
   insert into _res(navn, ok, info) values ('T1 ordre: På vei, aktiv, ikke bekreftet, ingen ankomstdato', o.ordre_status = 'paa_vei' and o.status = 'aktiv' and o.portal_bekreftet_at is null and o.ankomstdato is null, o.ordre_status);
   insert into _res(navn, ok, info) values ('T1 chassis normalisert (store bokstaver, uten mellomrom og bindestrek)', o.chassis = 'TESTWXYZ000000001', o.chassis);
   insert into _res(navn, ok, info) values ('T1 forhandler = Kontakter-navn, org.nr fra Kontakter, merke/modell fra oversettelsen', o.kunde = 'AK Auto AS' and o.forhandler_orgnr = c_org_a and o.merke = 'TESTMERKE' and o.modell = 'TESTMODELL', o.kunde || '|' || o.forhandler_orgnr || '|' || o.merke || '|' || o.modell);
+  insert into _res(navn, ok, info) values ('T1 (s09-012 steg 2) portal_modell_slug lagret på ordren', o.portal_modell_slug = 'testmodell', coalesce(o.portal_modell_slug, 'null'));
   insert into _res(navn, ok, info) values ('T1 eier = kontaktperson under riktig forhandler (matchet på e-post, ikke skrivemåte)', o.eier = 'Andreas Kåsa', o.eier);
   insert into _res(navn, ok, info) values ('T1 jsonb-form som en ekte ordre: ombygging/vekter/drivstoff har samme nøkler, aldri {}',
     (select array_agg(k order by k) from jsonb_object_keys(o.ombygging) k) = (select array_agg(k order by k) from jsonb_object_keys(v_real.ombygging) k)
@@ -237,6 +239,21 @@ begin
     v_ok := sqlerrm = 'UGYLDIG_INPUT: ident_type'; v_feil := sqlerrm;
   end;
   insert into _res(navn, ok, info) values ('T17 ident_type må være nøyaktig BESTILLINGSNR (små bokstaver avvises)', v_ok, v_feil);
+
+  -- ===== T18 (s09-012 steg 2, migrasjon 20261031150000) hent_portal_modell_kobling() =====
+  perform set_config('request.jwt.claims', '', true);
+  begin
+    perform public.hent_portal_modell_kobling(); v_feil := 'ingen feil';
+  exception when others then
+    v_feil := sqlerrm;
+  end;
+  insert into _res(navn, ok, info) values ('T18 ikke innlogget: IKKE_INNLOGGET', v_feil = 'IKKE_INNLOGGET', v_feil);
+
+  select id, coalesce(session_token, '') into v_ans, v_ans_tok from public.ansatte where aktiv order by id limit 1;
+  perform set_config('request.jwt.claims', jsonb_build_object('ansatt_id', v_ans, 'session_token', v_ans_tok)::text, true);
+  select count(*) into v_rpc_n from public.hent_portal_modell_kobling();
+  insert into _res(navn, ok, info) values ('T18 innlogget ansatt (hvilken som helst rolle) får kjøre funksjonen og ser testmodell-raden', v_rpc_n > 0 and exists (select 1 from public.hent_portal_modell_kobling() where portal_modell_slug = 'testmodell' and merke = 'TESTMERKE' and modell = 'TESTMODELL'), v_rpc_n::text);
+  perform set_config('request.jwt.claims', '', true);
 
   -- ===== T14 Rettigheter =====
   insert into _res(navn, ok, info) values ('T14 bare service_role kan kalle funksjonen (ikke anon, authenticated eller public)',

@@ -1,3 +1,6 @@
+-- v4 (2026-10-31, s09-012 steg 2): ordre-grenen (4b, "Ingen aktiv ordre: opprett") lagrer nå
+-- v_slug på den nye kolonnen ordrer.portal_modell_slug (se 20261031150000_portal_modell_slug_matching.sql)
+-- - den var allerede slått opp og validert her (linje ~236, venter_modell ellers), bare kastet bort før.
 -- v3 (2026-10-31, Henrik: «bestillingsnummer fra forhandler ved siden av chassis.nr og serienummer»): ident_type BESTILLINGSNR (forhandlerens eget bestillingsnummer) behandles som SERIENUMMER:
 -- løs rad i Admin-ark med nummeret i Serienummer-kolonnen, merknaden sier at det er et bestillingsnr fra forhandleren. Se også 20261031100000_portal_bestillingsnr.sql (sjekk-regelen på portal_bestillinger.ident_type).
 -- Kjørt: 2026-10-30 (v1, etter test 43/43 i en transaksjon som ble rullet tilbake og gjennomgang av en annen økt), omkjørt samme dag som v2 etter uavhengig gjennomgang av edge-funksjonen v3 samme dag: «bekreftet» er et ferdig utfall i idempotensgrenen (nytt kall etter Bekreft svarer ok); test 47/47.
@@ -274,7 +277,7 @@ begin
         ansatte_signert, signatur, godkjent, godkjenner_navn, diagnose, diagnose_av, fakturert, fakturert_av, ordre_start, ordre_stopp,
         ordre_timer_sessions, klargjoring_timer_sessions, fiken_linjer, notater, endringer, utstyr_sjekkliste, utstyr_mal_navn,
         visnings_sjekkliste, visnings_mal_navn, flate_id, coc, fullmakt, typegodkjenning, egenvekt_coc, forhandler_orgnr, kjoreseddel_skilt,
-        dokumenter, updated_at, portal_bestilling_id, portal_bekreftet_at, portal_bekreftet_av
+        dokumenter, updated_at, portal_bestilling_id, portal_bekreftet_at, portal_bekreftet_av, portal_modell_slug
       ) values (
         v_ordre_id, '', v_kunde, v_kp_navn,
         '{"nyttKjoretoy":false,"bruktKjoretoy":false,"lafinto":false,"personbil":false}'::jsonb,
@@ -286,7 +289,7 @@ begin
         '[]'::jsonb, null, false, '', false, '', false, '', null, null,
         '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '', v_logg, '[]'::jsonb, '',
         '[]'::jsonb, '', null, 'har_ikke', case when v_dok <> '[]'::jsonb then 'har' else 'har_ikke' end, '', '', coalesce(v_kontakt->>'orgnr', ''), null,
-        v_dok, now(), v_id, null, null
+        v_dok, now(), v_id, null, null, v_slug
       );
       v_status := 'ny_ordre';
       v_detalj := 'Ny ordre «På vei» opprettet (ikke bekreftet fra portal).';
