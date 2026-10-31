@@ -30,7 +30,7 @@ const CORS_HEADERS = {
 const FN = 'send-frakt-epost'
 // Sender ekte e-post fra post@salmaker.as: bare admin (samme rolle som ser Admin-arket i appen).
 const TILLATTE_ROLLER = ['admin']
-// ── EDGE-AUTH-GATE BEGIN (blokken er byte-lik i fiken-fakturer og send-frakt-epost; test/edge-auth-gate.test.js vokter mot avvik) ──
+// ── EDGE-AUTH-GATE BEGIN (blokken er byte-lik i fiken-fakturer, send-frakt-epost og vegvesen-oppslag; test/edge-auth-gate.test.js vokter mot avvik) ──
 // Innloggingssjekk innført 2026-10-29: kallet skal komme fra en innlogget ansatt med riktig rolle (TILLATTE_ROLLER). Samme regel som RLS bruker:
 // vi spør databasen via current_ansatt() med KALLERENS eget token (aktiv, riktig session_token, rolle slått opp live) - aldri dekoding av JWT her,
 // og aldri rolle-claimen i tokenet (den er frosset fra innloggingen). MYK MODUS til håndheving er slått på: kallet slippes alltid gjennom, men
@@ -80,8 +80,8 @@ async function innloggingsgate(req: Request): Promise<{ status: number; melding:
   console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: sjekk.via, grunn: sjekk.grunn ?? '', rolle: sjekk.rolle ?? '', ansatt_id: sjekk.ansattId ?? null, haandhevet: HAANDHEV, origin: req.headers.get('origin') ?? '' }))
   if (sjekk.via === 'ansatt' || !HAANDHEV) return null
   if (sjekk.via === 'ukjent') return { status: 503, melding: 'Kunne ikke bekrefte innloggingen akkurat nå - prøv igjen om litt' }
-  if (sjekk.via === 'ikke_tillatt_rolle') return { status: 403, melding: 'Bare administrator kan gjøre dette' }
-  return { status: 401, melding: 'Du må være innlogget som administrator - logg inn på nytt og prøv igjen' }
+  if (sjekk.via === 'ikke_tillatt_rolle') return { status: 403, melding: 'Rollen din har ikke tilgang til dette' }
+  return { status: 401, melding: 'Du må være innlogget - logg inn på nytt og prøv igjen' }
 }
 // ── EDGE-AUTH-GATE END ──
 

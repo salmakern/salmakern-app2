@@ -1,32 +1,43 @@
-// Innloggingssjekken i edge-funksjonene (fiken-fakturer og send-frakt-epost, innført 2026-10-29).
-// Blokken mellom «EDGE-AUTH-GATE BEGIN/END» skal være BYTE-LIK i begge funksjonene (én regel, ett sted å rette), og den
-// skal oppføre seg likt uansett hvilken funksjon den ligger i. Funksjonene kjører i Deno og kan ikke lastes direkte her,
-// så testen trekker ut selve blokken, legger den i en midlertidig .ts-modul (Vite fjerner typene) og kjører den mot falske
-// Deno/fetch. Hele funksjonene (A/B mot originalene) er testet manuelt - se supabase/README.md, «Edge-funksjoner låses».
+// Innloggingssjekken i edge-funksjonene (fiken-fakturer og send-frakt-epost 2026-10-29, vegvesen-oppslag 2026-10-31).
+// Blokken mellom «EDGE-AUTH-GATE BEGIN/END» skal være BYTE-LIK i alle funksjonene (én regel, ett sted å rette), og den
+// skal oppføre seg likt uansett hvilken funksjon den ligger i. TILLATTE_ROLLER (utenfor blokken) velger hvem som faktisk
+// slipper gjennom: bare admin for fiken-fakturer/send-frakt-epost, alle ansatte for vegvesen-oppslag (hvem som helst
+// kan slå opp et reg.nr i ordre-detalj). send-push har ENNÅ ingen sjekk - den kalles også fra cron-jobber og triggere
+// med service_role-nøkkel, ikke bare fra en innlogget ansatt i nettleseren, så samme ansatt-only-sjekk ville blokkert
+// de kallene hvis håndheving noensinne ble slått på der uten videre tilpasning (se s00-006 i Henger igjen-lista).
+// Funksjonene kjører i Deno og kan ikke lastes direkte her, så testen trekker ut selve blokken, legger den i en
+// midlertidig .ts-modul (Vite fjerner typene) og kjører den mot falske Deno/fetch. Hele funksjonene (A/B mot
+// originalene) er testet manuelt - se supabase/README.md, «Edge-funksjoner låses».
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FUNKSJONER = ['fiken-fakturer', 'send-frakt-epost'];
+const FUNKSJONER = ['fiken-fakturer', 'send-frakt-epost', 'vegvesen-oppslag'];
+const TILLATTE_ROLLER_PER_FN = {
+  'fiken-fakturer': ['admin'],
+  'send-frakt-epost': ['admin'],
+  'vegvesen-oppslag': ['admin', 'godkjenner', 'ansatt', 'verneombud'],
+};
 // Linjeskift normaliseres: Windows-utsjekk (autocrlf) gir CRLF, Linux-CI gir LF - det er innholdet som skal være likt.
 const kilde = (fn) => readFileSync(path.resolve(__dirname, `../supabase/functions/${fn}/index.ts`), 'utf8').replace(/\r\n/g, '\n');
 const blokk = (src) => src.match(/\/\/ ── EDGE-AUTH-GATE BEGIN[\s\S]*?\/\/ ── EDGE-AUTH-GATE END ──/)?.[0] ?? null;
 
 describe('innloggingssjekk i edge-funksjonene: oppsett', () => {
-  it('blokken finnes og er byte-lik i begge funksjonene', () => {
-    const [a, b] = FUNKSJONER.map((fn) => blokk(kilde(fn)));
-    expect(a).toBeTruthy();
-    expect(a).toBe(b);
+  it('blokken finnes og er byte-lik i alle funksjonene', () => {
+    const blokker = FUNKSJONER.map((fn) => blokk(kilde(fn)));
+    expect(blokker[0]).toBeTruthy();
+    for (const b of blokker) expect(b).toBe(blokker[0]);
   });
 
-  it.each(FUNKSJONER)('%s: FN og TILLATTE_ROLLER (bare admin) står før blokken, og sjekken er første handling i handleren', (fn) => {
+  it.each(FUNKSJONER)('%s: FN og TILLATTE_ROLLER står før blokken, og sjekken er første handling i handleren', (fn) => {
     const src = kilde(fn);
     const start = src.indexOf('EDGE-AUTH-GATE BEGIN');
     expect(src.indexOf(`const FN = '${fn}'`)).toBeGreaterThan(-1);
     expect(src.indexOf(`const FN = '${fn}'`)).toBeLessThan(start);
-    expect(src).toMatch(/const TILLATTE_ROLLER = \['admin'\]/);
+    const rollerLiteral = `[${TILLATTE_ROLLER_PER_FN[fn].map((r) => `'${r}'`).join(', ')}]`;
+    expect(src).toContain(`const TILLATTE_ROLLER = ${rollerLiteral}`);
     expect(src.indexOf('const TILLATTE_ROLLER')).toBeLessThan(start);
     expect(src).toMatch(/Deno\.serve\(async \(req\) => \{[\s\S]*?try \{\s*const avvist = await innloggingsgate\(req\)/);
   });
