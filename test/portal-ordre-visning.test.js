@@ -16,7 +16,7 @@ const seksjon = diverseKode.slice(diverseKode.lastIndexOf('\n', diverseKode.inde
 const escKilde = detaljKode.match(/^function esc\(s\)\{[^\n]*\}$/m)[0];
 
 function nyttMiljo({ rolle = 'ansatt', kontakter = [], rpc, bekreftSvar = true } = {}) {
-  const logg = { toast: [], rpc: [], render: 0, detalj: 0, autoMal: [], speiling: 0, tilbake: 0, confirm: [], logChange: [] };
+  const logg = { toast: [], rpc: [], render: 0, detalj: 0, autoMal: [], portalLinjer: [], speiling: 0, tilbake: 0, confirm: [], logChange: [] };
   const sandbox = {
     console: { log() {}, error() {}, warn() {}, info() {} },
     Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
@@ -39,6 +39,7 @@ function nyttMiljo({ rolle = 'ansatt', kontakter = [], rpc, bekreftSvar = true }
   sandbox.planleggRenderAll = () => { logg.render++; };
   sandbox.buildOrdreDetail = () => { logg.detalj++; };
   sandbox.autoVelgUtstyrMal = (id) => { logg.autoMal.push(id); };
+  sandbox.leggTilPortalUtstyrLinjer = (id) => { logg.portalLinjer.push(id); };
   sandbox.planleggLocalSpeiling = () => { logg.speiling++; };
   sandbox.tilbakeOrdreList = () => { logg.tilbake++; };
   sandbox.ordreLabel = (o) => o.regnr || ('Chassis: ' + o.chassis);
@@ -68,12 +69,13 @@ const portalOrdre = (over = {}) => ({
 });
 
 describe('dbToOrdre / ordreToDb: portal-kolonnene leses, men skrives ALDRI av appens lagring', () => {
-  it('dbToOrdre leser de fire kolonnene (inkl. portal_modell_slug, s09-012 steg 2), og vanlige ordre får null/tomt', () => {
+  it('dbToOrdre leser de fem kolonnene (inkl. portal_modell_slug s09-012 steg 2 og portal_linjer s08-048), og vanlige ordre får null/tomt', () => {
     const { sandbox } = nyttMiljo();
-    const p = sandbox.dbToOrdre({ id: 'a', portal_bestilling_id: 'cm9x', portal_bekreftet_at: '2026-10-30T18:00:00Z', portal_bekreftet_av: 'Ola', portal_modell_slug: 'kia-ev9' });
-    expect(p).toMatchObject({ portalBestillingId: 'cm9x', portalBekreftetAt: '2026-10-30T18:00:00Z', portalBekreftetAv: 'Ola', portalModellSlug: 'kia-ev9' });
+    const linjer = [{ produktnummer: '501', navn: 'Takluke', rabatt_prosent: 10 }];
+    const p = sandbox.dbToOrdre({ id: 'a', portal_bestilling_id: 'cm9x', portal_bekreftet_at: '2026-10-30T18:00:00Z', portal_bekreftet_av: 'Ola', portal_modell_slug: 'kia-ev9', portal_linjer: linjer });
+    expect(p).toMatchObject({ portalBestillingId: 'cm9x', portalBekreftetAt: '2026-10-30T18:00:00Z', portalBekreftetAv: 'Ola', portalModellSlug: 'kia-ev9', portalLinjer: linjer });
     const v = sandbox.dbToOrdre({ id: 'b' });
-    expect(v).toMatchObject({ portalBestillingId: null, portalBekreftetAt: null, portalBekreftetAv: '', portalModellSlug: null });
+    expect(v).toMatchObject({ portalBestillingId: null, portalBekreftetAt: null, portalBekreftetAv: '', portalModellSlug: null, portalLinjer: null });
   });
 
   it('ordreToDb sender ALDRI portal_*-kolonnene (en ansatt som lagrer et annet felt kan ikke nullstille bekreftelsen)', () => {
@@ -189,6 +191,7 @@ describe('Bekreft', () => {
     expect(o.endringer).toHaveLength(2);
     expect(m.logg.toast).toEqual([['Bestillingen er bekreftet', 'ok']]);
     expect(m.logg.autoMal).toEqual(['ord_1788100000000_abc123']);
+    expect(m.logg.portalLinjer).toEqual(['ord_1788100000000_abc123']);
     expect(m.logg.render).toBe(1);
     expect(m.logg.detalj).toBe(1);
   });

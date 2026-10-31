@@ -1,3 +1,13 @@
+-- v5 (2026-10-31, s08-048): tar nå imot en valgfri "linjer"-liste (produktnummer, navn,
+-- rabatt_prosent - forhandlerens rabatt fra BESTILLINGEN, ikke Salmaker'ns kundesats) og
+-- lagrer den rått i portal_bestillinger.linjer (admin-innsyn) og normalisert på den nye
+-- kolonnen ordrer.portal_linjer (kun ny_ordre-grenen - en løs Admin-ark-rad har ingen
+-- fakturering å fylle). Henrik 30.10/31.10: rabatten på fakturalinjen skal være portalens,
+-- ikke fiken_kunde_rabatt, for en portal-ordre - selve bruken (Bekreft fyller «Skal ha
+-- etter visning» + fiken_linjer, fiken-fakturer bruker den FROSNE rabatten) bygges i
+-- js/lager.js (leggTilPortalUtstyrLinjer) og fiken-fakturer, ikke her. Feltet er HELT
+-- valgfritt: mangler "linjer" i input (portalen sender det ikke ennå), er alt uendret.
+-- Se 20261031170000_portal_bestilling_linjer.sql for kolonnene.
 -- v4 (2026-10-31, s09-012 steg 2): ordre-grenen (4b, "Ingen aktiv ordre: opprett") lagrer nå
 -- v_slug på den nye kolonnen ordrer.portal_modell_slug (se 20261031150000_portal_modell_slug_matching.sql)
 -- - den var allerede slått opp og validert her (linje ~236, venter_modell ellers), bare kastet bort før.
@@ -80,6 +90,8 @@ declare
   v_utstyr jsonb;
   v_dok jsonb;
   v_logg jsonb;
+  v_linjer jsonb;
+  v_linje_elem jsonb;
 begin
   -- ---------- 1. Input: valider og sanér ----------
   if p is null or jsonb_typeof(p) <> 'object' then
@@ -109,6 +121,32 @@ begin
     end if;
   end if;
   v_slug := left(btrim(coalesce(p->>'modell_slug', '')), 80);
+  -- s08-048: valgfri produktliste fra bestillingen (portalens egen rabatt per linje).
+  -- Mangler feltet: v_linjer forblir null, helt uendret oppførsel. Finnes det, valideres
+  -- HVERT element strengt og hele kallet avvises ved første feil (fail-closed, samme
+  -- prinsipp som resten av valideringen over) - aldri en delvis lagret/tolket liste.
+  v_linjer := null;
+  if p ? 'linjer' and jsonb_typeof(p->'linjer') = 'array' then
+    if jsonb_array_length(p->'linjer') > 30 then
+      raise exception 'UGYLDIG_INPUT: linjer';
+    end if;
+    v_linjer := '[]'::jsonb;
+    for v_linje_elem in select * from jsonb_array_elements(p->'linjer') loop
+      if coalesce(btrim(v_linje_elem->>'produktnummer'), '') = '' or char_length(v_linje_elem->>'produktnummer') > 40
+         or coalesce(btrim(v_linje_elem->>'navn'), '') = '' or char_length(v_linje_elem->>'navn') > 200
+         or (v_linje_elem->>'rabatt_prosent') !~ '^[0-9]+(\.[0-9]+)?$'
+         or (v_linje_elem->>'rabatt_prosent')::numeric < 0 or (v_linje_elem->>'rabatt_prosent')::numeric > 100 then
+        raise exception 'UGYLDIG_INPUT: linjer';
+      end if;
+      v_linjer := v_linjer || jsonb_build_array(jsonb_build_object(
+        'produktnummer', btrim(v_linje_elem->>'produktnummer'),
+        'navn', left(btrim(regexp_replace(v_linje_elem->>'navn', '[\u0001-\u001f\u007f<>]', '', 'g')), 200),
+        'rabatt_prosent', (v_linje_elem->>'rabatt_prosent')::numeric
+      ));
+    end loop;
+  elsif p ? 'linjer' then
+    raise exception 'UGYLDIG_INPUT: linjer';
+  end if;
   v_kontakt_id := left(btrim(coalesce(p->>'kontakt_id', '')), 80);
   v_orgnr := regexp_replace(coalesce(p->>'orgnr', ''), '\D', '', 'g');
   -- Navn og e-post fra en ekstern bruker: ingen kontrolltegn, retningstegn eller < >, kappet lengde.
@@ -145,13 +183,13 @@ begin
     -- Eksplisitt ny kjøring: ta imot oppdaterte, endringsbare felt (org.nr, kontakt, selger) men behold identiteten.
     update public.portal_bestillinger
        set forhandler_kontakt_id = nullif(v_kontakt_id, ''), forhandler_orgnr = nullif(v_orgnr, ''), selger_navn = v_selger, selger_epost = nullif(v_epost, ''),
-           portal_modell_slug = nullif(v_slug, ''), oppdatert_at = now()
+           portal_modell_slug = nullif(v_slug, ''), linjer = coalesce(v_linjer, linjer), oppdatert_at = now()
      where portal_bestilling_id = v_id;
   else
     insert into public.portal_bestillinger
-      (portal_bestilling_id, portal_nr, ident_type, ident, forhandler_kontakt_id, forhandler_orgnr, forhandler_navn, selger_navn, selger_epost, portal_modell_slug, payload)
+      (portal_bestilling_id, portal_nr, ident_type, ident, forhandler_kontakt_id, forhandler_orgnr, forhandler_navn, selger_navn, selger_epost, portal_modell_slug, linjer, payload)
     values
-      (v_id, v_nr, v_type, v_ident, nullif(v_kontakt_id, ''), nullif(v_orgnr, ''), left(coalesce(p->>'forhandler_navn', ''), 120), v_selger, nullif(v_epost, ''), nullif(v_slug, ''),
+      (v_id, v_nr, v_type, v_ident, nullif(v_kontakt_id, ''), nullif(v_orgnr, ''), left(coalesce(p->>'forhandler_navn', ''), 120), v_selger, nullif(v_epost, ''), nullif(v_slug, ''), v_linjer,
        jsonb_build_object('nr', v_nr, 'ident_type', v_type, 'modell_slug', v_slug, 'kontakt_id', v_kontakt_id));
   end if;
 
@@ -277,7 +315,7 @@ begin
         ansatte_signert, signatur, godkjent, godkjenner_navn, diagnose, diagnose_av, fakturert, fakturert_av, ordre_start, ordre_stopp,
         ordre_timer_sessions, klargjoring_timer_sessions, fiken_linjer, notater, endringer, utstyr_sjekkliste, utstyr_mal_navn,
         visnings_sjekkliste, visnings_mal_navn, flate_id, coc, fullmakt, typegodkjenning, egenvekt_coc, forhandler_orgnr, kjoreseddel_skilt,
-        dokumenter, updated_at, portal_bestilling_id, portal_bekreftet_at, portal_bekreftet_av, portal_modell_slug
+        dokumenter, updated_at, portal_bestilling_id, portal_bekreftet_at, portal_bekreftet_av, portal_modell_slug, portal_linjer
       ) values (
         v_ordre_id, '', v_kunde, v_kp_navn,
         '{"nyttKjoretoy":false,"bruktKjoretoy":false,"lafinto":false,"personbil":false}'::jsonb,
@@ -289,7 +327,7 @@ begin
         '[]'::jsonb, null, false, '', false, '', false, '', null, null,
         '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '', v_logg, '[]'::jsonb, '',
         '[]'::jsonb, '', null, 'har_ikke', case when v_dok <> '[]'::jsonb then 'har' else 'har_ikke' end, '', '', coalesce(v_kontakt->>'orgnr', ''), null,
-        v_dok, now(), v_id, null, null, v_slug
+        v_dok, now(), v_id, null, null, v_slug, v_linjer
       );
       v_status := 'ny_ordre';
       v_detalj := 'Ny ordre «På vei» opprettet (ikke bekreftet fra portal).';

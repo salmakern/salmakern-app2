@@ -335,9 +335,15 @@ Deno.serve(async (req) => {
           line.unitPrice = Math.round(Number(l.pris) * 100)
           line.vatType = l.mva
         }
-        // Drivstoff (overstyrt beløp) skal ALDRI ha rabatt - alt annet får kundens avtalte
-        // sats, valgt ut fra om Fiken-produktnavnet er en ombygging-linje eller ekstra utstyr.
-        const rabatt = erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr
+        // s08-048 (Henrik 30.10/31.10 kveld): en linje som kom fra en portal-bestilling har
+        // fått forhandlerens rabatt FROSSET på linjen (l.rabatt, satt av
+        // leggTilPortalUtstyrLinjer() i js/lager.js da ordren ble bekreftet) - den brukes i
+        // stedet for kundens generelle sats i fiken_kunde_rabatt, slik Henrik bestemte
+        // ("rabattene skal være de som er i forhandlerportalen"). Linjer uten frosset rabatt
+        // (vanlige ordre, eller portal-linjer lagt til før denne endringen) er uendret:
+        // kundens avtalte sats, som før. Drivstoff (overstyrt beløp) skal ALDRI ha rabatt.
+        const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
+        const rabatt = erLaastRabatt ? l.rabatt : (erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr)
         if (rabatt > 0) line.discount = rabatt
       }
       if (chassisNr && i === linjer.length - 1) line.comment = `Ch. nr. ${chassisNr}`

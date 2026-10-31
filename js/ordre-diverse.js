@@ -1259,6 +1259,9 @@ async function portalBekreftOrdre(id) {
     // Ordren ble opprettet i databasen, ikke av appen, så utstyrsmalen (som opprettOrdre() ellers velger ved opprettelse) velges først nå ved bekreftelse. Kalles også når
     // svaret på første forsøk gikk tapt og ordren allerede var bekreftet (autoVelgUtstyrMal gjør ingenting hvis malen allerede er valgt).
     autoVelgUtstyrMal(id);
+    // s08-048: produktlinjer fra bestillingen (utstyr+rabatt) inn i «Skal ha etter visning»
+    // og fiken_linjer - gjør ingenting hvis ordren ikke har noen (o.portalLinjer tomt/null).
+    leggTilPortalUtstyrLinjer(id);
     planleggRenderAll();
     if (activeOrdreId === id) buildOrdreDetail();
   } catch (e) {

@@ -1599,6 +1599,41 @@ async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa, ordreId =
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
 
+// s08-048 (Henrik 30.10/31.10 kveld, ja gitt): en portal-ordre kan ha produktlinjer fra
+// bestillingen (o.portalLinjer - produktnummer, navn, rabatt_prosent FRA PORTALEN, ikke
+// Salmaker'ns kundesats i fiken_kunde_rabatt), satt av portal_koble_bestilling (migrasjon
+// 20261031170000) og lest av dbToOrdre. Kalles når ordren BEKREFTES (portalBekreftOrdre,
+// js/ordre-diverse.js), samme tidspunkt som autoVelgUtstyrMal - IKKE ved opprettelse, siden
+// ordren kan stå lenge som "ikke bekreftet" og chassis.nr kan vise seg feil først.
+// Hver linje: (1) navnet legges i «Skal ha etter visning» (samme fritekst-mønster som
+// oppdaterSkalHaForOppskrift - idempotent, legger aldri til samme tekst to ganger), og
+// (2) produktnummeret legges i fiken_linjer MED rabatt_prosent frosset på linjen (fiken-
+// fakturer, se supabase/functions/fiken-fakturer/index.ts, bruker DEN rabatten i stedet for
+// kundens generelle sats når den finnes). Pris/mva fryses som vanlig av
+// oppdater_ordre_fiken_linje() ut fra fiken_priser - rabatten er det ENESTE som kommer fra
+// bestillingen her. Idempotent: en linje som allerede finnes (produktnummer) røres ikke,
+// så et nytt kall (tapt svar, bekreftet på nytt) gjør ingenting ekstra. Lageruttak er
+// bevisst urørt - samme manuelle flyt via "Ekstra utstyr"-oppskriftene som i dag.
+async function leggTilPortalUtstyrLinjer(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  const linjer = Array.isArray(o.portalLinjer) ? o.portalLinjer : [];
+  for (const linje of linjer) {
+    if (!linje?.produktnummer || !linje?.navn) continue;
+    oppdaterSkalHaForOppskrift(linje.navn, true, ordreId);
+    const finnes = (o.fikenLinjer||[]).some(l=>l.produktnummer===linje.produktnummer);
+    if (finnes || !db) continue;
+    const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', {
+      p_ordre_id: o.id, p_produktnummer: linje.produktnummer,
+      p_linje: { produktnummer: linje.produktnummer, antall: 1, rabatt: typeof linje.rabatt_prosent === 'number' ? linje.rabatt_prosent : 0 }
+    });
+    if (error) { console.error('Kunne ikke legge til fakturalinje fra portal-bestilling:', error.message); continue; }
+    o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
+  }
+  planleggLocalSpeiling();
+  const el = document.getElementById('fikenLinjer_'+o.id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+
 async function angreLagerBatch(batchId) {
   if (!confirm('Angre denne uttrekkingen og legge varene tilbake på lager?')) return;
   const rader = (S.lagerhistorikk||[]).filter(h=>h.batchId===batchId);

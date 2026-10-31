@@ -639,7 +639,11 @@ function dbToOrdre(r) {
     portalBestillingId:r.portal_bestilling_id||null, portalBekreftetAt:r.portal_bekreftet_at||null, portalBekreftetAv:r.portal_bekreftet_av||'',
     // Modell-nøkkelen fra portal_modell_kobling (s09-012 steg 2) - brukes av kanoniskMerkeModell() i ordre-detalj.js til å gi stabil Fiken-matching
     // uavhengig av om noen retter fritekst-feltene Merke/Modell i etterkant. null for alle ordre uten portal-opprinnelse.
-    portalModellSlug:r.portal_modell_slug||null
+    portalModellSlug:r.portal_modell_slug||null,
+    // Produktlinjer fra bestillingen (s08-048, migrasjon 20261031170000) - produktnummer/navn/
+    // rabatt_prosent fra portalen, brukt av leggTilPortalUtstyrLinjer() (js/lager.js) ved
+    // Bekreft. Samme regel som de fire over: LESES her, skrives ALDRI av ordreToDb/save().
+    portalLinjer:r.portal_linjer||null
   };
 }
 function ordreToDb(o) {

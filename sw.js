@@ -32,7 +32,10 @@
 // v21 - s09-012 steg 2: Fiken-ombygging-matching bruker nå modellen fra portal-bestillingen
 // (portal_modell_slug) i stedet for ordrens frie merke/modell-tekst når de finnes, pluss et
 // varsel i ordredetaljen hvis de avviker (2026-10-31)
-const CACHE = 'salmakern-v21';
+// v22 - s08-048 grunnlag: Bekreft av en portal-ordre kan fylle «Skal ha etter visning» og
+// fiken_linjer fra bestillingens produktlinjer (o.portalLinjer) - helt inert til
+// portal_koble_bestilling v5 og portal-bestilling faktisk sender feltet (2026-10-31)
+const CACHE = 'salmakern-v22';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
