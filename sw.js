@@ -27,7 +27,9 @@
 // kortets ramme på smale skjermer - radene manglet flex-wrap (2026-10-30)
 // v19 - Vegvesen-dokumenter varsler nå synlig (i stedet for stille) når modellen ikke
 // gjenkjennes og Egenerklæringen må bruke en generisk mal (2026-10-31)
-const CACHE = 'salmakern-v19';
+// v20 - felles ord for kontaktpersonen hos forhandleren (s08-054): "selger" byttet til
+// "kontaktperson" i teksten brukerne ser på portal-bestillinger (2026-10-31)
+const CACHE = 'salmakern-v20';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

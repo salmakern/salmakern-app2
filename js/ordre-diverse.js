@@ -1219,7 +1219,7 @@ function portalBekreftBannerHTML(o) {
   const opprettet = (o.endringer || []).find(e => e && e.av === 'Forhandlerportalen');
   const kanAvvise = me?.rolle === 'admin' || me?.rolle === 'godkjenner';
   const mangler = !o.eier
-    ? 'Ingen kontaktperson er satt på ordren (selgeren finnes ikke som kontaktperson hos forhandleren i Kontakter).'
+    ? 'Ingen kontaktperson er satt på ordren (navnet fra bestillingen finnes ikke som kontaktperson hos forhandleren i Kontakter).'
     : (!adminArkFinnKontaktEpost(o.eier) ? `Fant ingen e-postadresse til «${esc(o.eier)}» i Kontakter. Frakt- og hentet-e-post fra Admin-ark finner ingen mottaker før kontaktpersonen er lagt inn.` : '');
   return `<div id="portalBanner_${o.id}" style="background:#1c1008;border:1px solid #b45309;border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:13px">
     <div style="font-weight:700;color:#fbbf24;margin-bottom:4px">Bestilt i Forhandlerportalen - ikke bekreftet</div>
@@ -1275,7 +1275,7 @@ async function portalAvvisOrdre(id) {
   const o = S.ordrer.find(x => x.id === id);
   if (!o || !db) return;
   if (portalHandlingPagar) { visToast(PORTAL_OPPTATT_TEKST, 'feil'); return; }
-  if (!confirm(`Avvise og slette bestillingen for ${ordreLabel(o)}?\n\nOrdren slettes, og bestillingen i portalen markeres som avvist (den opprettes ikke på nytt). Ta kontakt med selgeren selv hvis noe skal rettes.\n\nDette kan ikke angres.`)) return;
+  if (!confirm(`Avvise og slette bestillingen for ${ordreLabel(o)}?\n\nOrdren slettes, og bestillingen i portalen markeres som avvist (den opprettes ikke på nytt). Ta kontakt med kontaktpersonen selv hvis noe skal rettes.\n\nDette kan ikke angres.`)) return;
   portalHandlingPagar = true;
   for (const b of ['portalBekreftBtn_', 'portalAvvisBtn_']) { const k = document.getElementById(b + id); if (k) k.disabled = true; }
   try {
