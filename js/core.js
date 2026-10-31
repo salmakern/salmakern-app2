@@ -238,11 +238,14 @@ const STATUS_SORT = {hentet:0,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikk
 // på e-post fra Admin-ark (js/admin-ark.js). henteKlarDato er en valgfri dato valgt i
 // samme dialog, brukt i badge-teksten OG til å sortere listene under (mest hastverk øverst).
 const BESTILT_FRAKT_BADGE_FARGE = '#a78bfa';
+// Skjules når ordren faktisk er hentet (bedt om av Henrik 2026-10-01) - badgen/kant-
+// fargen er bare relevant mens man venter på henting, ikke lenger når det faktisk har
+// skjedd (bestiltFrakt-flagget på ordren røres ikke, kun selve visningen). Samme regel
+// styrer filteret «Bestilt frakt» i Ordre-lista (oversikt-kalender.js), så lista viser
+// akkurat de kortene som har merket.
+function erBestiltFraktAktiv(o) { return !!o.bestiltFrakt && o.ordreStatus !== 'hentet'; }
 function bestiltFraktBadgeHTML(o, offsetCss) {
-  // Skjules når ordren faktisk er hentet (bedt om av Henrik 2026-10-01) - badgen/kant-
-  // fargen er bare relevant mens man venter på henting, ikke lenger når det faktisk har
-  // skjedd (bestiltFrakt-flagget på ordren røres ikke, kun selve visningen).
-  if (!o.bestiltFrakt || o.ordreStatus === 'hentet') return '';
+  if (!erBestiltFraktAktiv(o)) return '';
   const tekst = o.henteKlarDato ? `HENTEKLAR ${fmtDatoKort(o.henteKlarDato)}` : 'BESTILT FRAKT';
   return `<span style="position:absolute;top:-9px;${offsetCss};background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:${BESTILT_FRAKT_BADGE_FARGE};letter-spacing:.03em">${tekst}</span>`;
 }

@@ -68,6 +68,26 @@ describe('sorterOrdre() - henteKlarDato ("mest hastverk øverst")', () => {
   });
 });
 
+describe('erBestiltFraktAktiv() - regelen bak merket OG filteret «Bestilt frakt» i Ordre-lista', () => {
+  it('sann når frakt er bestilt og ordren ikke er hentet, uansett øvrig status', () => {
+    const env = nyEnvironment();
+    expect(env.erBestiltFraktAktiv({ bestiltFrakt: true, ordreStatus: 'klar_henting' })).toBe(true);
+    expect(env.erBestiltFraktAktiv({ bestiltFrakt: true, ordreStatus: 'paabegynt' })).toBe(true);
+  });
+
+  it('usann når frakt ikke er bestilt, eller når ordren er hentet', () => {
+    const env = nyEnvironment();
+    expect(env.erBestiltFraktAktiv({ bestiltFrakt: false, ordreStatus: 'klar_henting' })).toBe(false);
+    expect(env.erBestiltFraktAktiv({ ordreStatus: 'klar_henting' })).toBe(false);
+    expect(env.erBestiltFraktAktiv({ bestiltFrakt: true, ordreStatus: 'hentet' })).toBe(false);
+  });
+
+  it('Ordre-lista filtrerer «bestilt_frakt» på denne regelen, ikke på ordreStatus (som aldri har den verdien)', () => {
+    const lista = readFileSync(path.resolve(__dirname, '../js/oversikt-kalender.js'), 'utf8');
+    expect(lista).toMatch(/statusFilter === 'bestilt_frakt'\)\s*\{\s*if \(!erBestiltFraktAktiv\(o\)\) return false;/);
+  });
+});
+
 describe('bestiltFraktBadgeHTML() - kort-merket som erstatter "Bestilt frakt"-statusen', () => {
   it('tom streng når bestiltFrakt er false', () => {
     const env = nyEnvironment();

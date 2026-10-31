@@ -186,7 +186,7 @@ Hele kjeden og begrunnelsene står i `supabase/README.md` («Bestillinger fra Fo
 - **Test**: SQL-testene (`supabase/tester/*_TEST_body.sql`) kjøres ALLTID i en transaksjon som rulles tilbake (kjøring står øverst i filene). Nettlesertest: lokal server (`python -m http.server 8099` i rotmappen) + headless
   Edge mot den ekte databasen med TEST-ansatte (id 990001/990002, `ansatte` + `ansatte_pin`, tilfeldig ledig PIN) og TEST-bestillinger (chassis `TESTWXYZ0000000xx`, lagd med `portal_koble_bestilling`), alt slettet etterpå.
   Merk: nye ansatte-/ordre-rader vises i sanntid for ansatte som har appen åpen, så gjør det utenom arbeidstid og rydd straks.
-- **Kjent, ikke gjort**: «Bestilt frakt»-valget i ordrefilteret (`salmakern.html`, `bestilt_frakt`) matcher ingenting (filteret sammenligner bare `ordreStatus`); fantes før portal-arbeidet. Push-varsel til administratorer når en ny
+- **«Bestilt frakt»-valget i ordrefilteret** (`salmakern.html`, `bestilt_frakt`) matchet ingenting før 2026-10-30 (filteret sammenlignet bare `ordreStatus`, og «Bestilt frakt» sluttet å være en status 30.9). Nå filtrerer det på `erBestiltFraktAktiv(o)` (core.js: `bestiltFrakt` og ikke `hentet`, samme regel som lilla merke/kantlinje); vokter: `test/sorter-ordre-bestilt-frakt.test.js`. Push-varsel til administratorer når en ny
   portal-bestilling kommer er bygget (G9, i edge-funksjonen `portal-bestilling`; se `supabase/README.md`: test aldri mot den utrullede funksjonen uten Henriks ja, det sender ekte varsler), og avklaringer (`venter_*`/`avklaring_*` i `portal_bestillinger`) har ingen visning ennå (G8): Claude utfører dem via SQL på Henriks ord.
 
 ## Daglig automatisk QA-gjennomgang

@@ -315,7 +315,9 @@ describe('Filter og oppsett (kildetekst)', () => {
     expect(html).toMatch(/<option value="portal_ubekreftet">Fra portal, ikke bekreftet \(0\)<\/option>/);
     const liste = les('oversikt-kalender.js');
     // hele filtergrenen (en endring som fjerner den eller bytter den ut, skal feile her)
-    expect(liste).toContain("if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }\n    else if (statusFilter && o.ordreStatus !== statusFilter) return false;");
+    // (portal-grenen først, og den vanlige status-sammenligningen sist; «Bestilt frakt»-grenen ligger mellom, se sorter-ordre-bestilt-frakt.test.js)
+    expect(liste).toContain("if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }");
+    expect(liste).toContain("else if (statusFilter && o.ordreStatus !== statusFilter) return false;");
     // merket står på alle tre korttypene (Ordre-lista, Oversikt aktive, Oversikt ventende)
     expect(liste.match(/portalBadgeHTML\(o\)/g).length).toBe(3);
   });

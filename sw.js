@@ -25,7 +25,7 @@
 // mobilnettlesere som tegnet sin egen pil klemt inntil lang statustekst (2026-10-30)
 // v17 - status-boksen i Oversikt (Aktive ordrer/Ikke påbegynt) kunne presse seg utenfor
 // kortets ramme på smale skjermer - radene manglet flex-wrap (2026-10-30)
-const CACHE = 'salmakern-v17';
+const CACHE = 'salmakern-v18';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

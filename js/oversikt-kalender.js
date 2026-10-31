@@ -87,6 +87,8 @@ function renderOrdreList() {
   const alle = S.ordrer.filter(o => {
     if (o.status !== 'aktiv') return false;
     if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }
+    // «Bestilt frakt» er en markering på ordren, ikke en ordreStatus (se core.js), så den kan ikke sammenlignes med ordreStatus.
+    else if (statusFilter === 'bestilt_frakt') { if (!erBestiltFraktAktiv(o)) return false; }
     else if (statusFilter && o.ordreStatus !== statusFilter) return false;
     if (!sokTekst) return true;
     return (o.regnr||'').toLowerCase().includes(sokTekst) ||
