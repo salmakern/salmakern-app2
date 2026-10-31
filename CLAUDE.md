@@ -318,7 +318,7 @@ og kan sende en forespørsel til opptil 3 av dem. Data og utsending ligger i For
   for `max-width: 1120px` (litt tettere meny) og strammere mobilregel (`720px`); målt etterpå:
   én rad fra 900px og opp, 800px lavere enn før, mobil ca. +7px mot før. Husk å måle header-
   høyden (`.site-header` offsetHeight) ved 375/800/1024/1280 hvis menyen endres igjen. `site.css`
-  er nå `?v=11` på alle sider (bumpet 2026-10-31, rulleteksten på forsiden fikk fullt merke + modellnavn og 53s i stedet for 42s), `model-sync.js` `?v=6` og `model-list-sync.js` `?v=7`.
+  er nå `?v=12` på alle sider (bumpet 2026-10-31: rulleteksten på forsiden fikk fullt merke + modellnavn og 53s i stedet for 42s; modellsidenes h1 (`.page-hero-dark h1`) skalerer ned under ca. 400px så lange ord som GELÄNDEWAGEN ikke går utenfor skjermen), `model-sync.js` `?v=6` og `model-list-sync.js` `?v=7`.
 - **Teste lokalt**: portalens API tillater bare `https://salmaker.as` som origin, så en side
   servert fra localhost får CORS-feil. Løsning brukt: en liten lokal proxy som serverer
   `nettside/`, sender `/api/*` videre til portalen på localhost:3000 med `Origin: https://salmaker.as`
