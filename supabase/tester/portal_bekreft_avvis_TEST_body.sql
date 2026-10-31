@@ -1,8 +1,8 @@
 -- Test av portal_bekreft_ordre / portal_avvis_ordre (migrasjon 20261030230000). ALLTID i en transaksjon som rulles tilbake: ingenting blir stående, ingen åpen app ser noe.
 -- Bruker EKTE ansatte (en admin, en godkjenner, en vanlig ansatt) KUN til lesing for å lage innloggingsutsagn (request.jwt.claims) - ingen ansatt-rader endres.
 -- Ordrene lages med portal_koble_bestilling (må være kjørt, med modellen kia-ev9 i portal_modell_kobling) mot AK Auto AS (k_portal_akauto, org.nr 831862122).
--- Kjøring (fra rotmappen):
---   (echo "begin;"; cat supabase/migrations/20261030230000_portal_bekreft_avvis.sql; cat supabase/tester/portal_bekreft_avvis_TEST_body.sql; echo "rollback;") > /tmp/t.sql
+-- Kjøring (fra rotmappen, 20261031180000 legger en startstatus-rad i ordre_status_utboks ved Bekreft - s08-034):
+--   (echo "begin;"; cat supabase/migrations/20261030230000_portal_bekreft_avvis.sql; cat supabase/migrations/20261031180000_portal_bekreft_utboks_baseline.sql; cat supabase/tester/portal_bekreft_avvis_TEST_body.sql; echo "rollback;") > /tmp/t.sql
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file /tmp/t.sql
 -- Siste setning før rollback skriver ut resultatlinjene: alle skal ha resultat OK.
 
@@ -47,10 +47,14 @@ begin
     and jsonb_array_length(o.endringer) = 2 and o.endringer->1->>'txt' = 'Bekreftet som bestilling fra Forhandlerportalen' and o.endringer->1->>'av' = o.portal_bekreftet_av
     and (o.endringer->1) ?& array['av', 'tid', 'txt'] and r->'endringer' = o.endringer, r::text);
   insert into _res(navn, ok, info) values ('T2 portal_bestillinger er «bekreftet»', (select status from public.portal_bestillinger where portal_bestilling_id = 'testbk0000001') = 'bekreftet', '');
+  insert into _res(navn, ok, info) values ('T2 (s08-034) Bekreft legger en startstatus-rad i ordre_status_utboks (status_forrige null, status = ordrens faktiske status)',
+    (select count(*) from public.ordre_status_utboks where ordre_id = v_id and status_forrige is null) = 1
+    and (select status from public.ordre_status_utboks where ordre_id = v_id and status_forrige is null) = o.ordre_status, o.ordre_status);
   v_endr_for := jsonb_array_length(o.endringer);
   r := public.portal_bekreft_ordre(v_id);
   select * into o from public.ordrer where id = v_id;
   insert into _res(navn, ok, info) values ('T2 ny bekreftelse er idempotent (allerede_bekreftet, ingen ny logglinje, samme tidspunkt)', r->>'kode' = 'allerede_bekreftet' and jsonb_array_length(o.endringer) = v_endr_for, r::text);
+  insert into _res(navn, ok, info) values ('T2 (s08-034) idempotent ny bekreftelse legger IKKE en ny startstatus-rad', (select count(*) from public.ordre_status_utboks where ordre_id = v_id and status_forrige is null) = 1, '');
   begin perform public.portal_avvis_ordre(v_id); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
   insert into _res(navn, ok, info) values ('T2 en bekreftet ordre kan IKKE avvises (selv av ansatt får IKKE_TILLATT først, så testes admin under)', v_feil = 'IKKE_TILLATT', v_feil);
   perform set_config('request.jwt.claims', jsonb_build_object('ansatt_id', v_admin, 'session_token', v_admin_tok)::text, true);

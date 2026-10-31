@@ -28,6 +28,13 @@
 // 31.10): endret_at (tidspunktet statusendringen faktisk ble lagt i køen, ikke når den ble
 // sendt) og klar_for_henting_dato (bare for status klar_henting, datoen satt i endreStatus()
 // - js/oversikt-kalender.js - slik portalen slipper et eget oppslag).
+//
+// Portalens svar (bekreftet 31.10): 200 = levert (lagret/allerede); 404 ukjent
+// portal_bestilling_id er PERMANENT (markeres levert med feilen notert, prøves ALDRI på
+// nytt - idempotens-id-en finnes ikke der, et nytt forsøk endrer ingenting); alt annet
+// (401/413/429/5xx/nettverksfeil/tidsavbrudd) er forbigående og prøves igjen neste
+// cron-kjøring med SAMME event_id (idempotent hos portalen - en retry etter f.eks. en 502
+// der bare e-posten feilet skal ikke lage en ny hendelse der).
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
@@ -69,6 +76,7 @@ Deno.serve(async (req) => {
     let feilet = 0
     const levertIder: number[] = []
     const feiletOppdateringer: { id: number; forsok: number; siste_feil: string }[] = []
+    const feiletPermanentIder: { id: number; siste_feil: string }[] = []
 
     for (const rad of rader as any[]) {
       const portalBestillingId = rad.ordrer?.portal_bestilling_id
@@ -110,6 +118,12 @@ Deno.serve(async (req) => {
         if (res.ok) {
           levertIder.push(rad.id)
           sendt++
+        } else if (res.status === 404) {
+          // Portal-økta (31.10): 404 (ukjent portal_bestilling_id hos dem) er permanent - et
+          // nytt forsøk endrer ingenting, så raden markeres levert med feilen notert i stedet
+          // for å stå og prøves på nytt for alltid.
+          feiletPermanentIder.push({ id: rad.id, siste_feil: `HTTP 404: ukjent portal_bestilling_id (${(await res.text()).slice(0, 200)})` })
+          feilet++
         } else {
           feiletOppdateringer.push({ id: rad.id, forsok: (rad.forsok || 0) + 1, siste_feil: `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` })
           feilet++
@@ -125,6 +139,9 @@ Deno.serve(async (req) => {
     }
     for (const opp of feiletOppdateringer) {
       await supabase.from('ordre_status_utboks').update({ forsok: opp.forsok, siste_feil: opp.siste_feil }).eq('id', opp.id)
+    }
+    for (const opp of feiletPermanentIder) {
+      await supabase.from('ordre_status_utboks').update({ levert: true, levert_at: new Date().toISOString(), siste_feil: opp.siste_feil }).eq('id', opp.id)
     }
 
     return jsonSvar({ ok: true, sendt, feilet })
