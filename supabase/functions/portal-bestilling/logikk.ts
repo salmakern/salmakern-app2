@@ -54,7 +54,8 @@ export function parseInnkommende(raw: unknown): Innkommende {
   const MELLOMROM = /[ \t\n\r\f\v]/g
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(p.bestilling_id.replace(/^ +| +$/g, ''))) return { ok: false, felt: 'bestilling_id' }
   if (p.nr.replace(/[^A-Za-z0-9-]/g, '') === '') return { ok: false, felt: 'nr' }
-  if (p.ident_type !== 'CHASSIS' && p.ident_type !== 'SERIENUMMER') return { ok: false, felt: 'ident_type' }
+  // BESTILLINGSNR (forhandlerens eget bestillingsnummer) har samme format som SERIENUMMER og samme vei videre (løs rad i Admin-ark).
+  if (p.ident_type !== 'CHASSIS' && p.ident_type !== 'SERIENUMMER' && p.ident_type !== 'BESTILLINGSNR') return { ok: false, felt: 'ident_type' }
   if (p.ident_type === 'CHASSIS') {
     // Bare ASCII før store bokstaver: toUpperCase() på ikke-ASCII kan endre lengden eller gi A-Z (ß, ﬁ, ŉ).
     const chassis = p.ident.replace(MELLOMROM, '').replace(/-/g, '')

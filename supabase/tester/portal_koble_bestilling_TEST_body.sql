@@ -197,6 +197,47 @@ begin
   select * into o from public.ordrer where portal_bestilling_id = 'testbest0072';
   insert into _res(navn, ok, info) values ('T16 navn som ingen kontakt har: eier = selgerens eget navn (som før)', o.eier = 'Zzyzx Qwertyuiop Testperson', coalesce(o.eier, 'null'));
 
+  -- ===== T17 BESTILLINGSNR (v3, 2026-10-31): forhandlerens eget bestillingsnummer = samme vei som serienummer (løs Admin-ark-rad, nummeret i Serienummer-kolonnen) =====
+  v_aar := extract(year from (now() at time zone 'Europe/Oslo'))::int;
+  select coalesce(max(rekkefolge), 0) into v_max from public.admin_ark where aar = v_aar and rekkefolge <> 2147483647;
+  r := public.portal_koble_bestilling(jsonb_build_object('bestilling_id', 'testbest0080', 'nr', 'B-TEST-0080', 'ident_type', 'BESTILLINGSNR', 'ident', ' bn-4711/a ',
+        'kontakt_id', c_a, 'orgnr', c_org_a, 'forhandler_navn', 'AK Auto AS', 'selger_navn', 'andreas kåsa', 'selger_epost', 'andreas.akauto@gmail.com', 'modell_slug', 'testmodell'));
+  select * into a from public.admin_ark where id = (select admin_ark_id from public.portal_bestillinger where portal_bestilling_id = 'testbest0080');
+  insert into _res(navn, ok, info) values ('T17 bestillingsnr: kode ok, status admin_ark, ingen ordre', r->>'kode' = 'ok' and r->>'status' = 'admin_ark' and not exists (select 1 from public.ordrer where portal_bestilling_id = 'testbest0080'), r::text);
+  insert into _res(navn, ok, info) values ('T17 Admin-ark-raden: nummeret (store bokstaver, trimmet) i Serienummer-kolonnen, tom chassis, forhandler og kontaktperson som for serienummer, riktig år og radnummer',
+    a.serienummer = 'BN-4711/A' and a.chassis_nr = '' and a.forhandler = 'AK Auto AS' and a.kontaktperson = 'Andreas Kåsa' and a.aar = v_aar and a.rekkefolge = v_max + 1 and a.id like 'ark\_%', row(a.serienummer, a.forhandler, a.kontaktperson, a.rekkefolge)::text);
+  insert into _res(navn, ok, info) values ('T17 merknaden sier at det er forhandlerens bestillingsnr (ikke et serienummer)', a.merknader = 'Fra portalen B-TEST-0080 (bestillingsnr fra forhandler)', a.merknader);
+  insert into _res(navn, ok, info) values ('T17 portal_bestillinger har ident_type BESTILLINGSNR og normalisert ident (sjekk-regelen tillater verdien)',
+    (select ident_type from public.portal_bestillinger where portal_bestilling_id = 'testbest0080') = 'BESTILLINGSNR' and (select ident from public.portal_bestillinger where portal_bestilling_id = 'testbest0080') = 'BN-4711/A', '');
+  r2 := public.portal_koble_bestilling(jsonb_build_object('bestilling_id', 'testbest0080', 'nr', 'B-TEST-0080', 'ident_type', 'BESTILLINGSNR', 'ident', 'BN-4711/A', 'kontakt_id', c_a, 'orgnr', c_org_a, 'selger_navn', 'x'));
+  insert into _res(navn, ok, info) values ('T17 bestillingsnr idempotent: ingen ny Admin-ark-rad', (select count(*) from public.admin_ark where serienummer = 'BN-4711/A' and merknader like 'Fra portalen B-TEST-0080%') = 1 and r2->>'status' = 'admin_ark', r2::text);
+  -- Serienummer beholder sin merknad uten tillegget (uendret oppførsel):
+  insert into _res(navn, ok, info) values ('T17 serienummer-raden (T8) har fortsatt merknaden UTEN «bestillingsnr»-tillegget', (select merknader from public.admin_ark where serienummer = 'BU 39953' and aar = v_aar and merknader like 'Fra portalen B-TEST-0020%' limit 1) = 'Fra portalen B-TEST-0020', '');
+  -- Ugyldig bestillingsnr kaster UGYLDIG_INPUT: bestillingsnr (feltnavnet er det portalen får tilbake)
+  for v_id, function_args in select * from (values
+      ('bestillingsnr for kort', jsonb_build_object('bestilling_id', 'testbest0081', 'nr', 'B-X', 'ident_type', 'BESTILLINGSNR', 'ident', 'AB')),
+      ('bestillingsnr med <script>', jsonb_build_object('bestilling_id', 'testbest0082', 'nr', 'B-X', 'ident_type', 'BESTILLINGSNR', 'ident', '<script>1')),
+      ('bestillingsnr for langt (41 tegn)', jsonb_build_object('bestilling_id', 'testbest0083', 'nr', 'B-X', 'ident_type', 'BESTILLINGSNR', 'ident', repeat('A', 41))),
+      ('bestillingsnr tomt', jsonb_build_object('bestilling_id', 'testbest0084', 'nr', 'B-X', 'ident_type', 'BESTILLINGSNR', 'ident', '   '))
+    ) as t(a, b) loop
+    v_ok := false; v_feil := '';
+    begin
+      perform public.portal_koble_bestilling(function_args);
+    exception when others then
+      v_ok := sqlerrm = 'UGYLDIG_INPUT: bestillingsnr'; v_feil := sqlerrm;
+    end;
+    insert into _res(navn, ok, info) values ('T17 ugyldig input avvises: ' || v_id, v_ok, v_feil);
+  end loop;
+  insert into _res(navn, ok, info) values ('T17 ugyldig input etterlot ingen portal-rader', not exists (select 1 from public.portal_bestillinger where portal_bestilling_id in ('testbest0081','testbest0082','testbest0083','testbest0084')), '');
+  -- Gamle verdier fungerer fortsatt, og en helt ukjent type avvises som før:
+  begin
+    perform public.portal_koble_bestilling(jsonb_build_object('bestilling_id', 'testbest0085', 'nr', 'B-X', 'ident_type', 'bestillingsnr', 'ident', 'ABC123'));
+    v_ok := false; v_feil := 'ingen feil';
+  exception when others then
+    v_ok := sqlerrm = 'UGYLDIG_INPUT: ident_type'; v_feil := sqlerrm;
+  end;
+  insert into _res(navn, ok, info) values ('T17 ident_type må være nøyaktig BESTILLINGSNR (små bokstaver avvises)', v_ok, v_feil);
+
   -- ===== T14 Rettigheter =====
   insert into _res(navn, ok, info) values ('T14 bare service_role kan kalle funksjonen (ikke anon, authenticated eller public)',
     has_function_privilege('service_role', 'public.portal_koble_bestilling(jsonb)', 'execute')

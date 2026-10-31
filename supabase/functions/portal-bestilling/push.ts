@@ -43,8 +43,8 @@ export function byggVarsel(status: string, rad: BestillingRad): Varsel | null {
   const forhandler = ren(rad.forhandler_navn, 60) || 'Ukjent forhandler'
   const bil = ren(`${rad.merke ?? ''} ${rad.modell ?? ''}`, 50)
   const ident = ren(rad.ident, 40)
-  const erSerie = rad.ident_type === 'SERIENUMMER'
-  const identTekst = ident ? (erSerie ? `serienr ${ident}` : ident) : ''
+  const erBestillingsnr = rad.ident_type === 'BESTILLINGSNR'
+  const identTekst = ident ? (rad.ident_type === 'SERIENUMMER' ? `serienr ${ident}` : erBestillingsnr ? `bestillingsnr ${ident}` : ident) : ''
   const ordreId = typeof rad.ordre_id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(rad.ordre_id) ? rad.ordre_id : null
   const delerOrdre = [forhandler, bil, identTekst].filter(Boolean).join(' · ')
 
@@ -52,7 +52,7 @@ export function byggVarsel(status: string, rad: BestillingRad): Varsel | null {
     return { title: 'Ny bestilling fra portalen', body: `${delerOrdre} (ikke bekreftet)`, url: '/salmakern.html' + (ordreId ? `?ordre=${ordreId}` : '') }
   }
   if (status === 'admin_ark') {
-    return { title: 'Ny serienummer-bestilling fra portalen', body: `${delerOrdre} - ligger i Admin-ark`, url: '/salmakern.html' }
+    return { title: erBestillingsnr ? 'Ny bestilling (bestillingsnr) fra portalen' : 'Ny serienummer-bestilling fra portalen', body: `${delerOrdre} - ligger i Admin-ark`, url: '/salmakern.html' }
   }
   return { title: 'Bestilling fra portalen trenger avklaring', body: `${delerOrdre} - ${AVKLARING_TEKST[status] ?? 'må avklares'}`, url: '/salmakern.html' }
 }

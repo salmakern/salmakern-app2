@@ -15,6 +15,11 @@ describe('byggVarsel', () => {
       .toEqual({ title: 'Ny serienummer-bestilling fra portalen', body: 'AK Auto AS · serienr BU 39953 - ligger i Admin-ark', url: '/salmakern.html' });
   });
 
+  it('forhandlerens bestillingsnr i Admin-ark: «bestillingsnr» (ikke serienr), egen tittel, ingen ordrelenke', () => {
+    expect(byggVarsel('admin_ark', { ...RAD, ident: 'BN-4711/A', ident_type: 'BESTILLINGSNR', ordre_id: null, merke: '', modell: '' }))
+      .toEqual({ title: 'Ny bestilling (bestillingsnr) fra portalen', body: 'AK Auto AS · bestillingsnr BN-4711/A - ligger i Admin-ark', url: '/salmakern.html' });
+  });
+
   it('hver avklaring har sin egen korte forklaring', () => {
     const forventet = {
       venter_forhandler: 'forhandleren er ikke koblet til Kontakter',

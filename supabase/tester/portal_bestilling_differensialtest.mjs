@@ -29,11 +29,13 @@ for (const c of ['I', 'O', 'Q', 'i', 'o', 'q', 'А', 'Ａ', '٣', 'ı', 'İ', '�
 for (const n of [0, 1, 15, 16, 17, 18, 19, 40]) add('ident', 'A1'.repeat(30).slice(0, n));
 for (const v of ['testwxyz000000001', 'TestWxyz000000001', 'TESTWXYZ-0000-00001', 'TEST WXYZ 0000 00001', '  TESTWXYZ000000001  ', '']) add('ident', v);
 // ident (SERIENUMMER)
-const S = { ident_type: 'SERIENUMMER' };
+// (BESTILLINGSNR har samme regler som SERIENUMMER, så begge typene kjøres gjennom de samme tilfellene)
+for (const S of [{ ident_type: 'SERIENUMMER' }, { ident_type: 'BESTILLINGSNR' }]) {
 for (const w of ws) { add('ident', w + 'AB-123' + w, S); add('ident', 'AB' + w + 'CD', S); add('ident', 'AB' + w + w + 'CD', S); }
 for (const c of ['.', '_', '/', ' ', '-', ',', ':', ';', '#', '<', '>', '"', "'", '\\', '&', '%', '(', ')', 'æ', 'Ø', 'é', 'ß', 'ı', '٣', 'А', 'Ａ', '́', '\u0000x'.slice(1)]) add('ident', 'AB' + c + 'CD', S);
 for (const n of [0, 1, 2, 3, 4, 39, 40, 41, 60]) add('ident', 'A'.repeat(n), S);
 for (const v of ['   ', 'a b', '  a  ', 'ab', 'a b c d e', '-', '---', '...', '   ab   ', '  a-b  ']) add('ident', v, S);
+}
 // bestilling_id
 for (const w of ws) { add('bestilling_id', w + 'cm9testbestilling0001'); add('bestilling_id', 'cm9testbestilling0001' + w); add('bestilling_id', 'cm9test' + w + 'bestilling0001'); }
 for (const n of [0, 1, 7, 8, 9, 63, 64, 65]) add('bestilling_id', 'a1'.repeat(40).slice(0, n));
@@ -41,7 +43,7 @@ for (const c of ['-', '_', '.', '/', ' ', '$', 'é', 'Ø', 'А', 'Ａ', '٣', "'
 // nr
 for (const v of ['', ' ', '#', '###', '-', '---', 'é', 'B 2026 0001', 'B-2026-0001', 'b-2026-0001', '٣٣٣', 'Ａ', '<b>', 'x'.repeat(30), 'x'.repeat(31), 'x'.repeat(40), '\n', '\t1']) add('nr', v);
 // ident_type
-for (const v of ['CHASSIS', 'chassis', 'Chassis', 'SERIENUMMER', 'serienummer', 'VIN', '', ' CHASSIS', 'CHASSIS ', 'CHASSIS\n', 'CHASSIS ', 'KJØRETØY']) add('ident_type', v);
+for (const v of ['CHASSIS', 'chassis', 'Chassis', 'SERIENUMMER', 'serienummer', 'BESTILLINGSNR', 'bestillingsnr', 'Bestillingsnr', ' BESTILLINGSNR', 'BESTILLINGSNR ', 'VIN', '', ' CHASSIS', 'CHASSIS ', 'CHASSIS\n', 'CHASSIS ', 'KJØRETØY']) add('ident_type', v);
 // manglende felt
 for (const f of ['bestilling_id', 'nr', 'ident_type', 'ident']) { const o = { ...base }; delete o[f]; cases.push({ felt: 'mangler_' + f, obj: o }); }
 

@@ -1,3 +1,5 @@
+-- v3 (2026-10-31, Henrik: «bestillingsnummer fra forhandler ved siden av chassis.nr og serienummer»): ident_type BESTILLINGSNR (forhandlerens eget bestillingsnummer) behandles som SERIENUMMER:
+-- løs rad i Admin-ark med nummeret i Serienummer-kolonnen, merknaden sier at det er et bestillingsnr fra forhandleren. Se også 20261031100000_portal_bestillingsnr.sql (sjekk-regelen på portal_bestillinger.ident_type).
 -- Kjørt: 2026-10-30 (v1, etter test 43/43 i en transaksjon som ble rullet tilbake og gjennomgang av en annen økt), omkjørt samme dag som v2 etter uavhengig gjennomgang av edge-funksjonen v3 samme dag: «bekreftet» er et ferdig utfall i idempotensgrenen (nytt kall etter Bekreft svarer ok); test 47/47.
 -- (navnekollisjon på kontaktperson/eier, lås per forhandler rundt taket, kommentarer; test 47/47). Begge ganger var ordrer/admin_ark/innstillinger byte-identiske før og etter.
 -- Fase 2 av «Bestill»-koblingen, STEG 3 (G3 i C:/Users/GroAnitaMartinsen/.claude/bestill-fase2/plan-salmakern.md): funksjonen som tar imot EN bestilling fra
@@ -24,6 +26,8 @@
 --  * SERIENUMMER: løs rad i admin_ark (chassis_nr = ''), forhandler = Kontakter-navnet, kontaktperson = kontaktperson under DENNE forhandleren med samme
 --    e-post (ellers samme navn), ellers selgerens navn, MEN bare hvis navnet ikke tilhører noen annen kontakt/kontaktperson i Kontakter (ellers tom, og selgeren
 --    står i merknaden: Admin-ark slår opp e-post på navn på tvers av alle forhandlere). Samme regel gir ordrens eier. Ingen ordre.
+--  * BESTILLINGSNR (v3): samme vei som SERIENUMMER (samme format 3-40 tegn A-Z0-9._/ -, samme løse Admin-ark-rad med nummeret i Serienummer-kolonnen). Merknaden er
+--    «Fra portalen <nr> (bestillingsnr fra forhandler)», så ansatte ser at nummeret i Serienummer-kolonnen er forhandlerens bestillingsnummer og ikke et serienummer.
 --  * Fritekst fra portalen: selger_navn og selger_epost saniteres (kontrolltegn, retningstegn og < > fjernes, lengde kappes). Øvrige felt (forhandler_navn,
 --    kontakt_id, modell_slug) lagres i portal_bestillinger (bare admin leser) bare med kappet lengde: en visning av dem MÅ bruke esc() på alle felt.
 --    Selgerens KOMMENTAR tas ikke imot og havner aldri i ordrenotater (notater kan skrives ut på dokumenter).
@@ -87,7 +91,7 @@ begin
     raise exception 'UGYLDIG_INPUT: nr';
   end if;
   v_type := p->>'ident_type';
-  if v_type is null or v_type not in ('CHASSIS', 'SERIENUMMER') then
+  if v_type is null or v_type not in ('CHASSIS', 'SERIENUMMER', 'BESTILLINGSNR') then
     raise exception 'UGYLDIG_INPUT: ident_type';
   end if;
   if v_type = 'CHASSIS' then
@@ -98,7 +102,7 @@ begin
   else
     v_ident := upper(btrim(regexp_replace(coalesce(p->>'ident', ''), '\s+', ' ', 'g')));
     if char_length(v_ident) not between 3 and 40 or v_ident !~ '^[A-Z0-9._/ -]+$' then
-      raise exception 'UGYLDIG_INPUT: serienummer';
+      raise exception 'UGYLDIG_INPUT: %', case when v_type = 'BESTILLINGSNR' then 'bestillingsnr' else 'serienummer' end;
     end if;
   end if;
   v_slug := left(btrim(coalesce(p->>'modell_slug', '')), 80);
@@ -190,8 +194,8 @@ begin
     end if;
   end if;
 
-  -- ---------- 4a. SERIENUMMER: løs rad i Admin-ark, ingen ordre ----------
-  if v_type = 'SERIENUMMER' then
+  -- ---------- 4a. SERIENUMMER og BESTILLINGSNR: løs rad i Admin-ark (nummeret i serienummer-kolonnen), ingen ordre ----------
+  if v_type in ('SERIENUMMER', 'BESTILLINGSNR') then
     v_aar := extract(year from (now() at time zone 'Europe/Oslo'))::int;
     -- Samme regel som adminArkNesteRekkefolge(): høyeste radnummer dette året, men aldri bunn-grensen (2147483647).
     select coalesce(max(rekkefolge), 0) + 1 into v_rek from public.admin_ark where aar = v_aar and rekkefolge <> 2147483647;
@@ -199,7 +203,7 @@ begin
     v_ark_id := 'ark_' || v_epoch::text || '_' || substr(md5(v_id), 1, 5);
     insert into public.admin_ark (id, chassis_nr, aar, rekkefolge, forhandler, kontaktperson, serienummer, merknader)
     values (v_ark_id, '', v_aar, v_rek, left(v_kunde, 200), left(v_kp_navn, 120), v_ident,
-            'Fra portalen ' || v_nr || case when v_kp_navn = '' then ' (selger: ' || v_selger || ', finnes ikke som kontaktperson hos forhandleren)' else '' end);
+            'Fra portalen ' || v_nr || case when v_type = 'BESTILLINGSNR' then ' (bestillingsnr fra forhandler)' else '' end || case when v_kp_navn = '' then ' (selger: ' || v_selger || ', finnes ikke som kontaktperson hos forhandleren)' else '' end);
     update public.portal_bestillinger
        set status = 'admin_ark', admin_ark_id = v_ark_id, forhandler_navn = v_kunde, detalj = 'Løs rad i Admin-ark opprettet.', oppdatert_at = now()
      where portal_bestilling_id = v_id;

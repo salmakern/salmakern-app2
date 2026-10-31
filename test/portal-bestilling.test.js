@@ -34,6 +34,11 @@ describe('parseInnkommende: gyldig input', () => {
     expect(r.ignorerte).toBe(0);
     const s = parseInnkommende({ ...GYLDIG, ident_type: 'SERIENUMMER', ident: ' ab-1234/5 ' });
     expect(s.ok).toBe(true);
+    // 2026-10-31: forhandlerens eget bestillingsnummer er en tredje identifikasjon (samme format som serienummer), sendt videre uendret.
+    const b = parseInnkommende({ ...GYLDIG, ident_type: 'BESTILLINGSNR', ident: ' bn-4711/a ' });
+    expect(b.ok).toBe(true);
+    expect(b.p.ident_type).toBe('BESTILLINGSNR');
+    expect(b.p.ident).toBe(' bn-4711/a ');
   });
 
   it('valgfrie felt kan mangle (forhandler_navn, selger_epost ...) eller være null', () => {
@@ -112,6 +117,7 @@ describe('parseInnkommende: avvises tidlig (400) uten å røre databasen', () =>
       avvist({ ident: w + GYLDIG.ident }, 'ident');
       avvist({ ident: GYLDIG.ident.slice(0, 8) + w + GYLDIG.ident.slice(8) }, 'ident');
       avvist({ ident_type: 'SERIENUMMER', ident: 'AB' + w + 'CD' }, 'ident');
+      avvist({ ident_type: 'BESTILLINGSNR', ident: 'AB' + w + 'CD' }, 'ident');
     }
     // Tab, linjeskift osv. rundt bestilling_id godtas IKKE av Postgres (btrim tar bare mellomrom), så de avvises også her.
     for (const w of ['\t', '\n', '\r', '\f', '\v']) {
@@ -132,8 +138,8 @@ describe('parseInnkommende: avvises tidlig (400) uten å røre databasen', () =>
     avvist({ nr: '###' }, 'nr');
   });
 
-  it('ident_type må være nøyaktig CHASSIS eller SERIENUMMER (store bokstaver)', () => {
-    for (const v of ['chassis', 'Chassis', 'serienummer', 'VIN', '', 'CHASSIS ']) avvist({ ident_type: v }, 'ident_type');
+  it('ident_type må være nøyaktig CHASSIS, SERIENUMMER eller BESTILLINGSNR (store bokstaver)', () => {
+    for (const v of ['chassis', 'Chassis', 'serienummer', 'bestillingsnr', 'Bestillingsnr', 'BESTILLINGSNR ', ' BESTILLINGSNR', 'VIN', '', 'CHASSIS ']) avvist({ ident_type: v }, 'ident_type');
   });
 
   it('chassis: 17 tegn A-Z/0-9 uten I, O og Q', () => {
@@ -146,6 +152,14 @@ describe('parseInnkommende: avvises tidlig (400) uten å røre databasen', () =>
     for (const v of ['ab', '<script>alert(1)</script>', 'a'.repeat(41), 'ab;cd', 'æøå123']) expect(s(v).ok, v).toBe(false);
     // Linjeskift i serienummeret blir ett mellomrom (som i Postgres-funksjonen: \s+ -> ' '), så det er gyldig og ikke et injeksjonshull.
     for (const v of ['abc', 'a'.repeat(40), 'AB 12.3/4_5-6', 'abc\ndef']) expect(s(v).ok, v).toBe(true);
+  });
+
+  it('bestillingsnr (forhandlerens eget nummer): nøyaktig samme regler som serienummer (3-40 tegn, A-Z 0-9 . _ / mellomrom og bindestrek)', () => {
+    const b = (ident) => parseInnkommende({ ...GYLDIG, ident_type: 'BESTILLINGSNR', ident });
+    for (const v of ['ab', '', '   ', '<script>alert(1)</script>', 'a'.repeat(41), 'ab;cd', 'æøå123']) expect(b(v).ok, v).toBe(false);
+    for (const v of ['abc', 'a'.repeat(40), 'AB 12.3/4_5-6', 'abc\ndef', ' bn-4711/a ']) expect(b(v).ok, v).toBe(true);
+    // Feilen peker på feltet «ident» (portalen får det aldri tilbake som noe annet).
+    expect(b('ab')).toEqual({ ok: false, felt: 'ident' });
   });
 });
 
