@@ -89,7 +89,10 @@ Deno.serve(async (req) => {
         continue
       }
 
-      let sendEpost = !!rad.ordrer?.portal_bekreftet_at && !trengerEpostAlltidFalse(rad.status)
+      // Startstatus-raden lagt av portal_bekreft_ordre (status_forrige null, se migrasjon
+      // 20261031180000) er ikke en reell overgang - portal-økta bekreftet 31.10 at den
+      // ALDRI skal gi e-post (de har også egen vakt mot dette, men riktig her også).
+      let sendEpost = rad.status_forrige !== null && !!rad.ordrer?.portal_bekreftet_at && !trengerEpostAlltidFalse(rad.status)
       if (sendEpost && rad.status === 'klar_henting' && chassis) {
         const { data: arkRad } = await supabase
           .from('admin_ark')
