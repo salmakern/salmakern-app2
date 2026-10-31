@@ -83,8 +83,8 @@ direkte `fetch()` (vokter: `test/ingen-direkte-edge-kall.test.js`). Den sender d
 access-token som `Authorization` og `SUPA_KEY` som `apikey`, og ved 401 fornyes sesjonen og kallet prøves
 ÉN gang til. Serversiden: fiken-fakturer, send-frakt-epost, vegvesen-oppslag og send-push verifiserer token-et mot
 `current_ansatt()` (foreløpig i MYK modus: logger `edge_auth`, blokkerer ikke, til `EDGE_AUTH_ENFORCE` slås på; send-push
-godtar i tillegg service_role-nøkkelen som server-kall, og cron-jobbene for påminnelsene er flyttet til den (fra Vault, 31.10);
-håndheving slås på først når loggene viser via=ansatt/server - se `supabase/README.md`, «send-push: innloggingssjekk»). `doLogout()` avslutter nå Auth-
+har i tillegg en server-kategori (service_role) for cron og ordre-push, men den treffer IKKE i dag (nøkkelen i Vault er ikke
+funksjonens SUPABASE_SERVICE_ROLE_KEY, funnet 31.10): håndheving må IKKE slås på for send-push før det er løst - se `supabase/README.md`, «send-push: innloggingssjekk»). `doLogout()` avslutter nå Auth-
 sesjonen på ekte: først `logg_ut()` (migrasjon `20261029150000`, nuller ansatt_id/rolle/session_token
 KUN på denne enhetens Auth-bruker, aldri `ansatte`-raden), så `auth.signOut({scope:'local'})`. En ny
 anonym sesjon startes først når PIN tastes (`sikreAnonymSesjon()` i `tryLogin`, bevisst ikke ved

@@ -88,9 +88,9 @@ async function innloggingsgate(req: Request): Promise<{ status: number; melding:
 // gyldig kategori (via: 'server'): den sammenlignes direkte mot SUPABASE_SERVICE_ROLE_KEY (ingen oppslag mot databasen, samme «ingen oppslag nødvendig»-prinsipp
 // som for den offentlige nøkkelen i den delte blokken), slippes gjennom også når håndheving er på, og logges som én edge_auth-linje som resten (aldri nøkkelen).
 // Sammenligningen går på SHA-256 av begge sider med en løkke uten tidlig avbrudd, så verken lengde eller første avvikende tegn lekker. Manglende/tomt miljø gir aldri treff.
-// VIKTIG FØR send-push (eller *) LEGGES I EDGE_AUTH_ENFORCE: cron-jobbene «paaminnelser-sjekk» og «daglig-paaminnelse» sender i dag den OFFENTLIGE nøkkelen
-// (sb_publishable_..., står i åpen kildekode og er aldri et server-kall), så de ville fått 401 og alle påminnelsene stoppet. De må først flyttes til service_role-nøkkelen
-// fra Vault, slik ordre-push allerede er (s00-006 i Henger igjen-lista, supabase/README.md). Rollback = fjern navnet fra EDGE_AUTH_ENFORCE.
+// VIKTIG FØR send-push (eller *) LEGGES I EDGE_AUTH_ENFORCE: kategorien TREFFER IKKE i dag (31.10). Cron-jobbene «paaminnelser-sjekk» og «daglig-paaminnelse» og ordre-push sender
+// service_role-nøkkelen fra Vault, men den er en ANNEN verdi enn SUPABASE_SERVICE_ROLE_KEY i funksjonen (bekreftet med SHA-256-sammendrag; loggene viser via=ingen), så de ville fått 401 og
+// alle påminnelser og statusvarsler stoppet. Må løses først (s00-027 i Henger igjen-lista, supabase/README.md). Rollback = fjern navnet fra EDGE_AUTH_ENFORCE.
 async function sha256(s: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
 }

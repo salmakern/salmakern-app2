@@ -92,8 +92,8 @@ Alle kjente roller slipper gjennom (klient-varslene kommer fra enhver ansatt: go
 | Kaller | Sender som `Authorization` | Kategori i gaten |
 |---|---|---|
 | Nettleseren (alle `edgeFetch('send-push', ...)` i appen) | innlogget ansatts access-token | `ansatt` |
-| Triggeren `ordre-push` (`public.ordre_push_trigger_fn`, nøkkelen fra Vault) | service_role-nøkkelen (JWT) | `server` |
-| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | service_role-nøkkelen fra Vault (flyttet 31.10, `20261031113000_send_push_cron_vault_nokkel.sql`; før det den OFFENTLIGE nøkkelen `sb_publishable_...`) | `server` |
+| Triggeren `ordre-push` (`public.ordre_push_trigger_fn`, nøkkelen fra Vault) | service_role-nøkkelen (JWT) | tiltenkt `server`; i dag `ingen` (se OBS under) |
+| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | service_role-nøkkelen fra Vault (flyttet 31.10, `20261031113000_send_push_cron_vault_nokkel.sql`; før det den OFFENTLIGE nøkkelen `sb_publishable_...`) | tiltenkt `server`; i dag `ingen` (se OBS under) |
 
 `portal-bestilling` kaller IKKE `send-push` (den sender sine egne varsler fra `push.ts`), og ingen andre triggere eller funksjoner i
 databasen nevner `send-push`.
@@ -102,7 +102,13 @@ databasen nevner `send-push`.
 sammenlignes direkte mot `SUPABASE_SERVICE_ROLE_KEY` (SHA-256 av begge sider, løkke uten tidlig avbrudd, tom nøkkel gir aldri treff), uten
 oppslag mot databasen, og slippes gjennom også når håndheving er på. Loggføres som `via: 'server', grunn: 'service_role'`.
 
-**FØR håndheving slås på for send-push - to ting som må være på plass:**
+**OBS 31.10: server-kategorien TREFFER IKKE i dag.** Loggene viser at kall med Vault-nøkkelen (cron etter flyttingen) står som `via: 'ingen'`, ikke `server`. SHA-256-sammendrag viser at
+nøkkelen i Vault (`ordre_push_service_role_key`) er en ANNEN verdi enn funksjonens `SUPABASE_SERVICE_ROLE_KEY` (funksjonen har også `SUPABASE_SECRET_KEYS`/`SUPABASE_PUBLISHABLE_KEYS`, det
+nye nøkkelsystemet). Harmløst i myk modus, men håndheving for send-push (eller `*`) ville gitt 401 til cron-jobbene og ordre-push-triggeren. **Ikke slå på håndheving før dette er løst** (s00-027 i
+Henger igjen-lista; forslag: en egen delt hemmelighet som sendes som egen header, i stedet for å sammenligne mot plattformens service-nøkkel). Slik leser du loggene: Supabase → Edge Functions →
+funksjonen → Logs, filtrer Event message på `haandhevet` (et søk på `edge_auth` gir falskt «ingen treff» på grunn av understreken).
+
+**FØR håndheving slås på for send-push - ting som må være på plass (OBS-punktet over må løses først):**
 1. **GJORT 31.10 (Henriks ja): cron-jobbene er flyttet til service_role-nøkkelen fra Vault** (`20261031113000_send_push_cron_vault_nokkel.sql`, `cron.alter_job`,
    samme hemmelighet som `ordre-push`). De sendte før den offentlige nøkkelen, som står i åpen kildekode og aldri er et server-kall; med håndheving på ville de
    fått 401, og alle biltilsyn-, møte- og «Husk å starte timer»-påminnelser ville stoppet stille. Nøkkelen slås opp ved hver kjøring og står aldri i selve jobben.
