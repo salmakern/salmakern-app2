@@ -7,7 +7,11 @@
 // (ORDRE_STATUS_SYNK_SECRET), samme mønster som fiken-priser-synk. IKKE tenkt kalt fra
 // appen eller portalen direkte.
 //
-// send_epost (Henrik, s08-034, avgjort 30.10):
+// send_epost (Henrik, s08-034, avgjort 30.10; presisert etter spørsmål fra portal-økta 31.10):
+//   - Ordren er IKKE bekreftet ennå (portal_bekreftet_at er null): ALLTID false, uansett
+//     status. En ubekreftet ordre kan vise seg å ha feil chassis.nr og bli slettet - ingen
+//     grunn til å varsle forhandleren om en statusendring på en bestilling Salmaker'n ikke
+//     engang har bekreftet å ha mottatt ennå.
 //   - "hentet": ALLTID false. Admin-arkets "✔ Hentet"-knapp eier fortsatt denne e-posten
 //     helt til Henrik sier fra ("i overgangen beholder Admin-ark knappen og portalen
 //     sender IKKE hentet-mail ... så ingen får to e-poster").
@@ -17,7 +21,13 @@
 //     denne bilen (adminArkSendFraktBestilling, js/admin-ark.js). Er ikke det tilfellet
 //     (ingen admin_ark-rad, annet fraktselskap, eller ikke bestilt ennå), sendes portalens
 //     e-post som normalt - det finnes ingen annen varsling da.
-//   - alle andre 5 statuser: ALLTID true (ingen eksisterende manuell e-post å kollidere med).
+//   - alle andre 5 statuser (på en bekreftet ordre): ALLTID true (ingen eksisterende manuell
+//     e-post å kollidere med).
+//
+// Nyttelasten har to valgfrie felt i tillegg (lagt til etter avklaring med portal-økta
+// 31.10): endret_at (tidspunktet statusendringen faktisk ble lagt i køen, ikke når den ble
+// sendt) og klar_for_henting_dato (bare for status klar_henting, datoen satt i endreStatus()
+// - js/oversikt-kalender.js - slik portalen slipper et eget oppslag).
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
@@ -47,7 +57,7 @@ Deno.serve(async (req) => {
 
     const { data: rader, error: feilVedHenting } = await supabase
       .from('ordre_status_utboks')
-      .select('id, ordre_id, status, status_forrige, forsok, ordrer!inner(portal_bestilling_id, chassis)')
+      .select('id, ordre_id, status, status_forrige, forsok, opprettet_at, ordrer!inner(portal_bestilling_id, portal_bekreftet_at, chassis, dato_klar_henting)')
       .eq('levert', false)
       .lt('forsok', MAKS_FORSOK)
       .order('opprettet_at', { ascending: true })
@@ -71,8 +81,8 @@ Deno.serve(async (req) => {
         continue
       }
 
-      let sendEpost = !trengerEpostAlltidFalse(rad.status)
-      if (rad.status === 'klar_henting' && chassis) {
+      let sendEpost = !!rad.ordrer?.portal_bekreftet_at && !trengerEpostAlltidFalse(rad.status)
+      if (sendEpost && rad.status === 'klar_henting' && chassis) {
         const { data: arkRad } = await supabase
           .from('admin_ark')
           .select('fraktselskap, bestilt_frakt')
@@ -93,6 +103,8 @@ Deno.serve(async (req) => {
             status: rad.status,
             status_forrige: rad.status_forrige,
             send_epost: sendEpost,
+            endret_at: rad.opprettet_at,
+            ...(rad.status === 'klar_henting' && rad.ordrer?.dato_klar_henting ? { klar_for_henting_dato: rad.ordrer.dato_klar_henting } : {}),
           }),
         })
         if (res.ok) {
