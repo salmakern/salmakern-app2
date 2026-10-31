@@ -131,6 +131,46 @@ Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandle
    grense mot en ansatt som går forbi appen (RLS på `ordrer` tillater alle innloggede ansatte å endre/slette direkte). Test: `tester/portal_bekreft_avvis_TEST_body.sql` (43 sjekker, rullet tilbake). Rollback:
    `rollback-referanser/portal_bekreft_avvis_ROLLBACK.sql` (appkoden må rulles tilbake først). Appdelen (merke, filter, banner, knapper) står i rotens CLAUDE.md og testes av `test/portal-ordre-visning.test.js`.
 
+## Prislås (s09-023/s05-003, 2026-10-30/31)
+
+Fryser pris og mva-type på en fakturalinje når den legges til/endrer produktnummer, i stedet
+for å la `fiken-fakturer` hente Fikens pris slik den er DEN DAGEN fakturaen opprettes - en
+prisendring i Fiken (prissynk) mellom bestilling og fakturering skal ikke lenger endre det
+kunden faktureres uten at noen merker det. Rabatt-% fryses bevisst IKKE - den er kundespesifikk
+(`fiken_kunde_rabatt`) og kjent først ved fakturering, og det er ikke rabatten prissynk endrer.
+
+1. **`fiken_priser`** (migrasjon `20261030220000`): lokal kopi av Fiken sine produktpriser
+   (produktnummer, navn, pris_kr, mva_type, konto), fylt av en egen edge-funksjon i stedet for
+   et live Fiken-kall per linje/avkrysning i Lager/Utstyr. Kun lesing for klienten.
+2. **`fiken-priser-synk`**: egen edge-funksjon (egen hemmelighet `FIKEN_PRISER_SYNK_SECRET`,
+   ALDRI delt med `FIKEN_SYNC_SECRET` - denne skriver til databasen, ikke bare leser) som
+   henter hele Fiken sin produktliste og upserter inn i `fiken_priser`. Kalt av en planlagt
+   `pg_cron`-jobb (`fiken-priser-synk-cron`, migrasjon `20261030231000`) hver 6. time.
+   Hemmeligheten ligger også i Supabase Vault (`fiken_priser_synk_secret`, satt via en
+   engangskommando som ALDRI ble committet - samme mønster som ordre-push-triggeren over) slik
+   at cron-jobben kan sende den i `x-sync-secret`-headeren.
+3. **`oppdater_ordre_fiken_linje` / `oppdater_ordre_fiken_linje_ved_id`** (samme migrasjon):
+   fryser `pris`/`mva`/`kilde`/`tidspunkt` fra `fiken_priser` når en linjes produktnummer er
+   NYTT eller endret seg. Samtidig fikset en reell bug: begge funksjonene brukte
+   `jsonb_set(..., p_linje)`, som ERSTATTER hele linje-elementet med det klienten sender - en
+   allerede frosset pris kunne dermed forsvinne hvis en eldre klient bare endret `antall`.
+   Flettes nå felt for felt (`eksisterende || ny`) i stedet.
+4. **`fiken-fakturer`**: en linje med `pris`+`mva` satt sender nå `unitPrice`/`vatType`
+   eksplisitt til Fiken i stedet for å la Fiken fylle inn dagens pris. Linjer uten frosset pris
+   (lagt til før denne endringen, eller et produktnummer uten rad i `fiken_priser`) er helt
+   uendret - ingen `unitPrice` settes, akkurat som før.
+5. **Engangs-backfill** (kjørt manuelt 2026-10-31, ikke en migrasjonsfil): fryste pris+mva på
+   131 eksisterende linjer på 96 ufakturerte ordrer (19 linjer uten treff i `fiken_priser`,
+   typisk Drivstoff, fikk bevisst ingen pris). Backfillede linjer er merket
+   `kilde: "fiken_priser_backfill"` (til forskjell fra `"fiken_priser"` for linjer frosset via
+   den vanlige flyten), så de kan skilles fra og reverseres isolert -
+   `rollback-referanser/prislas_backfill_20261030_ROLLBACK.sql`.
+
+Live-verifisert i en rollback-transaksjon (7 scenarier mot `fiken_priser`-oppslag og
+flette-fiksen) og med 276 ekte produkter synket inn fra Fiken (spotsjekket mot kjente priser).
+Samme synk svarte også det siste ubesvarte spørsmålet i s08-012: alle 276 Fiken-produkter med
+fast pris har mva-type `high`, ingen unntak.
+
 ## Backup-status (sjekket 2026-08-24)
 
 Daglige fysiske backups er aktivert (`walg_enabled: true`) - prosjektet har
