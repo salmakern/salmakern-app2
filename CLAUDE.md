@@ -83,8 +83,8 @@ direkte `fetch()` (vokter: `test/ingen-direkte-edge-kall.test.js`). Den sender d
 access-token som `Authorization` og `SUPA_KEY` som `apikey`, og ved 401 fornyes sesjonen og kallet prøves
 ÉN gang til. Serversiden: fiken-fakturer, send-frakt-epost, vegvesen-oppslag og send-push verifiserer token-et mot
 `current_ansatt()` (foreløpig i MYK modus: logger `edge_auth`, blokkerer ikke, til `EDGE_AUTH_ENFORCE` slås på; send-push
-godtar i tillegg service_role-nøkkelen som server-kall, og håndheving kan IKKE slås på der før cron-jobbene er flyttet fra den
-offentlige nøkkelen - se `supabase/README.md`, «send-push: innloggingssjekk»). `doLogout()` avslutter nå Auth-
+godtar i tillegg service_role-nøkkelen som server-kall, og cron-jobbene for påminnelsene er flyttet til den (fra Vault, 31.10);
+håndheving slås på først når loggene viser via=ansatt/server - se `supabase/README.md`, «send-push: innloggingssjekk»). `doLogout()` avslutter nå Auth-
 sesjonen på ekte: først `logg_ut()` (migrasjon `20261029150000`, nuller ansatt_id/rolle/session_token
 KUN på denne enhetens Auth-bruker, aldri `ansatte`-raden), så `auth.signOut({scope:'local'})`. En ny
 anonym sesjon startes først når PIN tastes (`sikreAnonymSesjon()` i `tryLogin`, bevisst ikke ved
@@ -161,7 +161,7 @@ de deler toppnivå-scope med første kjøring og kan derfor lese/skrive de "usyn
 
 ## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)
 
-Forhandlerportalens Bestill-knapp (se portalens CLAUDE.md, «Bestill») sender en bestilling med chassis.nr eller serienummer. Her lander den slik (Henriks avgjørelser: Salmaker'n/Kontakter er
+Forhandlerportalens Bestill-knapp (se portalens CLAUDE.md, «Bestill») sender en bestilling med chassis.nr, serienummer eller forhandlerens eget bestillingsnummer (BESTILLINGSNR, 2026-10-31: løs rad i Admin-ark med nummeret i Serienummer-kolonnen, merknaden «Fra portalen <nr> (bestillingsnr fra forhandler)»). Her lander den slik (Henriks avgjørelser: Salmaker'n/Kontakter er
 fasit; chassis.nr gir automatisk ordre «På vei» merket «ikke bekreftet», ansatte bekrefter etterpå; serienummer gir en løs rad i Admin-ark; «Bestill frakt» og Admin-arkets e-poster røres ikke).
 Hele kjeden og begrunnelsene står i `supabase/README.md` («Bestillinger fra Forhandlerportalen»); her det du må vite når du rører appen:
 

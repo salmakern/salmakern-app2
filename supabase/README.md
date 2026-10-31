@@ -93,7 +93,7 @@ Alle kjente roller slipper gjennom (klient-varslene kommer fra enhver ansatt: go
 |---|---|---|
 | Nettleseren (alle `edgeFetch('send-push', ...)` i appen) | innlogget ansatts access-token | `ansatt` |
 | Triggeren `ordre-push` (`public.ordre_push_trigger_fn`, nøkkelen fra Vault) | service_role-nøkkelen (JWT) | `server` |
-| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | den OFFENTLIGE nøkkelen `sb_publishable_...` | `ingen` (`ikke_jwt`) |
+| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | service_role-nøkkelen fra Vault (flyttet 31.10, `20261031113000_send_push_cron_vault_nokkel.sql`; før det den OFFENTLIGE nøkkelen `sb_publishable_...`) | `server` |
 
 `portal-bestilling` kaller IKKE `send-push` (den sender sine egne varsler fra `push.ts`), og ingen andre triggere eller funksjoner i
 databasen nevner `send-push`.
@@ -103,18 +103,22 @@ sammenlignes direkte mot `SUPABASE_SERVICE_ROLE_KEY` (SHA-256 av begge sider, l�
 oppslag mot databasen, og slippes gjennom også når håndheving er på. Loggføres som `via: 'server', grunn: 'service_role'`.
 
 **FØR håndheving slås på for send-push - to ting som må være på plass:**
-1. **Cron-jobbene må flyttes til service_role-nøkkelen fra Vault** (som `ordre-push` allerede bruker). I dag sender de den offentlige nøkkelen, som
-   står i åpen kildekode og aldri er et server-kall; med håndheving på får de 401, og alle biltilsyn-, møte- og «Husk å starte timer»-påminnelser
-   stopper stille. Det er en endring i produksjon (`cron.alter_job` eller ny `cron.schedule` med samme navn) som krever Henriks ja.
+1. **GJORT 31.10 (Henriks ja): cron-jobbene er flyttet til service_role-nøkkelen fra Vault** (`20261031113000_send_push_cron_vault_nokkel.sql`, `cron.alter_job`,
+   samme hemmelighet som `ordre-push`). De sendte før den offentlige nøkkelen, som står i åpen kildekode og aldri er et server-kall; med håndheving på ville de
+   fått 401, og alle biltilsyn-, møte- og «Husk å starte timer»-påminnelser ville stoppet stille. Nøkkelen slås opp ved hver kjøring og står aldri i selve jobben.
+   Mangler hemmeligheten i Vault stopper påminnelsene STILLE (cron-kjøringen står som «succeeded», porten svarer 401): se spørringen under. Rollback: kjør
+   `20260808095154_paaminnelser_cron.sql` og `20260903000000_daglig_paaminnelse_kl_0655.sql` på nytt (da må håndheving for send-push ikke være på).
 2. **Logg-vinduet må vise at ekte kall kommer riktig fram:** `via: 'ansatt'` for varsler fra appen og `via: 'server'` for ordre-push (bekrefter at
    Vault-nøkkelen er lik `SUPABASE_SERVICE_ROLE_KEY` i funksjonen; det kan bare sees live, ikke i test). Cron-linjene skal da vise `via: 'server'` (etter punkt 1), ikke `ingen`.
 
-Ikke bruk `*` i `EDGE_AUTH_ENFORCE` før punkt 1 er gjort; da rammes `send-push` også. Rollback = fjern navnet fra `EDGE_AUTH_ENFORCE`.
+Ikke bruk `*` i `EDGE_AUTH_ENFORCE` før punkt 2 er bekreftet; da rammes `send-push` også. Rollback = fjern navnet fra `EDGE_AUTH_ENFORCE`.
 Telle utfallene i loggene: søk etter `edge_auth` i Supabase → Edge Functions → send-push → Logs.
+Se at påminnelsene faktisk når funksjonen (skal ikke vise 401 etter 31.10): `select status_code, left(content, 24), count(*) from net._http_response where created > now() - interval '1 day' group by 1, 2;`
+og `select status, count(*) from cron.job_run_details where start_time > now() - interval '1 day' group by 1;`.
 
 ## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)
 
-Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandler, selger, modell) hit. Fire lag, alle testet hver for seg:
+Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandlerens eget bestillingsnummer, forhandler, selger, modell) hit. Fire lag, alle testet hver for seg:
 
 1. **Tabeller og kolonner** (`20261030200000_portal_bestilling_grunnlag.sql`): `portal_bestillinger` (ett utfall per bestilling), `portal_modell_kobling`
    (portalens modell-slug til appens merke/modell, godkjent av Henrik), og tre nullable kolonner på `ordrer`. Bare admin leser dem.
@@ -134,7 +138,7 @@ Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandle
    også sende anon-nøkkelen som `apikey`/`Authorization`. Bare ti navngitte felt slippes gjennom til databasen (`kjor_pa_nytt` kastes alltid), og et
    vellykket svar er bare `{kode, status, ordre_id?}`, feilsvar bare `{kode, felt?}` (aldri detaljer eller databasefeil). Logger én JSON-linje per kall uten
    verdier (utfall, HTTP-status, tid, SQLSTATE-kode og tidsavbrudd-flagg ved databasefeil).
-   **Kontrakten for portalen:** påkrevd `bestilling_id` (8-64 tegn A-Za-z0-9_-, portalens id), `nr`, `ident_type` (`CHASSIS` | `SERIENUMMER`), `ident`; valgfri
+   **Kontrakten for portalen:** påkrevd `bestilling_id` (8-64 tegn A-Za-z0-9_-, portalens id), `nr`, `ident_type` (`CHASSIS` | `SERIENUMMER` | `BESTILLINGSNR`; de to siste har samme format, 3-40 tegn A-Z0-9._/ - og blir begge en løs Admin-ark-rad med nummeret i Serienummer-kolonnen, men `BESTILLINGSNR` får merknaden «Fra portalen <nr> (bestillingsnr fra forhandler)» og eget varsel; lagt til 2026-10-31, Henrik: «bestillingsnummer fra forhandler ved siden av chassis.nr og serienummer», sjekk-regel i `20261031100000_portal_bestillingsnr.sql` og funksjonen v3), `ident`; valgfri
    `kontakt_id`, `orgnr`, `forhandler_navn`, `selger_navn`, `selger_epost`, `modell_slug` (uten kontakt-id og org.nr blir utfallet `venter_forhandler`, uten
    `modell_slug` på en ny chassis-ordre `venter_modell`). Svar: `200 {kode:'ok'|'trenger_avklaring', status, ordre_id?}` er ENDELIG (også `trenger_avklaring`:
    mottatt, ikke feil, ikke retry; vis aldri `status` til selgeren, den kan røpe at chassis.nr finnes hos en annen forhandler); `400 ugyldig_input`/`401`/`405`/`413`
