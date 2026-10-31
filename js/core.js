@@ -136,11 +136,11 @@ function visToast(melding, type='feil') {
 // ansatt_id/rolle/session_token (custom_access_token_hook). Funksjonene verifiserer
 // token-et mot databasen (rpc/current_ansatt): fiken-fakturer, send-frakt-epost og
 // vegvesen-oppslag gjør det i dag, i MYK modus (logger, blokkerer ikke) til EDGE_AUTH_ENFORCE
-// slås på. send-push har samme gate bygget (med en egen server-kaller-kategori for cron/
-// triggere, se supabase/README.md), men IKKE deployet ennå - venter på at cron-jobbene
-// (paaminnelser-sjekk, daglig-paaminnelse) flyttes fra den offentlige nøkkelen til Vault-
-// nøkkelen først (ellers ville håndheving stoppet alle automatiske påminnelser), og på
-// Henriks ja. Den offentlige SUPA_KEY (som står i åpen kildekode og
+// slås på. send-push har samme gate, deployet 31.10 også i myk modus, med en egen server-
+// kaller-kategori for ordre-push-triggeren (service_role-nøkkelen, se supabase/README.md).
+// Håndheving venter på at cron-jobbene (paaminnelser-sjekk, daglig-paaminnelse) flyttes fra
+// den offentlige nøkkelen til Vault-nøkkelen (ellers ville den stoppet alle automatiske
+// påminnelser) og på Henriks ja. Den offentlige SUPA_KEY (som står i åpen kildekode og
 // ikke er en JWT) skal ikke lenger være nok alene - den sendes bare som apikey-header.
 // Returnerer en vanlig Response, akkurat som fetch(), så hvert kallsted beholder sin egen
 // parsing/feilhåndtering. Body må kunne sendes to ganger (streng/JSON, ikke en stream) siden
