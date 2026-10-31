@@ -24,6 +24,101 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+const FN = 'send-push'
+// Klient-kallene (godkjenner-chat, møter, fravær, lager, ny ordre) kommer fra enhver innlogget ansatt, ikke bare admin - derfor alle kjente roller, som vegvesen-oppslag.
+const TILLATTE_ROLLER = ['admin', 'godkjenner', 'ansatt', 'verneombud']
+// ── EDGE-AUTH-GATE BEGIN (blokken er byte-lik i fiken-fakturer, send-frakt-epost, vegvesen-oppslag og send-push; test/edge-auth-gate.test.js vokter mot avvik) ──
+// Innloggingssjekk innført 2026-10-29: kallet skal komme fra en innlogget ansatt med riktig rolle (TILLATTE_ROLLER). Samme regel som RLS bruker:
+// vi spør databasen via current_ansatt() med KALLERENS eget token (aktiv, riktig session_token, rolle slått opp live) - aldri dekoding av JWT her,
+// og aldri rolle-claimen i tokenet (den er frosset fra innloggingen). MYK MODUS til håndheving er slått på: kallet slippes alltid gjennom, men
+// utfallet logges som én JSON-linje (edge_auth: 1, aldri tokens eller andre verdier fra headerne). Håndheving slås på uten ny utrulling ved å
+// legge funksjonsnavnet (eller *) i Supabase-hemmeligheten EDGE_AUTH_ENFORCE (kommaliste) og rulles tilbake ved å fjerne det igjen.
+const HAANDHEV = (Deno.env.get('EDGE_AUTH_ENFORCE') ?? '').split(',').map((s) => s.trim()).some((s) => s === '*' || s === FN)
+const JWT_FORM = /^[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/
+
+type Sjekk = { via: 'ansatt' | 'ikke_tillatt_rolle' | 'ingen' | 'ukjent'; grunn?: string; rolle?: string; ansattId?: number }
+
+async function sjekkAnsatt(req: Request): Promise<Sjekk> {
+  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  if (!token) return { via: 'ingen', grunn: 'ingen_header' }
+  // Den offentlige nøkkelen (sb_publishable_...) og alt annet som ikke er en JWT er aldri en ansatt-sesjon: ingen oppslag nødvendig.
+  if (token.length > 4096 || !JWT_FORM.test(token)) return { via: 'ingen', grunn: 'ikke_jwt' }
+  const url = Deno.env.get('SUPABASE_URL')
+  const apikey = Deno.env.get('SUPABASE_ANON_KEY') || req.headers.get('apikey') || ''
+  if (!url || !apikey) return { via: 'ukjent', grunn: 'mangler_miljo' }
+  const res = await fetch(`${url}/rest/v1/rpc/current_ansatt`, {
+    method: 'POST',
+    headers: { apikey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+    signal: AbortSignal.timeout(3000),
+  })
+  if (!res.ok) {
+    // Ugyldig/utløpt token er kallerens sak (ingen); alt annet (feil nøkkel hos oss, databasen nede, rate limit) er «ukjent» så vi aldri
+    // påstår at en ekte admin ikke er innlogget bare fordi selve sjekken svikter.
+    const kode = await res.json().then((b) => String(b?.code ?? '')).catch(() => '')
+    return /^PGRST30[13]$/.test(kode) ? { via: 'ingen', grunn: 'ugyldig_eller_utlopt_token' } : { via: 'ukjent', grunn: `postgrest_${res.status}` }
+  }
+  const rader = await res.json()
+  if (!Array.isArray(rader) || rader.length > 1) return { via: 'ukjent', grunn: 'uventet_svar' }
+  if (rader.length === 0) return { via: 'ingen', grunn: 'ingen_ansatt_sesjon' }
+  const { id, rolle } = rader[0] ?? {}
+  if (typeof rolle !== 'string' || !Number.isInteger(id)) return { via: 'ukjent', grunn: 'uventet_svar' }
+  return TILLATTE_ROLLER.includes(rolle) ? { via: 'ansatt', rolle, ansattId: id } : { via: 'ikke_tillatt_rolle', rolle, ansattId: id }
+}
+
+// Gir null når kallet skal slippes gjennom, ellers statuskoden og meldingen funksjonen skal svare med (i funksjonens eget svarformat).
+async function innloggingsgate(req: Request): Promise<{ status: number; melding: string } | null> {
+  let sjekk: Sjekk
+  try {
+    sjekk = await sjekkAnsatt(req)
+  } catch (e) {
+    sjekk = { via: 'ukjent', grunn: e instanceof Error ? e.name : 'feil' }
+  }
+  console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: sjekk.via, grunn: sjekk.grunn ?? '', rolle: sjekk.rolle ?? '', ansatt_id: sjekk.ansattId ?? null, haandhevet: HAANDHEV, origin: req.headers.get('origin') ?? '' }))
+  if (sjekk.via === 'ansatt' || !HAANDHEV) return null
+  if (sjekk.via === 'ukjent') return { status: 503, melding: 'Kunne ikke bekrefte innloggingen akkurat nå - prøv igjen om litt' }
+  if (sjekk.via === 'ikke_tillatt_rolle') return { status: 403, melding: 'Rollen din har ikke tilgang til dette' }
+  return { status: 401, melding: 'Du må være innlogget - logg inn på nytt og prøv igjen' }
+}
+// ── EDGE-AUTH-GATE END ──
+
+// ── SERVER-KALLER BEGIN (bare send-push - ligger bevisst UTENFOR den delte blokken over, som dermed er byte-lik i alle fire funksjonene; test/edge-auth-gate.test.js vokter begge) ──
+// send-push har to slags legitime kallere: innloggede ansatte i nettleseren (den delte gaten) og SERVER-til-server-kall som aldri har en ansatt-sesjon.
+// Triggeren «ordre-push» (public.ordre_push_trigger_fn, migrasjon 20261030180000) sender service_role-nøkkelen fra Vault. Et kall med den nøkkelen er en egen,
+// gyldig kategori (via: 'server'): den sammenlignes direkte mot SUPABASE_SERVICE_ROLE_KEY (ingen oppslag mot databasen, samme «ingen oppslag nødvendig»-prinsipp
+// som for den offentlige nøkkelen i den delte blokken), slippes gjennom også når håndheving er på, og logges som én edge_auth-linje som resten (aldri nøkkelen).
+// Sammenligningen går på SHA-256 av begge sider med en løkke uten tidlig avbrudd, så verken lengde eller første avvikende tegn lekker. Manglende/tomt miljø gir aldri treff.
+// VIKTIG FØR send-push (eller *) LEGGES I EDGE_AUTH_ENFORCE: cron-jobbene «paaminnelser-sjekk» og «daglig-paaminnelse» sender i dag den OFFENTLIGE nøkkelen
+// (sb_publishable_..., står i åpen kildekode og er aldri et server-kall), så de ville fått 401 og alle påminnelsene stoppet. De må først flyttes til service_role-nøkkelen
+// fra Vault, slik ordre-push allerede er (s00-006 i Henger igjen-lista, supabase/README.md). Rollback = fjern navnet fra EDGE_AUTH_ENFORCE.
+async function sha256(s: string): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
+}
+
+async function erServerKall(req: Request): Promise<boolean> {
+  const noekkel = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+  if (!noekkel || !token) return false
+  const [a, b] = await Promise.all([sha256(token), sha256(noekkel)])
+  let avvik = 0
+  for (let i = 0; i < a.length; i++) avvik |= a[i] ^ b[i]
+  return avvik === 0
+}
+
+// Brukes i stedet for innloggingsgate() i handleren: server-kall slippes gjennom, alt annet går til den delte gaten (som logger og eventuelt avviser).
+async function sendPushGate(req: Request): Promise<{ status: number; melding: string } | null> {
+  let server = false
+  try {
+    server = await erServerKall(req)
+  } catch {
+    // Selve sammenligningen feilet (skal ikke skje): la den delte gaten avgjøre i stedet for å anta server.
+  }
+  if (!server) return innloggingsgate(req)
+  console.log(JSON.stringify({ edge_auth: 1, fn: FN, via: 'server', grunn: 'service_role', rolle: '', ansatt_id: null, haandhevet: HAANDHEV, origin: req.headers.get('origin') ?? '' }))
+  return null
+}
+// ── SERVER-KALLER END ──
+
 // Gir dagens dato og klokkeslett (i minutter siden midnatt) i Oslo lokaltid, uavhengig
 // av at serveren selv kjører i UTC - håndterer sommer-/vintertid automatisk via Intl.
 function osloNaa(): { dato: string, minutter: number } {
@@ -99,6 +194,9 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const avvist = await sendPushGate(req)
+    if (avvist) return new Response(avvist.melding, { status: avvist.status, headers: CORS_HEADERS })
+
     const raw = await req.text()
     if (!raw) {
       console.error('Tom body mottatt. Method:', req.method, 'Headers:', JSON.stringify([...req.headers.entries()]))

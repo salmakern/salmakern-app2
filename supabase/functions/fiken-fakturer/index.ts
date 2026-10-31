@@ -38,7 +38,7 @@ function jsonSvar(body: unknown, status = 200) {
 const FN = 'fiken-fakturer'
 // Oppretter Fiken-kladder i selskapets navn: bare admin (godkjenner og andre ansatte skal ikke kunne fakturere, bestemt av Henrik 2026-10-29).
 const TILLATTE_ROLLER = ['admin']
-// ── EDGE-AUTH-GATE BEGIN (blokken er byte-lik i fiken-fakturer, send-frakt-epost og vegvesen-oppslag; test/edge-auth-gate.test.js vokter mot avvik) ──
+// ── EDGE-AUTH-GATE BEGIN (blokken er byte-lik i fiken-fakturer, send-frakt-epost, vegvesen-oppslag og send-push; test/edge-auth-gate.test.js vokter mot avvik) ──
 // Innloggingssjekk innført 2026-10-29: kallet skal komme fra en innlogget ansatt med riktig rolle (TILLATTE_ROLLER). Samme regel som RLS bruker:
 // vi spør databasen via current_ansatt() med KALLERENS eget token (aktiv, riktig session_token, rolle slått opp live) - aldri dekoding av JWT her,
 // og aldri rolle-claimen i tokenet (den er frosset fra innloggingen). MYK MODUS til håndheving er slått på: kallet slippes alltid gjennom, men

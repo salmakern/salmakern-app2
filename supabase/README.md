@@ -80,6 +80,38 @@ committes.
 Sjekket 2026-10-30 (før fiksen): `ordre-push` var den ENESTE triggeren i databasen som
 brukte `http_request` med en `Bearer`-header - ingen andre hadde samme hull.
 
+## send-push: innloggingssjekk (s00-006, myk modus fra 2026-10-31)
+
+`send-push` har samme innloggingssjekk som fiken-fakturer, send-frakt-epost og vegvesen-oppslag (den delte blokken
+`EDGE-AUTH-GATE`, byte-lik i alle fire; `test/edge-auth-gate.test.js` vokter det), i MYK modus: utfallet logges som én
+JSON-linje (`edge_auth: 1`), men ingenting blokkeres før `send-push` (eller `*`) står i hemmeligheten `EDGE_AUTH_ENFORCE`.
+Alle kjente roller slipper gjennom (klient-varslene kommer fra enhver ansatt: godkjenner-chat, møter, fravær, lager, ny ordre).
+
+**Hvem kaller `send-push`** (kartlagt mot live-databasen 31.10, bare navn og ja/nei, aldri nøkler):
+
+| Kaller | Sender som `Authorization` | Kategori i gaten |
+|---|---|---|
+| Nettleseren (alle `edgeFetch('send-push', ...)` i appen) | innlogget ansatts access-token | `ansatt` |
+| Triggeren `ordre-push` (`public.ordre_push_trigger_fn`, nøkkelen fra Vault) | service_role-nøkkelen (JWT) | `server` |
+| Cron `paaminnelser-sjekk` (hvert 5. min) og `daglig-paaminnelse` (kl. 06:55) | den OFFENTLIGE nøkkelen `sb_publishable_...` | `ingen` (`ikke_jwt`) |
+
+`portal-bestilling` kaller IKKE `send-push` (den sender sine egne varsler fra `push.ts`), og ingen andre triggere eller funksjoner i
+databasen nevner `send-push`.
+
+**Server-kall** er en egen gyldig kategori som bare finnes i `send-push` (blokken `SERVER-KALLER`, utenfor den delte blokken): token-et
+sammenlignes direkte mot `SUPABASE_SERVICE_ROLE_KEY` (SHA-256 av begge sider, løkke uten tidlig avbrudd, tom nøkkel gir aldri treff), uten
+oppslag mot databasen, og slippes gjennom også når håndheving er på. Loggføres som `via: 'server', grunn: 'service_role'`.
+
+**FØR håndheving slås på for send-push - to ting som må være på plass:**
+1. **Cron-jobbene må flyttes til service_role-nøkkelen fra Vault** (som `ordre-push` allerede bruker). I dag sender de den offentlige nøkkelen, som
+   står i åpen kildekode og aldri er et server-kall; med håndheving på får de 401, og alle biltilsyn-, møte- og «Husk å starte timer»-påminnelser
+   stopper stille. Det er en endring i produksjon (`cron.alter_job` eller ny `cron.schedule` med samme navn) som krever Henriks ja.
+2. **Logg-vinduet må vise at ekte kall kommer riktig fram:** `via: 'ansatt'` for varsler fra appen og `via: 'server'` for ordre-push (bekrefter at
+   Vault-nøkkelen er lik `SUPABASE_SERVICE_ROLE_KEY` i funksjonen; det kan bare sees live, ikke i test). Cron-linjene skal da vise `via: 'server'` (etter punkt 1), ikke `ingen`.
+
+Ikke bruk `*` i `EDGE_AUTH_ENFORCE` før punkt 1 er gjort; da rammes `send-push` også. Rollback = fjern navnet fra `EDGE_AUTH_ENFORCE`.
+Telle utfallene i loggene: søk etter `edge_auth` i Supabase → Edge Functions → send-push → Logs.
+
 ## Bestillinger fra Forhandlerportalen («Bestill», fase 2, 2026-10-30)
 
 Forhandlerportalen sender en bestilling (chassis.nr eller serienummer, forhandler, selger, modell) hit. Fire lag, alle testet hver for seg:
