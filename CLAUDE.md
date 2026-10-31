@@ -76,6 +76,9 @@ appen (Admin-ark, ordre, flåte).
 `logg_inn_med_pin`/`login_med_pin` (Postgres-funksjoner, se `supabase/migrations/`). PIN-er
 lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min
 lockout per anonym Auth-sesjon, se `20260824000000_pin_rate_limiting_og_search_path.sql`).
+`logg_inn_med_pin` oppdaterer `ansatte.session_token`, og `ansatte` er beskyttet av triggeren `ansatte_beskytt_skriving` (kun admin kan INSERT/DELETE og endre
+de fleste kolonner): de to er koblet via markeringen `app.pin_innlogging` (supabase/README.md, «Skriving til ansatte-tabellen»). Rør aldri en av dem uten å teste selve
+PIN-innloggingen med `supabase/tester/ansatte_beskytt_skriving_innlogging_TEST_body.sql` - en feil her låste alle ute 31.10 (kl. 11:45 til 13:43).
 
 **Kall til edge-funksjoner og utlogging (2026-10-29)**: ALLE kall til `/functions/v1/` (fiken-fakturer,
 send-frakt-epost, vegvesen-oppslag, send-push) går via `edgeFetch(funksjon, init)` i `core.js` - aldri en

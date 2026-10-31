@@ -80,6 +80,20 @@ committes.
 Sjekket 2026-10-30 (før fiksen): `ordre-push` var den ENESTE triggeren i databasen som
 brukte `http_request` med en `Bearer`-header - ingen andre hadde samme hull.
 
+## Skriving til ansatte-tabellen og PIN-innloggingen (s09-032, innloggingsfeil rettet 2026-10-31)
+
+Tabellen `ansatte` er beskyttet av to triggere: `ansatte_hindre_selv_rolleendring_trigger` (bare admin kan endre `rolle`) og `ansatte_beskytt_skriving_trigger` (`20261031110000`): INSERT og DELETE krever admin, og en ikke-admin kan bare
+endre `navn` og `stemplet_inn_siden` på sin EGEN rad (`session_token`, `rolle`, `aktiv`, `kan_fore_lonn`, `ansettelsesdato`, `flere_enheter` og `id` er blokkert).
+
+**Feilen 31.10:** `logg_inn_med_pin` (SECURITY DEFINER) setter et nytt `session_token` på ansatte-raden til den som taster riktig PIN. Det skjer fra en sesjon som ennå ikke har ansatt-claims (ny anonym sesjon) eller fra en
+som har en ANNEN ansatts claims (delt enhet uten utlogging), og den nye triggeren avviste det med `KUN_ADMIN`: PIN-innloggingen var brutt for alle fra ca. kl. 11:45 til 13:43 norsk tid (allerede innloggede var upåvirket).
+Testene av s09-032 dekket `opprett_ansatt`, navn og stempling, men ikke innloggingen. Rettet i `20261031140000_ansatte_beskytt_skriving_innlogging.sql`: `logg_inn_med_pin` setter den transaksjonslokale markeringen
+`app.pin_innlogging` rett før `session_token`-oppdateringen og nuller den rett etter, og triggeren slipper gjennom en UPDATE som BARE endrer `session_token` når markeringen er satt. En REST-klient kan ikke sette en egen GUC, og
+en klient uten ansatt-sesjon stoppes av RLS før triggeren kjører. Bare `logg_inn_med_pin` (session_token) og `opprett_ansatt` (insert, admin-sjekk) skriver til `ansatte` fra databasefunksjoner (sjekket 31.10).
+
+**Regel:** rør aldri `ansatte_beskytt_skriving` eller `logg_inn_med_pin` uten å teste SELVE PIN-innloggingen: `supabase/tester/ansatte_beskytt_skriving_innlogging_TEST_body.sql` (rulles tilbake; fersk innlogging, delt enhet, og at
+alle blokkeringene gjelder). Uten rettelsen feiler T1 og T2 med `KUN_ADMIN`. Den daglige booking-QA-en (punkt 20) kjører den testen hver natt.
+
 ## send-push: innloggingssjekk (s00-006/s00-027, myk modus fra 2026-10-31)
 
 `send-push` har samme innloggingssjekk som fiken-fakturer, send-frakt-epost og vegvesen-oppslag (den delte blokken
