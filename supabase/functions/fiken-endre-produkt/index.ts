@@ -60,6 +60,16 @@ Deno.serve(async (req) => {
     const productNumber = typeof body?.productNumber === 'string' ? body.productNumber.trim() : ''
     const newProductNumber = typeof body?.newProductNumber === 'string' ? body.newProductNumber.trim() : null
     const active = typeof body?.active === 'boolean' ? body.active : null
+    // Fiken tillater flere produkter med SAMME produktnummer (ekte kollisjoner funnet 31.10,
+    // f.eks. 553 "Oppbevaringskasse standard" til både 6600 og 6900 kr) - uten en entydig id
+    // å style etter (denne funksjonen tar bare nummer, ikke Fikens interne productId) må en
+    // kaller som treffer flere rader oppgi PRISEN på raden den faktisk mener, ellers nekter vi
+    // å gjette. Samme "spør i stedet for å anta"-prinsipp som forventetGammelPrisKr i
+    // fiken-oppdater-pris (s04-005).
+    const expectedUnitPriceKr =
+      typeof body?.expectedUnitPriceKr === 'number' && Number.isFinite(body.expectedUnitPriceKr)
+        ? body.expectedUnitPriceKr
+        : null
 
     if (!NUMBER_RE.test(productNumber)) {
       return jsonSvar({ updated: false, error: 'Ugyldig produktnummer' }, 400)
@@ -75,7 +85,7 @@ Deno.serve(async (req) => {
     }
 
     // Les HELE listen (alle sider): produktet må finnes, og et nytt nummer må være ledig.
-    let found: FikenProduct | null = null
+    const treff: FikenProduct[] = []
     let conflict: FikenProduct | null = null
     let page = 0
     while (true) {
@@ -84,7 +94,7 @@ Deno.serve(async (req) => {
       const produkter = (await res.json()) as FikenProduct[]
       for (const p of produkter) {
         const nr = String(p.productNumber ?? '')
-        if (nr === productNumber) found = p
+        if (nr === productNumber) treff.push(p)
         if (newProductNumber !== null && nr === newProductNumber) conflict = p
       }
       const pageCount = Number(res.headers.get('Fiken-Api-Page-Count') || '1')
@@ -92,8 +102,34 @@ Deno.serve(async (req) => {
       if (page >= pageCount) break
     }
 
-    if (!found) {
+    if (treff.length === 0) {
       return jsonSvar({ updated: false, reason: `Fant ikke produktnummer ${productNumber} i Fiken` }, 404)
+    }
+    let found: FikenProduct = treff[0]
+    if (treff.length > 1) {
+      if (expectedUnitPriceKr === null) {
+        return jsonSvar(
+          {
+            updated: false,
+            avvik: true,
+            reason: `${treff.length} produkter deler produktnummer ${productNumber} - oppgi expectedUnitPriceKr for å si hvilket du mener`,
+            treff: treff.map((p) => ({ navn: p.name, unitPriceKr: typeof p.unitPrice === 'number' ? p.unitPrice / 100 : null, active: p.active })),
+          },
+          409
+        )
+      }
+      const entydige = treff.filter((p) => typeof p.unitPrice === 'number' && p.unitPrice === Math.round(expectedUnitPriceKr * 100))
+      if (entydige.length !== 1) {
+        return jsonSvar(
+          {
+            updated: false,
+            reason: `expectedUnitPriceKr=${expectedUnitPriceKr} matcher ${entydige.length} av de ${treff.length} produktene på nummer ${productNumber} - må matche nøyaktig én`,
+            treff: treff.map((p) => ({ navn: p.name, unitPriceKr: typeof p.unitPrice === 'number' ? p.unitPrice / 100 : null, active: p.active })),
+          },
+          409
+        )
+      }
+      found = entydige[0]
     }
     if (conflict) {
       return jsonSvar({ updated: false, reason: `Produktnummer ${newProductNumber} finnes allerede i Fiken` }, 409)
