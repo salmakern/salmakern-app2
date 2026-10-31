@@ -35,6 +35,13 @@
 // (401/413/429/5xx/nettverksfeil/tidsavbrudd) er forbigående og prøves igjen neste
 // cron-kjøring med SAMME event_id (idempotent hos portalen - en retry etter f.eks. en 502
 // der bare e-posten feilet skal ikke lage en ny hendelse der).
+//
+// VIKTIG (rettet 31.10 etter funn fra portal-økta): en 404 er bare permanent når KROPPEN
+// faktisk er portalens egen {"ok":false,"feil":"ukjent_bestilling"} - IKKE enhver 404.
+// Et plattform-404 (ruten ikke utrullet ennå, feil domene, Vercel DEPLOYMENT_NOT_FOUND)
+// har samme statuskode, men betyr "prøv igjen senere", ikke "gi opp for alltid" - uten
+// dette sjekket ville ett slikt utfall markert en hel batch (opptil 100 rader) "levert"
+// og de forsvinner stille for godt.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
@@ -50,6 +57,17 @@ function jsonSvar(body: unknown, status = 200) {
 
 function trengerEpostAlltidFalse(status: string) {
   return status === 'hentet'
+}
+
+// En 404 er bare portalens egen "ukjent bestilling" (og dermed permanent) når kroppen
+// faktisk er deres {"ok":false,"feil":"ukjent_bestilling"} - se kommentaren øverst i filen.
+function erPortalensUkjentBestillingSvar(kropp: string): boolean {
+  try {
+    const data = JSON.parse(kropp)
+    return data && typeof data === 'object' && data.feil === 'ukjent_bestilling'
+  } catch {
+    return false
+  }
 }
 
 Deno.serve(async (req) => {
@@ -121,14 +139,19 @@ Deno.serve(async (req) => {
         if (res.ok) {
           levertIder.push(rad.id)
           sendt++
-        } else if (res.status === 404) {
-          // Portal-økta (31.10): 404 (ukjent portal_bestilling_id hos dem) er permanent - et
-          // nytt forsøk endrer ingenting, så raden markeres levert med feilen notert i stedet
-          // for å stå og prøves på nytt for alltid.
-          feiletPermanentIder.push({ id: rad.id, siste_feil: `HTTP 404: ukjent portal_bestilling_id (${(await res.text()).slice(0, 200)})` })
-          feilet++
         } else {
-          feiletOppdateringer.push({ id: rad.id, forsok: (rad.forsok || 0) + 1, siste_feil: `HTTP ${res.status}: ${(await res.text()).slice(0, 300)}` })
+          const kropp = await res.text()
+          if (res.status === 404 && erPortalensUkjentBestillingSvar(kropp)) {
+            // Portal-økta (31.10, rettet etter funn fra dem samme dag): KUN portalens egen
+            // {"ok":false,"feil":"ukjent_bestilling"} er permanent - et nytt forsøk endrer
+            // ingenting, så raden markeres levert med feilen notert i stedet for å stå og
+            // prøves på nytt for alltid. En 404 uten denne kroppen (plattform-404, f.eks.
+            // ruten ikke utrullet ennå eller feil domene) faller gjennom til grenen under
+            // og prøves på nytt som alt annet forbigående.
+            feiletPermanentIder.push({ id: rad.id, siste_feil: `HTTP 404: ukjent portal_bestilling_id (${kropp.slice(0, 200)})` })
+          } else {
+            feiletOppdateringer.push({ id: rad.id, forsok: (rad.forsok || 0) + 1, siste_feil: `HTTP ${res.status}: ${kropp.slice(0, 300)}` })
+          }
           feilet++
         }
       } catch (e) {

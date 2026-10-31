@@ -4,8 +4,8 @@
 //  * Autentisering: x-sync-secret = PORTAL_BESTILLING_SECRET (egen hemmelighet, aldri FIKEN_SYNC_SECRET), sammenlignet i konstant tid. Ingen myk modus:
 //    det finnes ingen gamle kallere, så den håndhever fra dag én. Mangler hemmeligheten i miljøet svarer den 500 (aldri åpen). I tillegg krever
 //    Supabase-porten en gyldig JWT (anon-nøkkelen) fordi funksjonen er utrullet med standard verify_jwt.
-//  * Validering og avgrensning av input/output: logikk.ts (ren, testet i test/portal-bestilling.test.js). Bare ti navngitte felt slippes gjennom,
-//    `kjor_pa_nytt` kastes alltid.
+//  * Validering og avgrensning av input/output: logikk.ts (ren, testet i test/portal-bestilling.test.js). Ti navngitte strengfelt pluss det
+//    valgfrie `linjer` (produktliste, s08-048) slippes gjennom, `kjor_pa_nytt` kastes alltid.
 //  * Databasen nås med service_role-nøkkelen fra miljøet (SUPABASE_SERVICE_ROLE_KEY, satt av Supabase): ingenting hardkodes. Postgres-funksjonen kan
 //    BARE kalles av service_role.
 //  * Et vellykket svar til portalen er bare {kode, status, ordre_id?}; feilsvar er bare {kode, felt?}. Detaljer (også andre forhandleres navn) står kun i

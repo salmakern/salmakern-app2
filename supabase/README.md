@@ -160,7 +160,8 @@ Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandle
 3. **Edge-funksjonen `portal-bestilling`** (`functions/portal-bestilling/`: `index.ts` er døra inn, `logikk.ts` er ren validering/avgrensning). Egen hemmelighet
    `PORTAL_BESTILLING_SECRET` (Supabase-hemmelighet; samme verdi i portalens miljø som `x-sync-secret`, og aldri `FIKEN_SYNC_SECRET`), sammenlignet i
    konstant tid, håndhevet fra dag én (ingen myk modus: det finnes ingen gamle kallere). Funksjonen er utrullet med standard `verify_jwt`, så portalen må
-   også sende anon-nøkkelen som `apikey`/`Authorization`. Bare ti navngitte felt slippes gjennom til databasen (`kjor_pa_nytt` kastes alltid), og et
+   også sende anon-nøkkelen som `apikey`/`Authorization`. Ti navngitte strengfelt pluss det valgfrie `linjer` (produktliste, se punkt 7 under) slippes
+   gjennom til databasen (`kjor_pa_nytt` kastes alltid), og et
    vellykket svar er bare `{kode, status, ordre_id?}`, feilsvar bare `{kode, felt?}` (aldri detaljer eller databasefeil). Logger én JSON-linje per kall uten
    verdier (utfall, HTTP-status, tid, SQLSTATE-kode og tidsavbrudd-flagg ved databasefeil).
    **Kontrakten for portalen:** påkrevd `bestilling_id` (8-64 tegn A-Za-z0-9_-, portalens id), `nr`, `ident_type` (`CHASSIS` | `SERIENUMMER` | `BESTILLINGSNR`; de to siste har samme format, 3-40 tegn A-Z0-9._/ - og blir begge en løs Admin-ark-rad med nummeret i Serienummer-kolonnen, men `BESTILLINGSNR` får merknaden «Fra portalen <nr> (bestillingsnr fra forhandler)» og eget varsel; lagt til 2026-10-31, Henrik: «bestillingsnummer fra forhandler ved siden av chassis.nr og serienummer», sjekk-regel i `20261031100000_portal_bestillingsnr.sql` og funksjonen v3), `ident`; valgfri

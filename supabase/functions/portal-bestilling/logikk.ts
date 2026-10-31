@@ -2,8 +2,10 @@
 // Ingen eksterne importer og ingen Deno-API-er, så Vitest kan laste filen direkte (test/portal-bestilling.test.js).
 //
 // Prinsipper:
-//  * ALLOWLIST: bare de ti feltene under sendes videre til Postgres-funksjonen. Alt annet kastes (også `kjor_pa_nytt`, som bare en
-//    admin i Salmaker'n skal kunne sette: det gjør at venter_*/avklaring_*-rader kjøres på nytt, og det skal portalen aldri kunne utløse).
+//  * ALLOWLIST: bare de ti strengfeltene i TILLATTE_FELT under, pluss det valgfrie `linjer` (egen gren, se s08-048 lenger ned - det er
+//    en liste av objekter, ikke en streng, og telles derfor ikke med i "de ti"), sendes videre til Postgres-funksjonen. Alt annet kastes
+//    (også `kjor_pa_nytt`, som bare en admin i Salmaker'n skal kunne sette: det gjør at venter_*/avklaring_*-rader kjøres på nytt, og det
+//    skal portalen aldri kunne utløse).
 //  * Edge-funksjonen normaliserer ikke: den sender originalverdiene videre, og Postgres-funksjonen er eneste sted som renser og normaliserer.
 //    Her avvises bare det som er åpenbart ugyldig, tidlig og med en tydelig 400, slik at en feilkonfigurert eller manipulert avsender ikke
 //    når databasen. Sjekkene er bevisst like strenge som i Postgres-funksjonen (supabase/migrations/20261030210000_portal_koble_bestilling.sql).
