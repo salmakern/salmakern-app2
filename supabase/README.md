@@ -189,8 +189,37 @@ Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandle
 4. **Bekreft og Avvis i appen** (`20261030230000_portal_bekreft_avvis.sql`): RPC-ene `portal_bekreft_ordre(p_ordre_id)` (alle innloggede ansatte; idempotent; setter bekreftet-tidspunkt/-navn, én logglinje og
    `portal_bestillinger.status = 'bekreftet'`) og `portal_avvis_ordre(p_ordre_id)` (bare admin og godkjenner; sletter bare en URØRT, ubekreftet portal-ordre, se `v_urort` i filen, og markerer alle bestillinger som
    peker på ordren som `avvist` = gravstein). Begge er SECURITY DEFINER og sjekker `current_ansatt()` selv; `anon` kan ikke kalle dem. Rolle- og urørt-sjekken er et sikkerhetsnett mot misforståelser i appen, IKKE en
-   grense mot en ansatt som går forbi appen (RLS på `ordrer` tillater alle innloggede ansatte å endre/slette direkte). Test: `tester/portal_bekreft_avvis_TEST_body.sql` (43 sjekker, rullet tilbake). Rollback:
-   `rollback-referanser/portal_bekreft_avvis_ROLLBACK.sql` (appkoden må rulles tilbake først). Appdelen (merke, filter, banner, knapper) står i rotens CLAUDE.md og testes av `test/portal-ordre-visning.test.js`.
+   grense mot en ansatt som går forbi appen (RLS på `ordrer` tillater alle innloggede ansatte å endre/slette direkte). Test: `tester/portal_bekreft_avvis_TEST_body.sql` (43 sjekker, rullet tilbake; 2 nye sjekker
+   lagt til 2026-10-31 for startstatus-raden, se punkt 6 under). Rollback: `rollback-referanser/portal_bekreft_avvis_ROLLBACK.sql` (appkoden må rulles tilbake først). Appdelen (merke, filter, banner, knapper)
+   står i rotens CLAUDE.md og testes av `test/portal-ordre-visning.test.js`.
+5. **Modellnøkkel i Fiken-matching** (s09-012 steg 2, `20261031150000_portal_modell_slug_matching.sql`, kjørt mot produksjon 2026-10-31 kveld): ny kolonne `ordrer.portal_modell_slug` (satt av
+   `portal_koble_bestilling` v5 på CHASSIS-grenen, aldri på serienummer/bestillingsnr-grenen siden `admin_ark` ikke har tilsvarende felt) og RPC-en `hent_portal_modell_kobling()` (enhver innlogget ansatt kan lese
+   `portal_modell_kobling` gjennom den - tabellen selv har RLS som bare slipper admin gjennom). `js/ordre-detalj.js` sin `kanoniskMerkeModell(o)` bruker slugen (når den finnes) i stedet for ordrens frie
+   merke/modell-tekst i `synkroniserOmbyggingFikenLinjer()` (Fiken-fakturering treffer riktig produkt selv om en ansatt har rettet skrivemåten på ordren), og `ombyggingBoksHTML()` viser et gult varsel hvis
+   fritekst og portal-modell avviker. Gjelder BARE ordre med `portal_modell_slug` satt - helt uendret for alle andre ordre. Test: `test/fiken-ombygging.test.js` (10 nye tester) og den generiske
+   `/portal/i`-regelen i `test/portal-ordre-visning.test.js` (dekker også denne kolonnen automatisk). Deployet: commit `e96772a`.
+6. **Statusutsending til portalen** (s08-034, `20261030200000_ordre_status_utboks.sql` + `20261031160000_ordre_status_utboks_kun_portal.sql` + `20261031180000_portal_bekreft_utboks_baseline.sql`, kjørt
+   2026-10-30/31): egen tabell `ordre_status_utboks` (LEVERINGSKØ, ikke en permanent logg som `ordre_status_historikk` fra s09-025) fylt av en trigger som bare fyrer på en faktisk `ordre_status`-endring OG bare
+   for ordre med `portal_bestilling_id` satt (innsnevret 2026-10-31 - fyrte før på ALLE ordre, noe portalen aldri kunne levere). `portal_bekreft_ordre()` legger i tillegg selv en rad med `status_forrige = null`
+   idet en ansatt trykker Bekreft (uten den ville portalen ikke visst noe om en bestilling før første senere statusendring, som kan være dager etter bekreftelse). Edge-funksjonen `send-ordre-status-til-portal`
+   (egen hemmelighet `ORDRE_STATUS_SYNK_SECRET`, samme mønster som `fiken-priser-synk`) leser uleverte rader, slår opp `send_epost` (ALLTID false for startstatus-rader og for status `hentet`; false for
+   `klar_henting` bare når `admin_ark`-raden for samme chassis har `fraktselskap = 'Hente selv'` OG `bestilt_frakt = true`, ellers true; ALLTID false når ordren ikke er bekreftet ennå), og POSTer til
+   `https://forhandler.salmaker.as/api/salmakern/bestilling-status` (header `x-salmakern-status-secret`) med `{event_id, portal_bestilling_id, status, status_forrige, send_epost, endret_at,
+   klar_for_henting_dato?}`. 404 fra portalen er permanent (markeres levert med feilen notert, aldri retry); alt annet prøves igjen neste kjøring med samme `event_id` (idempotent hos portalen). **INGEN cron-jobb
+   er opprettet ennå** - funksjonen kjører bare ved manuelt kall. Henrik 2026-10-31 kveld: ingen e-post til forhandlere/selgere (verken denne eller velkomst-e-posten) før forhandlergjennomgangen med daglig
+   leder søndag 1.11 er ferdig - IKKE opprett cron-jobben før det er opphevet (se punkt 21d i `salmakern-booking-daglig-qa` sin QA-sjekkliste, som sjekker dette hver natt). Live-testet mot webhook.site med
+   ekte TEST-ordre (opprettet/bekreftet/statusendret/slettet, 0 rester). Deployet: commits `7f9376a`, `c46fb8d`, `c0a7614`.
+7. **Utstyr og rabatt fra bestillingen** (s08-048, `20261031170000_portal_bestilling_linjer.sql` + `portal_koble_bestilling` v5, kjørt mot produksjon 2026-10-31 kveld): valgfritt felt `linjer`
+   (`[{produktnummer, navn, rabatt_prosent}]`, maks 30 rader, strengt validert - fail-closed, hele kallet avvises ved første ugyldige element) lagret rått i `portal_bestillinger.linjer` (admin-innsyn) og
+   normalisert på `ordrer.portal_linjer` (samme les-ikke-skriv-mønster som `portal_modell_slug`/`portal_bestilling_id` - leses av `dbToOrdre`, skrives ALDRI av `ordreToDb`). Edge-funksjonen `portal-bestilling`
+   (`logikk.ts`) har en egen valideringsgren for `linjer` (array av objekter, ikke en streng som resten av `TILLATTE_FELT`) og videresender feltet uendret. Ny `js/lager.js`-funksjon
+   `leggTilPortalUtstyrLinjer(ordreId)` (kalt fra `portalBekreftOrdre()` rett etter `autoVelgUtstyrMal`) legger hver linjes `navn` i «Skal ha etter visning» og `produktnummer` i `fiken_linjer` MED
+   `rabatt_prosent` frosset som `rabatt` på linjen - idempotent (samme `finnes`-sjekk som `oppdaterSkalHaForOppskrift`/`oppdaterFikenLinjeForOppskrift`). `fiken-fakturer` bruker en frosset `l.rabatt` (når
+   `typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)`) i stedet for `fiken_kunde_rabatt` for akkurat den linjen - uendret for alle andre linjer/ordre. Rabatten kommer altså fra BESTILLINGEN (portalens
+   forhandlersats), ikke Salmaker'ns egen kundetabell, per Henriks avgjørelse 2026-10-30 («rabattene skal være de som er i forhandlerportalen»). Testet mot falsk Fiken (`test/fiken-fakturer-rabatt.test.js`, 20
+   tester, bygget og adversarielt verifisert via en workflow - fant og rettet ett reelt hull der den falske Supabase-klienten ikke skilte mellom ulike `contactId`). Kjent, akseptert avrundingsforskjell mot
+   portalen (inntil ca. 1 kr per linje - portalen runder variant+tillegg én gang, Fiken runder per linje). **Portalen har ikke begynt å sende `linjer` ennå** (bygget og bekreftet 2026-10-31, venter på at de
+   ruller det ut). Deployet: commits `57a9de2`, `d1cb89f`.
 
 ## Prislås (s09-023/s05-003, 2026-10-30/31)
 
