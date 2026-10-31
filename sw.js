@@ -25,7 +25,9 @@
 // mobilnettlesere som tegnet sin egen pil klemt inntil lang statustekst (2026-10-30)
 // v17 - status-boksen i Oversikt (Aktive ordrer/Ikke påbegynt) kunne presse seg utenfor
 // kortets ramme på smale skjermer - radene manglet flex-wrap (2026-10-30)
-const CACHE = 'salmakern-v18';
+// v19 - Vegvesen-dokumenter varsler nå synlig (i stedet for stille) når modellen ikke
+// gjenkjennes og Egenerklæringen må bruke en generisk mal (2026-10-31)
+const CACHE = 'salmakern-v19';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

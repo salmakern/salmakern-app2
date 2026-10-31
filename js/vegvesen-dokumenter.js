@@ -509,9 +509,12 @@ async function genEgenerklaeringPDF(o) {
 
   // Hver modell(-familie) har sin egen, reelt forskjellige avsnitt-tekst (ikke bare
   // modellnavn byttet ut - bekreftet ved å lese ekte referansedokumenter for hver
-  // modell 2026-09-18) - se VEGVESEN_MODELLER. Faller tilbake til KIA sin mal hvis
-  // ingen modell er funnet (skal ikke skje i praksis, siden genererVegvesenDokumenter
-  // allerede sjekker dette før noe genereres).
+  // modell 2026-09-18) - se VEGVESEN_MODELLER. Faller tilbake til en generisk mal hvis
+  // ingen modell er funnet (skrivefeil i Merke/Modell, eller en reell modell som ennå
+  // ikke er lagt inn i VEGVESEN_MODELLER) - IKKE lenger sjekket/blokkert før kallet (den
+  // sjekken ble fjernet 2026-09-30, se kommentaren i vegvesenGenererOgLagre). Kalleren
+  // varsler nå i stedet synlig om dette (s09-012-relatert funn 31.10) - se
+  // vegvesenGenererOgLagre, som legger på en advarsel i meldingen den returnerer.
   const vegvesenModell = vegvesenFinnModell(o.merke, o.modell);
   const erBrukt = !!o.ombygging?.bruktKjoretoy;
   const avsnitt = vegvesenModell
@@ -1390,6 +1393,13 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   // alle) - viser derfor "Se kjøretøyliste" på disse feltene også, akkurat som Chassis
   // allerede gjorde (bedt om av Henrik 2026-10-01: "skal det være Se kjøretøyliste på
   // farge og navn eier" + "og samme på org.nr over").
+  // Ukjent modell (skrivefeil i Merke/Modell, eller en reell modell uten mal ennå) gir i dag
+  // en Egenerklæring med en generisk mal i stedet for modellens egen tekst (se kommentaren i
+  // genEgenerklaeringPDF) - uten dette varselet ville det skjedd helt stille. Beregnes FØR
+  // selve genereringen siden meldingen under skal gjelde uansett hvilken gren som returnerer.
+  const kjentModell = !!vegvesenFinnModell(kilde.merke, kilde.modell);
+  const modellAdvarsel = kjentModell ? '' : `⚠ Ukjent modell (${kilde.merke || '?'} ${kilde.modell || '?'}) - Egenerklæringen bruker en generisk mal, ikke modellens egen tekst. Sjekk innholdet manuelt før bruk. `;
+
   const egenerklaeringBytes = await genEgenerklaeringPDF(visningsOrdre);
   const egenerklaeringOk = await vegvesenLagreGenerertDokumentFlere(malOrdreIder, vegvesenFilnavn('Egenerklæring', filnavnNokkel), egenerklaeringBytes);
 
@@ -1413,11 +1423,11 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   // seg selv når noen fyller inn Vekter-feltene) siden vegvesenAutoGenererHvisKomplett()
   // trenger å vite hvilket for å avgjøre om den skal fortsette å prøve på nytt.
   if (!vegvesenGeometri(kilde.merke, kilde.modell)) {
-    return { status: 'delvis_geometri_mangler', melding: `Egenerklæring og Melding om registrering generert. Ingen mal/geometri lagt inn for ${kilde.merke||'?'} ${kilde.modell||'?'} ennå - Vektfordeling/Fabrikantattest kan ikke genereres.` };
+    return { status: 'delvis_geometri_mangler', melding: `${modellAdvarsel}Egenerklæring og Melding om registrering generert. Ingen mal/geometri lagt inn for ${kilde.merke||'?'} ${kilde.modell||'?'} ennå - Vektfordeling/Fabrikantattest kan ikke genereres.` };
   }
   const resultat = await vegvesenBeregnOgSettEndring(kilde);
   if (!resultat) {
-    return { status: 'delvis_vekt_mangler', melding: `Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
+    return { status: 'delvis_vekt_mangler', melding: `${modellAdvarsel}Egenerklæring og Melding om registrering generert. Mangler Vekter (Ved ankomst/Før visning) for Vektfordeling/Fabrikantattest.` };
   }
   const { P1, P2, M, M1, M2, justertP, justertVogntog, geometri: geom } = resultat;
   const { bytes: vektfordelingBytes } = await genVektfordelingPDF(visningsOrdre, justertP, P1, P2, M, M1, M2, geom);
@@ -1436,7 +1446,7 @@ async function vegvesenGenererOgLagre(kilde, kontekst) {
   }
 
   const dokumentliste = `Egenerklæring, Vektfordeling, Fabrikantattest og Melding om registrering`;
-  return { status: 'ok', melding: kontekst ? 'Vegvesen-dokumenter generert og lagret for hele flåten (inkl. Kjøretøyliste)' : `${dokumentliste} generert og lagret` };
+  return { status: 'ok', melding: `${modellAdvarsel}${kontekst ? 'Vegvesen-dokumenter generert og lagret for hele flåten (inkl. Kjøretøyliste)' : `${dokumentliste} generert og lagret`}` };
 }
 
 // Manuell knapp - tvinger fram en ny generering uansett om noe faktisk har endret seg
