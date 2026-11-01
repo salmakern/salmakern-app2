@@ -136,7 +136,7 @@ begin
   v_kontakt_id := left(btrim(coalesce(p->>'kontakt_id', '')), 80);
   v_orgnr := regexp_replace(coalesce(p->>'orgnr', ''), '\D', '', 'g');
   -- Navn og e-post fra en ekstern bruker: ingen kontrolltegn, retningstegn eller < >, kappet lengde.
-  v_selger := btrim(regexp_replace(regexp_replace(coalesce(p->>'selger_navn', ''), '[\u0001-\u001f\u007f​-‏‪-‮⁦-⁩]', '', 'g'), '[<>]', '', 'g'));
+  v_selger := btrim(regexp_replace(regexp_replace(coalesce(p->>'selger_navn', ''), '[\u0001-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]', '', 'g'), '[<>]', '', 'g'));
   v_selger := left(regexp_replace(v_selger, '\s+', ' ', 'g'), 80);
   if v_selger = '' then
     v_selger := 'Selger fra portalen';
@@ -226,11 +226,13 @@ begin
 
   -- ---------- 4a. SERIENUMMER og BESTILLINGSNR: løs rad i Admin-ark (nummeret i serienummer-kolonnen), ingen ordre ----------
   if v_type in ('SERIENUMMER', 'BESTILLINGSNR') then
-    v_aar := extract(year from now() at time zone 'Europe/Oslo');
+    v_aar := extract(year from (now() at time zone 'Europe/Oslo'))::int;
+    -- Samme regel som adminArkNesteRekkefolge(): høyeste radnummer dette året, men aldri bunn-grensen (2147483647).
     select coalesce(max(rekkefolge), 0) + 1 into v_rek from public.admin_ark where aar = v_aar and rekkefolge <> 2147483647;
-    v_ark_id := 'ark_' || (extract(epoch from clock_timestamp()) * 1000)::bigint::text || '_' || substr(md5(v_id), 1, 6);
+    v_epoch := (extract(epoch from clock_timestamp()) * 1000)::bigint;
+    v_ark_id := 'ark_' || v_epoch::text || '_' || substr(md5(v_id), 1, 5);
     insert into public.admin_ark (id, chassis_nr, aar, rekkefolge, forhandler, kontaktperson, serienummer, merknader)
-    values (v_ark_id, '', v_aar, v_rek, v_kunde, coalesce(v_kp_navn, ''), v_ident,
+    values (v_ark_id, '', v_aar, v_rek, left(v_kunde, 200), left(v_kp_navn, 120), v_ident,
             'Fra portalen ' || v_nr || case when v_type = 'BESTILLINGSNR' then ' (bestillingsnr fra forhandler)' else '' end || case when v_kp_navn = '' then ' (selger: ' || v_selger || ', finnes ikke som kontaktperson hos forhandleren)' else '' end);
     update public.portal_bestillinger
        set status = 'admin_ark', admin_ark_id = v_ark_id, forhandler_navn = v_kunde, detalj = 'Løs rad i Admin-ark opprettet.', oppdatert_at = now()

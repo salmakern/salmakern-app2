@@ -503,8 +503,10 @@ function adminArkOpprettOrdreForChassis(rad, chassis) {
 // tilknyttet; er den IKKE det (det vanlige, for alle andre Admin-ark-rader), kalles denne
 // funksjonen aldri og adminArkOpprettOrdreForChassis() kjører akkurat som før - se cellEdited.
 const PORTAL_KOBLING_STATUS_TEKST = {
-  ny_ordre: 'Ordre opprettet (På vei) og koblet til portal-bestillingen.',
-  koblet: 'Chassis.nr fantes alt på en aktiv ordre - koblet til den i stedet for å lage en ny.',
+  ny_ordre: 'Ordre opprettet (På vei) og koblet til portal-bestillingen. Husk å trykke Bekreft på ordren før forhandleren får status i portalen.',
+  koblet: 'Chassis.nr fantes alt på en aktiv ordre - koblet til den i stedet for å lage en ny. Ordren selv er IKKE endret: den får ikke PORTAL-merke og forhandleren får ikke status i portalen.',
+  bekreftet: 'Portal-bestillingen er allerede bekreftet fra før - ingen endring.',
+  avvist: 'Portal-bestillingen er avvist fra før (f.eks. via «Avvis og slett») og kan ikke kobles på nytt automatisk. Ta kontakt om chassis.nr likevel skal kobles.',
   avklaring_chassis: 'Fant en ordre på samme chassis.nr som trenger manuell avklaring (flere aktive, eller hentet men ikke arkivert) - ingen ordre ble opprettet automatisk.',
   avklaring_annen_forhandler: 'Chassis.nr står alt på en aktiv ordre hos en ANNEN forhandler - må avklares manuelt, ingen ordre opprettet.',
   avklaring_tak: 'Forhandleren har alt for mange ubekreftede portal-ordre - ingen ny ordre opprettet. Bekreft eller rydd opp i noen først.',
@@ -512,25 +514,35 @@ const PORTAL_KOBLING_STATUS_TEKST = {
   venter_modell: 'Modellen fra portal-bestillingen mangler en oversettelse - ingen ordre opprettet.',
   admin_ark: 'Fortsatt ingen chassis.nr registrert hos portalen - prøv igjen.',
 };
-let adminArkPortalKoblingPagar = false; // hindrer at to raske trykk/redigeringer kaller RPC-en samtidig for samme/ulik rad
+const PORTAL_KOBLING_OK_STATUSER = new Set(['ny_ordre', 'koblet', 'bekreftet']);
+// Ingen busy-sperre her (fjernet 2026-11-01 etter funn fra portal-økta): i motsetning til
+// Bekreft/Avvis (ett brukerinitiert trykk om gangen) kan cellEdited fyres raskt for MANGE
+// ULIKE rader samtidig (f.eks. lim inn flere chassisnumre over hverandre). En delt
+// busy-boolean ville da latt rad 2..N tro "tilknyttet" og ALDRI få en ordre. SQL-funksjonen
+// har sin egen advisory-lock-idempotens per bestilling, så klienten trenger ingen egen sperre.
 async function adminArkKobleChassisTilPortalHvisAktuelt(rad, chassis) {
   if (!db || !rad._arkId) return { tilknyttet: false };
-  if (adminArkPortalKoblingPagar) { visToast(PORTAL_OPPTATT_TEKST, 'feil'); return { tilknyttet: true }; } // tilknyttet:true -> IKKE fall tilbake til vanlig oppretting mens noe annet pågår
-  adminArkPortalKoblingPagar = true;
+  let data, error;
   try {
-    const { data, error } = await db.rpc('portal_koble_chassis_fra_losrad', { p_admin_ark_id: rad._arkId, p_chassis: chassis });
-    if (error) {
-      portalLoggFeil('Koble chassis til portal-bestilling feilet:', error);
-      visToast(portalFeilTekst(error), 'feil');
-      return { tilknyttet: true }; // usikkert utfall - ikke lag en ordre til på toppen av et mislykket forsøk
-    }
-    if (!data?.tilknyttet) return { tilknyttet: false };
-    const status = data.resultat?.status;
-    visToast(PORTAL_KOBLING_STATUS_TEKST[status] || 'Portal-bestillingen ble behandlet.', status === 'ny_ordre' || status === 'koblet' ? 'ok' : 'feil');
-    return { tilknyttet: true };
-  } finally {
-    adminArkPortalKoblingPagar = false;
+    ({ data, error } = await db.rpc('portal_koble_chassis_fra_losrad', { p_admin_ark_id: rad._arkId, p_chassis: chassis }));
+  } catch (e) {
+    error = e;
   }
+  if (error) {
+    // Usikkert utfall (nettverksfeil/tidsavbrudd/RPC-en finnes ikke lenger/KUN_ADMIN etc.) -
+    // vi vet IKKE om raden faktisk er portal-tilknyttet. tilknyttet:false lar den vanlige,
+    // uendrede oppretting-veien kjøre i stedet: for det store flertallet av Admin-ark-rader
+    // (ikke portal-tilknyttet) er det riktig oppførsel. I det sjeldne tilfellet raden FAKTISK
+    // var portal-tilknyttet, lages en vanlig (ikke-koblet) ordre i stedet for ingen ordre - det
+    // er et langt mindre problem enn at en helt vanlig chassis-inntasting plutselig ikke gir
+    // noen ordre i det hele tatt.
+    portalLoggFeil('Koble chassis til portal-bestilling feilet (fortsetter som vanlig rad):', error);
+    return { tilknyttet: false };
+  }
+  if (!data?.tilknyttet) return { tilknyttet: false };
+  const status = data.resultat?.status;
+  visToast(PORTAL_KOBLING_STATUS_TEKST[status] || 'Portal-bestillingen ble behandlet.', PORTAL_KOBLING_OK_STATUSER.has(status) ? 'ok' : 'feil');
+  return { tilknyttet: true };
 }
 
 // Time bekreftet skrives inn som fri tekst "DD.MM - HH:MM" (tiden er valgfri), med et
@@ -1558,12 +1570,15 @@ function renderAdminArk(scrollTilBunn) {
       cell.restoreOldValue();
       return;
     }
-    // Chassis-nr normaliseres til store bokstaver med en gang det skrives inn - forhindrer
-    // at en admin_ark-rad og en ordre havner med ulik store/små-skriving av samme
-    // chassisnummer og dermed aldri finner hverandre (samsvarerChassis tåler det uansett,
-    // men konsekvent visning er ryddigere). Bruker row.update (ikke cell.setValue) for
-    // visnings-normaliseringen - det siste ville trigget et nytt cellEdited-kall.
-    const verdi = felt === 'chassisNr' ? (cell.getValue()||'').trim().toUpperCase() : cell.getValue();
+    // Chassis-nr normaliseres til store bokstaver UTEN mellomrom/bindestrek med en gang det
+    // skrives inn - samme normalisering som portal_koble_bestilling bruker på CHASSIS (se
+    // migrasjonen). samsvarerChassis() tåler bare ulik store/små bokstaver og ytre mellomrom,
+    // IKKE indre mellomrom/bindestrek - uten denne normaliseringen her kunne en portal-koblet
+    // ordre (chassis normalisert av SQL-funksjonen) og admin_ark-raden (rå tekst) ende med to
+    // ulike strenger som aldri matcher hverandre igjen (s90-20261101-1, funnet av portal-økta).
+    // Bruker row.update (ikke cell.setValue) for visnings-normaliseringen - det siste ville
+    // trigget et nytt cellEdited-kall.
+    const verdi = felt === 'chassisNr' ? (cell.getValue()||'').replace(/[\s-]/g, '').toUpperCase() : cell.getValue();
     adminArkLagreFelter(rad, {[felt]: verdi})
       .then(() => {
         // "Frakt-e-post"-kolonnen (Bestill-knappen) leser fraktselskap/bestiltFrakt fra

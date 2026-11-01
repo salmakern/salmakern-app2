@@ -2,7 +2,8 @@
 -- (realtime sender først ved commit). Funksjonen opprettes INNI transaksjonen, så testen kan kjøres før den er kjørt for alvor.
 -- Bruker EKTE kontakter bare til lesing (AK Auto AS = k_portal_akauto, Autostrada Seljord AS = k2) og en midlertidig modell-oversettelse.
 -- Kjøring (fra rotmappen, nå to migrasjoner - 20261031150000 legger til portal_modell_slug/hent_portal_modell_kobling, se s09-012 steg 2):
---   (echo "begin;"; cat supabase/migrations/20261031150000_portal_modell_slug_matching.sql; cat supabase/migrations/20261030210000_portal_koble_bestilling.sql; cat supabase/tester/portal_koble_bestilling_TEST_body.sql; echo "rollback;") > /tmp/t.sql
+--   (echo "begin;"; cat supabase/migrations/20261031150000_portal_modell_slug_matching.sql; cat supabase/migrations/20261101000000_portal_koble_chassis_fra_losrad.sql; cat supabase/tester/portal_koble_bestilling_TEST_body.sql; echo "rollback;") > /tmp/t.sql
+-- (20261101000000 er den LEVENDE v6-fila - inneholder hele v5 pluss én dokumentert endring, se den filens header. Gir samme resultat som v5 her siden ingen test bruker kjor_pa_nytt på en admin_ark-rad.)
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file /tmp/t.sql
 -- Siste setning før rollback skriver ut resultatlinjene: alle skal ha ok = true.
 

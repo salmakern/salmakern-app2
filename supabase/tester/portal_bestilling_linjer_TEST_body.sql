@@ -3,7 +3,8 @@
 -- som rulles tilbake. Alle migrasjonene under er kjørt mot produksjon 31.10 - tas likevel med
 -- i kjeden under slik at testen kan kjøres uendret selv om noen kjører den fra en frisk kopi
 -- av databasen. Kjøring (fra rotmappen):
---   (echo "begin;"; cat supabase/migrations/20261031150000_portal_modell_slug_matching.sql; cat supabase/migrations/20261031170000_portal_bestilling_linjer.sql; cat supabase/migrations/20261030210000_portal_koble_bestilling.sql; cat supabase/tester/portal_bestilling_linjer_TEST_body.sql; echo "rollback;") > /tmp/t.sql
+--   (echo "begin;"; cat supabase/migrations/20261031150000_portal_modell_slug_matching.sql; cat supabase/migrations/20261031170000_portal_bestilling_linjer.sql; cat supabase/migrations/20261101000000_portal_koble_chassis_fra_losrad.sql; cat supabase/tester/portal_bestilling_linjer_TEST_body.sql; echo "rollback;") > /tmp/t.sql
+-- (20261101000000 er den LEVENDE v6-fila av portal_koble_bestilling - inneholder hele v5 pluss én dokumentert endring, se den filens header.)
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file /tmp/t.sql
 
 create temp table _res (n serial, navn text, ok boolean, info text);

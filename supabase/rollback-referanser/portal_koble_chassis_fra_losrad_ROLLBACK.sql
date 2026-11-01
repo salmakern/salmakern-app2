@@ -1,9 +1,20 @@
 -- Rollback for 20261101000000_portal_koble_chassis_fra_losrad.sql
--- To deler:
--- 1) Fjern den nye funksjonen (helt ny, trygt å droppe - ingenting annet kaller den).
+--
+-- VIKTIG REKKEFØLGE (rettet 2026-11-01 etter funn fra portal-økta - js/admin-ark.js KALLER
+-- faktisk denne funksjonen, i motsetning til hva en tidligere versjon av denne filen sa):
+-- rull tilbake js/admin-ark.js (og bump sw.js CACHE) og få det live på salmaker.as FØRST,
+-- SÅ drop funksjonen i databasen. Gjøres det i feil rekkefølge, feiler RPC-kallet fra
+-- klienten (PGRST202, funksjonen finnes ikke) - adminArkKobleChassisTilPortalHvisAktuelt()
+-- behandler siden 2026-11-01 ALLE RPC-feil (inkl. PGRST202) som {tilknyttet:false} og faller
+-- tilbake til vanlig oppretting, så selv i feil rekkefølge opprettes ordre fortsatt for
+-- vanlige Admin-ark-rader - men ingen SERIENUMMER/BESTILLINGSNR-bestilling kobles til portalen
+-- i mellomtiden.
+--
+-- To deler i databasen:
+-- 1) Fjern den nye funksjonen.
 -- 2) Sett portal_koble_bestilling TILBAKE til v5 (kjør 20261030210000_portal_koble_bestilling.sql
---    på nytt - den filen ligger uendret i migrations/ og re-oppretter funksjonen byte-identisk
---    med v5, uten "and not v_rerun" på admin_ark-grenen).
+--    på nytt - den filen ligger uendret i migrations/ og fjerner "and not v_rerun" på
+--    admin_ark-grenen igjen).
 -- Rader som ALLEREDE er opprettet/koblet via den nye funksjonen (ordrer, portal_bestillinger-
 -- oppdateringer) berøres IKKE av dette - de må ryddes bevisst hvis noe skal reverseres.
 drop function if exists public.portal_koble_chassis_fra_losrad(text, text);
