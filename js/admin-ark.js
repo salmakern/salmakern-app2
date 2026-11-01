@@ -495,6 +495,44 @@ function adminArkOpprettOrdreForChassis(rad, chassis) {
   visToast('Ny ordre opprettet (På vei)', 'ok');
 }
 
+// s90-20261101-1 (Henrik: «når vi får chassis.nr på bestillingen, lag en ordre på vei og gi den
+// status i portalen»): skrives et chassis-nr inn på en løs Admin-ark-rad som kom fra en
+// SERIENUMMER/BESTILLINGSNR-bestilling fra Forhandlerportalen, skal ordren kobles til portalen
+// (PORTAL-merke, ikke bekreftet, status går til portalen etter Bekreft) i stedet for en vanlig
+// ordre uten kobling. portal_koble_chassis_fra_losrad() avgjør om raden faktisk er portal-
+// tilknyttet; er den IKKE det (det vanlige, for alle andre Admin-ark-rader), kalles denne
+// funksjonen aldri og adminArkOpprettOrdreForChassis() kjører akkurat som før - se cellEdited.
+const PORTAL_KOBLING_STATUS_TEKST = {
+  ny_ordre: 'Ordre opprettet (På vei) og koblet til portal-bestillingen.',
+  koblet: 'Chassis.nr fantes alt på en aktiv ordre - koblet til den i stedet for å lage en ny.',
+  avklaring_chassis: 'Fant en ordre på samme chassis.nr som trenger manuell avklaring (flere aktive, eller hentet men ikke arkivert) - ingen ordre ble opprettet automatisk.',
+  avklaring_annen_forhandler: 'Chassis.nr står alt på en aktiv ordre hos en ANNEN forhandler - må avklares manuelt, ingen ordre opprettet.',
+  avklaring_tak: 'Forhandleren har alt for mange ubekreftede portal-ordre - ingen ny ordre opprettet. Bekreft eller rydd opp i noen først.',
+  venter_forhandler: 'Forhandleren fra portal-bestillingen stemmer ikke lenger med Kontakter - ingen ordre opprettet.',
+  venter_modell: 'Modellen fra portal-bestillingen mangler en oversettelse - ingen ordre opprettet.',
+  admin_ark: 'Fortsatt ingen chassis.nr registrert hos portalen - prøv igjen.',
+};
+let adminArkPortalKoblingPagar = false; // hindrer at to raske trykk/redigeringer kaller RPC-en samtidig for samme/ulik rad
+async function adminArkKobleChassisTilPortalHvisAktuelt(rad, chassis) {
+  if (!db || !rad._arkId) return { tilknyttet: false };
+  if (adminArkPortalKoblingPagar) { visToast(PORTAL_OPPTATT_TEKST, 'feil'); return { tilknyttet: true }; } // tilknyttet:true -> IKKE fall tilbake til vanlig oppretting mens noe annet pågår
+  adminArkPortalKoblingPagar = true;
+  try {
+    const { data, error } = await db.rpc('portal_koble_chassis_fra_losrad', { p_admin_ark_id: rad._arkId, p_chassis: chassis });
+    if (error) {
+      portalLoggFeil('Koble chassis til portal-bestilling feilet:', error);
+      visToast(portalFeilTekst(error), 'feil');
+      return { tilknyttet: true }; // usikkert utfall - ikke lag en ordre til på toppen av et mislykket forsøk
+    }
+    if (!data?.tilknyttet) return { tilknyttet: false };
+    const status = data.resultat?.status;
+    visToast(PORTAL_KOBLING_STATUS_TEKST[status] || 'Portal-bestillingen ble behandlet.', status === 'ny_ordre' || status === 'koblet' ? 'ok' : 'feil');
+    return { tilknyttet: true };
+  } finally {
+    adminArkPortalKoblingPagar = false;
+  }
+}
+
 // Time bekreftet skrives inn som fri tekst "DD.MM - HH:MM" (tiden er valgfri), med et
 // valgfritt STED til slutt (f.eks. "21.08 - 11:30 Skien") - biltilsyn kan være ulike
 // steder. Året hentes automatisk fra året arket står på, siden det uansett er året
@@ -1542,9 +1580,16 @@ function renderAdminArk(scrollTilBunn) {
         // feltet helt (den betingede renderAdminArk() under kjører kun når et NYTT
         // chassisnummer settes, ikke når et gammelt fjernes) - funnet 2026-10-22.
         cell.getRow().reformat();
-        // Løs rad (ingen ordre ennå) som nettopp fikk et chassis-nr - oppretter automatisk
-        // en ny ordre ("På vei") for den, se adminArkOpprettOrdreForChassis().
-        if (verdi && !rad._erOrdre) { adminArkOpprettOrdreForChassis(rad, verdi); renderAdminArk(); }
+        // Løs rad (ingen ordre ennå) som nettopp fikk et chassis-nr - oppretter automatisk en ny
+        // ordre ("På vei") for den. Sjekker FØRST om raden er tilknyttet en portal-bestilling
+        // (s90-20261101-1, se adminArkKobleChassisTilPortalHvisAktuelt()); er den IKKE det (det
+        // vanlige), faller den tilbake til den opprinnelige, uendrede veien.
+        if (verdi && !rad._erOrdre) {
+          adminArkKobleChassisTilPortalHvisAktuelt(rad, verdi).then(({ tilknyttet }) => {
+            if (!tilknyttet) adminArkOpprettOrdreForChassis(rad, verdi);
+            renderAdminArk();
+          });
+        }
       });
   });
 
