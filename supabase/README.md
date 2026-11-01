@@ -236,6 +236,16 @@ Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandle
    status-synk-stoppen i punkt 6 som styrer det, uberørt av denne funksjonen). Testet i rullet-tilbake transaksjoner: 21/21 nye sjekker (`supabase/tester/portal_koble_chassis_fra_losrad_TEST_body.sql`)
    og hele den opprinnelige 62-punkts regresjonstesten for `portal_koble_bestilling` på nytt (62/62, 0 feil - v6 er bevist uendret for alt annet enn den nye kapasiteten). Kjørt mot produksjon
    2026-11-01 etter Henriks eksplisitte ja. Rollback: `supabase/rollback-referanser/portal_koble_chassis_fra_losrad_ROLLBACK.sql`.
+   **Rettet etter uavhengig gjennomgang (portal-økta, 2026-11-01)** - ikke fjern: `adminArkKobleChassisTilPortalHvisAktuelt` har ingen busy-sperre (en delt boolean ville blokkert HELT VANLIGE rader
+   ved f.eks. lim inn av flere chassisnumre samtidig - SQL-funksjonen har sin egen advisory-lock-idempotens); enhver USIKKER feil (nettverk, tidsavbrudd, funksjonen finnes ikke) gir `{tilknyttet:false}`
+   og faller tilbake til vanlig oppretting (riktig for det store flertallet av rader, som ikke er portal-tilknyttet); en KJENT forretningsfeil fra wrapperen selv (`UGYLDIG_INPUT: chassis`, `KUN_ADMIN` -
+   kastet ETTER at raden er bekreftet portal-tilknyttet) gir i stedet `{tilknyttet:true}` og en tydelig advarsel, slik at fallback aldri lager en ikke-koblet ordre med et nummer databasen nettopp avviste
+   uten at noen fikk vite det. Chassis normaliseres fullt i `cellEdited` (mellomrom/bindestrek fjernet, ikke bare store bokstaver) - ellers kunne `admin_ark.chassis_nr` (rå tekst) og `ordrer.chassis`
+   (normalisert av SQL-funksjonen) bli to ulike strenger som aldri matcher via `samsvarerChassis()`. «Koblet»-toasten (chassis fantes alt på en aktiv ordre) vises bevisst IKKE grønn: ordren er ikke
+   endret og forhandleren får ikke status, og teksten sier det rett ut (Henriks valg, spurt direkte - alternativet var å stemple `portal_bestilling_id` på den eksisterende ordren, avslått pga. risikoen
+   for at Bekreft da kjører automatikk på en ordre som kan være i arbeid). **Kjent, bevisst valgt:** mister klienten SVARET fra en vellykket kobling (nettfeil rett etter at databasen har opprettet
+   portal-ordren), faller den tilbake til å lage en VANLIG, ikke-koblet ordre - i sjeldne tilfeller kan det da finnes to ordre for samme bil (én portal-koblet, én ikke). Vurdert mot alternativet (ingen
+   ordre i det hele tatt ved enhver usikker feil, som rammer alle vanlige rader) og bevisst latt være endret.
 
 ## Prislås (s09-023/s05-003, 2026-10-30/31)
 

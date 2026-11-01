@@ -514,7 +514,18 @@ const PORTAL_KOBLING_STATUS_TEKST = {
   venter_modell: 'Modellen fra portal-bestillingen mangler en oversettelse - ingen ordre opprettet.',
   admin_ark: 'Fortsatt ingen chassis.nr registrert hos portalen - prøv igjen.',
 };
-const PORTAL_KOBLING_OK_STATUSER = new Set(['ny_ordre', 'koblet', 'bekreftet']);
+// "koblet" (chassis fantes alt på en aktiv ordre) er BEVISST ikke i denne lista (F05, funnet
+// 2026-11-01): ordren er ikke endret og forhandleren får ikke status - en grønn "ok"-toast ville
+// motsagt teksten som nettopp advarte om akkurat det.
+const PORTAL_KOBLING_OK_STATUSER = new Set(['ny_ordre', 'bekreftet']);
+// Kjente FORRETNINGSFEIL fra selve wrapperen (kastet ETTER at raden er bekreftet portal-
+// tilknyttet - se portal_koble_chassis_fra_losrad): disse skal IKKE falle tilbake til vanlig
+// oppretting (det ville laget en ikke-koblet ordre med et nummer databasen nettopp avviste,
+// uten at noen fikk vite det - F08, funnet av portal-økta 2026-11-01), de skal stoppe og si fra.
+const PORTAL_KOBLING_FORRETNINGSFEIL_TEKST = {
+  'UGYLDIG_INPUT: chassis': 'Chassis.nr må være 17 tegn, A-Z og 0-9, uten I, O og Q. Ingen ordre er laget - rett nummeret og prøv igjen.',
+  KUN_ADMIN: 'Du må være logget inn som administrator for å koble denne raden til portalen. Logg inn på nytt. Ingen ordre er laget.',
+};
 // Ingen busy-sperre her (fjernet 2026-11-01 etter funn fra portal-økta): i motsetning til
 // Bekreft/Avvis (ett brukerinitiert trykk om gangen) kan cellEdited fyres raskt for MANGE
 // ULIKE rader samtidig (f.eks. lim inn flere chassisnumre over hverandre). En delt
@@ -529,13 +540,22 @@ async function adminArkKobleChassisTilPortalHvisAktuelt(rad, chassis) {
     error = e;
   }
   if (error) {
-    // Usikkert utfall (nettverksfeil/tidsavbrudd/RPC-en finnes ikke lenger/KUN_ADMIN etc.) -
-    // vi vet IKKE om raden faktisk er portal-tilknyttet. tilknyttet:false lar den vanlige,
-    // uendrede oppretting-veien kjøre i stedet: for det store flertallet av Admin-ark-rader
-    // (ikke portal-tilknyttet) er det riktig oppførsel. I det sjeldne tilfellet raden FAKTISK
-    // var portal-tilknyttet, lages en vanlig (ikke-koblet) ordre i stedet for ingen ordre - det
-    // er et langt mindre problem enn at en helt vanlig chassis-inntasting plutselig ikke gir
-    // noen ordre i det hele tatt.
+    const melding = String(error?.message || '');
+    const forretningsfeil = Object.keys(PORTAL_KOBLING_FORRETNINGSFEIL_TEKST).find(k => melding.includes(k));
+    if (forretningsfeil) {
+      // Raden ER bekreftet portal-tilknyttet (wrapperen fant den FØR den kastet denne feilen) -
+      // ikke la fallback-en lage en ikke-koblet ordre på toppen av et kjent, rettbart problem.
+      portalLoggFeil('Koble chassis til portal-bestilling avvist:', error);
+      visToast(PORTAL_KOBLING_FORRETNINGSFEIL_TEKST[forretningsfeil], 'feil');
+      return { tilknyttet: true };
+    }
+    // Usikkert utfall (nettverksfeil/tidsavbrudd/RPC-en finnes ikke lenger etc.) - vi vet IKKE
+    // om raden faktisk er portal-tilknyttet. tilknyttet:false lar den vanlige, uendrede
+    // oppretting-veien kjøre i stedet: for det store flertallet av Admin-ark-rader (ikke
+    // portal-tilknyttet) er det riktig oppførsel. I det sjeldne tilfellet raden FAKTISK var
+    // portal-tilknyttet, lages en vanlig (ikke-koblet) ordre i stedet for ingen ordre - det er
+    // et langt mindre problem enn at en helt vanlig chassis-inntasting plutselig ikke gir noen
+    // ordre i det hele tatt.
     portalLoggFeil('Koble chassis til portal-bestilling feilet (fortsetter som vanlig rad):', error);
     return { tilknyttet: false };
   }
