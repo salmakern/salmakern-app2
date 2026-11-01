@@ -221,6 +221,21 @@ Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandle
    tester, bygget og adversarielt verifisert via en workflow - fant og rettet ett reelt hull der den falske Supabase-klienten ikke skilte mellom ulike `contactId`). Kjent, akseptert avrundingsforskjell mot
    portalen (inntil ca. 1 kr per linje - portalen runder variant+tillegg én gang, Fiken runder per linje). **Portalen har ikke begynt å sende `linjer` ennå** (bygget og bekreftet 2026-10-31, venter på at de
    ruller det ut). Deployet: commits `57a9de2`, `d1cb89f`.
+8. **Koble SERIENUMMER/BESTILLINGSNR til portalen når chassis.nr blir kjent** (s90-20261101-1, Henrik 2026-11-01: «når vi får chassis.nr på bestillingen, lag en ordre på vei og gi den status i
+   portalen», `20261101000000_portal_koble_chassis_fra_losrad.sql`): før punkt 7 i denne listen fantes, ble en SERIENUMMER/BESTILLINGSNR-bestilling bare en løs rad i Admin-ark uten ordre og uten
+   `portal_bestilling_id` - ingen status gikk noensinne til portalen. **v6 av `portal_koble_bestilling`**: ÉN linje endret - `admin_ark`-grenen i idempotens-sjekken (4a) respekterer nå `kjor_pa_nytt`
+   (akkurat som `venter_*`/`avklaring_*`-grenen rett under alt gjorde - dette ER den «G8-RPC-en» v5 sin kommentar varslet om). Resten av funksjonen er byte-identisk med v5. **Ny funksjon
+   `portal_koble_chassis_fra_losrad(p_admin_ark_id, p_chassis)`** (kallbar av `authenticated`, krever `rolle = 'admin'` - speiler `admin_ark`-tabellens egen RLS, en strengere grense enn
+   `portal_bekreft_ordre` som er åpen for alle ansatte): slår opp om admin_ark-raden har en tilknyttet `portal_bestillinger`-rad (via `admin_ark_id`, UANSETT status - bevisst intet filter på
+   `status = 'admin_ark'`, slik at to samtidige kall for samme rad aldri begge tror «ikke tilknyttet» og lager to ordre; `portal_koble_bestilling` sin egen advisory-lock-idempotens er det som
+   faktisk avgjør utfallet uansett hvilken status raden sto i). Finnes ingen tilknyttet bestilling (det store flertallet av Admin-ark-rader), returneres `{tilknyttet:false}` og ingenting skjer her.
+   Finnes den, bygges en ny nyttelast FRA DEN LAGREDE raden (`bestilling_id, nr, kontakt_id, orgnr, selger_navn, selger_epost, modell_slug, linjer`) med `ident_type=CHASSIS` og det nye
+   chassisnummeret, og `portal_koble_bestilling` kalles på nytt med `kjor_pa_nytt=true` - CHASSIS-grenen (4b) gjenbrukes dermed uendret, så ALLE kanttilfellene (annen forhandler, flere aktive
+   ordre, hentet-men-ikke-arkivert, allerede koblet, tak per forhandler, `linjer`→`ordrer.portal_linjer`) er allerede løst uten ny kode. `js/admin-ark.js` (`cellEdited` for `chassisNr`) kaller den
+   nye RPC-en FØR `adminArkOpprettOrdreForChassis()`; er raden ikke portal-tilknyttet, faller den tilbake til den uendrede, opprinnelige veien. Sender ingen e-post eller push selv (det er
+   status-synk-stoppen i punkt 6 som styrer det, uberørt av denne funksjonen). Testet i rullet-tilbake transaksjoner: 21/21 nye sjekker (`supabase/tester/portal_koble_chassis_fra_losrad_TEST_body.sql`)
+   og hele den opprinnelige 62-punkts regresjonstesten for `portal_koble_bestilling` på nytt (62/62, 0 feil - v6 er bevist uendret for alt annet enn den nye kapasiteten). Kjørt mot produksjon
+   2026-11-01 etter Henriks eksplisitte ja. Rollback: `supabase/rollback-referanser/portal_koble_chassis_fra_losrad_ROLLBACK.sql`.
 
 ## Prislås (s09-023/s05-003, 2026-10-30/31)
 
