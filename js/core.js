@@ -690,7 +690,12 @@ function dbToAdminArkRad(r) {
     forhandler:r.forhandler||'', kontaktperson:r.kontaktperson||'',
     serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:r.papirer||'', dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
     bestiltFrakt:!!r.bestilt_frakt, hentetVarslet:!!r.hentet_varslet, utstyr:r.utstyr||'',
-    merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', timeBekreftetSted:r.time_bekreftet_sted||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert };
+    merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', timeBekreftetSted:r.time_bekreftet_sted||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert,
+    // _db: raden FAKTISK finnes i databasen (brukt av admin-ark.js til å skille en ekte
+    // rad fra en tom reserverad som bare ligger i S.adminArk i minnet til noen skriver i
+    // den - se "Blank reserverad" i CLAUDE.md). Alt som kommer herfra (første innlasting
+    // OG Realtime) er per definisjon allerede lagret.
+    _db: true };
 }
 function dbToMote(r) {
   return { id:r.id, tittel:r.tittel||'', dato:r.dato||'', tid:r.tid||'', opprettetAv:r.opprettet_av||'', varslet:!!r.varslet, deltakerIder:r.deltaker_ider||[], type:r.type||'møte' };

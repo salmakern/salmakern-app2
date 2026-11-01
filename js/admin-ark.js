@@ -113,16 +113,28 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
   // eget kall, siden det er en insert uten noen eksisterende rad å kollidere med.
   const rekkefolgeOppdateringer = [];
   const nyeRader = [];
+  const nyeArkObjekter = [];
   rader.forEach((rad, idx) => {
     const posisjonsbasertVentendeTimer = ventendeTimerSnapshot[idx] ?? '';
     let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
     if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, rad.chassisNr) && !r.arkivert);
-    if (!ark) {
+    // Samme _db-sjekk som adminArkLagreFelter() (se der): en tom reserverad finnes i
+    // S.adminArk rent i minnet, aldri i databasen, til noen faktisk skriver i den. Uten
+    // dette ville en reserverad som flyttes (dra-og-slipp) FØR noe annet felt er skrevet i
+    // den, gått i rekkefolgeOppdateringer under - som bare sender {id, rekkefolge,
+    // ventende_timer} - og upsert-et en ufullstendig rad (tomme/NULL-kolonner for resten).
+    if (!ark || !ark._db) {
       if (!rad.chassisNr) return;
-      ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
-        forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
-        serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
-      S.adminArk = [...(S.adminArk||[]), ark];
+      if (!ark) {
+        ark = { id: 'ark_' + Date.now() + '_' + idx, chassisNr: rad.chassisNr, aar: adminArkAar, rekkefolge: idx,
+          forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
+          serienummer:'', mottatt:false, papirer:'', dokumenter:false, fraktselskap:'', bestiltFrakt:false, hentetVarslet:false, utstyr:'', merknader:'', flateHypotetisk:'', timeBekreftet:'', timeBekreftetTid:'', timeBekreftetSted:'', ventendeTimer: posisjonsbasertVentendeTimer, arkivert:false };
+        S.adminArk = [...(S.adminArk||[]), ark];
+      } else {
+        ark.rekkefolge = idx;
+        ark.ventendeTimer = posisjonsbasertVentendeTimer;
+      }
+      nyeArkObjekter.push(ark);
       nyeRader.push({ id: ark.id, chassis_nr: ark.chassisNr||'', aar: ark.aar, rekkefolge: idx,
         forhandler: ark.forhandler||'', kontaktperson: ark.kontaktperson||'',
         serienummer: ark.serienummer||'', mottatt: !!ark.mottatt, papirer: ark.papirer||'', dokumenter: !!ark.dokumenter,
@@ -152,6 +164,7 @@ async function adminArkPersisterRekkefolge(ventendeTimerSnapshot) {
   if (nyeRader.length) {
     const { error } = await db.from('admin_ark').upsert(nyeRader, {onConflict:'id'});
     if (error) console.error('Rekkefølge-lagring (nye rader) feilet:', error.message);
+    else nyeArkObjekter.forEach(a => { a._db = true; });
   }
 }
 if (!window._adminArkEnterLytterBundet) {
@@ -756,7 +769,16 @@ const ADMIN_ARK_FELT_KOLONNE = {
 async function adminArkLagreFelter(rad, endringer) {
   let ark = rad._arkId ? (S.adminArk||[]).find(r => r.id === rad._arkId) : null;
   if (!ark && rad.chassisNr) ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, rad.chassisNr) && !r.arkivert);
-  const erNyRad = !ark;
+  // VIKTIG: "finnes i S.adminArk" er IKKE det samme som "finnes i databasen". Tomme
+  // reserverader (adminArkNyTomRadObjekt/adminArkSikreTommeRader) legges inn i S.adminArk
+  // RENT I MINNET, for alltid å ha noen klikkbare tomme rader nederst i arket - de blir
+  // ALDRI lagret før noen faktisk skriver noe i dem. Uten _db-sjekken under ville den
+  // første skrivingen i en slik rad funnet "ark" i S.adminArk, trodd raden alt fantes, og
+  // sendt en UPDATE som stille traff 0 rader - ordren kunne bli opprettet, men raden i
+  // Admin-ark forsvant sporløst ved neste omlasting (bekreftet i produksjon 1.11, se
+  // Henger igjen s08-058). ark._db settes av dbToAdminArkRad() for alt som faktisk kommer
+  // fra databasen (første innlasting og Realtime).
+  const erNyRad = !ark || !ark._db;
   if (!ark) {
     ark = { id: 'ark_' + Date.now() + '_' + Math.random().toString(36).slice(2,7), chassisNr: rad.chassisNr||'', aar: adminArkAar, rekkefolge: adminArkNesteRekkefolge(),
       forhandler: rad._erOrdre ? '' : (rad.forhandler||''), kontaktperson: rad._erOrdre ? '' : (rad.kontaktperson||''),
@@ -780,6 +802,7 @@ async function adminArkLagreFelter(rad, endringer) {
       merknader: ark.merknader||'', flate_hypotetisk: ark.flateHypotetisk||'', time_bekreftet: ark.timeBekreftet||null,
       time_bekreftet_tid: ark.timeBekreftetTid||'', time_bekreftet_sted: ark.timeBekreftetSted||'', ventende_timer: ark.ventendeTimer||'', arkivert: ark.arkivert };
     ({ error } = await db.from('admin_ark').upsert(payload, {onConflict:'id'}));
+    if (!error) ark._db = true;
   } else {
     // Eksisterende rad: skriver KUN de faktisk endrede kolonnene i stedet for hele radens
     // nåværende (potensielt utdaterte) lokale tilstand - en full-rad-skriving her kunne
