@@ -44,3 +44,19 @@ describe('chassis.nr vises helt (ikke avkortet) i ordrekortet og ordredetaljen',
     expect(liste).toMatch(/white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:0;min-width:100%">\$\{esc\(o\.kunde\)\}/);
   });
 });
+
+// Henrik 2026-11-02 (skjermbilde av ordredetaljen): «Vedtak» skal stå ved siden av «Aktiv» i headeren i stedet for under,
+// så toppen blir lavere (mye ubrukt plass). Statusknappen står over, og PORTAL-merket under raden som før.
+describe('ordredetaljen: Vedtak står på samme rad som Aktiv', () => {
+  it('Aktiv-pillen og Vedtak-avkrysningen ligger i samme rad (egen flex-rad), mellom statusknappen og PORTAL-merket', () => {
+    const rad = detalj.match(/\$\{statusDropdown\(o\.id, o\.ordreStatus, 'font-size:13px[^\n]*\n([\s\S]*?)\$\{portalBadgeHTML\(o, true\)\}/);
+    expect(rad).not.toBeNull();
+    const blokk = rad[1];
+    expect(blokk).toMatch(/^\s*<div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:5px 12px">/);
+    expect(blokk).toContain('class="pill ${o.godkjent');
+    expect(blokk).toContain('toggleGodkjentBiltilsyn');
+    // pillen kommer før avkrysningen i samme rad, og raden lukkes før PORTAL-merket
+    expect(blokk.indexOf('class="pill')).toBeLessThan(blokk.indexOf('toggleGodkjentBiltilsyn'));
+    expect(blokk.trim().endsWith('</div>')).toBe(true);
+  });
+});

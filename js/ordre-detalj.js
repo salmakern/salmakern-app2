@@ -174,12 +174,14 @@ function buildOrdreDetail() {
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:6px 11px;border-radius:999px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
-        <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px;margin:0">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
+        <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:5px 12px">
+          <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px;margin:0">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
+          ${erAdmin ? `<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;white-space:nowrap">
+            Vedtak
+            <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
+          </label>` : ''}
+        </div>
         ${portalBadgeHTML(o, true)}
-        ${erAdmin ? `<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;white-space:nowrap">
-          Vedtak
-          <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
-        </label>` : ''}
       </div>
     </div>
   </div>

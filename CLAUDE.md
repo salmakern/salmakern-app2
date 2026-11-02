@@ -121,6 +121,8 @@ bruddet: er det ikke plass ved siden av, havner statusknappen UNDER nummeret. Ku
 så det avkortes med «…» uten å presse kortet bredere. Kontrollert på 393, 360 og 320 px (kortet er ca. 327 px på en smal
 iPhone). Vakt: `test/chassis-hele.test.js`. NB: `max-width:100px` på `.ordre-status-dropdown` under 480 px virker ikke (inline
 `max-width:100%` fra `statusDropdown()` vinner), og det er bevisst latt stå siden statusnavnet skal være lesbart.
+I ordredetaljens header (2026-11-02, Henrik: «veldig mye plass som ikke blir brukt») står «Vedtak» på SAMME rad som «Aktiv»-pillen (egen flex-rad
+under statusknappen, PORTAL-merket under raden); headeren gikk fra ca. 113 til 88 px. Vakt i `test/chassis-hele.test.js`.
 
 **Frakt-e-post med henteklar-dato (2026-11-02)**: velger man en dato i dialogen «Bestill frakt» (Admin-ark), sendes den med i
 bestillingen til fraktselskapet: «Bilen er klar for å bli hentet fra DD.MM.YYYY.» (HTML og ren tekst, mellom bilopplysningene og
