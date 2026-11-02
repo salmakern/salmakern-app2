@@ -646,6 +646,42 @@ function dbToOrdre(r) {
     portalLinjer:r.portal_linjer||null
   };
 }
+// Supabase Realtime utelater UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
+// UPDATE-hendelse (bekreftet med en ekte hendelse mot prosjektet 2026-11-02: endring av en
+// annen kolonne ga record uten det store jsonb-feltet). På ordrer gjelder det i praksis
+// endringer (123 av 162 rader), dokumenter, vegvesen_fingerprint, fiken_linjer, bilder_* og
+// signatur. Å bygge ordren på nytt med dbToOrdre(p.new) ga da tom dokumentliste/logg/bilder
+// i den lokale kopien (dokumenter "forsvant" eller "ble alle slettet" ved en enkelt
+// sletting, og en tom bildeliste/signatur kunne skrives tilbake av save()).
+// Kolonne -> ordre-egenskaper utledes av dbToOrdre selv (Proxy registrerer hvilke kolonner
+// den leser), så en ny kolonne i dbToOrdre følger automatisk med uten at en liste her
+// må holdes à jour.
+let _ordreKolonneKart = null;
+function ordreKolonneKart() {
+  if (_ordreKolonneKart) return _ordreKolonneKart;
+  const kolonner = new Set();
+  dbToOrdre(new Proxy({id:'_'}, { get:(m, k) => { if (typeof k === 'string' && k !== 'id') kolonner.add(k); return m[k]; } }));
+  const basis = dbToOrdre({id:'_'});
+  const kart = {};
+  kolonner.forEach(kol => {
+    let ny = null;
+    try { ny = dbToOrdre({id:'_', [kol]:{__prove:true}}); } catch(_) {}
+    kart[kol] = ny ? Object.keys(ny).filter(p => JSON.stringify(ny[p]) !== JSON.stringify(basis[p])) : [];
+  });
+  return (_ordreKolonneKart = kart);
+}
+// Bygger ordren fra en Realtime-rad, men beholder den lokale verdien for hver kolonne som
+// MANGLER i raden (nøkkelen finnes ikke - en kolonne som er med, selv som null/tom, brukes).
+function dbToOrdreFraRealtime(gammel, rad) {
+  const ny = dbToOrdre(rad);
+  if (!gammel) return ny;
+  const kart = ordreKolonneKart();
+  Object.keys(kart).forEach(kol => {
+    if (kol in rad) return;
+    kart[kol].forEach(p => { ny[p] = gammel[p]; });
+  });
+  return ny;
+}
 function ordreToDb(o) {
   return {
     id:o.id, regnr:o.regnr, kunde:o.kunde, eier:o.eier,
@@ -792,7 +828,7 @@ function subscribeRealtime() {
         if (ignorerRealtimeFor.has(p.new.id)) return;
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
         if(i>=0){
-          S.ordrer[i]=dbToOrdre(p.new);
+          S.ordrer[i]=dbToOrdreFraRealtime(S.ordrer[i], p.new);
           planleggRenderAll();
           if(activeOrdreId===p.new.id) buildOrdreDetail();
         }
@@ -922,11 +958,15 @@ function subscribeRealtime() {
       S.dagensPIN = row.dagens_pin || '1234';
       if (pinByttet && me) { visToast('Dagens PIN er byttet - logger ut'); doLogout(true); return; }
       S.gps = {lat: row.gps_lat||null, lng: row.gps_lng||null, radius: row.gps_radius||300};
-      S.utstyrMaler = row.utstyr_maler || [];
-      S.drivstoffSatser = row.drivstoff_satser || [];
-      S.beskjeder = row.beskjeder || [];
-      S.kontakter = row.kontakter || [];
-      S.standardtider = row.standardtider || {};
+      // En kolonne som mangler i hendelsen (uendret, eksternt lagret verdi - se
+      // dbToOrdreFraRealtime) beholder den lokale verdien i stedet for å bli tømt; ellers ble
+      // f.eks. kontaktlista (19 KB) tom for alle andre økter hver gang noen endret en
+      // drivstoffsats eller genererte en ny PIN.
+      if ('utstyr_maler' in row) S.utstyrMaler = row.utstyr_maler || [];
+      if ('drivstoff_satser' in row) S.drivstoffSatser = row.drivstoff_satser || [];
+      if ('beskjeder' in row) S.beskjeder = row.beskjeder || [];
+      if ('kontakter' in row) S.kontakter = row.kontakter || [];
+      if ('standardtider' in row) S.standardtider = row.standardtider || {};
       if (me) renderMer();
     })
     .subscribe(async (status, err) => {

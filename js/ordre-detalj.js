@@ -546,8 +546,23 @@ function toggleSkalHaBekreftet(id, bekreftet) {
 // Fakturalinjer (produktnummer + antall) som senere skal sendes til Fiken ved
 // fakturering - én ordre kan trenge flere linjer (f.eks. ombygging + ekstra utstyr),
 // akkurat som en vanlig faktura har flere linjer.
+// Sorterer fakturalinjer etter produktnummer (bedt om av Henrik 2026-11-02), både i
+// Fakturering-kortet og i fakturaen som sendes til Fiken. Rene tall sammenlignes som tall
+// (21 før 100), ellers som tekst; en linje uten produktnummer (nylagt, ennå ikke utfylt)
+// havner sist så den ikke hopper opp øverst mens man skriver. Returnerer en KOPI - selve
+// o.fikenLinjer-rekkefølgen (som databasen eier) røres ikke. Sorteringen er stabil, så
+// like produktnumre beholder rekkefølgen de ble lagt inn i.
+function sorterFikenLinjer(linjer) {
+  const nr = l => String(l?.produktnummer ?? '').trim();
+  return [...(linjer || [])].sort((a, b) => {
+    const na = nr(a), nb = nr(b);
+    if (!na || !nb) return !na && !nb ? 0 : !na ? 1 : -1;
+    if (/^\d+$/.test(na) && /^\d+$/.test(nb)) return Number(na) - Number(nb) || (na < nb ? -1 : na > nb ? 1 : 0);
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+}
 function fikenLinjerHTML(o) {
-  const linjer = o.fikenLinjer || [];
+  const linjer = sorterFikenLinjer(o.fikenLinjer);
   // Hver linje skal ha en stabil id fra databasen (backfillet i migrasjonen
   // 20261023120000) - denne lazy-tildelingen er kun et sikkerhetsnett for linjer som av
   // en eller annen grunn mangler den i akkurat denne nettleserfanens kopi.
@@ -684,7 +699,7 @@ async function kallFikenFakturer(id, ekstra) {
     const res = await edgeFetch('fiken-fakturer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordreId: id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: o.fikenLinjer, brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
+      body: JSON.stringify({ ordreId: id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: sorterFikenLinjer(o.fikenLinjer), brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
     });
     const data = await res.json();
     if (data.needsBekreftelse) {

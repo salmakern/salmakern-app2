@@ -68,6 +68,25 @@ enkeltrad-tabeller som `innstillinger`), fjern markeringen igjen etter 10 sek vi
 selv forårsaket. **Ny tabell som trenger sanntid → husk denne markeringen**, ellers er du
 tilbake til "siden refresher seg selv"-bugen.
 
+**Realtime utelater uendrede store kolonner (TOAST, bekreftet 2026-11-02)**: en UPDATE-hendelse
+har IKKE med kolonner som er lagret eksternt (store jsonb/text) og ikke ble endret av akkurat
+den oppdateringen (testet med en ekte hendelse mot prosjektet: record hadde `id,liten,tittel`,
+ikke det store feltet). På `ordrer` gjelder det `endringer` (123 av 162 rader), `dokumenter`,
+`vegvesen_fingerprint`, `fiken_linjer`, `bilder_*` og `signatur`; på `innstillinger` `kontakter`.
+Å bygge objektet på nytt fra `p.new` gir da tomme lister lokalt: dokumenter "forsvant", sletting av
+ett dokument "tok alle", og `save()` kunne skrive en tom bildeliste/signatur tilbake. Derfor bruker
+ordre-handleren `dbToOrdreFraRealtime(gammel, p.new)` (beholder lokal verdi for kolonner som
+MANGLER i raden; kolonne→egenskap utledes av `dbToOrdre` selv, så nye kolonner følger med), og
+innstillinger-handleren sjekker `'kolonne' in row` før den overskriver. **Ny Realtime-handler som
+erstatter et helt objekt fra `p.new` → bruk samme mønster.** Vakt: `test/realtime-manglende-felt.test.js`.
+
+**Vegvesen-dokumentnavn (2026-11-02)**: filnavnet er `<type>-<chassis eller flåtenummer>.pdf`, og
+flåtenummeret er et fritt redigerbart navn. Lagringen erstatter bare en linje med SAMME navn, så
+`vegvesenFjernAndreVersjonerAvType()` fjerner andre versjoner av samme type med et annet navn når et
+nytt dokument lagres (ellers ble det dobbelt opp ved omdøping/flytting inn og ut av flåte). Filen i
+Storage slettes bare hvis ingen annen ordre peker på den. «Skriv ut» velger nyeste per type.
+Vakt: `test/vegvesen-utdaterte-versjoner.test.js`.
+
 **Chassis-sammenligning**: bruk alltid `samsvarerChassis(a, b)` (case-uavhengig + trim), ikke
 `===` direkte - chassisnummer kan skrives inn med ulik store/små bokstaver flere steder i
 appen (Admin-ark, ordre, flåte).

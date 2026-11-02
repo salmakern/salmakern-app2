@@ -1273,10 +1273,49 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   } else {
     logChange(o, 'Generert dokument: ' + filnavn);
   }
+  await vegvesenFjernAndreVersjonerAvType([ordreId], filnavn);
   planleggLocalSpeiling();
   const listEl = document.getElementById('dokumenterListe_' + ordreId);
   if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
   return true;
+}
+
+// Et Vegvesen-dokument heter "<type>-<chassis eller flåtenummer>.pdf", og nøkkelen kan endre
+// seg: flåtenummeret er et fritt redigerbart navn, og en bil kan flyttes inn i/ut av en flåte.
+// Lagringen erstatter bare en linje med SAMME navn, så et nytt navn ga et ekstra sett ved
+// siden av det gamle (reell hendelse 2026-11-02: flåte 26 omdøpt til 25 ga både "-26" og
+// "-25" på alle fire ordrene, og "Skriv ut" tok første treff = det gamle settet). Kalles etter
+// at et nytt dokument er lagret: fjerner andre linjer av SAMME type med et annet navn fra
+// disse ordrene. Filen i Storage slettes bare hvis ingen annen ordre (utenfor ordreIder, f.eks.
+// en bil som er flyttet ut av flåten) fortsatt peker på den. Feil logges, avbryter ikke -
+// det nye dokumentet er allerede trygt lagret.
+async function vegvesenFjernAndreVersjonerAvType(ordreIder, filnavn) {
+  const prefiks = VEGVESEN_DOKUMENTTYPER.find(p => filnavn.startsWith(p));
+  if (!prefiks || !db) return;
+  const utdaterte = [];
+  for (const id of ordreIder) {
+    const o = S.ordrer.find(x => x.id === id); if (!o) continue;
+    (o.dokumenter || []).filter(d => d.navn !== filnavn && d.navn.startsWith(prefiks)).forEach(dok => utdaterte.push({ o, dok }));
+  }
+  if (!utdaterte.length) return;
+  const urlFeilet = new Set();
+  const urlFjernet = new Set();
+  for (const { o, dok } of utdaterte) {
+    const { data, error } = await db.rpc('oppdater_ordre_dokument', { p_ordre_id: o.id, p_navn: dok.navn, p_dokument: null });
+    if (error) { console.error('Kunne ikke fjerne utdatert versjon av ' + dok.navn + ':', error.message); if (dok.url) urlFeilet.add(dok.url); continue; }
+    o.dokumenter = data?.dokumenter ?? o.dokumenter;
+    if (dok.url) urlFjernet.add(dok.url);
+    logChange(o, 'Fjernet utdatert versjon av dokument (nytt filnavn): ' + dok.navn);
+  }
+  for (const url of urlFjernet) {
+    if (urlFeilet.has(url)) continue;
+    const brukesAvAndre = S.ordrer.some(x => !ordreIder.includes(x.id) && (x.dokumenter || []).some(d => d.url === url));
+    if (brukesAvAndre) continue;
+    const sti = url.split('/ordre-dokumenter/')[1];
+    if (!sti) continue;
+    const { error } = await db.storage.from('ordre-dokumenter').remove([sti]);
+    if (error) console.error('Kunne ikke slette utdatert fil ' + sti + ':', error.message);
+  }
 }
 
 // Alle genererte dokumentnavn følger mønsteret "<Dokumenttype>-<chassis>.pdf" - eller
@@ -1353,6 +1392,7 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
       if (sletteFeil) console.error('Kunne ikke slette gammel versjon (flåte) av ' + filnavn + ':', sletteFeil.message);
     }
   }
+  await vegvesenFjernAndreVersjonerAvType(ordreIder, filnavn);
   planleggLocalSpeiling();
   oppdaterte.forEach(o => {
     const listEl = document.getElementById('dokumenterListe_' + o.id);
@@ -1630,7 +1670,10 @@ async function vegvesenSkrivUt(ordreId) {
   const kontekst = vegvesenFlateKontext(o);
   const kildeDok = (kontekst ? kontekst.primaer : o).dokumenter || [];
   const REKKEFOLGE = ['Egenerklæring-', 'Vektfordeling-', 'Fabrikantattest-', 'Melding om registrering-', 'Kjøretøyliste-'];
-  const relevante = REKKEFOLGE.map(p => kildeDok.find(d => d.navn.startsWith(p))).filter(Boolean);
+  // Nyeste per type (ikke første treff): har en ordre to sett (f.eks. etter at flåtenummeret
+  // ble endret, før opprydding) skal det siste genererte skrives ut, ikke det eldste.
+  const nyeste = p => kildeDok.filter(d => d.navn.startsWith(p)).sort((a, b) => String(b.dato || '').localeCompare(String(a.dato || '')))[0];
+  const relevante = REKKEFOLGE.map(nyeste).filter(Boolean);
   if (!relevante.length) { visToast('Ingen Vegvesen-dokumenter å skrive ut ennå'); return; }
 
   const vindu = window.open('', '_blank');
