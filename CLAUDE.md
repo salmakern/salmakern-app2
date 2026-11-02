@@ -68,17 +68,23 @@ enkeltrad-tabeller som `innstillinger`), fjern markeringen igjen etter 10 sek vi
 selv forårsaket. **Ny tabell som trenger sanntid → husk denne markeringen**, ellers er du
 tilbake til "siden refresher seg selv"-bugen.
 
-**Realtime utelater uendrede store kolonner (TOAST, bekreftet 2026-11-02)**: en UPDATE-hendelse
-har IKKE med kolonner som er lagret eksternt (store jsonb/text) og ikke ble endret av akkurat
-den oppdateringen (testet med en ekte hendelse mot prosjektet: record hadde `id,liten,tittel`,
-ikke det store feltet). På `ordrer` gjelder det `endringer` (123 av 162 rader), `dokumenter`,
-`vegvesen_fingerprint`, `fiken_linjer`, `bilder_*` og `signatur`; på `innstillinger` `kontakter`.
-Å bygge objektet på nytt fra `p.new` gir da tomme lister lokalt: dokumenter "forsvant", sletting av
-ett dokument "tok alle", og `save()` kunne skrive en tom bildeliste/signatur tilbake. Derfor bruker
-ordre-handleren `dbToOrdreFraRealtime(gammel, p.new)` (beholder lokal verdi for kolonner som
-MANGLER i raden; kolonne→egenskap utledes av `dbToOrdre` selv, så nye kolonner følger med), og
-innstillinger-handleren sjekker `'kolonne' in row` før den overskriver. **Ny Realtime-handler som
-erstatter et helt objekt fra `p.new` → bruk samme mønster.** Vakt: `test/realtime-manglende-felt.test.js`.
+**Realtime utelater STORE uendrede kolonner (TOAST, målt 2026-11-02)**: en UPDATE-hendelse har IKKE
+med en stor, eksternt lagret kolonne som ikke ble endret av akkurat den oppdateringen. Målt mot ekte
+`ordrer` med en TEST-ordre (urelatert kolonne endret): en 160 KB `bilder_levering` manglet (69 av 70
+felter), mens små eksterne kolonner (`endringer` og `dokumenter`, under ca. 2 KB) alltid kom med.
+På en test-tabell (12,8 KB, med og uten RLS) manglet feltet også. I praksis kan det altså mangle:
+`bilder_*` og `signatur` på ordrer med bilder/signatur (5/2/5 ekte rader 2026-11-02), og
+`innstillinger.kontakter` (19 KB). Å bygge objektet på nytt fra `p.new` ga da en tom bildeliste/
+signatur lokalt, og `save()` (som fortsatt skriver `bilder_*`/`signatur` fra den lokale kopien)
+kunne skrive det tomme tilbake til databasen. Derfor bruker ordre-handleren
+`dbToOrdreFraRealtime(gammel, p.new)` (beholder lokal verdi for kolonner som MANGLER i raden;
+kolonne→egenskap utledes av `dbToOrdre` selv, så nye kolonner følger med), og innstillinger-
+handleren sjekker `'kolonne' in row` før den overskriver. **Ny Realtime-handler som erstatter et
+helt objekt fra `p.new` → bruk samme mønster.** Vakt: `test/realtime-manglende-felt.test.js`.
+**Dette forklarer IKKE meldingene om at Vegvesen-dokumenter «forsvinner» eller at sletting «tar
+alle»**: `dokumenter` kom med i alle målinger, og sletting i den åpne appen (to flåteordrer, 14 s
+observert) fjernet bare det valgte dokumentet. Årsaken til de meldingene er ikke funnet; be om
+konkrete steg/skjermbilde før du jager den videre.
 
 **Vegvesen-dokumentnavn (2026-11-02)**: filnavnet er `<type>-<chassis eller flåtenummer>.pdf`, og
 flåtenummeret er et fritt redigerbart navn. Lagringen erstatter bare en linje med SAMME navn, så

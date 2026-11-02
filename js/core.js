@@ -646,13 +646,15 @@ function dbToOrdre(r) {
     portalLinjer:r.portal_linjer||null
   };
 }
-// Supabase Realtime utelater UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
-// UPDATE-hendelse (bekreftet med en ekte hendelse mot prosjektet 2026-11-02: endring av en
-// annen kolonne ga record uten det store jsonb-feltet). På ordrer gjelder det i praksis
-// endringer (123 av 162 rader), dokumenter, vegvesen_fingerprint, fiken_linjer, bilder_* og
-// signatur. Å bygge ordren på nytt med dbToOrdre(p.new) ga da tom dokumentliste/logg/bilder
-// i den lokale kopien (dokumenter "forsvant" eller "ble alle slettet" ved en enkelt
-// sletting, og en tom bildeliste/signatur kunne skrives tilbake av save()).
+// Supabase Realtime utelater STORE, UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
+// UPDATE-hendelse. Målt mot ekte `ordrer` 2026-11-02 (TEST-ordre, urelatert kolonne endret):
+// en 160 KB `bilder_levering` manglet i hendelsen (69 av 70 felter), mens små eksterne
+// kolonner (`endringer` og `dokumenter`, under ca. 2 KB) alltid kom med. Det som kan mangle i
+// praksis er derfor bilder_* og signatur på ordrer med bilder/signatur. Å bygge ordren på
+// nytt med dbToOrdre(p.new) ga da en tom bildeliste/signatur i den lokale kopien, og en
+// senere save() (som fortsatt skriver bilder_*/signatur fra den lokale kopien) kunne skrive
+// det tomme tilbake til databasen. NB: dette forklarer IKKE at Vegvesen-dokumenter
+// "forsvinner" - `dokumenter` kom med i alle målinger.
 // Kolonne -> ordre-egenskaper utledes av dbToOrdre selv (Proxy registrerer hvilke kolonner
 // den leser), så en ny kolonne i dbToOrdre følger automatisk med uten at en liste her
 // må holdes à jour.

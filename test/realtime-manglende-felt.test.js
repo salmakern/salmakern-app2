@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import vm from 'node:vm';
 
-// Supabase Realtime utelater UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
-// UPDATE-hendelse (bekreftet mot det ekte prosjektet 2026-11-02). På ordrer gjelder det
-// endringer, dokumenter, vegvesen_fingerprint, fiken_linjer, bilder_* og signatur. Uten
-// dbToOrdreFraRealtime() ble dokumentlista tom lokalt etter en helt urelatert oppdatering
-// (dokumenter "forsvant", sletting av ett "tok alle"), og en tom bildeliste/signatur kunne
-// skrives tilbake av save().
+// Supabase Realtime utelater STORE, UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
+// UPDATE-hendelse. Målt mot ekte `ordrer` 2026-11-02 (TEST-ordre): en 160 KB `bilder_levering`
+// manglet, mens små eksterne kolonner (`endringer`, `dokumenter`) kom med. Uten
+// dbToOrdreFraRealtime() ble bildelisten/signaturen tom lokalt etter en urelatert oppdatering,
+// og save() kunne skrive det tomme tilbake til databasen. Testene under bruker de ekte
+// kolonnenavnene for å vise mekanismen (inkludert bilder og signatur); de påstår ikke at
+// dokumentlista mangler i hendelser - det ble IKKE funnet.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const coreKode = readFileSync(path.resolve(__dirname, '../js/core.js'), 'utf8').replace(/\r\n/g, '\n');
