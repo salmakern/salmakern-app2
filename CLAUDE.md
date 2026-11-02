@@ -363,7 +363,17 @@ og kan sende en forespørsel til opptil 3 av dem. Data og utsending ligger i For
   for `max-width: 1120px` (litt tettere meny) og strammere mobilregel (`720px`); målt etterpå:
   én rad fra 900px og opp, 800px lavere enn før, mobil ca. +7px mot før. Husk å måle header-
   høyden (`.site-header` offsetHeight) ved 375/800/1024/1280 hvis menyen endres igjen. `site.css`
-  er nå `?v=12` på alle sider (bumpet 2026-10-31: rulleteksten på forsiden fikk fullt merke + modellnavn og 53s i stedet for 42s; modellsidenes h1 (`.page-hero-dark h1`) skalerer ned under ca. 400px så lange ord som GELÄNDEWAGEN ikke går utenfor skjermen), `model-sync.js` `?v=6` og `model-list-sync.js` `?v=7`.
+  er nå `?v=13` på alle sider (bumpet 2026-11-02: stiler for den roterende heroen; 2026-10-31: rulleteksten på forsiden fikk fullt merke + modellnavn og 53s i stedet for 42s; modellsidenes h1 (`.page-hero-dark h1`) skalerer ned under ca. 400px så lange ord som GELÄNDEWAGEN ikke går utenfor skjermen), `model-sync.js` `?v=6`, `model-list-sync.js` `?v=7` og `hero-rotasjon.js` `?v=1`.
+- **Roterende hero på forsiden (2026-11-02, `hero-rotasjon.js`)**: viser profilbildet til hver modell (hentet live fra
+  `GET /api/public/models`, kun modeller med `imageUrl`: 11 av 14), alle i NØYAKTIG samme ramme (`.hero-media` er
+  `position:absolute; inset:0; object-fit:cover`, så størrelsen er lik uansett bilde; kontrollert: alle 11 målte
+  1009x660 på desktop og 375x660 på mobil). Kryssovergang 1,5 s, 6 s per bilde, en etikett nede til høyre
+  (`.hero-modell`) med modellnavn som lenker til modellsiden. Originalbildene er opptil 4 MB PNG, så bildene hentes via
+  **portalens bildeoptimalisering** (`/_next/image?url=<bilde>&w=828|1200|1920&q=75`, 46-275 KB WebP); bare neste bilde
+  forhåndslastes. Det statiske `hero-bil.jpg` i HTML-en vises først og er fallback: svikter API-et, er det under 2
+  bilder, eller har besøkende `prefers-reduced-motion`, skjer ingenting (siden er som før). Skriptet har en egen kopi av
+  `KNOWN_PAGES` (hold lik `model-list-sync.js`). Lokal testing: API-et gir CORS-feil fra localhost (se under), så test ved
+  å stubbe `window.fetch` for `/api/public/models` med den ekte lista og kjøre skriptet på nytt i siden.
 - **Teste lokalt**: portalens API tillater bare `https://salmaker.as` som origin, så en side
   servert fra localhost får CORS-feil. Løsning brukt: en liten lokal proxy som serverer
   `nettside/`, sender `/api/*` videre til portalen på localhost:3000 med `Origin: https://salmaker.as`
