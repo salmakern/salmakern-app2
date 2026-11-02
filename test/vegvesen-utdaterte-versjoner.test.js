@@ -20,6 +20,7 @@ function nyttMiljo(ordrer, { rpcFeilForNavn = null } = {}) {
     visToast: (m) => logg.toast.push(m),
     logChange: (o, t) => logg.logChange.push([o.id, t]),
     planleggLocalSpeiling: () => {},
+    dokLogg: () => {}, dokumentTapBevisst: () => {}, // diagnostikk i core.js
     dokumenterListeHTML: () => '',
     document: { getElementById: () => null },
     Blob,

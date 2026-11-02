@@ -426,8 +426,10 @@ async function loadFromSupabase() {
   const now = Date.now();
   const LOCAL_TTL = 15000; // ms — behold lokale rader inntil Supabase bekrefter dem
 
+  const prevAktiv = activeOrdreId ? prevOrdrer.find(o => String(o.id) === String(activeOrdreId)) : null;
   S.ordrer = (oR.data||[]).map(row => {
     const fresh = dbToOrdre(row);
+    if (prevAktiv && String(row.id) === String(activeOrdreId)) dokLogg('full_innlasting', {id:row.id, fra:(prevAktiv.dokumenter||[]).length, til:fresh.dokumenter.length});
     if (ignorerRealtimeFor.has(String(row.id))) {
       const prev = prevOrdrer.find(o=>String(o.id)===String(row.id));
       if (prev) fresh.ordreStatus = prev.ordreStatus;
@@ -684,6 +686,63 @@ function dbToOrdreFraRealtime(gammel, rad) {
   });
   return ny;
 }
+// ════════════════════════════════════════════════════
+// DIAGNOSTIKK: dokumentlista som krymper på SKJERMEN (2026-11-02)
+// ════════════════════════════════════════════════════
+// Meldt av de ansatte: genererte dokumenter "forsvinner", og å slette ett "tar alle" - men de
+// er tilbake etter F5, så databasen har dem (kun visningen i appen blir tom). Årsaken er IKKE
+// funnet (se CLAUDE.md: Realtime-utelatelse av `dokumenter` er målt og utelukket, og sletting
+// i en åpen app fjernet bare det valgte). Denne koden observerer derfor SYMPTOMET uten å
+// gjette på årsak: dokumenterListeHTML() (ordre-diverse.js) kaller dokumentKrympingSjekk() ved
+// hver tegning av lista. Krymper den med minst 2 uten at appen selv nettopp fjernet så mange
+// (dokumentTapBevisst), spør vi databasen om FASIT-antallet. Bare hvis databasen har FLERE enn
+// skjermen viser, sendes én melding til Sentry (ingen navn, URL-er eller chassis - kun
+// ordre-id, antall og de siste hendelsene i dokLogg under). Er databasen enig i krympingen
+// (en kollega slettet/genererte på nytt) skjer ingenting utover console.info.
+const DOK_LOGG_MAKS = 40;
+const dokLoggListe = [];
+function dokLogg(type, data) {
+  dokLoggListe.push({ t: new Date().toISOString().slice(11, 23), type, ...(data || {}) });
+  if (dokLoggListe.length > DOK_LOGG_MAKS) dokLoggListe.shift();
+}
+const dokSisteAntall = {};      // ordre-id -> antall dokumenter da lista sist ble tegnet
+const dokBevisstTap = {};       // ordre-id -> {til, maks}: appen fjerner selv inntil `maks` dokumenter før tidspunktet `til`
+const dokKrympingRapportert = {}; // ordre-id -> tidspunkt for siste rapport (maks én per minutt per ordre)
+function dokumentTapBevisst(ordreIder, maks, sekunder = 20) {
+  const til = Date.now() + sekunder * 1000;
+  (ordreIder || []).forEach(id => { dokBevisstTap[id] = { til, maks }; });
+}
+async function dokumentKrympingSjekk(o) {
+  try {
+    const n = (o.dokumenter || []).length;
+    const forrige = dokSisteAntall[o.id];
+    dokSisteAntall[o.id] = n;
+    if (forrige === undefined || forrige - n < 2) return;
+    const b = dokBevisstTap[o.id];
+    if (b && Date.now() < b.til && forrige - n <= b.maks) return;
+    if (Date.now() - (dokKrympingRapportert[o.id] || 0) < 60000) return;
+    dokKrympingRapportert[o.id] = Date.now();
+    if (!db) return;
+    const { data, error } = await db.from('ordrer').select('dokumenter').eq('id', o.id).maybeSingle();
+    if (error || !data) { console.warn('Dokumentliste krympet; kunne ikke bekrefte mot databasen:', error?.message); return; }
+    const iDatabasen = (data.dokumenter || []).length;
+    if (iDatabasen <= n) { console.info('Dokumentlista krympet (' + forrige + ' til ' + n + ') og databasen bekrefter det (' + iDatabasen + ').'); return; }
+    const detaljer = {
+      ordreId: o.id, antallForrige: forrige, antallPaaSkjerm: n, antallIDatabasen: iDatabasen,
+      objektUtskiftet: S.ordrer.find(x => x.id === o.id) !== o,
+      ignorertRealtime: ignorerRealtimeFor.has(o.id), aktivOrdre: activeOrdreId === o.id,
+      synlig: document.visibilityState, online: navigator.onLine, rolle: me?.rolle || null,
+      logg: [...dokLoggListe]
+    };
+    console.error('Dokumentlista ble tom/kortere på skjermen, men databasen har dem:', detaljer);
+    if (window.Sentry) {
+      window.Sentry.captureMessage('Dokumentliste krympet på skjermen, men databasen har dokumentene', {
+        level: 'error', tags: { omraade: 'dokumentliste' }, extra: detaljer,
+        fingerprint: ['dokumentliste-krympet-paa-skjermen']
+      });
+    }
+  } catch (e) { console.warn('dokumentKrympingSjekk feilet:', e); }
+}
 function ordreToDb(o) {
   return {
     id:o.id, regnr:o.regnr, kunde:o.kunde, eier:o.eier,
@@ -827,10 +886,13 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); planleggRenderAll(); }
       } else if (p.eventType==='UPDATE') {
-        if (ignorerRealtimeFor.has(p.new.id)) return;
+        if (ignorerRealtimeFor.has(p.new.id)) { if (activeOrdreId===p.new.id) dokLogg('rt_ignorert', {id:p.new.id}); return; }
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);
         if(i>=0){
+          const dokFra = (S.ordrer[i].dokumenter||[]).length;
           S.ordrer[i]=dbToOrdreFraRealtime(S.ordrer[i], p.new);
+          const dokTil = S.ordrer[i].dokumenter.length;
+          if (activeOrdreId===p.new.id || dokFra!==dokTil) dokLogg('rt_update', {id:p.new.id, fra:dokFra, til:dokTil, harDok:'dokumenter' in p.new});
           planleggRenderAll();
           if(activeOrdreId===p.new.id) buildOrdreDetail();
         }
@@ -972,6 +1034,7 @@ function subscribeRealtime() {
       if (me) renderMer();
     })
     .subscribe(async (status, err) => {
+      dokLogg('rt_status', {status});
       if (status === 'SUBSCRIBED') {
         prosesserOfflineKo(); // sanntidskanalen kom opp igjen - sterkt signal om at nettet er tilbake
         // Nullstiller IKKE backoff-nivået med en gang - kun etter at forbindelsen faktisk har
@@ -1059,6 +1122,7 @@ async function oppdaterApp() {
 // Full refresh skjer kun ved: første load, realtime-frakobling, og lang pause.
 
 document.addEventListener('visibilitychange', async () => {
+  dokLogg('synlighet', {tilstand: document.visibilityState});
   if (document.visibilityState === 'visible') {
     const pauseMs = Date.now() - sisteVarSynlig;
     if (me && pauseMs > 3 * 60 * 1000) await oppdaterApp(); // refresh bare etter >3 min pause
@@ -1075,6 +1139,7 @@ async function oppdaterAktivOrdre() {
     const {data,error} = await db.from('ordrer').select('*').eq('id', activeOrdreId).maybeSingle();
     if (!error && data) {
       const i = S.ordrer.findIndex(x=>x.id===activeOrdreId);
+      dokLogg('oppdater_aktiv', {id:activeOrdreId, fra:i>=0?(S.ordrer[i].dokumenter||[]).length:null, til:(data.dokumenter||[]).length});
       if (i>=0) S.ordrer[i] = dbToOrdre(data);
       else S.ordrer.push(dbToOrdre(data));
       buildOrdreDetail();

@@ -93,6 +93,23 @@ nytt dokument lagres (ellers ble det dobbelt opp ved omdøping/flytting inn og u
 Storage slettes bare hvis ingen annen ordre peker på den. «Skriv ut» velger nyeste per type.
 Vakt: `test/vegvesen-utdaterte-versjoner.test.js`.
 
+**Diagnostikk: dokumentlista som krymper på skjermen (2026-11-02, årsak IKKE funnet)**: de ansatte
+melder at dokumenter «forsvinner» eller at sletting «tar alle», men at de er tilbake etter F5 (altså
+intakt i databasen, bare visningen blir tom). Koden observerer symptomet i stedet for å gjette
+(`dokumentKrympingSjekk()` i `core.js`, kalt fra `dokumenterListeHTML()`): krymper lista med minst 2
+uten at appen selv fjernet så mange (`dokumentTapBevisst()`: `slettDokument` melder 1 per ordre,
+fjerning av utdaterte/genererte melder antallet), spørres databasen om fasit-antallet. **Bare hvis
+databasen har FLERE enn skjermen viser** sendes én Sentry-melding, «Dokumentliste krympet på
+skjermen, men databasen har dokumentene» (tag `omraade:dokumentliste`, maks én per minutt per ordre).
+Den inneholder kun ordre-id, antall (før/skjerm/database), `objektUtskiftet` (S.ordrer-objektet er byttet
+ut under visningen), `ignorertRealtime`, `aktivOrdre`, synlighet, online, rolle og `logg`: de siste ~40
+hendelsene fra `dokLogg()` (`rt_update` fra→til, `rt_ignorert`, `rt_status`, `full_innlasting`,
+`oppdater_aktiv`, `dok_lagre`, `dok_slett`, `synlighet`), ingen navn, URL-er eller chassis. Er databasen
+enig i krympingen (en kollega slettet) sendes ingenting. **Les Sentry for denne meldingen før du
+jager feilen videre**: loggen viser hva som skjedde rett før (f.eks. en forsinket `rt_update` med
+færre dokumenter, en `full_innlasting`, eller `objektUtskiftet: true`). Vakt:
+`test/dokument-krymping-diagnostikk.test.js`.
+
 **Chassis-sammenligning**: bruk alltid `samsvarerChassis(a, b)` (case-uavhengig + trim), ikke
 `===` direkte - chassisnummer kan skrives inn med ulik store/små bokstaver flere steder i
 appen (Admin-ark, ordre, flåte).

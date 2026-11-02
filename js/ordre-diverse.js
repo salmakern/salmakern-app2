@@ -1062,6 +1062,7 @@ function dokIkon(navn) {
 }
 function dokumenterListeHTML(o) {
   const dok = o.dokumenter||[];
+  dokumentKrympingSjekk(o); // diagnostikk, se core.js (DIAGNOSTIKK: dokumentlista som krymper på SKJERMEN)
   if (!dok.length) return '<div class="muted small">Ingen dokumenter lagt til</div>';
   // Kun admin kan slette dokumenter (bedt om av Henrik 2026-10-01 - godkjenner mistet denne).
   const kanSletteDok = me && me.rolle==='admin';
@@ -1154,6 +1155,7 @@ async function slettDokument(id, idx) {
   // ellers sitter søsken-ordrene igjen med ødelagte lenker når storage-filen slettes.
   const kontekst = vegvesenFlateKontext(o);
   const beroerte = kontekst ? kontekst.medlemmer.filter(m => (m.dokumenter||[]).some(d => d.navn===dok.navn && d.url===dok.url)) : [o];
+  dokumentTapBevisst(beroerte.map(m => m.id), 1); // ETT dokument skal forsvinne per ordre - mer enn det er et avvik (diagnostikk i core.js)
 
   if (db && dok.url) {
     const filnavn = dok.url.split('/ordre-dokumenter/')[1];
@@ -1171,6 +1173,7 @@ async function slettDokument(id, idx) {
     } else {
       m.dokumenter = m.dokumenter.filter(d => !(d.navn===dok.navn && d.url===dok.url));
     }
+    dokLogg('dok_slett', {id:m.id, antall:m.dokumenter.length});
     logChange(m, 'Slettet dokument: ' + dok.navn);
     const listEl = document.getElementById('dokumenterListe_'+m.id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(m);

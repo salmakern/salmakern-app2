@@ -1175,6 +1175,7 @@ async function vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o) {
   const malOrdreIder = kontekst ? kontekst.medlemmer.map(m => m.id) : [o.id];
   malOrdreIder.forEach(id => ignorerRealtimeFor.add(id));
   setTimeout(() => malOrdreIder.forEach(id => ignorerRealtimeFor.delete(id)), 10000);
+  dokumentTapBevisst(malOrdreIder, gamle.length, 60); // diagnostikk i core.js: alle genererte dokumenter fjernes med vilje her
 
   // Fjerning av hver dokumentlinje går nå via den atomiske oppdater_ordre_dokument()-
   // funksjonen (p_dokument=null = slett), én gang PER berørt ordre - samme radlås som
@@ -1257,6 +1258,7 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   if (dbError) { visToast('Kunne ikke lagre dokumentlisten for ' + filnavn + ': ' + dbError.message); return false; }
   const forrige = rpcData?.forrige || null;
   o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter || []), nyttDok];
+  dokLogg('dok_lagre', {id: ordreId, antall: o.dokumenter.length});
   if (forrige?.url) {
     const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
     // Feil her ble tidligere ikke sjekket i det hele tatt - en mislykket sletting (f.eks.
@@ -1298,6 +1300,7 @@ async function vegvesenFjernAndreVersjonerAvType(ordreIder, filnavn) {
     (o.dokumenter || []).filter(d => d.navn !== filnavn && d.navn.startsWith(prefiks)).forEach(dok => utdaterte.push({ o, dok }));
   }
   if (!utdaterte.length) return;
+  dokumentTapBevisst(ordreIder, utdaterte.length); // diagnostikk i core.js: disse fjernes med vilje
   const urlFeilet = new Set();
   const urlFjernet = new Set();
   for (const { o, dok } of utdaterte) {
@@ -1380,6 +1383,7 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
     }
     if (rpcData?.forrige && !forrige) forrige = rpcData.forrige;
     o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter || []), nyttDok];
+    dokLogg('dok_lagre', {id, antall: o.dokumenter.length});
     logChange(o, 'Generert dokument (flåte): ' + filnavn);
     oppdaterte.push(o);
   }
