@@ -104,6 +104,7 @@ function renderOrdreList() {
   const antallEl = document.getElementById('ordreListAntall');
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
+    try {
     const si = statusInfo(o.ordreStatus);
     const drivstoffTekst = drivstoffKundeprisTekst(o);
     return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
@@ -155,7 +156,21 @@ function renderOrdreList() {
         </div>
       </div>
     </div>`;
+    } catch (e) { return ordreKortFeilHTML(o, e); }
   }).join('') : `<div class="muted small" style="grid-column:1/-1">${sokTekst?'Ingen ordrer matcher søket':'Ingen aktive ordrer'}</div>`;
+}
+
+// Én ordre som ikke lar seg tegne (f.eks. uventet form på data) skal bare gi et lite feilkort for DEN ordren, aldri en
+// tom ordreliste for alle (2026-11-02: en ordre med tom vekter-kolonne fikk hele siden til å stoppe, se normaliserVekter()
+// i core.js). Feilen logges, og meldes til Sentry (bare ordre-id og feilmelding, ingen kundedata).
+const ordreKortFeilMeldt = new Set();
+function ordreKortFeilHTML(o, e) {
+  console.error('Kunne ikke tegne ordrekort for ' + (o && o.id) + ':', e);
+  if (window.Sentry && o && !ordreKortFeilMeldt.has(o.id)) {
+    ordreKortFeilMeldt.add(o.id);
+    try { window.Sentry.captureMessage('Ordrekort kunne ikke tegnes', { level: 'error', tags: { omraade: 'ordreliste' }, extra: { ordreId: o.id, feil: String(e && e.message || e).slice(0, 200) }, fingerprint: ['ordrekort-feilet'] }); } catch (_) {}
+  }
+  return `<div class="box" style="padding:14px 16px;border:1px solid #7f1d1d;border-radius:18px;color:#fca5a5;font-size:13px;min-width:0"><b>Ordren kan ikke vises i lista</b><div class="small muted" style="margin-top:4px;word-break:break-all">${esc((o && (o.chassis || o.regnr || o.id)) || '')}</div><div class="small" style="margin-top:6px">Noe er uventet i dataene. Si ifra til Henrik, så rettes det.</div></div>`;
 }
 
 // ════════════════════════════════════════════════════

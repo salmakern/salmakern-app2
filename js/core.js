@@ -601,8 +601,20 @@ async function loadFromSupabase() {
   } catch(e) { console.error('Feil ved henting av HMS-data:', e); }
 }
 
+// vekter kommer fra databasen som {} eller med manglende delfelt, ikke bare som et fullt objekt: en NY ordre
+// får kolonnens default '{}', fordi save() ikke lenger skriver vekter (s09-005, 2026-10-30; vekter eies av
+// de atomiske RPC-ene). Den gamle koden (`r.vekter||dv`) beholdt det tomme objektet, så tvangsflyt() kastet
+// «Cannot read properties of undefined (reading 'a')» og HELE Ordre-siden ble tom for alle da den første nye
+// ordren siden 30.10 ble opprettet (2026-11-02). Fyller nå inn manglende vektfelt (a/e/v) og beholder alt som finnes.
+const VEKT_FELT = ['totalvekt','vogntog','foraksel','bakaksel'];
+function normaliserVekter(v) {
+  const er = x => x && typeof x === 'object' && !Array.isArray(x);
+  const kilde = er(v) ? v : {};
+  const ut = { ...kilde };
+  VEKT_FELT.forEach(k => { ut[k] = { a:'', e:'', v:'', ...(er(kilde[k]) ? kilde[k] : {}) }; });
+  return ut;
+}
 function dbToOrdre(r) {
-  const dv = {totalvekt:{a:'',e:'',v:''},vogntog:{a:'',e:'',v:''},foraksel:{a:'',e:'',v:''},bakaksel:{a:'',e:'',v:''}};
   return {
     id:r.id, regnr:r.regnr, kunde:r.kunde||'', eier:r.eier||'',
     ombygging:r.ombygging||{nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false},
@@ -610,7 +622,7 @@ function dbToOrdre(r) {
     ankomstdato:r.ankomstdato||'', status:r.status||'aktiv',
     ordreStatus:r.ordre_status||'ikke_paabegynt',
     kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
-    vekter:r.vekter||dv, drivstoff:r.drivstoff||{totalpris:'',satsId:''},
+    vekter:normaliserVekter(r.vekter), drivstoff:r.drivstoff||{totalpris:'',satsId:''},
     utstyr:r.utstyr||{har:'',skalHa:'',hengerfeste:'ikke_hengerfeste',hengerfesteMontert:'ikke_montert',hengerfesteBestilt:'ikke_bestilt',skalHaBekreftet:false},
     bilderAnkomst:r.bilder_ankomst||[null,null,null,null,null,null],
     bilderLevering:r.bilder_levering||[null,null,null,null,null,null],

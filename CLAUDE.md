@@ -133,6 +133,13 @@ og `send-frakt-epost/index.ts` formaterer den med `datoVisning()` (bare nøyakti
 qoqpenbfdxeduylxirwk --use-api` (klienten uten funksjonen er ufarlig: ukjent felt ignoreres). Test ALDRI med en ekte mottaker:
 `test/frakt-epost.test.js` kjører hele funksjonen mot falsk Deno og falsk Resend.
 
+**Ordre.vekter kan komme tom fra databasen (2026-11-02, tom Ordre-side for alle)**: `ordrer.vekter` har kolonne-default `'{}'`, og `save()` skriver ikke vekter (s09-005: vekter eies av RPC-ene
+`oppdater_ordre_vekter_felt` m.fl.). Da den første NYE ordren siden 30.10 ble opprettet, kom den inn med `vekter = {}`, `dbToOrdre` beholdt det tomme objektet, `tvangsflyt()` leste `o.vekter.totalvekt.a` og
+kastet, og `renderOrdreList` stoppet midt i lista: «67 ordrer», men ingen kort, for alle brukere. Rettet i to lag: (1) `normaliserVekter()` i `core.js` fyller alltid inn totalvekt/vogntog/foraksel/bakaksel med a/e/v
+og beholder det som finnes (brukes av `dbToOrdre`; all kode kan fortsatt anta full struktur), og (2) hvert ordrekort i `renderOrdreList` bygges i try/catch (`ordreKortFeilHTML()`): en ordre som ikke lar seg tegne
+gir ET lite feilkort + logg + Sentry-melding (bare ordre-id og feilmelding), aldri en tom liste for alle. Vokter: `test/ordre-vekter-normalisering.test.js`. Lærdom: en ny kolonne/default i databasen er en
+datatilstand klienten må tåle, ikke bare en verdi appen selv skriver; og skriver du IKKE en kolonne fra `save()`, må lesesiden normalisere den.
+
 **PIN-innlogging**: ingen passord, kun 4-sifret PIN sjekket server-side via
 `logg_inn_med_pin`/`login_med_pin` (Postgres-funksjoner, se `supabase/migrations/`). PIN-er
 lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min
