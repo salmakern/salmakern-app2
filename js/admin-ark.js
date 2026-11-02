@@ -331,14 +331,15 @@ async function adminArkFraktBestill(chassisNr) {
   document.getElementById('kfh_datoLabel').textContent = erHenterSelv ? 'Klar for henting fra dato' : 'Henteklar dato (valgfritt)';
   document.getElementById('klarForHentingBeskrivelse').textContent = erHenterSelv
     ? 'Sender e-post til kontaktpersonen med denne datoen.'
-    : `Sender bestilling til ${rad.fraktselskap} (${fraktEpost})${kontaktEpost?`, med ${rad.kontaktperson} på kopi`:''}. Datoen brukes kun internt (vises på ordrekortet), ikke i selve bestillingen.`;
+    : `Sender bestilling til ${rad.fraktselskap} (${fraktEpost})${kontaktEpost?`, med ${rad.kontaktperson} på kopi`:''}. Velger du en dato, står den i bestillingen («Bilen er klar for å bli hentet fra …») og vises på ordrekortet.`;
   openModal('klarForHenting');
 }
 
 // Sender selve frakt-bestillingen/hentevarselet fra dialogen åpnet i adminArkFraktBestill()
 // over - dekker BÅDE "Hente selv" (krever dato, samme "klar_for_henting"-e-post som før)
-// OG ekte fraktselskap (dato valgfri, samme "bestilling"-e-post som før - datoen sendes
-// IKKE med i den, kun lagret internt, se adminArkSpeilBestiltFraktPaaOrdre()). Datoen er
+// OG ekte fraktselskap (dato valgfri, "bestilling"-e-posten). Fra 2026-11-02 sendes en valgt dato
+// MED i bestillingen til fraktselskapet ("Bilen er klar for å bli hentet fra DD.MM.YYYY", bedt om av
+// Henrik) i tillegg til å lagres på ordren, se adminArkSpeilBestiltFraktPaaOrdre(). Datoen er
 // ikke koblet mot o.datoKlarHenting/ordreStatus - det er en annen, mer omfattende
 // statusovergang med egne sideeffekter i endreStatus(), og denne dialogen sier ingenting
 // om at HELE ordren skal bytte status.
@@ -354,7 +355,7 @@ async function adminArkSendFraktBestilling() {
       visToast('Varsel om henting sendt til ' + ctx.kontaktperson, 'ok');
     } else {
       await adminArkKallFraktEpost({ type:'bestilling', fraktselskapEpost:ctx.fraktEpost, kontaktpersonEpost:ctx.kontaktEpost||undefined,
-        forhandler: ctx.forhandler, kontaktperson: ctx.kontaktperson, chassisNr, avsenderNavn: me?.navn });
+        forhandler: ctx.forhandler, kontaktperson: ctx.kontaktperson, chassisNr, dato: dato || undefined, avsenderNavn: me?.navn });
       visToast('Fraktbestilling sendt til ' + ctx.fraktselskap, 'ok');
     }
     closeModal('klarForHenting');

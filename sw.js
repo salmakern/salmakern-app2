@@ -35,7 +35,7 @@
 // v22 - s08-048 grunnlag: Bekreft av en portal-ordre kan fylle «Skal ha etter visning» og
 // fiken_linjer fra bestillingens produktlinjer (o.portalLinjer) - helt inert til
 // portal_koble_bestilling v5 og portal-bestilling faktisk sender feltet (2026-10-31)
-const CACHE = 'salmakern-v28';
+const CACHE = 'salmakern-v29';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

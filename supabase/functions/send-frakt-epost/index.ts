@@ -3,7 +3,8 @@
 // automatisk, siden dette går til ekte eksterne mottakere og feil data er vanskeligere å
 // rette opp enn en intern PDF:
 //   type: "bestilling"       - bestiller frakt hos fraktselskapet (forhandler/kontaktperson/
-//         chassis.nr i innholdet), kontaktpersonen på kopi.
+//         chassis.nr i innholdet, og "Bilen er klar for å bli hentet fra <dato>" når en
+//         henteklar-dato er valgt), kontaktpersonen på kopi.
 //   type: "hentet"           - varsler kontaktpersonen om at bilen er hentet (kun chassis.nr).
 //   type: "klar_for_henting" - varsler kontaktpersonen om at bilen er klar for å hentes,
 //         brukt når Fraktselskap er satt til "Hente selv" (kun chassis.nr).
@@ -158,6 +159,14 @@ function splittEposter(felt: string | undefined): string[] {
   return (felt || '').split(',').map(e => e.trim()).filter(Boolean)
 }
 
+// "dato" kommer som 'YYYY-MM-DD' fra <input type="date"> i admin-ark.js - formatert om til
+// 'DD.MM.YYYY' for visning (samme konvensjon som fmtDatoKort() i frontend). Alt som ikke har
+// nøyaktig dette formatet gir tom streng (og dermed ingen datolinje), så ingenting fra klienten
+// havner uskadelig-formatert i e-posten. Brukes av både "bestilling" og "klar_for_henting".
+function datoVisning(dato: unknown): string {
+  return typeof dato === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dato) ? dato.split('-').reverse().join('.') : ''
+}
+
 async function sendEpost(til: string, cc: string | undefined, emne: string, html: string, tekst: string) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY er ikke satt - kontakt Henrik for å fullføre oppsettet')
   const tilListe = splittEposter(til)
@@ -187,8 +196,13 @@ Deno.serve(async (req) => {
     const payload = JSON.parse(raw)
 
     if (payload.type === 'bestilling') {
-      const { fraktselskapEpost, kontaktpersonEpost, forhandler, kontaktperson, chassisNr, avsenderNavn } = payload
+      const { fraktselskapEpost, kontaktpersonEpost, forhandler, kontaktperson, chassisNr, dato, avsenderNavn } = payload
       if (!fraktselskapEpost) return new Response('Mangler e-post for fraktselskap', { status: 400, headers: CORS_HEADERS })
+      // Henteklar-dato (valgfri, valgt i dialogen "Bestill frakt"): tas med i bestillingen så fraktselskapet vet
+      // FRA NÅR bilen kan hentes (bedt om av Henrik 2026-11-02). Uten dato er e-posten som før.
+      const klarDato = datoVisning(dato)
+      const klarHtml = klarDato ? `<p style="margin:0 0 16px">Bilen er klar for å bli hentet fra ${escHtml(klarDato)}.</p>` : ''
+      const klarTekst = klarDato ? `Bilen er klar for å bli hentet fra ${klarDato}.\n\n` : ''
       const emne = `Bestilling av frakt${chassisNr ? ' - ' + chassisNr : ''}`
       const html = `
         <p style="margin:0 0 12px">Hei,</p>
@@ -198,11 +212,13 @@ Deno.serve(async (req) => {
           Kontaktperson: ${escHtml(kontaktperson || '-')}<br>
           Chassis.nr: ${escHtml(chassisNr || '-')}
         </p>
+        ${klarHtml}
         ${await signaturHtml(avsenderNavn)}`
       const tekst = `Hei,\n\nVi ønsker å bestille frakt for følgende bil:\n\n`
         + `Forhandler: ${forhandler || '-'}\n`
         + `Kontaktperson: ${kontaktperson || '-'}\n`
         + `Chassis.nr: ${chassisNr || '-'}\n\n`
+        + klarTekst
         + signaturTekst(avsenderNavn)
       await sendEpost(fraktselskapEpost, kontaktpersonEpost, emne, html, tekst)
       return new Response('ok', { status: 200, headers: CORS_HEADERS })
@@ -243,10 +259,7 @@ Deno.serve(async (req) => {
     if (payload.type === 'klar_for_henting') {
       const { kontaktpersonEpost, chassisNr, dato, avsenderNavn } = payload
       if (!kontaktpersonEpost) return new Response('Mangler e-post for kontaktperson', { status: 400, headers: CORS_HEADERS })
-      // "dato" kommer som 'YYYY-MM-DD' fra <input type="date"> i admin-ark.js - formatert
-      // om til 'DD.MM.YYYY' for visning, samme konvensjon som fmtDatoKort() i frontend.
-      const datoVisning = /^\d{4}-\d{2}-\d{2}$/.test(dato || '') ? dato.split('-').reverse().join('.') : ''
-      const fraSetning = datoVisning ? ` fra ${datoVisning}` : ''
+      const fraSetning = datoVisning(dato) ? ` fra ${datoVisning(dato)}` : ''
       const emne = `Bilen er klar for henting${chassisNr ? ' - ' + chassisNr : ''}`
       const html = `
         <p style="margin:0 0 12px">Hei,</p>

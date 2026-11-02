@@ -164,13 +164,13 @@ function buildOrdreDetail() {
   ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">Arkivert ordre — kun visning</div>`:''}
   ${portalBekreftBannerHTML(o)}
   <div class="card" style="padding:12px 16px;margin-bottom:0">
-    <div class="row" style="flex-wrap:nowrap;align-items:center">
-      <div style="min-width:0;overflow:hidden">
+    <div class="row" style="flex-wrap:wrap;align-items:center;gap:8px 12px">
+      <div style="flex:1 1 0">
         ${o.regnr
           ? `<div class="title" style="letter-spacing:.02em">${esc(o.regnr)}</div>
-             ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px;overflow:hidden">CHASSIS <span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
+             ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px;${CHASSIS_HEL_STIL}">CHASSIS <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
           : `<div style="font-size:10px;letter-spacing:.16em;color:#52525b">CHASSIS</div>
-             <div style="overflow:hidden;margin-top:3px">${o.chassis?`<span class="chassis-stor" style="${CHASSIS_TRUNKER_STIL}">${esc(o.chassis)}</span>`:'Uten reg.nr'}</div>`}
+             <div style="margin-top:3px">${o.chassis?`<span class="chassis-stor" style="${CHASSIS_HEL_STIL}">${esc(o.chassis)}</span>`:'Uten reg.nr'}</div>`}
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0">
         ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:6px 11px;border-radius:999px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
@@ -1204,24 +1204,21 @@ function bekreftKjoreseddelSkilt() {
  * @returns {string}
  */
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
-// Brukes KUN der chassis skal stå på ÉN linje ved siden av statusdropdownen (ordre-detalj-
-// headeren og ordrekortene i "Ordre"-lista, se CHASSIS_TRUNKER_STIL rett under) - IKKE i
-// ordreLabel()/ordreLabelFull() selv, som fortsatt brukes uendret andre steder (PDF-tittel,
-// slette-bekreftelse, kalenderkort, flåte-etiketter) der full tekst og vanlig linjebryting er
-// riktig, ikke avkorting.
+// Brukes KUN der chassis skal stå HELT og på ÉN linje (ordre-detalj-headeren og ordrekortene i
+// "Ordre"-lista, se CHASSIS_HEL_STIL rett under) - IKKE i ordreLabel()/ordreLabelFull() selv,
+// som fortsatt brukes uendret andre steder (PDF-tittel, slette-bekreftelse, kalenderkort,
+// flåte-etiketter) der full tekst og vanlig linjebryting er riktig.
 //
-// Chassisnummeret har ingen mellomrom å bryte på i det hele tatt, så vanlig tekstbryting kan
-// enten la det flyte utenfor kortet, eller (med word-break/overflow-wrap) dele det opp midt i
-// selve nummeret - begge deler er det Henrik har bedt om å bli kvitt (2026-10-29: "det blir så
-// mye forvirring når chassis.nr deles opp"), samtidig som status-dropdownen skal stå ved siden
-// av uansett (samme krav som i kommentaren under, bare nå løst med avkorting i stedet for
-// linjebryting). Løsningen er et kjent CSS-knep: en RTL-blokk rundt LTR-innhold (bokstaver og
-// tall "speiles" ikke, bare SELVE AVKORTINGEN skjer fra venstre i stedet for høyre) - viser
-// "…" + halen av nummeret i stedet for starten, siden halen (det faktiske løpenummeret) er det
-// som faktisk skiller like biler fra hverandre, ikke de første tegnene (felles for hele
-// modellserien/fabrikken). `unicode-bidi:plain-text` sikrer at selve tegnrekkefølgen ikke
-// endres, kun avkortings-retningen.
-const CHASSIS_TRUNKER_STIL = 'direction:rtl;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:plain-text;display:inline-block;max-width:100%;vertical-align:bottom';
+// Chassisnummeret har ingen mellomrom å bryte på, så vanlig tekstbryting kan enten la det flyte
+// utenfor kortet eller dele det midt i nummeret ("det blir så mye forvirring når chassis.nr
+// deles opp", Henrik 2026-10-29). Fram til 2026-11-02 ble det i stedet avkortet fra venstre
+// ("…8156T6077262" via en RTL-blokk) for at statusdropdownen alltid skulle stå ved siden av -
+// men på en smalere telefon (kortet ca. 327 px) forsvant da starten av nummeret, og Henrik ba
+// om å se HELE chassis.nr. Nå er nummeret aldri avkortet og aldri delt (white-space:nowrap);
+// raden bryter i stedet (flex-wrap) slik at statusdropdownen havner UNDER nummeret når det ikke
+// er plass ved siden av. Venstrekolonnen har flex:1 1 0 og INGEN overflow:hidden/min-width:0,
+// så dens minstebredde er det hele nummeret, og det er det som utløser bruddet.
+const CHASSIS_HEL_STIL = 'white-space:nowrap';
 
 // Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
 // regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.

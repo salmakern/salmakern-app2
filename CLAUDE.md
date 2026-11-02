@@ -114,6 +114,23 @@ færre dokumenter, en `full_innlasting`, eller `objektUtskiftet: true`). Vakt:
 `===` direkte - chassisnummer kan skrives inn med ulik store/små bokstaver flere steder i
 appen (Admin-ark, ordre, flåte).
 
+**Chassis.nr vises HELT på ordrekortet og i ordredetaljen (2026-11-02)**: nummeret er aldri avkortet (ingen RTL/ellipsis-
+knep, `CHASSIS_TRUNKER_STIL` er fjernet) og aldri delt midt i (`CHASSIS_HEL_STIL` = `white-space:nowrap`, i `ordre-detalj.js`).
+Raden har `flex-wrap:wrap` og venstrekolonnen `flex:1 1 0` uten `overflow:hidden`/`min-width:0`, så nummerets bredde utløser
+bruddet: er det ikke plass ved siden av, havner statusknappen UNDER nummeret. Kundenavnet på kortet har `width:0;min-width:100%`
+så det avkortes med «…» uten å presse kortet bredere. Kontrollert på 393, 360 og 320 px (kortet er ca. 327 px på en smal
+iPhone). Vakt: `test/chassis-hele.test.js`. NB: `max-width:100px` på `.ordre-status-dropdown` under 480 px virker ikke (inline
+`max-width:100%` fra `statusDropdown()` vinner), og det er bevisst latt stå siden statusnavnet skal være lesbart.
+
+**Frakt-e-post med henteklar-dato (2026-11-02)**: velger man en dato i dialogen «Bestill frakt» (Admin-ark), sendes den med i
+bestillingen til fraktselskapet: «Bilen er klar for å bli hentet fra DD.MM.YYYY.» (HTML og ren tekst, mellom bilopplysningene og
+signaturen; kontaktpersonen på kopi får samme e-post). Uten dato er e-posten som før; datoen er fortsatt valgfri for ekte
+fraktselskap og påkrevd for «Hente selv» (egen `klar_for_henting`-e-post, uendret). Klienten sender `dato` (`adminArkSendFraktBestilling`),
+og `send-frakt-epost/index.ts` formaterer den med `datoVisning()` (bare nøyaktig `YYYY-MM-DD`, alt annet gir ingen datolinje).
+**Edge-funksjonen må rulles ut for at dette virker**: `npx supabase functions deploy send-frakt-epost --project-ref
+qoqpenbfdxeduylxirwk --use-api` (klienten uten funksjonen er ufarlig: ukjent felt ignoreres). Test ALDRI med en ekte mottaker:
+`test/frakt-epost.test.js` kjører hele funksjonen mot falsk Deno og falsk Resend.
+
 **PIN-innlogging**: ingen passord, kun 4-sifret PIN sjekket server-side via
 `logg_inn_med_pin`/`login_med_pin` (Postgres-funksjoner, se `supabase/migrations/`). PIN-er
 lastes ALDRI ned til nettleseren. Rate-limited siden 2026-08-24 (5 feil forsøk → 10 min

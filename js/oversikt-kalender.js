@@ -110,14 +110,14 @@ function renderOrdreList() {
       ${o.prioritert?'<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
       ${bestiltFraktBadgeHTML(o, 'right:14px')}
 
-      <div style="display:flex;flex-wrap:nowrap;justify-content:space-between;align-items:flex-start;gap:12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;min-width:0;flex:1;overflow:hidden">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px 12px">
+        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1 1 0">
           ${o.regnr
             ? `<b style="font-size:16px;letter-spacing:-.2px;line-height:1.25">${esc(o.regnr)}</b>
-               ${o.chassis?`<div class="small muted" style="margin-top:2px;display:flex;gap:4px;overflow:hidden"><span style="flex-shrink:0">Chassis</span><span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span></div>`:''}`
+               ${o.chassis?`<div class="small muted" style="margin-top:2px;display:flex;gap:4px;${CHASSIS_HEL_STIL}"><span>Chassis</span><span style="font-family:ui-monospace,'SF Mono',Menlo,monospace">${esc(o.chassis)}</span></div>`:''}`
             : `<div style="font-size:9px;letter-spacing:.14em;color:#52525b">CHASSIS</div>
-               <div style="overflow:hidden;margin-top:1px">${o.chassis?`<span style="${CHASSIS_TRUNKER_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.2px">${esc(o.chassis)}</span>`:'<b style="font-size:15px">Uten reg.nr</b>'}</div>`}
-          ${o.kunde?`<div class="small muted" style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.kunde)}</div>`:''}
+               <div style="margin-top:1px">${o.chassis?`<span style="${CHASSIS_HEL_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.2px">${esc(o.chassis)}</span>`:'<b style="font-size:15px">Uten reg.nr</b>'}</div>`}
+          ${o.kunde?`<div class="small muted" style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:0;min-width:100%">${esc(o.kunde)}</div>`:''}
           ${o.portalBestillingId?`<div style="margin-top:5px">${portalBadgeHTML(o)}</div>`:''}
           ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
