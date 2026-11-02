@@ -322,8 +322,20 @@ Forhandlerportalens offentlige API i stedet for å ha dem hardkodet:
   `#mainImg`/`#thumbContainer` (bildegalleri). Faller tilbake til en "ta kontakt"-melding hvis
   modellen ikke finnes eller mangler varianter.
 - `model-list-sync.js` - kjører på `varebil.html`, henter `GET /api/public/models` (hele
-  lista), erstatter den statiske `#modelsGrid`-lenkelisten med ferske lenker + bilder. Modeller
-  med en av de 17 kjente slugene lenker til sin egendefinerte side; alt annet lenker til
+  lista) og erstatter den statiske `#modelsGrid`-lenkelisten med **samme oppsett som Produkter-siden i
+  Forhandlerportalen, uten priser** (endret 2026-11-02): søkefelt, «HOPP TIL»-knapper (Alle + ett per merke med
+  antall), merkegrupper (rød strek + merkenavn + «N MODELLER» + linje) som flyter i et 5-kolonners rutenett (3 på
+  mellomstor skjerm, 1 på mobil; hver gruppe spenner like mange kolonner som den har kort, `--n3`/`--n5` settes av
+  scriptet), modellkort med 4:3-bilde, modellnavn uten merke og «N varianter», og dempede «KOMMER SNART»-kort for
+  modeller uten varianter. Merket utledes av modellnavnet med samme regel som portalens `splitModelName`
+  (`src/lib/modelName.ts`; `MULTI_WORD_BRANDS` må holdes lik), og gruppering/rekkefølge følger portalens
+  `src/lib/brandGroups.ts` (merker med ferdige modeller først, flest modeller øverst, alt-«kommer snart» sist).
+  Listen har ikke variantantall, så scriptet henter `GET /api/public/models/<slug>` for hver modell (parallelt, maks
+  4 s ventetid; svikter et kall tegnes kortet uten antall og regnes som ferdig) - bare på varebil.html, forsiden
+  henter bare tallet. Søket treffer modellnavn, variantnavn og produktnumre. Bildene hentes via portalens
+  bildeoptimalisering (`/_next/image?...&w=384|640|828`), ikke som originaler på opptil 4 MB, med fallback til
+  originalen hvis det svikter. Svikter API-et helt, står den statiske reservelista igjen (ingen verktøylinje).
+  Modeller med en av de 17 kjente slugene lenker til sin egendefinerte side; alt annet lenker til
   `modell.html?slug=X`. Modeller UTEN bilde får en "KOMMER SNART"-plate (`.thumb-placeholder` /
   `.thumb-placeholder-label` i `site.css`: skråstriper og en mørk plate med rød venstrekant) -
   samme utseende som `NoImagePlaceholder` i Forhandlerportalen (endret 2026-10-15, før det var et
@@ -363,7 +375,7 @@ og kan sende en forespørsel til opptil 3 av dem. Data og utsending ligger i For
   for `max-width: 1120px` (litt tettere meny) og strammere mobilregel (`720px`); målt etterpå:
   én rad fra 900px og opp, 800px lavere enn før, mobil ca. +7px mot før. Husk å måle header-
   høyden (`.site-header` offsetHeight) ved 375/800/1024/1280 hvis menyen endres igjen. `site.css`
-  er nå `?v=13` på alle sider (bumpet 2026-11-02: stiler for den roterende heroen; 2026-10-31: rulleteksten på forsiden fikk fullt merke + modellnavn og 53s i stedet for 42s; modellsidenes h1 (`.page-hero-dark h1`) skalerer ned under ca. 400px så lange ord som GELÄNDEWAGEN ikke går utenfor skjermen), `model-sync.js` `?v=6`, `model-list-sync.js` `?v=7` og `hero-rotasjon.js` `?v=1`.
+  er nå `?v=14` på alle sider (bumpet 2026-11-02: stiler for modelloversikten per merke på varebil.html og for den roterende heroen; 2026-10-31: rulleteksten på forsiden fikk fullt merke + modellnavn og 53s i stedet for 42s; modellsidenes h1 (`.page-hero-dark h1`) skalerer ned under ca. 400px så lange ord som GELÄNDEWAGEN ikke går utenfor skjermen), `model-sync.js` `?v=6`, `model-list-sync.js` `?v=8` og `hero-rotasjon.js` `?v=1`.
 - **Roterende hero på forsiden (2026-11-02, `hero-rotasjon.js`)**: viser profilbildet til hver modell (hentet live fra
   `GET /api/public/models`, kun modeller med `imageUrl`: 11 av 14), alle i NØYAKTIG samme ramme (`.hero-media` er
   `position:absolute; inset:0; object-fit:cover`, så størrelsen er lik uansett bilde; kontrollert: alle 11 målte
