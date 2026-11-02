@@ -68,7 +68,7 @@ header.site-header {
 }
 .header-inner { max-width: var(--max-w); margin: 0 auto; padding: 14px var(--pad-x); display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
 .logo-link { display: flex; align-items: center; margin-right: auto; }
-.logo-link img { height: 40px; width: auto; }
+.logo-link img { height: 60px; width: auto; } /* 2026-11-02: 40 -> 60 px (Henrik valgte alternativ B: dagens logo, større). Se justeringer under 1120px og 720px i RESPONSIVE. */
 .main-nav { display: flex; align-items: center; gap: 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; flex-wrap: wrap; }
 .nav-link { color: var(--text-muted); transition: color 0.18s ease; }
 .nav-link:hover { color: var(--text); }
@@ -400,8 +400,10 @@ h3 { font-size: 20px; letter-spacing: -0.01em; text-transform: none; margin-bott
   .main-nav { gap: 14px; font-size: 11px; letter-spacing: 0.06em; }
   .nav-cta { padding: 11px 14px; }
   .header-inner { gap: 20px; }
+  .logo-link img { height: 52px; } /* 60 px gir for bred logo til at menyen får én rad ved siden av den */
 }
 @media (max-width: 720px) {
+  .logo-link img { height: 50px; }
   /* Holder mobil-headeren så lav som mulig: den er klebrig, så hver ekstra rad koster skjermplass */
   .main-nav { gap: 10px 14px; font-size: 11px; letter-spacing: 0.06em; }
   .nav-cta { padding: 10px 14px; }
