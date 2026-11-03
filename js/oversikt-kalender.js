@@ -250,6 +250,8 @@ function renderOversikt(q) {
       }).join('')
     : '<div class="muted small">Ingen ventende ordrer</div>';
 
+  // Leveranser (ordre uten bil) har sitt eget kort nederst: grupper etter status. Se js/leveranse.js.
+  if (typeof renderLeveranseOversikt === 'function') renderLeveranseOversikt(q);
   renderWeek();
 }
 

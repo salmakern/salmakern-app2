@@ -208,6 +208,43 @@ function sfLev(id, felt, val) {
   if (['fraktselskap', 'adresse', 'postnr', 'sted', 'fraktAuto', 'sendtDato'].includes(felt) && activeOrdreId === id) buildOrdreDetail();
 }
 
+// ─── Oversikt ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+// «Leveranser»-kortet nederst på Oversikt: alle AKTIVE leveranser gruppert etter status (en sendt og fakturert leveranse er arkivert og vises i Arkiv). En leveranse med en
+// status vi ikke kjenner (f.eks. en feilregistrert rad) havner i «Under arbeid», så ingen leveranse kan bli usynlig. Hvert kort tegnes for seg (try/catch), som i Ordre-lista.
+const LEVERANSE_OVERSIKT_GRUPPER = [
+  { id: 'under_arbeid', tittel: 'Under arbeid', farge: '#22d3ee' },
+  { id: 'klar_sending', tittel: 'Klar til sending', farge: '#a3e635' },
+  { id: 'sendt', tittel: 'Sendt, venter på fakturering', farge: '#2dd4bf' },
+];
+function leveranseOversiktGruppe(o) {
+  return o.ordreStatus === 'klar_sending' || o.ordreStatus === 'sendt' ? o.ordreStatus : 'under_arbeid';
+}
+function renderLeveranseOversikt(q) {
+  const liste = document.getElementById('leveranseOversiktListe');
+  if (!liste) return;
+  const sok = String(q || '').toLowerCase().trim();
+  const treff = o => !sok || [leveranseTittel(o), o.kunde, o.eier, o.regnr, o.chassis, o.leveranse.adresse, o.leveranse.sted, o.leveranse.fraktselskap]
+    .some(v => String(v || '').toLowerCase().includes(sok));
+  const aktive = (S.ordrer || []).filter(o => erLeveranse(o) && o.status === 'aktiv');
+  const synlige = aktive.filter(treff).sort(sorterOrdre);
+  const antall = id => aktive.filter(o => leveranseOversiktGruppe(o) === id).length;
+  const tekstEl = document.getElementById('leveranseOversiktTekst');
+  if (tekstEl) tekstEl.textContent = aktive.length
+    ? `${aktive.length} aktive · ${antall('under_arbeid')} under arbeid · ${antall('klar_sending')} klar til sending · ${antall('sendt')} sendt`
+    : 'Ordre uten bil, for å sende av gårde løsninger';
+  if (!aktive.length) { liste.innerHTML = '<div class="muted small">Ingen aktive leveranser</div>'; return; }
+  if (!synlige.length) { liste.innerHTML = '<div class="muted small">Ingen leveranser matcher søket</div>'; return; }
+  liste.innerHTML = LEVERANSE_OVERSIKT_GRUPPER.map(g => {
+    const rader = synlige.filter(o => leveranseOversiktGruppe(o) === g.id);
+    if (!rader.length) return '';
+    const kort = rader.map(o => { try { return leveranseKortHTML(o); } catch (e) { return ordreKortFeilHTML(o, e); } }).join('');
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="width:9px;height:9px;border-radius:999px;background:${g.farge};flex-shrink:0"></span><b style="font-size:13px">${esc(g.tittel)}</b><span class="muted small">${rader.length}</span></div>
+      <div class="grid g3">${kort}</div>
+    </div>`;
+  }).join('');
+}
+
 // ─── Kort i lister ──────────────────────────────────────────────────────────────────────────────────────────────────────
 function leveranseKortHTML(o) {
   const si = statusInfo(o.ordreStatus);

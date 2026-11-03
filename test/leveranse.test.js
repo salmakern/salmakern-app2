@@ -429,6 +429,81 @@ describe('statusnedtrekk og lister', () => {
   });
 });
 
+describe('Leveranser-kortet på Oversikt', () => {
+  const liste = () => String(sandbox.document.getElementById('leveranseOversiktListe').innerHTML);
+  const tekst = () => String(sandbox.document.getElementById('leveranseOversiktTekst').textContent);
+  const vis = (q) => app.kjor(`renderOversikt(${JSON.stringify(q || '')})`);
+
+  it('uten leveranser: tom melding og forklarende tekst', () => {
+    S.ordrer = [nyBil()];
+    vis();
+    expect(liste()).toContain('Ingen aktive leveranser');
+    expect(tekst()).toContain('uten bil');
+  });
+  it('aktive leveranser grupperes etter status, med antall, og hver gruppe har sine kort', () => {
+    S.ordrer = [
+      nyLeveranse({ id: 'ord_L1' }, { merking: 'LEV-A' }),
+      nyLeveranse({ id: 'ord_L2', ordre_status: 'klar_sending' }, { merking: 'LEV-B' }),
+      nyLeveranse({ id: 'ord_L3', ordre_status: 'sendt' }, { merking: 'LEV-C' }),
+      nyBil(),
+    ];
+    vis();
+    const h = liste();
+    expect(h).toContain('Under arbeid'); expect(h).toContain('Klar til sending'); expect(h).toContain('Sendt, venter på fakturering');
+    for (const m of ['LEV-A', 'LEV-B', 'LEV-C']) expect(h).toContain(m);
+    expect(h.indexOf('LEV-A')).toBeLessThan(h.indexOf('LEV-B'));
+    expect(h.indexOf('LEV-B')).toBeLessThan(h.indexOf('LEV-C'));
+    expect(h).not.toContain('TESTWXYZ0000000A1'); // en bil-ordre er ikke en leveranse
+    expect(tekst()).toBe('3 aktive · 1 under arbeid · 1 klar til sending · 1 sendt');
+  });
+  it('en gruppe uten leveranser vises ikke', () => {
+    S.ordrer = [nyLeveranse({}, { merking: 'LEV-A' })];
+    vis();
+    // kortenes status-nedtrekk lister alle statuser, så gruppeoverskriftene sjekkes på selve overskrift-markeringen
+    expect(liste()).toContain('<b style="font-size:13px">Under arbeid</b>');
+    expect(liste()).not.toContain('<b style="font-size:13px">Klar til sending</b>');
+    expect(liste()).not.toContain('<b style="font-size:13px">Sendt, venter');
+  });
+  it('arkiverte leveranser vises ikke (de ligger i Arkiv)', () => {
+    S.ordrer = [nyLeveranse({ status: 'arkivert', ordre_status: 'sendt', fakturert: true }, { merking: 'GAMMEL' })];
+    vis();
+    expect(liste()).not.toContain('GAMMEL');
+    expect(liste()).toContain('Ingen aktive leveranser');
+  });
+  it('en leveranse med ukjent status havner i «Under arbeid» (aldri usynlig)', () => {
+    S.ordrer = [nyLeveranse({ ordre_status: 'noe_helt_annet' }, { merking: 'MERKELIG' }), nyLeveranse({ id: 'ord_L2', ordre_status: '' }, { merking: 'TOM-STATUS' })];
+    vis();
+    expect(liste()).toContain('MERKELIG'); expect(liste()).toContain('TOM-STATUS');
+    expect(liste()).toContain('<b style="font-size:13px">Under arbeid</b>');
+    expect(liste()).not.toContain('<b style="font-size:13px">Klar til sending</b>');
+  });
+  it('søket i Oversikt filtrerer leveransene på merking, kunde, adresse, sted og fraktselskap', () => {
+    S.ordrer = [nyLeveranse({ id: 'ord_L1' }, { merking: 'LEV-A' }), nyLeveranse({ id: 'ord_L2', kunde: 'Annen Kunde' }, { merking: 'LEV-B', adresse: 'Fjellveien 9', sted: 'Bø', fraktselskap: 'NBT' })];
+    for (const [sok, ventet, ikke] of [['lev-b', 'LEV-B', 'LEV-A'], ['annen kunde', 'LEV-B', 'LEV-A'], ['fjellveien', 'LEV-B', 'LEV-A'], ['nbt', 'LEV-B', 'LEV-A'], ['TEST Frakt', 'LEV-A', 'LEV-B']]) {
+      vis(sok);
+      expect(liste(), sok).toContain(ventet); expect(liste(), sok).not.toContain(ikke);
+    }
+    vis('finnes-ikke');
+    expect(liste()).toContain('Ingen leveranser matcher søket');
+  });
+  it('en leveranse som ikke lar seg tegne gir et feilkort for den ene, ikke en tom liste', () => {
+    const orig = sandbox.leveranseKortHTML;
+    S.ordrer = [nyLeveranse({ id: 'ord_L1' }, { merking: 'GOD' }), nyLeveranse({ id: 'ord_L2' }, { merking: 'DEFEKT' })];
+    sandbox.leveranseKortHTML = (o) => { if (o.id === 'ord_L2') throw new TypeError('simulert'); return orig(o); };
+    try {
+      vis();
+      expect(liste()).toContain('GOD');
+      expect(liste()).toContain('kan ikke vises i lista');
+    } finally { sandbox.leveranseKortHTML = orig; }
+  });
+  it('knappen «+ Ny leveranse» og kortet står på Oversikt-siden i salmakern.html', () => {
+    const html = les('salmakern.html');
+    expect(html).toMatch(/id="leveranseOversiktKort"[\s\S]*apneNyLeveranseModal\(\)[\s\S]*id="leveranseOversiktListe"/);
+    expect(html.indexOf('id="leveranseOversiktKort"')).toBeGreaterThan(html.indexOf('id="pendingList"'));
+    expect(html.indexOf('id="leveranseOversiktKort"')).toBeLessThan(html.indexOf('<!-- ── ORDRE DETAIL ── -->'));
+  });
+});
+
 describe('fakturalinjer og timer', () => {
   it('«Hent fra Utstyr-boksen» og drivstoff finnes for bil, men ikke for en leveranse', () => {
     expect(sandbox.fikenLinjerHTML(nyBil())).toContain('Hent fra Utstyr-boksen');

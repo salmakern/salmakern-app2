@@ -476,6 +476,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         </div>
         <div class="grid g3" style="margin-top:12px" id="pendingList"></div>
       </div>
+      <div class="card" id="leveranseOversiktKort">
+        <div class="row">
+          <div><div class="h">Leveranser</div><div class="muted small" id="leveranseOversiktTekst">Ordre uten bil</div></div>
+          <button class="btn" onclick="apneNyLeveranseModal()">+ Ny leveranse</button>
+        </div>
+        <div id="leveranseOversiktListe" style="margin-top:12px"></div>
+      </div>
     </section>
 
     <!-- ── ORDRE DETAIL ── -->
