@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
       return jsonSvar({ ok: true, contactId, navn }, 201)
     }
 
-    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
+    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, referanse, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
 
@@ -308,7 +308,11 @@ Deno.serve(async (req) => {
     const idag = norskDato()
     // Ordrereferanse: "<chassis> - <regnr>" hvis regnr finnes, ellers bare chassisnr.
     // Kommentar på siste linje: "Ch. nr. <chassis>" - begge deler bekreftet av Henrik.
-    const ordreReferanse = chassisNr ? (regnr ? `${chassisNr} - ${regnr}` : chassisNr) : undefined
+    // En LEVERANSE (ordre uten bil, 2026-11-03) kan mangle chassis og sender i stedet en ferdig referanse (merking, reg.nr og chassis det finnes av); den brukes
+    // slik den er (maks 100 tegn). Bil-ordrer sender ingen `referanse` og får samme referanse som før.
+    const ordreReferanse = typeof referanse === 'string' && referanse.trim()
+      ? referanse.trim().slice(0, 100)
+      : (chassisNr ? (regnr ? `${chassisNr} - ${regnr}` : chassisNr) : undefined)
     const linjerMedIndeks = linjer.map((l: any, i: number) => {
       const produkt = produktMap.get(String(l.produktnummer))!
       const line: Record<string, unknown> = { productId: produkt.productId, quantity: l.antall || 1 }

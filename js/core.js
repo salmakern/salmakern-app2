@@ -229,11 +229,18 @@ const STATUSER = [
   {id:'klar_henting',   lbl:'Klar for henting',     border:'#a1a1aa', bg:'#09090b88', txt:'#e4e4e7'},
   {id:'hentet',         lbl:'Hentet',               border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
 ];
-function statusInfo(id) { return STATUSER.find(s=>s.id===id) || STATUSER[1]; }
+// Statuser for en LEVERANSE (ordre uten bil, 2026-11-03). Egen liste, bevisst IKKE i STATUSER: alle bil-nedtrekk (ordrelista, admin-ark, flåte)
+// bygger på STATUSER og skal aldri vise disse. statusInfo() kjenner begge, så et kort/en pille alltid får riktig tekst og farge.
+const LEVERANSE_STATUSER = [
+  {id:'under_arbeid', lbl:'Under arbeid',     border:'#22d3ee', bg:'#08333c88', txt:'#a5f3fc'},
+  {id:'klar_sending', lbl:'Klar til sending', border:'#a3e635', bg:'#1a2e0588', txt:'#d9f99d'},
+  {id:'sendt',        lbl:'Sendt',            border:'#2dd4bf', bg:'#03302888', txt:'#99f6e4'},
+];
+function statusInfo(id) { return STATUSER.find(s=>s.id===id) || LEVERANSE_STATUSER.find(s=>s.id===id) || STATUSER[1]; }
 // rolle lagres/sammenlignes alltid med små bokstaver (ansatt/godkjenner/admin) - denne
 // er KUN for visning, rører aldri selve verdien noe sted den brukes i logikk/sammenligning.
 function rolleVis(rolle) { return rolle ? rolle.charAt(0).toUpperCase() + rolle.slice(1) : ''; }
-const STATUS_SORT = {hentet:0,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8};
+const STATUS_SORT = {hentet:0,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8, sendt:0,klar_sending:2,under_arbeid:6};
 // "Bestilt frakt" er ikke lenger en verdi i ordreStatus-nedtrekkslisten (bedt om av Henrik
 // 2026-09-30: den krevde et manuelt valg som lett ble glemt, og "stjal" plassen til den
 // faktiske statusen). I stedet en uavhengig markering PÅ ordren - samme mønster som
@@ -626,9 +633,29 @@ async function loadFromSupabase() {
 // `r.x||[null x6]` beskytter ikke mot [] (truthy): en ordre opprettet utenom appen (SQL/migrasjon/edge) fikk en TOM liste, og
 // tvangsflyt() sin `.every(Boolean)` er sann for [] - «6 bilder ankomst» så ut som oppfylt uten ett eneste bilde. Fyller derfor
 // alltid opp til fast antall plasser (null), beholder det som finnes (også ekstra), og tåler {} / feil type.
+// Lister som koden itererer over (.find/.filter/.some/.map) må være lister. En kolonne med feil type ({} i stedet for []) ga «x.find is not a function» i ordredetaljen.
+function normaliserListe(v) { return Array.isArray(v) ? v : []; }
 function normaliserBilder(v, antall) {
   const kilde = Array.isArray(v) ? v : [];
   return Array.from({ length: Math.max(antall, kilde.length) }, (_, i) => kilde[i] || null);
+}
+// ═══ LEVERANSE (ordre uten bil, Henrik 2026-11-02) ═══
+// En leveranse er en rad i ordrer med ordretype = 'leveranse' (bil-ordrer har 'bil'). Egne felt ligger i jsonb-kolonnen `leveranse`; fraktbestillingens tidspunkt/mottaker
+// (frakt_bestilt_*) settes BARE av edge-funksjonen send-frakt-epost og LESES bare her (står ikke i ordreToDb), som portal_*-kolonnene. Lærdommen fra 2026-11-02 (en ordre i
+// uventet form blanket Ordre-lista for alle): kolonnen kan være {} eller mangle delfelt, så ALT går gjennom normaliserLeveranse() og ingen kode leser leveranse-feltene rått.
+const LEVERANSE_TEKSTFELT = ['merking','adresse','postnr','sted','kontaktTlf','fraktselskap','kolli','onsketHentedato','sporing','sendtDato'];
+function normaliserLeveranse(v) {
+  const kilde = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  const ut = { ...kilde };
+  LEVERANSE_TEKSTFELT.forEach(k => { const x = kilde[k]; ut[k] = (typeof x === 'string' || typeof x === 'number') ? String(x) : ''; });
+  ut.fraktAuto = kilde.fraktAuto !== false; // automatisk fraktbestilling er PÅ som standard (Henrik), kan slås av per leveranse
+  return ut;
+}
+function erLeveranse(o) { return !!o && o.ordretype === 'leveranse'; }
+// Tittelen en leveranse vises med i lister og detalj: merkingen, ellers reg.nr, ellers chassis (minst ett av dem kreves ved opprettelse). Rå tekst: kall esc() ved visning.
+function leveranseTittel(o) {
+  const l = (o && o.leveranse) || {};
+  return String(l.merking || '').trim() || (o && o.regnr) || (o && o.chassis) || 'Uten merking';
 }
 const VEKT_FELT = ['totalvekt','vogntog','foraksel','bakaksel'];
 function normaliserVekter(v) {
@@ -652,17 +679,17 @@ function dbToOrdre(r) {
     bilderLevering:normaliserBilder(r.bilder_levering,6),
     bilderAvstandSkader:normaliserBilder(r.bilder_avstand_skader,3),
     bilderManglendeDeler:Array.isArray(r.bilder_manglende_deler)?r.bilder_manglende_deler:[],
-    ansatteSignert:r.ansatte_signert||[], signatur:r.signatur||null,
+    ansatteSignert:normaliserListe(r.ansatte_signert), signatur:r.signatur||null,
     godkjent:r.godkjent||false, godkjennerNavn:r.godkjenner_navn||'',
     diagnose:r.diagnose||false, diagnoseAv:r.diagnose_av||'',
     fakturert:r.fakturert||false, fakturertAv:r.fakturert_av||'',
     ordreStart:r.ordre_start||null, ordreStopp:r.ordre_stopp||null,
-    ordreTimerSessions:r.ordre_timer_sessions||[], klargjoringTimerSessions:r.klargjoring_timer_sessions||[],
-    fikenLinjer:r.fiken_linjer||[],
-    notater:r.notater||'', endringer:r.endringer||[],
-    utstyrSjekkliste:r.utstyr_sjekkliste||[], utstyrMalNavn:r.utstyr_mal_navn||'',
-    visningsSjekkliste:r.visnings_sjekkliste||[], visningsMalNavn:r.visnings_mal_navn||'',
-    flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:r.dokumenter||[],
+    ordreTimerSessions:normaliserListe(r.ordre_timer_sessions), klargjoringTimerSessions:normaliserListe(r.klargjoring_timer_sessions),
+    fikenLinjer:normaliserListe(r.fiken_linjer),
+    notater:r.notater||'', endringer:normaliserListe(r.endringer),
+    utstyrSjekkliste:normaliserListe(r.utstyr_sjekkliste), utstyrMalNavn:r.utstyr_mal_navn||'',
+    visningsSjekkliste:normaliserListe(r.visnings_sjekkliste), visningsMalNavn:r.visnings_mal_navn||'',
+    flateId:r.flate_id||null, prioritert:!!r.prioritert, dokumenter:normaliserListe(r.dokumenter),
     coc:r.coc||'har_ikke', fullmakt:r.fullmakt||'har_ikke', godkjentBiltilsyn:!!r.godkjent_biltilsyn,
     tidBiltilsynet:r.tid_biltilsynet||'', tidBiltilsynetTid:r.tid_biltilsynet_tid||'', tidBiltilsynetSted:r.tid_biltilsynet_sted||'',
     datoKlarHenting:r.dato_klar_henting||'',
@@ -681,7 +708,10 @@ function dbToOrdre(r) {
     // Produktlinjer fra bestillingen (s08-048, migrasjon 20261031170000) - produktnummer/navn/
     // rabatt_prosent fra portalen, brukt av leggTilPortalUtstyrLinjer() (js/lager.js) ved
     // Bekreft. Samme regel som de fire over: LESES her, skrives ALDRI av ordreToDb/save().
-    portalLinjer:r.portal_linjer||null
+    portalLinjer:r.portal_linjer||null,
+    // Leveranse (ordre uten bil, 2026-11-03): ordretype/leveranse skrives av ordreToDb BARE for leveranser (så en bil-ordre kan lagres også mot en database uten kolonnene), frakt_bestilt_* aldri.
+    ordretype:r.ordretype==='leveranse'?'leveranse':'bil', leveranse:normaliserLeveranse(r.leveranse),
+    fraktBestiltAt:r.frakt_bestilt_at||null, fraktBestiltAv:r.frakt_bestilt_av||'', fraktBestiltTil:r.frakt_bestilt_til||''
   };
 }
 // Supabase Realtime utelater STORE, UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
@@ -705,7 +735,7 @@ function ordreKolonneKart() {
   const kart = {};
   // To prøveverdier: et objekt og en liste. Normaliserere (normaliserVekter/normaliserBilder) tar bare imot «sin» type og ignorerer
   // den andre, så en enkelt prøveverdi ville gjort at en kolonne ikke ble koblet til noen egenskap (og Realtime ville tømt den).
-  const prover = [{__prove:true}, ['__prove']];
+  const prover = [{__prove:true}, ['__prove'], 'leveranse'];
   kolonner.forEach(kol => {
     const egenskaper = new Set();
     prover.forEach(verdi => {
@@ -810,6 +840,7 @@ function ordreToDb(o) {
     coc:o.coc||'har_ikke', fullmakt:o.fullmakt||'har_ikke',
     typegodkjenning:o.typegodkjenning||'', egenvekt_coc:o.egenvektCoc||'', forhandler_orgnr:o.forhandlerOrgnr||'',
     kjoreseddel_skilt:o.kjoreseddelSkilt||null,
+    ...(o.ordretype==='leveranse' ? { ordretype:'leveranse', leveranse:o.leveranse||{} } : {}),
     updated_at:new Date().toISOString()
   };
 }

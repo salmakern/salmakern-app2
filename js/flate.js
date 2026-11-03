@@ -60,7 +60,7 @@ function renderNyFlatePrimaerSok(q) {
   const el = document.getElementById('nyFlatePrimaerResultat');
   q = q.trim().toLowerCase();
   if (!q) { el.innerHTML=''; return; }
-  const treff = (S.ordrer||[]).filter(o => (
+  const treff = (S.ordrer||[]).filter(o => !erLeveranse(o) && (
     (o.regnr||'').toLowerCase().includes(q) ||
     (o.chassis||'').toLowerCase().includes(q) ||
     (o.kunde||'').toLowerCase().includes(q)
@@ -151,7 +151,7 @@ function renderFlateSok(q) {
   const el = document.getElementById('flateSokResultat');
   q = q.trim().toLowerCase();
   if (!q) { el.innerHTML=''; return; }
-  const treff = (S.ordrer||[]).filter(o => o.flateId !== aktivFlateId && (
+  const treff = (S.ordrer||[]).filter(o => !erLeveranse(o) && o.flateId !== aktivFlateId && (
     (o.regnr||'').toLowerCase().includes(q) ||
     (o.chassis||'').toLowerCase().includes(q) ||
     (o.kunde||'').toLowerCase().includes(q)

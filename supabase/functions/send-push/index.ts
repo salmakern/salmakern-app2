@@ -16,6 +16,10 @@ const STATUS_NAVN: Record<string, string> = {
   paabegynt:       'Påbegynt',
   ikke_paabegynt:  'Ikke påbegynt',
   paa_vei:         'På vei',
+  // Leveranse (ordre uten bil, 2026-11-03): egne statuser, ellers ville varselet vist den rå statuskoden («er under_arbeid»)
+  under_arbeid:    'Under arbeid',
+  klar_sending:    'Klar til sending',
+  sendt:           'Sendt',
 }
 
 const CORS_HEADERS = {
@@ -344,7 +348,10 @@ Deno.serve(async (req) => {
     } else if (payload.type === 'UPDATE') {
       const { record, old_record } = payload
       ordreId = record.id
-      const bil = record.chassis || record.regnr || record.kunde || 'Bil'
+      // En leveranse har ofte verken chassis eller reg.nr: merkingen (leveranse.merking) er det den kjennes igjen på.
+      const bil = record.ordretype === 'leveranse'
+        ? ('Leveranse ' + (record.leveranse?.merking || record.regnr || record.chassis || record.kunde || '')).trim()
+        : (record.chassis || record.regnr || record.kunde || 'Bil')
       const statusEndret = record.ordre_status !== old_record?.ordre_status
       const vektNy  = record.vekter?.totalvekt?.v
       const vektGml = old_record?.vekter?.totalvekt?.v

@@ -133,6 +133,7 @@ function settHengerfeste(id, val) {
 // uten noen kobling til status eller meldt-på i det hele tatt.
 function ordreAktivFase(o) {
   if (o.ordreStatus === 'paabegynt') return 'ordreTimerSessions';
+  if (erLeveranse(o) && o.ordreStatus === 'under_arbeid') return 'ordreTimerSessions'; // leveranse: arbeidsklokka går mens den er «Under arbeid»
   return null;
 }
 function feltTilKolonne(felt) { return felt==='ordreTimerSessions' ? 'ordre_timer_sessions' : 'klargjoring_timer_sessions'; }
@@ -235,10 +236,10 @@ function ordreTimerKortHTML(o, felt) {
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
-        <div class="h">${ORDRE_TIMER_LABEL[felt]}</div>
+        <div class="h">${erLeveranse(o) && felt==='ordreTimerSessions' ? 'Arbeidstid' : ORDRE_TIMER_LABEL[felt]}</div>
         <div style="font-size:28px;font-weight:800;margin-top:4px;color:${gaaende.length?'#86efac':'#f4f4f5'}">${tidStr}</div>
         ${gaaende.length?`<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå: ${gaaende.map(x=>esc(x.ansatt||'?')).join(', ')}</div>`:''}
-        <div class="small muted" style="margin-top:2px">${felt==='ordreTimerSessions' ? 'Starter/stopper normalt automatisk (meldt på + status \"Påbegynt\") - knappen er en manuell nødløsning' : 'Rent manuell - trykk Start når du begynner, Stopp når du er ferdig'}</div>
+        <div class="small muted" style="margin-top:2px">${felt==='ordreTimerSessions' ? (erLeveranse(o) ? 'Starter/stopper normalt automatisk (meldt på + status \"Under arbeid\") - knappen er en manuell nødløsning' : 'Starter/stopper normalt automatisk (meldt på + status \"Påbegynt\") - knappen er en manuell nødløsning') : 'Rent manuell - trykk Start når du begynner, Stopp når du er ferdig'}</div>
       </div>
       <div style="display:flex;gap:8px">
         ${migLoper
@@ -530,7 +531,7 @@ function opprettOrdre() {
   // Chassis-nr er en unik identifikator for selve bilen - finnes det allerede en aktiv
   // ordre på samme chassis, åpnes DEN i stedet for å opprette en duplikat-ordre.
   if (chassis) {
-    const eksisterende = S.ordrer.find(o => o.status==='aktiv' && samsvarerChassis(o.chassis, chassis));
+    const eksisterende = S.ordrer.find(o => o.status==='aktiv' && !erLeveranse(o) && samsvarerChassis(o.chassis, chassis));
     if (eksisterende) {
       visToast(`Finnes allerede en ordre på dette chassis-nummeret - åpner ${ordreLabel(eksisterende)}`);
       closeModal('nyOrdre');

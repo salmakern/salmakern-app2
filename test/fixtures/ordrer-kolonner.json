@@ -1,5 +1,5 @@
 {
- "hentet": "2026-11-02",
+ "hentet": "2026-11-03",
  "kilde": "information_schema.columns for public.ordrer (read-only)",
  "kolonner": [
   {
@@ -489,6 +489,41 @@
    "kolonne": "portal_linjer",
    "type": "jsonb",
    "udt": "jsonb",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "ordretype",
+   "type": "text",
+   "udt": "text",
+   "default": "'bil'::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "leveranse",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'{}'::jsonb",
+   "nullable": false
+  },
+  {
+   "kolonne": "frakt_bestilt_at",
+   "type": "timestamp with time zone",
+   "udt": "timestamptz",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "frakt_bestilt_av",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "frakt_bestilt_til",
+   "type": "text",
+   "udt": "text",
    "default": null,
    "nullable": true
   }

@@ -39,7 +39,15 @@ function defaultVerdi(k) {
   throw new Error('Ukjent kolonne-default for ' + k.kolonne + ': ' + d + ' - oppdater defaultVerdi() i testen');
 }
 
-const defaultRad = () => Object.fromEntries(KOLONNER.map((k) => [k.kolonne, defaultVerdi(k)]));
+// En leveranse (ordre uten bil, 2026-11-03) er en vanlig ordre-rad med ordretype = 'leveranse' og sine egne felt i jsonb-kolonnen `leveranse`. Alle bil-felt står på
+// kolonne-defaultene (tomme), akkurat som for en leveranse opprettet i appen. Hver kolonne fuzzes for BEGGE typer.
+const LEVERANSE_RAD = { ordretype: 'leveranse', ordre_status: 'under_arbeid', kunde: 'TEST - Kunde',
+  leveranse: { merking: 'TEST-merking', adresse: 'Veien 1', postnr: '3734', sted: 'Skien', kontaktTlf: '12345678', fraktselskap: 'TEST-selskap', kolli: '2 pakker', onsketHentedato: '2026-11-10', sporing: '', sendtDato: '', fraktAuto: true } };
+const TYPER = ['bil', 'leveranse'];
+const defaultRad = (type = 'bil') => {
+  const rad = Object.fromEntries(KOLONNER.map((k) => [k.kolonne, defaultVerdi(k)]));
+  return type === 'leveranse' ? { ...rad, ...structuredClone(LEVERANSE_RAD) } : rad;
+};
 
 // Verdiene databasen faktisk tillater for en kolonne (ut over defaulten).
 function varianter(k) {
@@ -58,10 +66,15 @@ const VISNINGER = [
 const LES_FUNKSJONER = ['tvangsflyt', 'tvangsflytBarHTML', 'tvangsflytBoksHTML'];
 
 const app = lastApp();
+// KJENT TESTMILJØ-SÆRTREKK (2026-11-03, årsak ikke funnet): avsluttes en vitest-fil mens `me` i appen er admin, dør worker-prosessen ved nedstenging («Worker exited unexpectedly»,
+// minuttlange hang) selv om alle tester er grønne. Samme kode kjørt rett i Node (se scratchpad-skriptene) avslutter normalt. Derfor settes `me` tilbake til en vanlig ansatt
+// etter hver kjøring (kjorAlle) og etter hver test som setter admin. Ikke fjern det uten å kjøre hele filen.
 
 // Kjører alle visninger mot en ordre-rad. Returnerer en liste med feilbeskrivelser (tom = trygt).
-function kjorAlle(rad, status) {
+function kjorAlle(rad, status, rolle = 'admin') {
   const feil = [];
+  // Innlogget som admin (ser ALLE seksjoner: fakturering, kjøreseddel, bil-effektivitet, godkjenning) eller vanlig ansatt (ser mindre). Begge må tåle raden.
+  app.settMe({ id: 1, navn: 'TEST - Bruker', rolle });
   let o;
   try { o = app.sandbox.dbToOrdre({ ...rad, status: status ?? rad.status }); }
   catch (e) { return ['dbToOrdre kastet: ' + e.message]; }
@@ -81,8 +94,13 @@ function kjorAlle(rad, status) {
   app.consoleFeil.length = 0;
   try { app.sandbox.openOrdre(o.id); } catch (e) { feil.push('openOrdre kastet: ' + e.message); }
   if (app.consoleFeil.length) feil.push('openOrdre logget feil: ' + app.consoleFeil[0]);
+  // buildOrdreDetail fanger egne feil og skriver dem som tekst i detaljvisningen (ingen kast, ingen console.error), så det må sjekkes her.
+  const detaljHtml = String(app.sandbox.document.getElementById('ordreDetail').innerHTML || '');
+  const detaljFeil = detaljHtml.match(/Feil ved lasting av ordre: ([^<]*)/);
+  if (detaljFeil) feil.push('ordredetaljen viser feil: ' + detaljFeil[1]);
   app.settAktivOrdre(null);
   try { app.sandbox.dbToOrdreFraRealtime(o, rad); } catch (e) { feil.push('dbToOrdreFraRealtime kastet: ' + e.message); }
+  app.settMe({ id: 1, navn: 'TEST - Bruker', rolle: 'ansatt' }); // se kommentar under «Kjent testmiljø-særtrekk»
   return feil;
 }
 
@@ -101,41 +119,98 @@ describe('oppsettet', () => {
   });
 });
 
-describe('en ordre slik databasen lager den når BARE kolonne-defaultene brukes', () => {
-  it('alle visninger tåler den (aktiv)', () => {
-    expect(kjorAlle(defaultRad(), 'aktiv')).toEqual([]);
+for (const type of TYPER) {
+  describe(`[${type}] en ordre slik databasen lager den når BARE kolonne-defaultene brukes`, () => {
+    it('alle visninger tåler den (aktiv), som admin og som vanlig ansatt', () => {
+      expect(kjorAlle(defaultRad(type), 'aktiv')).toEqual([]);
+      expect(kjorAlle(defaultRad(type), 'aktiv', 'ansatt')).toEqual([]);
+    });
+
+    it('alle visninger tåler den (arkivert)', () => {
+      expect(kjorAlle(defaultRad(type), 'arkivert')).toEqual([]);
+    });
+
+    it('en ordre med DE GAMLE defaultene (vekter = {}, fra før 2026-11-02) tåles også', () => {
+      expect(kjorAlle({ ...defaultRad(type), vekter: {} }, 'aktiv')).toEqual([]);
+    });
   });
 
-  it('alle visninger tåler den (arkivert)', () => {
-    expect(kjorAlle(defaultRad(), 'arkivert')).toEqual([]);
-  });
+  describe(`[${type}] hver kolonne, én om gangen, satt til hver verdi databasen tillater`, () => {
+    const tilfeller = [];
+    for (const k of KOLONNER) {
+      if (k.kolonne === 'id') continue;
+      for (const [navn, verdi] of varianter(k)) tilfeller.push({ k, navn, verdi });
+    }
 
-  it('en ordre med DE GAMLE defaultene (vekter = {}, fra før 2026-11-02) tåles også', () => {
-    expect(kjorAlle({ ...defaultRad(), vekter: {} }, 'aktiv')).toEqual([]);
+    it('det finnes mange tilfeller (testen tester faktisk noe)', () => {
+      expect(tilfeller.length).toBeGreaterThan(60);
+    });
+
+    it('ingen kombinasjon av kolonne og tom/NULL-verdi får en visning til å kaste eller logge feil', () => {
+      const funn = [];
+      for (const t of tilfeller) {
+        const rad = defaultRad(type);
+        rad[t.k.kolonne] = t.verdi;
+        for (const status of ['aktiv', 'arkivert']) {
+          for (const rolle of ['admin', 'ansatt']) {
+            const feil = kjorAlle(rad, status, rolle);
+            if (feil.length) funn.push(`${t.k.kolonne} = ${t.navn} (status ${status}, ${rolle}): ${feil.join(' | ')}`);
+          }
+        }
+      }
+      expect(funn).toEqual([]);
+    });
+  });
+}
+
+// Leveranse-spesifikke former: feltene i jsonb-kolonnen med feil type, og fraktstatus (bestilt/ikke) - ingen visning skal kaste.
+describe('[leveranse] uventet innhold i leveranse-kolonnen og fraktfeltene', () => {
+  const former = [
+    {}, [], 'tekst', 5, { merking: 5, adresse: null, postnr: [], sted: {}, fraktAuto: 'ja' },
+    { merking: 'X', fraktselskap: 'Finnes ikke i Kontakter', adresse: '', fraktAuto: false },
+    { merking: 'a'.repeat(2000), kolli: 'b'.repeat(2000) }, { __proto__: null, merking: 'X' },
+  ];
+  it('alle visninger tåler hver form for kolonnen leveranse', () => {
+    const funn = [];
+    for (const f of former) {
+      const feil = kjorAlle({ ...defaultRad('leveranse'), leveranse: f }, 'aktiv');
+      if (feil.length) funn.push(JSON.stringify(f).slice(0, 80) + ': ' + feil.join(' | '));
+    }
+    expect(funn).toEqual([]);
+  });
+  it('en leveranse med fraktbestilling sendt (frakt_bestilt_*) og med ugyldig tidspunkt tåles', () => {
+    for (const at of ['2026-11-03T10:00:00+00:00', 'ikke-en-dato', '']) {
+      expect(kjorAlle({ ...defaultRad('leveranse'), frakt_bestilt_at: at, frakt_bestilt_av: 'TEST', frakt_bestilt_til: 'x@y.z' }, 'aktiv')).toEqual([]);
+    }
+  });
+  it('alle ordrestatuser (også de som ikke hører til typen) tåles på begge typer', () => {
+    for (const type of TYPER) {
+      for (const st of ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'hentet', 'under_arbeid', 'klar_sending', 'sendt', 'ukjent', '']) {
+        expect(kjorAlle({ ...defaultRad(type), ordre_status: st }, 'aktiv')).toEqual([]);
+      }
+    }
   });
 });
 
-describe('hver kolonne, én om gangen, satt til hver verdi databasen tillater', () => {
-  const tilfeller = [];
-  for (const k of KOLONNER) {
-    if (k.kolonne === 'id') continue;
-    for (const [navn, verdi] of varianter(k)) tilfeller.push({ k, navn, verdi });
-  }
-
-  it('det finnes mange tilfeller (testen tester faktisk noe)', () => {
-    expect(tilfeller.length).toBeGreaterThan(60);
-  });
-
-  it('ingen kombinasjon av kolonne og tom/NULL-verdi får en visning til å kaste eller logge feil', () => {
-    const funn = [];
-    for (const t of tilfeller) {
-      const rad = defaultRad();
-      rad[t.k.kolonne] = t.verdi;
-      for (const status of ['aktiv', 'arkivert']) {
-        const feil = kjorAlle(rad, status);
-        if (feil.length) funn.push(`${t.k.kolonne} = ${t.navn} (status ${status}): ${feil.join(' | ')}`);
-      }
-    }
-    expect(funn).toEqual([]);
+describe('[leveranse] selve visningene bruker leveransens egen tegning (ikke bil-kortet)', () => {
+  it('ordrekortet og detaljen viser merking, LEVERANSE og fraktfelt, og ingen bil-seksjoner', () => {
+    const rad = defaultRad('leveranse');
+    expect(kjorAlle(rad, 'aktiv')).toEqual([]);
+    app.S.ordrer = [app.sandbox.dbToOrdre(rad)];
+    app.kjor('renderOrdreList()');
+    const kort = String(app.sandbox.document.getElementById('ordreListeResultat').innerHTML);
+    expect(kort).toContain('LEVERANSE');
+    expect(kort).toContain('TEST-merking');
+    expect(kort).not.toContain('tvangsflyt'.toUpperCase());
+    app.settMe({ id: 1, navn: 'TEST - Admin', rolle: 'admin' }); // Fakturering-kortet er bare for admin
+    app.sandbox.openOrdre(rad.id);
+    const detalj = String(app.sandbox.document.getElementById('ordreDetail').innerHTML);
+    expect(detalj).toContain('Kunde og merking');
+    expect(detalj).toContain('Veien 1');
+    expect(detalj).toContain('Fakturering');
+    expect(detalj).not.toContain('Vekter (kg)');
+    expect(detalj).not.toContain('Bilder – Ankomst');
+    app.settAktivOrdre(null);
+    app.settMe({ id: 1, navn: 'TEST - Bruker', rolle: 'ansatt' }); // aldri avslutt en testfil som admin (se kjorAlle)
   });
 });

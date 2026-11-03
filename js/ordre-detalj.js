@@ -131,6 +131,7 @@ function buildOrdreDetail() {
   const detailEl = document.getElementById('ordreDetail');
   const focusTag = document.activeElement?.tagName;
   if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
+  if (erLeveranse(o)) { buildLeveranseDetail(o); return; } // ordre uten bil: egen visning, se js/leveranse.js
   synkroniserOmbyggingFikenLinjer(o);
   synkroniserDrivstoffFikenLinje(o);
   vegvesenAutoGenererHvisKomplett(o);
@@ -579,8 +580,8 @@ function fikenLinjerHTML(o) {
       </div>`).join('')}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
-      <button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>
-      <button class="btn sm" onclick="leggTilFikenLinjeDrivstoff('${o.id}')">⛽ Hent drivstoff</button>
+      ${erLeveranse(o) ? '' : `<button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>
+      <button class="btn sm" onclick="leggTilFikenLinjeDrivstoff('${o.id}')">⛽ Hent drivstoff</button>`}
     </div>
   </div>`;
 }
@@ -701,7 +702,7 @@ async function kallFikenFakturer(id, ekstra) {
     const res = await edgeFetch('fiken-fakturer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ordreId: id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, linjer: sorterFikenLinjer(o.fikenLinjer), brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
+      body: JSON.stringify({ ordreId: id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, referanse: erLeveranse(o) ? leveranseFakturaReferanse(o) : undefined, linjer: sorterFikenLinjer(o.fikenLinjer), brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
     });
     const data = await res.json();
     if (data.needsBekreftelse) {
@@ -726,6 +727,7 @@ async function kallFikenFakturer(id, ekstra) {
     // siden den også fanger opp andre lokale endringer (f.eks. brukRabatt-avkrysningen) som
     // edge-funksjonen selv ikke skriver tilbake.
     if (!data.alleredeOpprettet) logChange(o, 'Fakturert - kladd opprettet i Fiken');
+    leveranseSjekkArkiver(o); // en leveranse som er sendt og nå fakturert arkiveres (no-op for bil-ordrer)
     await save(id);
     if (o.status === 'arkivert') renderArkiv();
     else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
@@ -804,6 +806,7 @@ function toggleFakturert(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   o.fakturert = !o.fakturert;
   logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
+  leveranseSjekkArkiver(o); // en leveranse som er sendt og nå fakturert arkiveres (no-op for bil-ordrer)
   save(id);
   // Kan nå trykkes fra tre steder: Fakturering-kortet på selve ordresiden, Arkiv-kortet,
   // og avkrysningen på ordrekortet i Ordreliste - oppdater den visningen man faktisk står
@@ -911,6 +914,7 @@ async function bekreftAdminMeldPaa() {
 }
 
 function tvangsflyt(o) {
+  if (erLeveranse(o)) return []; // en leveranse har ingen tvangsflyt (ingen bil, biltilsyn eller godkjenning)
   const ombyggingValgt = o.ombygging && Object.values(o.ombygging).some(Boolean);
   return [
     {lbl:'Diagnose utført',   ok: !!o.diagnose},
@@ -940,6 +944,7 @@ function tvangsflyt(o) {
 // "Godkjenn og lukk"-knapp helt til noe HELT ANNET tilfeldigvis trigget en full rendering
 // (funnet 2026-10-22).
 function tvangsflytBoksHTML(o) {
+  if (erLeveranse(o)) return '';
   const tf = tvangsflyt(o);
   const tvangsflytOk = tf.every(t=>t.ok);
   const erAdmin = me && me.rolle==='admin';
@@ -1224,7 +1229,7 @@ const CHASSIS_HEL_STIL = 'white-space:nowrap';
 
 // Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
 // regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.
-function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
+function ordreLabel(o){ if (erLeveranse(o)) return esc(leveranseTittel(o)); return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
 // Chassisnummeret brøt tidligere midt i seg selv på mobil, fikset tre runder på rad
 // (2026-09-30, 2026-10-01, 2026-10-02) ved å pakke "Chassis: <nr>" inn i en
 // white-space:nowrap-span - men det tvang samtidig status-knappen ved siden av ned på en
@@ -1235,6 +1240,13 @@ function ordreLabel(o){ return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.ch
 // ord), og status-knappen kan da bli stående ved siden av tittelen slik den skal. Bekreftet
 // visuelt i 360px mobilbredde med flere chassis-lengder før dette ble endret.
 function ordreLabelFull(o){
+  if (erLeveranse(o)) {
+    // merking først; reg.nr og chassis hvis de også er fylt ut (samme skille som for biler)
+    const deler = [leveranseTittel(o)];
+    if (o.regnr && o.regnr !== deler[0]) deler.push(o.regnr);
+    if (o.chassis && o.chassis !== deler[0]) deler.push('Chassis: '+o.chassis);
+    return deler.map(esc).join(' · ');
+  }
   if (o.regnr && o.chassis) return esc(o.regnr)+' · Chassis: '+esc(o.chassis);
   if (!o.regnr && o.chassis) return 'Chassis: '+esc(o.chassis);
   return ordreLabel(o);

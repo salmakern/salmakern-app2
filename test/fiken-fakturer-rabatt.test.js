@@ -416,3 +416,55 @@ describe('fiken-fakturer: kjent, akseptert avrundingsforskjell mot portalen (fak
     expect(linjer[1].unitPrice).toBe(22200);
   });
 });
+
+// ── Leveranse (ordre uten bil, 2026-11-03): referansen på fakturaen ─────────────────────────────────────────────────────
+// En leveranse kan mangle chassis. Klienten sender da `referanse` (merking, reg.nr og chassis det finnes av) som brukes som Ordrereferanse i Fiken.
+// Bil-ordrer sender ingen `referanse` og skal få nøyaktig samme referanse som før.
+describe('fiken-fakturer: ordrereferanse (leveranse vs bil)', () => {
+  const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
+  async function hentKladd(body) {
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(body);
+    expect(res.status).toBe(201);
+    expect(draftKall).toHaveLength(1);
+    return draftKall[0];
+  }
+
+  it('leveranse uten chassis: referansen blir merkingen, og ingen «Ch. nr.»-kommentar på linjen', async () => {
+    const kladd = await hentKladd(standardBody([linje('200')], { referanse: 'TEST-merking - AB12345' }));
+    expect(kladd.orderReference).toBe('TEST-merking - AB12345');
+    expect(kladd.lines[0].comment).toBeUndefined();
+  });
+
+  it('leveranse med chassis: `referanse` vinner for ordrereferansen, og «Ch. nr.» står fortsatt på siste linje', async () => {
+    const kladd = await hentKladd(standardBody([linje('100'), linje('200')], { chassisNr: 'WVWZZZ1KZ6W123456', referanse: 'Løsning X - WVWZZZ1KZ6W123456' }));
+    expect(kladd.orderReference).toBe('Løsning X - WVWZZZ1KZ6W123456');
+    expect(kladd.lines[1].comment).toBe('Ch. nr. WVWZZZ1KZ6W123456');
+    expect(kladd.lines[0].comment).toBeUndefined();
+  });
+
+  it('en lang referanse kappes til 100 tegn', async () => {
+    const kladd = await hentKladd(standardBody([linje('200')], { referanse: 'x'.repeat(250) }));
+    expect(kladd.orderReference).toHaveLength(100);
+  });
+
+  it('en tom eller bare-mellomrom referanse regnes som fraværende (faller tilbake til chassis-regelen)', async () => {
+    const a = await hentKladd(standardBody([linje('200')], { referanse: '   ', chassisNr: 'CH1' }));
+    expect(a.orderReference).toBe('CH1');
+    const b = await hentKladd(standardBody([linje('200')], { referanse: '' }));
+    expect(b.orderReference).toBeUndefined();
+  });
+
+  it('bil-ordre uten `referanse` er UENDRET: «chassis - regnr», bare chassis, eller ingen referanse', async () => {
+    expect((await hentKladd(standardBody([linje('200')], { chassisNr: 'CH1', regnr: 'AB12345' }))).orderReference).toBe('CH1 - AB12345');
+    expect((await hentKladd(standardBody([linje('200')], { chassisNr: 'CH1' }))).orderReference).toBe('CH1');
+    expect((await hentKladd(standardBody([linje('200')], {}))).orderReference).toBeUndefined();
+  });
+
+  it('en referanse som ikke er tekst (tall, objekt) ignoreres', async () => {
+    const a = await hentKladd(standardBody([linje('200')], { referanse: 12345, chassisNr: 'CH1' }));
+    expect(a.orderReference).toBe('CH1');
+    const b = await hentKladd(standardBody([linje('200')], { referanse: { x: 1 } }));
+    expect(b.orderReference).toBeUndefined();
+  });
+});

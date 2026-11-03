@@ -493,6 +493,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <button class="btn" id="tilGodkjBtn" style="display:none;position:relative" onclick="apneTilGodkjenningModal()">
                 ✅ Til godkjenning<span class="knapp-tall-badge" id="tilGodkjBadge" style="display:none">0</span>
               </button>
+              <button class="btn" onclick="apneNyLeveranseModal()" title="En ordre uten bil, for å sende av gårde løsninger">+ Ny leveranse</button>
               <button class="btn red" onclick="apneNyOrdreModal()">+ Ny ordre</button>
             </div>
           </div>
@@ -510,6 +511,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <option value="klar_henting">Klar for henting</option>
               <option value="bestilt_frakt">Bestilt frakt</option>
               <option value="hentet">Hentet</option>
+              <option value="leveranse">Leveranser (alle)</option>
+              <option value="under_arbeid">Leveranse: Under arbeid</option>
+              <option value="klar_sending">Leveranse: Klar til sending</option>
+              <option value="sendt">Leveranse: Sendt</option>
             </select>
             <select id="ordreSorterValg" onchange="renderOrdreList()" style="width:auto;flex-shrink:0;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
               <option value="">Standard rekkefølge</option>
@@ -1372,6 +1377,67 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
+<div class="modal" id="nyLeveranse">
+  <div class="modal-box">
+    <div class="h">Ny leveranse</div>
+    <div class="small muted" style="margin-top:6px">En ordre uten bil, for å sende av gårde løsninger. Fyll inn minst ett av <b>merking</b>, <b>reg.nr</b> eller <b>chassis-nr</b>.</div>
+
+    <div class="box" style="margin-top:14px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KUNDE</div>
+      <div class="grid g2">
+        <div class="felt-wrap">
+          <label>Kunde / forhandler</label>
+          <input id="lev_kunde" autocomplete="off"
+            oninput="renderEierForslag('lev_kunde','lev_eier','lev_eier_forslag');renderForhandlerForslag('lev_kunde','lev_kunde','lev_kunde','lev_kunde_forslag')"
+            onfocus="visFeltDropdown('lev_kunde_forslag')" onblur="skjulFeltDropdown(document.getElementById('lev_kunde_forslag'))">
+          <div id="lev_kunde_forslag" class="felt-dropdown"></div>
+        </div>
+        <div class="felt-wrap">
+          <label>Kontaktperson</label>
+          <input id="lev_eier" autocomplete="off"
+            onfocus="visFeltDropdown('lev_eier_forslag')" onblur="skjulFeltDropdown(document.getElementById('lev_eier_forslag'))">
+          <div id="lev_eier_forslag" class="felt-dropdown"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">MERKING</div>
+      <div class="grid g2">
+        <div style="grid-column:1/-1"><label>Merking</label><input id="lev_merking" placeholder="F.eks. kundens ordrenr eller en beskrivelse" autocomplete="off"></div>
+        <div><label>Reg.nr</label><input id="lev_regnr" placeholder="EL 84213" autocomplete="off" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"></div>
+        <div>
+          <label>Chassis-nr (VIN)</label>
+          <input id="lev_chassis" maxlength="17" placeholder="17 tegn" autocomplete="off" oninput="document.getElementById('lev_chassis_tel').textContent=this.value.length+'/17'">
+          <div class="small muted" id="lev_chassis_tel" style="margin-top:4px;text-align:right">0/17</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="box" style="margin-top:10px">
+      <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">FRAKT (kan fylles ut senere)</div>
+      <div class="grid g2">
+        <div><label>Fraktselskap</label><select id="lev_fraktselskap"></select></div>
+        <div><label>Ønsket hentedato</label><input id="lev_hentedato" type="date"></div>
+        <div style="grid-column:1/-1"><label>Leveringsadresse</label><input id="lev_adresse" autocomplete="off"></div>
+        <div><label>Postnr.</label><input id="lev_postnr" autocomplete="off"></div>
+        <div><label>Sted</label><input id="lev_sted" autocomplete="off"></div>
+        <div><label>Telefon mottaker</label><input id="lev_tlf" autocomplete="off"></div>
+        <div><label>Gods / kolli</label><input id="lev_kolli" placeholder="F.eks. 2 pakker" autocomplete="off"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+        <input type="checkbox" id="lev_fraktauto" checked style="width:15px;height:15px;accent-color:#22c55e">
+        <span class="small">Bestill frakt automatisk på e-post når den settes til «Klar til sending»</span>
+      </label>
+    </div>
+
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="opprettLeveranse()">Opprett leveranse</button>
+      <button class="btn" onclick="closeModal('nyLeveranse')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="nyttMote">
   <div class="modal-box">
     <div class="h">Nytt møte</div>
@@ -1761,6 +1827,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <script src="js/admin-ark.js"></script>
 <script src="js/vegvesen-dokumenter.js"></script>
 <script src="js/hms.js"></script>
+<script src="js/leveranse.js"></script>
 <!-- Ansatt-detalj modal -->
 <div class="modal" id="ansattDetaljModal">
   <div class="modal-box" style="max-width:520px;width:95%">

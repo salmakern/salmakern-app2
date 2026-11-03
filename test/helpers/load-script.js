@@ -18,6 +18,8 @@ export function loadScript(filnavn, ekstraGlobals = {}) {
     console,
     Math, Date, JSON, Array, Object, String, Number, Boolean,
     Set, Map, Promise, RegExp,
+    // Delt hjelper fra core.js som flere filer bruker (ordre uten bil, 2026-11-03); i appen er den global. Samme definisjon som i core.js.
+    erLeveranse: (o) => !!o && o.ordretype === 'leveranse',
     ...ekstraGlobals
   };
   vm.createContext(sandbox);

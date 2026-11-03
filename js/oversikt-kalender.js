@@ -89,6 +89,7 @@ function renderOrdreList() {
     if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }
     // «Bestilt frakt» er en markering på ordren, ikke en ordreStatus (se core.js), så den kan ikke sammenlignes med ordreStatus.
     else if (statusFilter === 'bestilt_frakt') { if (!erBestiltFraktAktiv(o)) return false; }
+    else if (statusFilter === 'leveranse') { if (!erLeveranse(o)) return false; }
     else if (statusFilter && o.ordreStatus !== statusFilter) return false;
     if (!sokTekst) return true;
     return (o.regnr||'').toLowerCase().includes(sokTekst) ||
@@ -99,12 +100,14 @@ function renderOrdreList() {
            (o.modell||'').toLowerCase().includes(sokTekst) ||
            (o.chassis||'').toLowerCase().includes(sokTekst) ||
            (o.utstyr?.skalHa||'').toLowerCase().includes(sokTekst) ||
-           (o.utstyr?.har||'').toLowerCase().includes(sokTekst);
+           (o.utstyr?.har||'').toLowerCase().includes(sokTekst) ||
+           (erLeveranse(o) && ((o.leveranse.merking||'').toLowerCase().includes(sokTekst) || (o.leveranse.adresse||'').toLowerCase().includes(sokTekst) || (o.leveranse.sted||'').toLowerCase().includes(sokTekst) || (o.leveranse.fraktselskap||'').toLowerCase().includes(sokTekst)));
   }).sort(sorterFn);
   const antallEl = document.getElementById('ordreListAntall');
   if (antallEl) antallEl.textContent = `${alle.length} ordre${alle.length===1?'':'r'} · Klikk for å åpne`;
   if (resultatEl) resultatEl.innerHTML = alle.length ? alle.map(o=>{
     try {
+    if (erLeveranse(o)) return leveranseKortHTML(o);
     const si = statusInfo(o.ordreStatus);
     const drivstoffTekst = drivstoffKundeprisTekst(o);
     return `<div style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:13px;min-width:0">
@@ -184,17 +187,19 @@ function renderOversikt(q) {
   const mnd = now.getMonth(), yr = now.getFullYear();
   // "Ferdigstilt denne måneden" bruker dato_klar_henting (når ordren faktisk ble klar), ikke
   // ankomstdato - en ordre som ankom i fjor men ble klar nå skal telle med her.
-  document.getElementById('s1').textContent = S.ordrer.filter(o=>{
+  // Oversikten gjelder biler (kalender, biltilsyn, ankomst). Leveranser (ordre uten bil) vises i Ordre-fanen.
+  const bil = S.ordrer.filter(o => !erLeveranse(o));
+  document.getElementById('s1').textContent = bil.filter(o=>{
     if (o.status!=='aktiv' || !['klar_henting','hentet'].includes(o.ordreStatus) || !o.datoKlarHenting) return false;
     const d = new Date(o.datoKlarHenting); return d.getMonth()===mnd && d.getFullYear()===yr;
   }).length;
-  document.getElementById('s2').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)).length;
-  document.getElementById('s3').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt').length;
-  document.getElementById('s4').textContent = S.ordrer.filter(o=>o.status==='aktiv'&&!o.kalenderDato).length;
+  document.getElementById('s2').textContent = bil.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)).length;
+  document.getElementById('s3').textContent = bil.filter(o=>o.status==='aktiv'&&o.ordreStatus==='ikke_paabegynt').length;
+  document.getElementById('s4').textContent = bil.filter(o=>o.status==='aktiv'&&!o.kalenderDato).length;
 
   const match = o => !q || ordreLabel(o).toLowerCase().includes(q.toLowerCase())||(o.chassis||'').toLowerCase().includes(q.toLowerCase())||(o.kunde||'').toLowerCase().includes(q.toLowerCase())||(o.eier||'').toLowerCase().includes(q.toLowerCase());
-  const aktive  = S.ordrer.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)&&match(o)).sort(sorterOrdre);
-  const pending = S.ordrer.filter(o=>o.status==='aktiv'&&(o.ordreStatus==='ikke_paabegynt'||o.ordreStatus==='paa_vei')&&match(o)).sort(sorterOrdre);
+  const aktive  = bil.filter(o=>o.status==='aktiv'&&['paabegynt','ikke_veid','klar_visning','vist_biltilsyn'].includes(o.ordreStatus)&&match(o)).sort(sorterOrdre);
+  const pending = bil.filter(o=>o.status==='aktiv'&&(o.ordreStatus==='ikke_paabegynt'||o.ordreStatus==='paa_vei')&&match(o)).sort(sorterOrdre);
 
   const activeEl = document.getElementById('activeList');
   const activeElHarFokusertValg = activeEl.contains(document.activeElement) && document.activeElement.tagName === 'SELECT';
@@ -382,7 +387,7 @@ function renderWeek() {
   const dayCols = dates.map((dt) => {
     const ds      = dt.toISOString().split('T')[0];
     const isToday = ds === todayStr;
-    const orders  = S.ordrer.filter(o => o.kalenderDato === ds && o.status === 'aktiv');
+    const orders  = S.ordrer.filter(o => o.kalenderDato === ds && o.status === 'aktiv' && !erLeveranse(o));
     const moter   = (S.moter||[]).filter(m => m.dato === ds);
 
     const slotEls = slots30.map(s => {
@@ -525,6 +530,7 @@ function apneHurtigOppgaveInput(el) {
 
 async function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (erLeveranse(o)) return endreLeveranseStatus(id, nyStatus); // egen løype og regler, se js/leveranse.js
   const forrigeStatus = o.ordreStatus;
   const forrigeArkivStatus = o.status;
   const forrigeDatoKlarHenting = o.datoKlarHenting;
@@ -662,7 +668,7 @@ function statusDropdown(ordreId, currentStatus, extraStyle='', extraClass='') {
   // siden en <select> ellers ikke krymper under sin egen tekstbredde i en flex-rad.
   const pilStil = `appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url('${statusDropdownPilSvg(si.txt)}');background-repeat:no-repeat;background-position:right 7px center;background-size:10px;padding-right:22px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
   return `<select class="${extraClass}" onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle};${pilStil}">
-    ${STATUSER.map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
+    ${(erLeveranse(S.ordrer.find(x=>x.id===ordreId)) ? LEVERANSE_STATUSER : STATUSER).map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
   </select>`;
 }
 
@@ -779,6 +785,7 @@ function dokStatusKortHTML(o) {
 // krav som tvangsflyt(o) i ordre-detalj.js, bare vist som en rad segmenter i
 // stedet for en full ✔/✕-liste, siden kortene har begrenset plass.
 function tvangsflytBarHTML(o) {
+  if (erLeveranse(o)) return '';
   const tf = tvangsflyt(o);
   const oppfylt = tf.filter(t=>t.ok).length;
   const si = statusInfo(o.ordreStatus);
