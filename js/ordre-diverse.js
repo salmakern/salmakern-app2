@@ -622,6 +622,17 @@ function openFlytt(id) {
 }
 async function bekreftFlytt() {
   const o=S.ordrer.find(x=>x.id===flyttOrdreId); if(!o) return;
+  if (erLeveranse(o)) {
+    // Leveranse: bare kalendertiden settes (målrettet skriving). Time på biltilsynet/Admin-ark gjelder biler, og chassis.nr kan være samme som en bil.
+    const dato = document.getElementById('fl_dato').value, tid = document.getElementById('fl_tid').value || '09:00';
+    const ugyldig = leveranseKalenderUgyldig(dato, tid);
+    if (ugyldig) { visToast(ugyldig); return; }
+    const ok = await leveranseSettKalender(o, dato, tid, 'Flyttet til kalender: ' + dato + ' ' + tid);
+    if (!ok) return;
+    closeModal('flytt'); renderAll();
+    if (activeOrdreId===flyttOrdreId) buildOrdreDetail();
+    return;
+  }
   o.kalenderDato=document.getElementById('fl_dato').value;
   o.kalenderTid=document.getElementById('fl_tid').value;
   logChange(o,'Flyttet til kalender: '+o.kalenderDato+' '+o.kalenderTid);

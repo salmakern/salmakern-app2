@@ -1423,14 +1423,27 @@ function planleggLocalSpeiling() {
     try { localStorage.setItem(STORE, JSON.stringify(S)); } catch(e) {}
   }, 400);
 }
+// LAGRINGER AV SAMME ORDRE GÅR ETTER HVERANDRE (2026-11-03). To save() på samme ordre tett etter hverandre (f.eks. et felt som mister fokus og så «Legg til pakke»)
+// ble sendt som to SAMTIDIGE forespørsler, og de kan lande i feil rekkefølge: den ELDSTE sto da igjen i databasen mens skjermen viste den nyeste, uten feilmelding. Målt mot den ekte databasen:
+// 2 av 12 par med 0 ms mellomrom endte med den gamle verdien. Nå sendes én lagring om gangen per ordre; kommer det flere mens én pågår, slås de sammen til ÉN oppfølger som leser den SIST lokale
+// tilstanden når den starter. (Målrettede RPC-er/oppdateringer er egne kall og berøres ikke.)
+const _saveKo = {}; // ordre-id -> { pagar: løftet for lagringen som er på vei, ventende: løftet for oppfølgeren }
 function save(ordreId) {
   planleggLocalSpeiling();
   if (!db || !ordreId) return Promise.resolve(null);
-  const o = S.ordrer.find(x=>x.id===ordreId);
-  if (!o) return Promise.resolve(null);
+  if (!S.ordrer.find(x=>x.id===ordreId)) return Promise.resolve(null);
   // Ignorer Realtime-oppdatering for denne ordren i 10 sekunder
   ignorerRealtimeFor.add(ordreId);
   setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
+  const st = _saveKo[ordreId] || (_saveKo[ordreId] = { pagar: null, ventende: null });
+  if (!st.pagar) return sendLagring(ordreId, st);
+  // Oppfølgeren starter når den pågående er ferdig (også etter en feil), men senest etter 30 s: en forespørsel som henger (mobilnett) skal ikke stoppe alle senere lagringer av ordren for alltid.
+  if (!st.ventende) { const neste = () => { st.ventende = null; return sendLagring(ordreId, st); }; st.ventende = Promise.race([st.pagar, new Promise(ok => setTimeout(ok, 30000))]).then(neste, neste); }
+  return st.ventende;
+}
+function sendLagring(ordreId, st) {
+  const o = S.ordrer.find(x=>x.id===ordreId);
+  if (!o) return Promise.resolve(null);
   // status/ordre_status/godkjent/godkjenner_navn utelates bevisst her - de har
   // egne målrettede oppdateringer (endreStatus/arkiver/bekreftGodkjenn)
   // og skal ALDRI skrives via denne generelle full-rad-lagringen. Grunnen: hvis
@@ -1466,7 +1479,10 @@ function save(ordreId) {
   // fiken_kladd_url utelates likeledes (lagt til 2026-10-30, s09-006) - skrives KUN av
   // fiken-fakturer-funksjonen selv, server-side, aldri av klienten.
   delete payload.fiken_kladd_url;
-  return db.from('ordrer').upsert(payload)
+  // Kalenderplasseringen til en LEVERANSE skrives bare av leveranseSettKalender() (målrettet update, leveranse.js): en full-rad-lagring fra en gammel lokal kopi kunne ellers skrive en
+  // gammel dato tilbake over en nyere flytting (også en kollegas). Opprettelsen bruker egen insert, så den har fortsatt kalenderen med.
+  if (erLeveranse(o)) { delete payload.kalender_dato; delete payload.kalender_tid; }
+  const lop = db.from('ordrer').upsert(payload)
     .then(r=>{
       if (r.error) {
         console.error('Lagringsfeil:', r.error.message);
@@ -1481,6 +1497,10 @@ function save(ordreId) {
       oppdaterLagreStatusBadge();
       return null;
     });
+  st.pagar = lop;
+  const frigi = () => { if (st.pagar === lop) st.pagar = null; }; // registrert FØRE en eventuell oppfølger, så den ser en ledig kø
+  lop.then(frigi, frigi);
+  return lop;
 }
 
 // ════════════════════════════════════════════════════

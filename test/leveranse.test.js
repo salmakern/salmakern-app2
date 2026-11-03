@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -9,6 +9,10 @@ import { lastApp } from './helpers/app-harness.js';
 
 const app = lastApp();
 const { sandbox, S } = app;
+// Testene bytter ut globale funksjoner med spioner (save, closeModal, renderAll, visToast ...). De ekte settes tilbake etter hver test, så en spion aldri lekker inn i neste test.
+const EKTE = { save: sandbox.save, closeModal: sandbox.closeModal, renderAll: sandbox.renderAll, visToast: sandbox.visToast, adminArkLagreFelter: sandbox.adminArkLagreFelter,
+  openKalenderStedModal: sandbox.openKalenderStedModal, edgeFetch: sandbox.edgeFetch, confirm: sandbox.confirm, alert: sandbox.alert, oppdaterOrdreFikenLinje: sandbox.oppdaterOrdreFikenLinje, localStorage: sandbox.localStorage };
+afterEach(() => { Object.assign(sandbox, EKTE); });
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const les = (f) => readFileSync(path.resolve(__dirname, '../' + f), 'utf8').replace(/\r\n/g, '\n');
 
@@ -686,5 +690,784 @@ describe('pakker (vekt og mål) og fraktpris', () => {
       expect(html).toContain('Husk vekt og mål på pakkene');
       expect(sandbox.leveranseFraktKortHTML(lev({ kolliListe: [{ antall: 1, vekt: 5, lengde: 1, bredde: 1, hoyde: 1 }] }))).not.toContain('Husk vekt og mål');
     });
+  });
+});
+
+// ─── Kalender (Henrik 2026-11-03): en ny leveranse legges i verkstedkalenderen den dagen og det klokkeslettet den opprettes ────────────────────────────────────
+// 2026-11-03 er en tirsdag. Alle klokkeslett er LOKAL tid (veggklokka), aldri UTC.
+describe('kalender: tidspunktet en ny leveranse får', () => {
+  const lokal = (y, m, d, h = 0, min = 0) => new Date(y, m - 1, d, h, min);
+  const kt = (d) => sandbox.leveranseKalenderTidspunkt(d);
+  it('en hverdag innenfor 07:30-15:30 får nøyaktig opprettelsestidspunktet', () => {
+    expect(kt(lokal(2026, 11, 3, 10, 17))).toEqual({ dato: '2026-11-03', tid: '10:17' });
+    expect(kt(lokal(2026, 11, 6, 9, 5))).toEqual({ dato: '2026-11-06', tid: '09:05' });
+  });
+  it('grensene: 07:30 og 15:30 beholdes; før 07:30 blir 07:30 og etter 15:30 blir 15:30, begge samme dag', () => {
+    expect(kt(lokal(2026, 11, 3, 7, 30))).toEqual({ dato: '2026-11-03', tid: '07:30' });
+    expect(kt(lokal(2026, 11, 3, 7, 29)).tid).toBe('07:30');
+    expect(kt(lokal(2026, 11, 3, 0, 0))).toEqual({ dato: '2026-11-03', tid: '07:30' });
+    expect(kt(lokal(2026, 11, 3, 15, 30)).tid).toBe('15:30');
+    expect(kt(lokal(2026, 11, 3, 15, 31)).tid).toBe('15:30');
+    expect(kt(lokal(2026, 11, 3, 23, 59))).toEqual({ dato: '2026-11-03', tid: '15:30' });
+  });
+  it('lørdag og søndag blir mandag 07:30 (også over månedsskifte og årsskifte)', () => {
+    expect(kt(lokal(2026, 11, 7, 12, 0))).toEqual({ dato: '2026-11-09', tid: '07:30' }); // lørdag
+    expect(kt(lokal(2026, 11, 8, 9, 0))).toEqual({ dato: '2026-11-09', tid: '07:30' });  // søndag
+    expect(kt(lokal(2026, 10, 31, 11, 0))).toEqual({ dato: '2026-11-02', tid: '07:30' }); // lørdag over månedsskifte
+    expect(kt(lokal(2027, 1, 2, 11, 0))).toEqual({ dato: '2027-01-04', tid: '07:30' });   // lørdag over årsskifte
+    expect(kt(lokal(2026, 12, 27, 18, 0))).toEqual({ dato: '2026-12-28', tid: '07:30' }); // søndag
+  });
+  it('bruker lokal tid: en lokal mandag kl. 00:30 er fortsatt mandag (ikke en dag tilbake slik UTC kunne gitt)', () => {
+    expect(kt(lokal(2026, 11, 2, 0, 30))).toEqual({ dato: '2026-11-02', tid: '07:30' });
+  });
+  it('ugyldig eller manglende dato gir et gyldig tidspunkt (nå) uten å kaste, og inndataene endres ikke', () => {
+    for (const d of [undefined, null, 'x', new Date('x'), {}]) expect(kt(d)).toMatchObject({ dato: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), tid: expect.stringMatching(/^\d{2}:\d{2}$/) });
+    const lordag = lokal(2026, 11, 7, 12, 0); const foer = lordag.getTime();
+    kt(lordag);
+    expect(lordag.getTime()).toBe(foer);
+  });
+});
+
+describe('kalender: opprettelse, visning og flytting', () => {
+  const sett = (felt) => { Object.entries(felt).forEach(([k, v]) => { sandbox.document.getElementById(k).value = v; }); };
+  const lokal = (y, m, d, h = 0, min = 0) => new Date(y, m - 1, d, h, min);
+  // «Nå» i modulen settes til et fast tidspunkt (en Date-klasse som gir dette når den lages uten argument).
+  function fastNaa(d) {
+    const Ekte = Date;
+    class Fast extends Ekte { constructor(...a) { super(...(a.length ? a : [d.getTime()])); } static now() { return d.getTime(); } }
+    sandbox.Date = Fast;
+    return () => { sandbox.Date = Ekte; };
+  }
+  const spioner = () => {
+    const r = { admin: [], sted: [], lagret: [], toast: [] };
+    sandbox.adminArkLagreFelter = async (...a) => { r.admin.push(a); };
+    sandbox.openKalenderStedModal = (id) => { r.sted.push(id); };
+    sandbox.save = (id) => { r.lagret.push(id); };
+    sandbox.document.removeEventListener = () => {};
+    sandbox.visToast = (m) => { r.toast.push(m); };
+    return r;
+  };
+  const kalOppdateringer = (kall) => oppdateringer(kall).filter((u) => 'kalender_dato' in u);
+  const skjemaTilNyLeveranse = () => { sett({ lev_kunde: 'TEST Kunde AS', lev_merking: 'TEST-kal', lev_pakker: '', lev_vekt: '', lev_lengde: '', lev_bredde: '', lev_hoyde: '', lev_fraktpris: '' }); sandbox.alert = () => {}; };
+
+  it('«Ny leveranse» får kalenderdato og -tid fra opprettelsestidspunktet, og de lagres i databasen', () => {
+    const { db, kall } = lagDb(); app.settDb(db); edgeFake(); skjemaTilNyLeveranse();
+    const tilbake = fastNaa(lokal(2026, 11, 3, 10, 17));
+    try { sandbox.opprettLeveranse(); } finally { tilbake(); }
+    const o = S.ordrer[S.ordrer.length - 1];
+    expect(o).toMatchObject({ ordretype: 'leveranse', kalenderDato: '2026-11-03', kalenderTid: '10:17' });
+    expect(innsettinger(kall)[0]).toMatchObject({ kalender_dato: '2026-11-03', kalender_tid: '10:17', ordretype: 'leveranse' });
+  });
+  it('opprettet i helga eller etter stengetid: mandag 07:30 / 15:30 samme dag', () => {
+    const { db } = lagDb(); app.settDb(db); edgeFake(); skjemaTilNyLeveranse();
+    let tilbake = fastNaa(lokal(2026, 11, 7, 12, 0));
+    try { sandbox.opprettLeveranse(); } finally { tilbake(); }
+    expect(S.ordrer[S.ordrer.length - 1]).toMatchObject({ kalenderDato: '2026-11-09', kalenderTid: '07:30' });
+    skjemaTilNyLeveranse();
+    tilbake = fastNaa(lokal(2026, 11, 4, 17, 45));
+    try { sandbox.opprettLeveranse(); } finally { tilbake(); }
+    expect(S.ordrer[S.ordrer.length - 1]).toMatchObject({ kalenderDato: '2026-11-04', kalenderTid: '15:30' });
+  });
+
+  describe('ukekalenderen', () => {
+    const uke = () => { sandbox.renderWeek(); return sandbox.document.getElementById('weekCal').innerHTML; };
+    const medFastNaa = (f) => { const tilbake = fastNaa(lokal(2026, 11, 3, 10, 17)); try { return f(); } finally { tilbake(); } };
+    it('en aktiv leveranse med kalenderdato i uka vises med 🚚, tittel, tid og status; bil-kort har ikke 🚚', () => {
+      S.ordrer = [nyLeveranse({ kalender_dato: '2026-11-04', kalender_tid: '13:00' }), nyBil({ kalender_dato: '2026-11-05', kalender_tid: '09:00' })];
+      const html = medFastNaa(uke);
+      expect(html).toContain('🚚 TEST-merking');
+      expect(html).toContain("openOrdre('ord_TESTLEV1')");
+      expect(html).toContain('13:00');
+      expect(html).toContain('Under arbeid');
+      expect(html).toContain("openOrdre('ord_TESTBIL1')");
+      expect(html.match(/🚚/g)).toHaveLength(1);
+    });
+    it('arkivert, uten kalenderdato, eller i en annen uke vises ikke', () => {
+      S.ordrer = [nyLeveranse({ id: 'ord_A', status: 'arkivert', kalender_dato: '2026-11-04', kalender_tid: '13:00' }),
+        nyLeveranse({ id: 'ord_B', kalender_dato: null }), nyLeveranse({ id: 'ord_C', kalender_dato: '2026-11-12', kalender_tid: '09:00' })];
+      const html = medFastNaa(uke);
+      for (const id of ['ord_A', 'ord_B', 'ord_C']) expect(html).not.toContain(`openOrdre('${id}')`);
+    });
+    it('et uventet kalenderfelt (tom tid, skadet verdi) gir aldri en tom uke', () => {
+      S.ordrer = [nyLeveranse({ id: 'ord_D', kalender_dato: '2026-11-04', kalender_tid: '' }), nyLeveranse({ id: 'ord_E', kalender_dato: '2026-11-04', kalender_tid: '<b>' }), nyBil({ kalender_dato: '2026-11-05', kalender_tid: '09:00' })];
+      const html = medFastNaa(uke);
+      expect(html).toContain("openOrdre('ord_D')");
+      expect(html).toContain("openOrdre('ord_TESTBIL1')");
+    });
+  });
+
+  describe('dra, flytt og fjern rører aldri Admin-ark eller Time på biltilsynet for en leveranse', () => {
+    const CHASSIS = 'TESTWXYZ0000000A1';
+    const oppsett = () => {
+      const lev = nyLeveranse({ chassis: CHASSIS, kalender_dato: '2026-11-03', kalender_tid: '10:17' });
+      const bil = nyBil({ chassis: CHASSIS, kalender_dato: '2026-11-04', kalender_tid: '09:00', tid_biltilsynet: '2026-11-04', tid_biltilsynet_tid: '09:00', tid_biltilsynet_sted: 'Skien' });
+      S.ordrer = [lev, bil];
+      return { lev, bil };
+    };
+    const slippPaa = (id, dato, tid) => {
+      sandbox.document.elementFromPoint = () => ({ closest: () => ({ dataset: { dato, tid } }) });
+      app.kjor(`_dragOrdre = { id: '${id}', moved: true, ghostEl: null, kortEl: null, x: 0, y: 0, startX: 0, startY: 0 }`);
+      sandbox.dragOrdreEnd({ clientX: 1, clientY: 1 });
+    };
+    it('dra: leveransen får ny dato/tid med én målrettet oppdatering, uten sted-dialog, uten Admin-ark, og bilen med samme chassis er urørt', async () => {
+      const r = spioner(); const { db, kall } = lagDb(); app.settDb(db);
+      const { lev, bil } = oppsett();
+      slippPaa(lev.id, '2026-11-05', '13:00');
+      await new Promise((ok) => setTimeout(ok, 10));
+      expect(lev).toMatchObject({ kalenderDato: '2026-11-05', kalenderTid: '13:00' });
+      expect(kalOppdateringer(kall)).toEqual([{ kalender_dato: '2026-11-05', kalender_tid: '13:00' }]);
+      expect(r.sted).toEqual([]); expect(r.admin).toEqual([]); expect(r.lagret).toEqual([]);
+      expect(kall.some((k) => k.tabell === 'admin_ark')).toBe(false);
+      expect(bil).toMatchObject({ kalenderDato: '2026-11-04', kalenderTid: '09:00', tidBiltilsynet: '2026-11-04', tidBiltilsynetTid: '09:00', tidBiltilsynetSted: 'Skien' });
+      expect(JSON.stringify(lev.endringer)).toContain('Flyttet til kalender (dra): 2026-11-05 13:00');
+    });
+    it('dra en BIL virker som før: full lagring og sted-dialogen åpnes', () => {
+      const r = spioner(); const { db } = lagDb(); app.settDb(db);
+      const { bil } = oppsett();
+      slippPaa(bil.id, '2026-11-06', '11:00');
+      expect(bil).toMatchObject({ kalenderDato: '2026-11-06', kalenderTid: '11:00' });
+      expect(r.lagret).toEqual([bil.id]); expect(r.sted).toEqual([bil.id]);
+    });
+    it('Flytt: bare leveransens kalendertid endres; mangler dato skjer ingenting; en bil med chassis går fortsatt via Admin-ark', async () => {
+      const r = spioner(); const { db, kall } = lagDb(); app.settDb(db);
+      const { lev, bil } = oppsett();
+      app.kjor(`flyttOrdreId = '${lev.id}'`);
+      sandbox.document.getElementById('fl_dato').value = ''; sandbox.document.getElementById('fl_tid').value = '14:00';
+      await sandbox.bekreftFlytt();
+      expect(kalOppdateringer(kall)).toEqual([]);
+      expect(r.toast.join('|')).toMatch(/Velg en dato/);
+      sandbox.document.getElementById('fl_dato').value = '2026-11-06';
+      await sandbox.bekreftFlytt();
+      expect(kalOppdateringer(kall)).toEqual([{ kalender_dato: '2026-11-06', kalender_tid: '14:00' }]);
+      expect(lev).toMatchObject({ kalenderDato: '2026-11-06', kalenderTid: '14:00' });
+      expect(r.admin).toEqual([]); expect(r.lagret).toEqual([]);
+      expect(bil.tidBiltilsynet).toBe('2026-11-04');
+      // Tom tid faller tilbake på 09:00 (som resten av kalenderen)
+      sandbox.document.getElementById('fl_tid').value = '';
+      await sandbox.bekreftFlytt();
+      expect(lev.kalenderTid).toBe('09:00');
+      // Bil: Admin-ark som før
+      app.kjor(`flyttOrdreId = '${bil.id}'`);
+      sandbox.document.getElementById('fl_dato').value = '2026-11-07'; sandbox.document.getElementById('fl_tid').value = '10:00';
+      await sandbox.bekreftFlytt();
+      expect(r.admin).toHaveLength(1);
+      expect(r.admin[0][1]).toMatchObject({ timeBekreftet: '2026-11-07', timeBekreftetTid: '10:00' });
+    });
+    it('Fjern fra kalender: leveransen får tom kalendertid (null/tom i databasen), Admin-ark røres ikke, bilen er urørt; en bil med chassis går fortsatt via Admin-ark', async () => {
+      const r = spioner(); const { db, kall } = lagDb(); app.settDb(db);
+      const { lev, bil } = oppsett();
+      await sandbox.fjernFraKalender(lev.id);
+      expect(lev).toMatchObject({ kalenderDato: '', kalenderTid: '' });
+      expect(kalOppdateringer(kall)).toEqual([{ kalender_dato: null, kalender_tid: '' }]);
+      expect(r.admin).toEqual([]);
+      expect(bil).toMatchObject({ kalenderDato: '2026-11-04', tidBiltilsynet: '2026-11-04' });
+      expect(r.toast.join('|')).toMatch(/tatt ut av kalenderen/);
+      await sandbox.fjernFraKalender(bil.id);
+      expect(r.admin).toHaveLength(1);
+      expect(r.admin[0][1]).toEqual({ timeBekreftet: '', timeBekreftetTid: '', timeBekreftetSted: '' });
+    });
+    it('feiler skrivingen, rulles kalendertiden tilbake lokalt og brukeren får beskjed (ingen logglinje om noe som ikke skjedde)', async () => {
+      const r = spioner(); const { db } = lagDb({ feilPaa: (i) => i.tabell === 'ordrer' }); app.settDb(db);
+      const { lev } = oppsett();
+      const logg = lev.endringer.length;
+      slippPaa(lev.id, '2026-11-05', '13:00');
+      await new Promise((ok) => setTimeout(ok, 10));
+      expect(lev).toMatchObject({ kalenderDato: '2026-11-03', kalenderTid: '10:17' });
+      expect(r.toast.join('|')).toMatch(/Kunne ikke lagre kalendertiden/);
+      expect(lev.endringer.length).toBe(logg);
+    });
+    it('Realtime-ekkoet av vår egen skriving ignoreres (markert i ignorerRealtimeFor)', async () => {
+      spioner(); const { db } = lagDb(); app.settDb(db);
+      const { lev } = oppsett();
+      await sandbox.leveranseSettKalender(lev, '2026-11-05', '13:00', 'test');
+      expect(app.kjor(`ignorerRealtimeFor.has('${lev.id}')`)).toBe(true);
+    });
+  });
+
+  describe('kort og detalj', () => {
+    it('på Oversikt kan leveransekortet dras inn i kalenderen; i Ordre-lista kan det ikke', () => {
+      const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' });
+      expect(sandbox.leveranseKortHTML(o, { drag: true })).toContain(`class="drag-card" onpointerdown="dragOrdreStart(event,'ord_TESTLEV1')"`);
+      expect(sandbox.leveranseKortHTML(o)).not.toContain('drag-card');
+      S.ordrer = [o];
+      sandbox.renderLeveranseOversikt('');
+      expect(sandbox.document.getElementById('leveranseOversiktListe').innerHTML).toContain('drag-card');
+    });
+    it('kortet viser kalendertiden, eller «Ikke i kalender»; et arkivert kort viser ingen kalenderlinje', () => {
+      expect(sandbox.leveranseKortHTML(nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }))).toContain('📅 03.11.2026 kl. 10:17');
+      expect(sandbox.leveranseKortHTML(nyLeveranse({ kalender_dato: null }))).toContain('Ikke i kalender');
+      expect(sandbox.leveranseKortHTML(nyLeveranse({ status: 'arkivert', kalender_dato: '2026-11-03', kalender_tid: '10:17' }))).not.toContain('Kalender</span>');
+    });
+    it('detaljen viser Flytt/Fjern når den står i kalenderen, og «Legg i kalenderen» når den ikke gjør det; skadede verdier escapes', () => {
+      const med = sandbox.leveranseKalenderRadHTML(nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }));
+      expect(med).toContain('I kalenderen'); expect(med).toContain('03.11.2026 kl. 10:17'); expect(med).toContain("leveranseApneKalenderValg('ord_TESTLEV1')"); expect(med).toContain("fjernFraKalender('ord_TESTLEV1')");
+      const uten = sandbox.leveranseKalenderRadHTML(nyLeveranse({ kalender_dato: null }));
+      expect(uten).toContain('Ikke i kalenderen'); expect(uten).toContain('Legg i kalenderen'); expect(uten).not.toContain('fjernFraKalender');
+      expect(sandbox.leveranseKalenderRadHTML(nyLeveranse({ kalender_dato: '<img src=x>', kalender_tid: '"><b>' }))).not.toMatch(/<img|"><b>/);
+    });
+    it('hele detaljvisningen har kalenderraden, og ikke for en arkivert leveranse', () => {
+      const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }); S.ordrer = [o]; app.settAktivOrdre(o.id);
+      sandbox.buildOrdreDetail();
+      expect(sandbox.document.getElementById('ordreDetail').innerHTML).toContain('I kalenderen');
+      const a = nyLeveranse({ status: 'arkivert', kalender_dato: '2026-11-03', kalender_tid: '10:17' }); S.ordrer = [a]; app.settAktivOrdre(a.id);
+      sandbox.buildOrdreDetail();
+      expect(sandbox.document.getElementById('ordreDetail').innerHTML).not.toContain('I kalenderen');
+    });
+    it('«Legg i kalenderen» åpner Flytt-vinduet forhåndsutfylt (nåværende tid, ellers tidspunktet en ny leveranse ville fått nå)', () => {
+      spioner();
+      const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }); S.ordrer = [o];
+      sandbox.leveranseApneKalenderValg(o.id);
+      expect(sandbox.document.getElementById('fl_dato').value).toBe('2026-11-03');
+      expect(sandbox.document.getElementById('fl_tid').value).toBe('10:17');
+      expect(app.kjor('flyttOrdreId')).toBe(o.id);
+      const uten = nyLeveranse({ id: 'ord_TESTLEV2', kalender_dato: null }); S.ordrer = [uten];
+      const tilbake = fastNaa(lokal(2026, 11, 7, 12, 0));
+      try { sandbox.leveranseApneKalenderValg(uten.id); } finally { tilbake(); }
+      expect(sandbox.document.getElementById('fl_dato').value).toBe('2026-11-09');
+      expect(sandbox.document.getElementById('fl_tid').value).toBe('07:30');
+    });
+  });
+});
+
+// ─── Pakker: en standardpakke og flere pakker (Henrik 2026-11-03) ───────────────────────────────────────────────────────────────────────────────────────────────
+describe('pakker: standardpakke og flere pakker', () => {
+  const sett = (felt) => { Object.entries(felt).forEach(([k, v]) => { sandbox.document.getElementById(k).value = v; }); };
+  const tomPakke = { antall: 1, vekt: '', lengde: '', bredde: '', hoyde: '' };
+  beforeEach(() => { sandbox.alert = () => {}; sandbox.visToast = () => {}; });
+
+  describe('i detaljen', () => {
+    it('en leveranse uten pakker viser likevel en standardpakke med felt for vekt og mål (uten fjern-knapp) og «+ Legg til pakke»', () => {
+      const o = nyLeveranse(); S.ordrer = [o];
+      const html = sandbox.leveransePakkerHTML(o);
+      expect(html).toContain('Vekt kg'); expect(html).toContain('L cm'); expect(html).toContain('B cm'); expect(html).toContain('H cm');
+      for (const f of ['antall', 'vekt', 'lengde', 'bredde', 'hoyde']) expect(html).toContain(`settKolli('ord_TESTLEV1',0,'${f}'`);
+      expect(html).not.toContain('fjernKolli'); expect(html).not.toContain('Ingen pakker lagt inn');
+      expect(html).toContain("leggTilKolli('ord_TESTLEV1')");
+      expect(html).toContain('egen vekt og egne mål');
+    });
+    it('standardpakken lagres første gang et felt fylles ut (vekt 7,5 kg og mål), uten at tomme pakker lagres før', () => {
+      const { db } = lagDb(); app.settDb(db);
+      const o = nyLeveranse(); S.ordrer = [o];
+      expect(o.leveranse.kolliListe).toEqual([]);
+      sandbox.settKolli(o.id, 0, 'vekt', '7,5');
+      expect(o.leveranse.kolliListe).toEqual([{ antall: 1, vekt: 7.5, lengde: '', bredde: '', hoyde: '' }]);
+      sandbox.settKolli(o.id, 0, 'lengde', '60'); sandbox.settKolli(o.id, 0, 'bredde', '40'); sandbox.settKolli(o.id, 0, 'hoyde', '30');
+      expect(o.leveranse.kolliListe).toEqual([{ antall: 1, vekt: 7.5, lengde: 60, bredde: 40, hoyde: 30 }]);
+      expect(sandbox.leveransePakkerHTML(o)).toContain('fjernKolli');
+    });
+    it('«Legg til pakke» på en tom liste gir to pakker (standardpakken og en ny), og på en liste med pakker en kopi av den siste', () => {
+      const { db } = lagDb(); app.settDb(db);
+      const o = nyLeveranse(); S.ordrer = [o];
+      sandbox.leggTilKolli(o.id);
+      expect(o.leveranse.kolliListe).toEqual([tomPakke, tomPakke]);
+      sandbox.settKolli(o.id, 1, 'vekt', '12'); sandbox.settKolli(o.id, 1, 'lengde', '80');
+      sandbox.leggTilKolli(o.id);
+      expect(o.leveranse.kolliListe).toHaveLength(3);
+      expect(o.leveranse.kolliListe[2]).toEqual({ antall: 1, vekt: 12, lengde: 80, bredde: '', hoyde: '' });
+      // hver pakke har sin egen vekt og egne mål
+      sandbox.settKolli(o.id, 2, 'vekt', '3');
+      expect(o.leveranse.kolliListe.map((p) => p.vekt)).toEqual(['', 12, 3]);
+    });
+    it('en rad som ikke finnes endres ikke (bare standardpakken på plass 0 opprettes), og maks 50 pakker', () => {
+      const { db } = lagDb(); app.settDb(db);
+      const o = nyLeveranse(); S.ordrer = [o];
+      sandbox.settKolli(o.id, 1, 'vekt', '5');
+      sandbox.settKolli(o.id, 0, 'ugyldigfelt', '5');
+      expect(o.leveranse.kolliListe).toEqual([]);
+      const mange = nyLeveranse({}, { kolliListe: Array.from({ length: 50 }, () => ({ antall: 1, vekt: 1 })) });
+      S.ordrer = [mange];
+      sandbox.leggTilKolli(mange.id);
+      expect(mange.leveranse.kolliListe).toHaveLength(50);
+    });
+    it('totalen og «mangler vekt»-meldingen regner bare med lagrede pakker (standardraden teller ikke)', () => {
+      const o = nyLeveranse(); S.ordrer = [o];
+      expect(sandbox.leveransePakkerHTML(o)).not.toContain('totalt');
+      const b = nyLeveranse({}, { kolliListe: [{ antall: 2, vekt: 10 }, { antall: 1, vekt: '' }] });
+      const html = sandbox.leveransePakkerHTML(b);
+      expect(html).toContain('3 pakker · 20 kg'); expect(html).toContain('1 pakke mangler vekt');
+    });
+  });
+
+  describe('i «Ny leveranse»', () => {
+    const pakkeFelt = (o = {}) => sett({ lev_pakker: '', lev_vekt: '', lev_lengde: '', lev_bredde: '', lev_hoyde: '', ...o });
+    const opprett = (felt = {}) => { const { db } = lagDb(); app.settDb(db); edgeFake(); sett({ lev_kunde: 'TEST Kunde AS', lev_merking: 'TEST-pakker', lev_fraktpris: '', ...felt }); sandbox.opprettLeveranse(); return S.ordrer[S.ordrer.length - 1]; };
+    beforeEach(() => { sandbox.apneNyLeveranseModal(); });
+
+    it('åpning nullstiller de ekstra pakkene', () => {
+      sandbox.leggTilNyPakke();
+      expect(app.kjor('levNyePakker.length')).toBe(1);
+      sandbox.apneNyLeveranseModal();
+      expect(app.kjor('levNyePakker.length')).toBe(0);
+    });
+    it('«+ Legg til pakke» kopierer pakke 1, og senere rader kopierer forrige rad', () => {
+      pakkeFelt({ lev_pakker: '2', lev_vekt: '7,5', lev_lengde: '60', lev_bredde: '40', lev_hoyde: '30' });
+      sandbox.leggTilNyPakke();
+      expect(app.kjor('levNyePakker')).toEqual([{ antall: '2', vekt: '7,5', lengde: '60', bredde: '40', hoyde: '30' }]);
+      sandbox.settNyPakke(0, 'vekt', '12');
+      sandbox.leggTilNyPakke();
+      expect(app.kjor('levNyePakker[1].vekt')).toBe('12');
+      expect(sandbox.document.getElementById('lev_ekstra_pakker').innerHTML).toContain("settNyPakke(1,'vekt'");
+      expect(sandbox.document.getElementById('lev_ekstra_pakker').innerHTML).toContain('fjernNyPakke(1)');
+    });
+    it('flere pakker i skjemaet gir flere pakker på leveransen, hver med egen vekt og egne mål', () => {
+      pakkeFelt({ lev_pakker: '2', lev_vekt: '7,5', lev_lengde: '60', lev_bredde: '40', lev_hoyde: '30' });
+      sandbox.leggTilNyPakke(); sandbox.settNyPakke(0, 'antall', '1'); sandbox.settNyPakke(0, 'vekt', '20'); sandbox.settNyPakke(0, 'lengde', '120');
+      sandbox.leggTilNyPakke(); sandbox.settNyPakke(1, 'vekt', '3');
+      const o = opprett();
+      expect(o.leveranse.kolliListe).toEqual([
+        { antall: 2, vekt: 7.5, lengde: 60, bredde: 40, hoyde: 30 },
+        { antall: 1, vekt: 20, lengde: 120, bredde: 40, hoyde: 30 },
+        { antall: 1, vekt: 3, lengde: 120, bredde: 40, hoyde: 30 },
+      ]);
+    });
+    it('en helt tom pakke (rad eller pakke 1) lagres ikke; er bare en ekstra rad fylt ut, lagres bare den', () => {
+      pakkeFelt();
+      sandbox.leggTilNyPakke(); // kopi av tom pakke 1 = tom rad
+      expect(opprett().leveranse.kolliListe).toEqual([]);
+      sandbox.apneNyLeveranseModal(); pakkeFelt();
+      sandbox.leggTilNyPakke(); sandbox.settNyPakke(0, 'vekt', '9');
+      expect(opprett().leveranse.kolliListe).toEqual([{ antall: 1, vekt: 9, lengde: '', bredde: '', hoyde: '' }]);
+    });
+    it('fjern en rad, og maks 50 pakker totalt (pakke 1 + 49 ekstra)', () => {
+      pakkeFelt({ lev_vekt: '5' });
+      sandbox.leggTilNyPakke(); sandbox.leggTilNyPakke();
+      sandbox.fjernNyPakke(0);
+      expect(app.kjor('levNyePakker.length')).toBe(1);
+      for (let i = 0; i < 60; i++) sandbox.leggTilNyPakke();
+      expect(app.kjor('levNyePakker.length')).toBe(49);
+    });
+    it('ugyldige tall i en rad (tekst, negativt) blir tomme felt, ikke feil, og antall minst 1', () => {
+      pakkeFelt({ lev_vekt: '5' });
+      sandbox.leggTilNyPakke(); sandbox.settNyPakke(0, 'vekt', 'abc'); sandbox.settNyPakke(0, 'lengde', '-4'); sandbox.settNyPakke(0, 'antall', '0');
+      const o = opprett();
+      expect(o.leveranse.kolliListe[1]).toEqual({ antall: 1, vekt: '', lengde: '', bredde: '', hoyde: '' });
+    });
+    it('pakkene fra skjemaet tas med i fraktbestillingen på samme måte som pakker lagt til i detaljen (kolliListe)', () => {
+      pakkeFelt({ lev_vekt: '5', lev_lengde: '50', lev_bredde: '30', lev_hoyde: '20' });
+      sandbox.leggTilNyPakke(); sandbox.settNyPakke(0, 'vekt', '8');
+      const o = opprett();
+      expect(sandbox.leveranseKolliSum(o.leveranse)).toEqual({ antall: 2, vekt: 13, utenVekt: 0 });
+      expect(sandbox.leveranseKolliTekst(o.leveranse)).toBe('2 pakker · 13 kg');
+    });
+  });
+});
+
+describe('pakke-raden (felles for detalj og «Ny leveranse»)', () => {
+  const rad = (p, fjern) => sandbox.pakkeRadHTML(p, (k) => `data-felt="${k}"`, fjern);
+  it('hvert av de fem feltene har egen overskrift og eget hendelsesattributt, og tallfeltene har riktig type og steg', () => {
+    const html = rad({ antall: 2, vekt: 7.5, lengde: 60, bredde: 40, hoyde: 30 }, '');
+    for (const [k, tekst] of [['antall', 'Antall'], ['vekt', 'Vekt kg'], ['lengde', 'L cm'], ['bredde', 'B cm'], ['hoyde', 'H cm']]) {
+      expect(html).toContain(`<span>${tekst}</span>`);
+      expect(html).toContain(`data-felt="${k}"`);
+    }
+    expect(html.match(/<input /g)).toHaveLength(5);
+    expect(html).toContain('value="7.5"'); expect(html).toContain('value="60"');
+    expect(html).toMatch(/min="1" step="1" inputmode="numeric"/); // antall: hele tall, minst 1
+    expect(html).toMatch(/min="0" step="0.1" inputmode="decimal"/);
+    expect(html).not.toContain('<button');
+  });
+  it('tomme/ukjente verdier gir tomme felt, verdier escapes, og fjern-knappen tas bare med når den er gitt', () => {
+    const html = rad({ antall: '', vekt: null, lengde: undefined, bredde: '"><img src=x>', hoyde: 0 }, '<button>X</button>');
+    expect(html).not.toContain('<img');
+    expect(html).toContain('value="0"'); // 0 er en verdi, ikke tomt
+    expect(html).toContain('<button>X</button>');
+    expect(html.match(/value=""/g)).toHaveLength(3);
+  });
+  it('detaljen og skjemaet bruker samme rad (overskriftene står per felt, ikke i en egen toppliste)', () => {
+    const o = nyLeveranse({}, { kolliListe: [{ antall: 1, vekt: 5, lengde: 1, bredde: 2, hoyde: 3 }, { antall: 2, vekt: 6, lengde: 4, bredde: 5, hoyde: 6 }] });
+    const html = sandbox.leveransePakkerHTML(o);
+    expect(html.match(/class="pakke-rad"/g)).toHaveLength(2);
+    expect(html.match(/<span>Vekt kg<\/span>/g)).toHaveLength(2);
+    expect(html).toContain("settKolli('ord_TESTLEV1',1,'hoyde',this.value,this)");
+    sandbox.apneNyLeveranseModal(); sandbox.leggTilNyPakke(); sandbox.leggTilNyPakke();
+    const skjema = sandbox.document.getElementById('lev_ekstra_pakker').innerHTML;
+    expect(skjema.match(/class="pakke-rad"/g)).toHaveLength(2);
+    expect(skjema).toContain("settNyPakke(1,'lengde',this.value)");
+  });
+  it('CSS-en bryter raden til to linjer på smal skjerm (antall + vekt, så L/B/H)', () => {
+    const html = readFileSync(path.resolve(__dirname, '../salmakern.html'), 'utf8');
+    expect(html).toMatch(/\.pakke-rad\{display:grid;grid-template-columns:64px repeat\(4,minmax\(0,1fr\)\) 34px/);
+    expect(html).toMatch(/@media\(max-width:560px\)\{\.pakke-rad\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\) 34px\}\.pakke-felt:nth-child\(2\)\{grid-column:2 \/ 4\}\.pakke-fjern\{grid-column:4;grid-row:1\}\}/);
+  });
+});
+
+// ─── Rettelser etter uavhengig gjennomgang (2026-11-03) ──────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('gjennomgang: kalenderkort og tekst', () => {
+  const lokal = (y, m, d, h = 0, min = 0) => new Date(y, m - 1, d, h, min);
+  function fastNaa(d) {
+    const Ekte = Date;
+    class Fast extends Ekte { constructor(...a) { super(...(a.length ? a : [d.getTime()])); } static now() { return d.getTime(); } }
+    sandbox.Date = Fast;
+    return () => { sandbox.Date = Ekte; };
+  }
+  const uke = () => { const tilbake = fastNaa(lokal(2026, 11, 3, 10, 17)); try { sandbox.renderWeek(); return sandbox.document.getElementById('weekCal').innerHTML; } finally { tilbake(); } };
+  // Henter ut selve hendelseskortet for en ordre (fra «cal-event» til neste «cal-event»)
+  const kortFor = (html, id) => { const ut = html.split(/<div class="cal-event(?: cal-event-smal)?" /).find((d) => d.includes(`openOrdre('${id}')`)); return ut || ''; };
+
+  it('kortet til en leveranse er alltid den høye varianten (54 px), selv med reg.nr og uten chassis; bil med reg.nr uten chassis er fortsatt 38 px', () => {
+    S.ordrer = [nyLeveranse({ regnr: 'AB12345', kalender_dato: '2026-11-04', kalender_tid: '10:00' }), nyBil({ chassis: '', regnr: 'CD67890', kalender_dato: '2026-11-05', kalender_tid: '10:00' })];
+    const html = uke();
+    expect(kortFor(html, 'ord_TESTLEV1')).toMatch(/height:54px/);
+    expect(kortFor(html, 'ord_TESTBIL1')).toMatch(/height:38px/);
+  });
+  it('kortet har dra-håndtak og ⋯-meny med Flytt og Fjern for en leveranse (som for en bil)', () => {
+    S.ordrer = [nyLeveranse({ kalender_dato: '2026-11-04', kalender_tid: '10:00' })];
+    const kort = kortFor(uke(), 'ord_TESTLEV1');
+    expect(kort).toContain("onpointerdown=\"dragOrdreStart(event,'ord_TESTLEV1')\"");
+    expect(kort).toContain("openFlyttKalender('ord_TESTLEV1')");
+    expect(kort).toContain("fjernFraKalender('ord_TESTLEV1')");
+    expect(kort).toContain("toggleCalMenu('ord_TESTLEV1')");
+  });
+  it('merking med spesialtegn vises som vanlig tekst i «tatt ut av kalenderen»-toasten og i drag-spøkelset (ikke som &amp; / &quot;)', async () => {
+    const toasts = []; sandbox.visToast = (m) => toasts.push(m); sandbox.document.removeEventListener = () => {};
+    const { db } = lagDb(); app.settDb(db);
+    const o = nyLeveranse({ kalender_dato: '2026-11-04', kalender_tid: '10:00' }, { merking: 'Takboks & stige "A" <b>' }); S.ordrer = [o];
+    await sandbox.fjernFraKalender(o.id);
+    expect(toasts.join('|')).toContain('Takboks & stige "A" <b> tatt ut av kalenderen');
+    expect(toasts.join('|')).not.toMatch(/&amp;|&quot;|&lt;/);
+    sandbox.document.elementFromPoint = () => null;
+    app.kjor(`_dragOrdre = { id: '${o.id}', moved: false, ghostEl: null, kortEl: null, x: 0, y: 0, startX: 0, startY: 0 }`);
+    sandbox.dragOrdreMove({ clientX: 60, clientY: 60, preventDefault() {} });
+    expect(sandbox.document.createElement('div').textContent).toBe('📅 Takboks & stige "A" <b>');
+    app.kjor('_dragOrdre = null');
+  });
+  it('rutenettet er fullt synlig uten rulling inne i kalenderen (rullefeltet er minst like høyt som de 17 rutene à 32 px)', () => {
+    const html = readFileSync(path.resolve(__dirname, '../salmakern.html'), 'utf8');
+    const m = html.match(/\.cal-body-scroll\{[^}]*max-height:(\d+)px/);
+    expect(Number(m[1])).toBeGreaterThanOrEqual(17 * 32 + 24);
+    // og et kort på siste rute (top 512 + høyde 54 = 566 px) er innenfor rutenettet pluss bunnmarginen (544 + 24 = 568 px), så det er helt synlig
+    expect(html).toMatch(/\.cal-body\{display:flex;padding-bottom:24px\}/);
+    expect(512 + 54).toBeLessThanOrEqual(17 * 32 + 24);
+  });
+});
+
+describe('gjennomgang: Flytt-vinduet godtar bare det kalenderen viser', () => {
+  const ug = (d, t) => sandbox.leveranseKalenderUgyldig(d, t);
+  it('ukedag og tid mellom 07:30 og 15:30 er OK (grensene inkludert), tom tid er OK (blir 09:00)', () => {
+    expect(ug('2026-11-03', '10:00')).toBe('');
+    expect(ug('2026-11-02', '07:30')).toBe('');
+    expect(ug('2026-11-06', '15:30')).toBe('');
+    expect(ug('2026-11-03', '')).toBe('');
+    expect(ug('2026-11-03', undefined)).toBe('');
+  });
+  it('helg, tid utenfor rutenettet, tom og ugyldig dato gir en tydelig beskjed', () => {
+    expect(ug('2026-11-07', '10:00')).toMatch(/mandag til fredag/);  // lørdag
+    expect(ug('2026-11-08', '10:00')).toMatch(/mandag til fredag/);  // søndag
+    expect(ug('2026-11-03', '07:29')).toMatch(/07:30 til 15:30/);
+    expect(ug('2026-11-03', '15:31')).toMatch(/07:30 til 15:30/);
+    expect(ug('2026-11-03', '00:00')).toMatch(/07:30 til 15:30/);
+    expect(ug('', '10:00')).toBe('Velg en dato');
+    expect(ug(undefined, '10:00')).toBe('Velg en dato');
+    expect(ug('2026-02-30', '10:00')).toMatch(/gyldig dato/);
+    expect(ug('03.11.2026', '10:00')).toBe('Velg en dato');
+  });
+  it('bekreftFlytt nekter helg og tid utenfor rutenettet for en leveranse (ingen skriving, vinduet står åpent), men godtar en ukedag', async () => {
+    const toasts = []; sandbox.visToast = (m) => toasts.push(m);
+    const { db, kall } = lagDb(); app.settDb(db);
+    const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:00' }); S.ordrer = [o];
+    app.kjor(`flyttOrdreId = '${o.id}'`);
+    const sett = (d, t) => { sandbox.document.getElementById('fl_dato').value = d; sandbox.document.getElementById('fl_tid').value = t; };
+    sett('2026-11-07', '10:00'); await sandbox.bekreftFlytt();
+    sett('2026-11-04', '17:00'); await sandbox.bekreftFlytt();
+    expect(oppdateringer(kall).filter((u) => 'kalender_dato' in u)).toEqual([]);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-03', kalenderTid: '10:00' });
+    expect(toasts.join('|')).toMatch(/mandag til fredag/); expect(toasts.join('|')).toMatch(/07:30 til 15:30/);
+    sett('2026-11-04', '14:00'); await sandbox.bekreftFlytt();
+    expect(o).toMatchObject({ kalenderDato: '2026-11-04', kalenderTid: '14:00' });
+  });
+  it('kalenderfunksjonene for leveranser bruker lokal tid (ingen toISOString/UTC-uttrykk i leveranseKalenderTidspunkt), uavhengig av tidssonen testen kjører i', () => {
+    expect(sandbox.leveranseKalenderTidspunkt.toString()).not.toMatch(/toISOString|getUTC|Date\.UTC/);
+  });
+});
+
+describe('gjennomgang: kalenderskrivinger går etter hverandre og bare siste kall ruller tilbake', () => {
+  // Falsk db der HVER oppdatering venter til testen avgjør utfallet (ok eller feil).
+  function styrtDb() {
+    const ventende = []; const kall = [];
+    const db = {
+      from: (tabell) => {
+        const info = { tabell, kall: [] }; kall.push(info);
+        const kjede = new Proxy(function () {}, { get(_, k) {
+          if (k === 'then') return (res) => new Promise((ok) => ventende.push({ info, ok })).then(res);
+          return (...a) => { info.kall.push([String(k), a]); return kjede; };
+        } });
+        return kjede;
+      },
+      rpc: async () => ({ data: null, error: null }),
+    };
+    return { db, ventende, kall };
+  }
+  const tikk = () => new Promise((ok) => setTimeout(ok, 0));
+  const nyttO = (id) => nyLeveranse({ id, kalender_dato: '2026-11-03', kalender_tid: '10:17' });
+  const OK = { data: null, error: null }, FEIL = { data: null, error: { message: 'nettfeil' } };
+  beforeEach(() => { sandbox.visToast = () => {}; });
+
+  it('to raske flyttinger skrives i rekkefølge (neste starter først når forrige er ferdig), og begge lykkes: lokal og lagret verdi er den siste', async () => {
+    const { db, ventende, kall } = styrtDb(); app.settDb(db);
+    const o = nyttO('ord_RACE1'); S.ordrer = [o];
+    const p1 = sandbox.leveranseSettKalender(o, '2026-11-04', '09:00', 'A');
+    const p2 = sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'B');
+    expect(o).toMatchObject({ kalenderDato: '2026-11-05', kalenderTid: '13:00' }); // visningen følger med straks
+    await tikk();
+    expect(ventende).toHaveLength(1);                                              // bare første skriving er sendt
+    ventende[0].ok(OK); await tikk();
+    expect(ventende).toHaveLength(2);
+    ventende[1].ok(OK);
+    expect(await p1).toBe(true); expect(await p2).toBe(true);
+    expect(kall.map((k) => k.kall.find(([m]) => m === 'update')[1][0].kalender_dato)).toEqual(['2026-11-04', '2026-11-05']);
+    expect(kall.every((k) => k.kall.some(([m, a]) => m === 'eq' && a[0] === 'id' && a[1] === 'ord_RACE1'))).toBe(true); // alltid riktig rad
+    expect(o).toMatchObject({ kalenderDato: '2026-11-05', kalenderTid: '13:00' });
+  });
+  it('første feiler og andre lykkes: den eldre feilen ruller IKKE tilbake den nyere flyttingen (lokal verdi = det som ble lagret sist)', async () => {
+    const { db, ventende } = styrtDb(); app.settDb(db);
+    const o = nyttO('ord_RACE2'); S.ordrer = [o];
+    const p1 = sandbox.leveranseSettKalender(o, '2026-11-04', '09:00', 'A');
+    const p2 = sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'B');
+    await tikk(); ventende[0].ok(FEIL); await tikk(); ventende[1].ok(OK);
+    expect(await p1).toBe(false); expect(await p2).toBe(true);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-05', kalenderTid: '13:00' });
+  });
+  it('første lykkes og andre feiler: lokal verdi rulles tilbake til den første (sist lagrede), ikke til opprinnelig', async () => {
+    const { db, ventende } = styrtDb(); app.settDb(db);
+    const o = nyttO('ord_RACE3'); S.ordrer = [o];
+    const p1 = sandbox.leveranseSettKalender(o, '2026-11-04', '09:00', 'A');
+    const p2 = sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'B');
+    await tikk(); ventende[0].ok(OK); await tikk(); ventende[1].ok(FEIL);
+    expect(await p1).toBe(true); expect(await p2).toBe(false);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-04', kalenderTid: '09:00' });
+  });
+  it('begge feiler (f.eks. uten nett): lokal verdi tilbake til den opprinnelige, og ingen logglinje for noe som ikke skjedde', async () => {
+    const { db, ventende } = styrtDb(); app.settDb(db);
+    const o = nyttO('ord_RACE4'); S.ordrer = [o]; const logg = o.endringer.length;
+    const p1 = sandbox.leveranseSettKalender(o, '2026-11-04', '09:00', 'A');
+    const p2 = sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'B');
+    await tikk(); ventende[0].ok(FEIL); await tikk(); ventende[1].ok(FEIL);
+    expect(await p1).toBe(false); expect(await p2).toBe(false);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-03', kalenderTid: '10:17' });
+    expect(o.endringer.length).toBe(logg);
+  });
+  it('en kollegas endring (Realtime) mellom to flyttinger gjør at neste feil ruller tilbake til DEN verdien, ikke til en gammel', async () => {
+    const { db, ventende } = styrtDb(); app.settDb(db);
+    const o = nyttO('ord_RACE5'); S.ordrer = [o];
+    const p1 = sandbox.leveranseSettKalender(o, '2026-11-04', '09:00', 'A');
+    await tikk(); ventende[0].ok(OK); await p1;
+    o.kalenderDato = '2026-11-06'; o.kalenderTid = '11:00';                         // kollega flytter (kommer inn via Realtime)
+    const p2 = sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'B');
+    await tikk(); ventende[1].ok(FEIL);
+    expect(await p2).toBe(false);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-06', kalenderTid: '11:00' });
+  });
+  it('Realtime-ekkoet av vår egen skriving ignoreres (nullstilt først, så testen fanger at markeringen faktisk settes)', async () => {
+    const { db } = lagDb(); app.settDb(db);
+    const o = nyttO('ord_RACE6'); S.ordrer = [o];
+    app.kjor("ignorerRealtimeFor.delete('ord_RACE6')");
+    expect(app.kjor("ignorerRealtimeFor.has('ord_RACE6')")).toBe(false);
+    await sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'test');
+    expect(app.kjor("ignorerRealtimeFor.has('ord_RACE6')")).toBe(true);
+  });
+  it('uten database (null) settes bare lokal verdi, og logglinjen skrives', async () => {
+    app.settDb(null);
+    const o = nyttO('ord_RACE7'); S.ordrer = [o]; const logg = o.endringer.length;
+    expect(await sandbox.leveranseSettKalender(o, '2026-11-05', '13:00', 'lokalt')).toBe(true);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-05', kalenderTid: '13:00' });
+    expect(o.endringer.length).toBe(logg + 1);
+  });
+});
+
+describe('gjennomgang: pakke-blokken bytter ikke ut feltene mens man fyller dem ut', () => {
+  const el = (id) => sandbox.document.getElementById(id);
+  beforeEach(() => { sandbox.visToast = () => {}; sandbox.alert = () => {}; const { db } = lagDb(); app.settDb(db); app.settMe({ id: 1, navn: 'TEST - Admin', rolle: 'admin' }); });
+
+  it('blokken har egne deler (rader, sum, fakturaknapp) med id per ordre', () => {
+    const o = nyLeveranse(); S.ordrer = [o];
+    const html = sandbox.leveransePakkerHTML(o);
+    for (const id of [`levPakkerRader_${o.id}`, `levPakkerSum_${o.id}`, `levFraktBtn_${o.id}`]) expect(html).toContain(`id="${id}"`);
+  });
+  it('en verdiendring på en eksisterende rad bytter IKKE ut radene (neste felt beholder trykket), men oppdaterer summen', () => {
+    const o = nyLeveranse({}, { kolliListe: [{ antall: 1, vekt: 5, lengde: 1, bredde: 1, hoyde: 1 }, { antall: 1, vekt: 6, lengde: 2, bredde: 2, hoyde: 2 }] }); S.ordrer = [o];
+    el(`levPakkerRader_${o.id}`).innerHTML = 'MARKØR'; el(`levPakkerSum_${o.id}`).innerHTML = '';
+    sandbox.settKolli(o.id, 0, 'vekt', '10');
+    expect(el(`levPakkerRader_${o.id}`).innerHTML).toBe('MARKØR');
+    expect(el(`levPakkerSum_${o.id}`).innerHTML).toContain('2 pakker · 16 kg');
+  });
+  it('legg til og fjern pakke tegner radene på nytt (antall rader endres)', () => {
+    const o = nyLeveranse({}, { kolliListe: [{ antall: 1, vekt: 5 }] }); S.ordrer = [o];
+    el(`levPakkerRader_${o.id}`).innerHTML = 'MARKØR';
+    sandbox.leggTilKolli(o.id);
+    expect(el(`levPakkerRader_${o.id}`).innerHTML.match(/class="pakke-rad"/g)).toHaveLength(2);
+    el(`levPakkerRader_${o.id}`).innerHTML = 'MARKØR';
+    sandbox.fjernKolli(o.id, 0);
+    expect(el(`levPakkerRader_${o.id}`).innerHTML.match(/class="pakke-rad"/g)).toHaveLength(1);
+  });
+  it('standardpakken som lagres første gang: feltene byttes ikke ut, men fjern-knappen settes inn på stedet', () => {
+    const o = nyLeveranse(); S.ordrer = [o];
+    el(`levPakkerRader_${o.id}`).innerHTML = 'MARKØR';
+    sandbox.settKolli(o.id, 0, 'vekt', '7');
+    expect(el(`levPakkerRader_${o.id}`).innerHTML).toBe('MARKØR');
+    expect(sandbox.document.querySelector(`#levPakkerRader_${o.id} .pakke-fjern`).innerHTML).toContain(`fjernKolli('${o.id}',0)`);
+  });
+  it('fraktpris oppdaterer fakturaknappen PÅ STEDET (aktiv/inaktiv og tekst), uten å bytte den ut', () => {
+    const o = nyLeveranse(); S.ordrer = [o];
+    const knapp = el(`levFraktBtn_${o.id}`); knapp.disabled = true; knapp.textContent = '';
+    sandbox.settFraktPris(o.id, '450');
+    expect(knapp.disabled).toBe(false); expect(knapp.textContent).toContain('Legg frakt på fakturaen');
+    sandbox.settFraktPris(o.id, '');
+    expect(knapp.disabled).toBe(true);
+  });
+  it('fakturaknappen viser «Oppdater» når frakt-linjen allerede finnes', () => {
+    const o = nyLeveranse({}, { fraktPris: 450, fraktProduktnr: '30' }); o.fikenLinjer = [{ produktnummer: '30', antall: 1, belop: 450 }]; S.ordrer = [o];
+    expect(sandbox.leveransePakkerFraktKnapp(o)).toEqual({ deaktivert: false, tekst: '↻ Oppdater frakt på fakturaen' });
+    expect(sandbox.leveransePakkerHTML(o)).toContain('↻ Oppdater frakt på fakturaen');
+  });
+  it('en vanlig ansatt får ingen fakturaknapp, og oppdatering av en blokk som ikke er på skjermen kaster ikke', () => {
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    const o = nyLeveranse(); S.ordrer = [o];
+    expect(sandbox.leveransePakkerHTML(o)).not.toContain('levFraktBtn_');
+    expect(() => sandbox.oppdaterPakkerUtdata(nyLeveranse({ id: 'ord_FINNES_IKKE_PAA_SKJERMEN' }), true)).not.toThrow();
+    app.settMe({ id: 1, navn: 'TEST - Admin', rolle: 'admin' });
+  });
+});
+
+describe('gjennomgang: «Ny leveranse»-pakkeradene', () => {
+  const sett = (felt) => { Object.entries(felt).forEach(([k, v]) => { sandbox.document.getElementById(k).value = v; }); };
+  const dom = () => sandbox.document.getElementById('lev_ekstra_pakker').innerHTML;
+  beforeEach(() => { sandbox.visToast = () => {}; sandbox.apneNyLeveranseModal(); });
+
+  it('åpning tømmer den tegnede lista, og antall rader i DOM følger lista etter hver endring', () => {
+    sett({ lev_vekt: '5' }); sandbox.leggTilNyPakke(); sandbox.leggTilNyPakke();
+    expect(dom().match(/class="pakke-rad"/g)).toHaveLength(2);
+    sandbox.apneNyLeveranseModal();
+    expect(dom()).toBe('');
+    sandbox.leggTilNyPakke();
+    expect(dom().match(/class="pakke-rad"/g)).toHaveLength(1);
+  });
+  it('fjerner man en rad midt i lista, er det riktig rad som forsvinner og indeksene i DOM-en følger med', () => {
+    sandbox.leggTilNyPakke(); sandbox.leggTilNyPakke(); sandbox.leggTilNyPakke();
+    sandbox.settNyPakke(0, 'vekt', '1'); sandbox.settNyPakke(1, 'vekt', '2'); sandbox.settNyPakke(2, 'vekt', '3');
+    sandbox.fjernNyPakke(1);
+    expect(app.kjor('levNyePakker.map(p => p.vekt)')).toEqual(['1', '3']);
+    const html = dom();
+    expect(html.match(/class="pakke-rad"/g)).toHaveLength(2);
+    expect(html).toContain("settNyPakke(1,'vekt'");  // andre rad har nå indeks 1
+    expect(html).not.toContain("settNyPakke(2,");    // og ingen rad har igjen den gamle indeksen 2
+    expect(html).toContain('value="3"'); expect(html).not.toContain('value="2"');
+  });
+  it('skjemaet i salmakern.html har beholderen og «+ Legg til pakke»-knappen som koden bruker', () => {
+    const html = readFileSync(path.resolve(__dirname, '../salmakern.html'), 'utf8');
+    expect(html).toContain('id="lev_ekstra_pakker"');
+    expect(html).toMatch(/<button[^>]*onclick="leggTilNyPakke\(\)"[^>]*>\+ Legg til pakke<\/button>/);
+    for (const id of ['lev_pakker', 'lev_vekt', 'lev_lengde', 'lev_bredde', 'lev_hoyde']) expect(html).toContain(`id="${id}"`);
+  });
+  it('fjern-knappen i skjemaet bruker samme CSS som i detaljen (ingen egen inline-padding som overstyrer høyden)', () => {
+    sandbox.leggTilNyPakke();
+    expect(dom()).toContain('title="Fjern pakke">✕</button>');
+    expect(dom()).not.toContain('padding:5px 0');
+    const css = readFileSync(path.resolve(__dirname, '../salmakern.html'), 'utf8');
+    expect(css).toContain('.pakke-fjern .btn{height:38px;padding:0;width:100%}');
+    expect(css).toMatch(/\.pakke-felt\{[^}]*margin:0/);
+  });
+});
+
+// ─── Rettelser etter runde 2 av gjennomgangen (2026-11-03) ───────────────────────────────────────────────────────────────────────────────────────────────────
+describe('runde 2: kalenderen til en leveranse skrives bare av leveranseSettKalender', () => {
+  const lagUpsertDb = () => { const payloads = []; return { payloads, db: { from: () => ({ upsert: (p) => { payloads.push(p); return Promise.resolve({ error: null }); } }) } }; };
+  it('full lagring (save) av en LEVERANSE tar IKKE med kalender_dato/kalender_tid (en gammel kopi kan ikke skrive en gammel dato tilbake over en nyere flytting)', async () => {
+    const { db, payloads } = lagUpsertDb(); app.settDb(db);
+    const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }); S.ordrer = [o];
+    await sandbox.save(o.id);
+    expect(payloads).toHaveLength(1);
+    expect('kalender_dato' in payloads[0]).toBe(false); expect('kalender_tid' in payloads[0]).toBe(false);
+    expect(payloads[0].ordretype).toBe('leveranse');   // resten av raden er med som før
+    expect(payloads[0].leveranse.merking).toBe('TEST-merking');
+  });
+  it('en BIL tar fortsatt med kalenderen i full lagring (uendret), og opprettelsen av en leveranse (egen insert) har den med', async () => {
+    const { db, payloads } = lagUpsertDb(); app.settDb(db);
+    const bil = nyBil({ kalender_dato: '2026-11-04', kalender_tid: '09:00' }); S.ordrer = [bil];
+    await sandbox.save(bil.id);
+    expect(payloads[0]).toMatchObject({ kalender_dato: '2026-11-04', kalender_tid: '09:00' });
+    expect(sandbox.ordreToDb(nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }))).toMatchObject({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }); // insert bruker ordreToDb direkte
+  });
+});
+
+describe('runde 2: pakke- og fraktfeltene viser den lagrede (normaliserte) verdien', () => {
+  beforeEach(() => { sandbox.visToast = () => {}; const { db } = lagDb(); app.settDb(db); app.settMe({ id: 1, navn: 'TEST - Admin', rolle: 'admin' }); });
+  const felt = (v) => ({ value: v });
+  it('antall 0 blir 1, 2,5 blir 2, negative tall og tekst blir tomme, gyldige verdier (også med komma) står urørt', () => {
+    const o = nyLeveranse({}, { kolliListe: [{ antall: 3, vekt: 5, lengde: 1, bredde: 1, hoyde: 1 }] }); S.ordrer = [o];
+    const a = felt('0'); sandbox.settKolli(o.id, 0, 'antall', a.value, a); expect(a.value).toBe('1'); expect(o.leveranse.kolliListe[0].antall).toBe(1);
+    const b = felt('2.5'); sandbox.settKolli(o.id, 0, 'antall', b.value, b); expect(b.value).toBe('2');
+    const c = felt('-3'); sandbox.settKolli(o.id, 0, 'vekt', c.value, c); expect(c.value).toBe(''); expect(o.leveranse.kolliListe[0].vekt).toBe('');
+    const d = felt('abc'); sandbox.settKolli(o.id, 0, 'lengde', d.value, d); expect(d.value).toBe('');
+    const e = felt('12,5'); sandbox.settKolli(o.id, 0, 'vekt', e.value, e); expect(e.value).toBe('12,5'); expect(o.leveranse.kolliListe[0].vekt).toBe(12.5); // gyldig: teksten røres ikke
+    const f = felt('12.50'); sandbox.settKolli(o.id, 0, 'vekt', f.value, f); expect(f.value).toBe('12.50');
+  });
+  it('fraktpris: negativt blir tomt i feltet, gyldig står urørt, og uten element kaster ingenting', () => {
+    const o = nyLeveranse(); S.ordrer = [o];
+    const a = felt('-5'); sandbox.settFraktPris(o.id, a.value, a); expect(a.value).toBe(''); expect(o.leveranse.fraktPris).toBe('');
+    const b = felt('450'); sandbox.settFraktPris(o.id, b.value, b); expect(b.value).toBe('450'); expect(o.leveranse.fraktPris).toBe(450);
+    expect(() => sandbox.settFraktPris(o.id, '300')).not.toThrow();
+    expect(() => sandbox.settKolli(o.id, 0, 'vekt', '3')).not.toThrow();
+  });
+  it('feltene i HTML-en sender seg selv med (this), og produktnr-feltet har id slik at det kan oppdateres', () => {
+    const o = nyLeveranse(); S.ordrer = [o];
+    const html = sandbox.leveransePakkerHTML(o);
+    expect(html).toContain("settKolli('ord_TESTLEV1',0,'vekt',this.value,this)");
+    expect(html).toContain("settFraktPris('ord_TESTLEV1',this.value,this)");
+    expect(html).toContain('id="levFraktNr_ord_TESTLEV1"');
+  });
+  it('«Legg frakt på fakturaen» viser produktnummeret som faktisk brukes (hentet fra forrige bruk på enheten) i feltet', async () => {
+    sandbox.localStorage = { getItem: () => '30', setItem() {}, removeItem() {} };
+    sandbox.oppdaterOrdreFikenLinje = async () => {};
+    const o = nyLeveranse({}, { fraktPris: 450 }); S.ordrer = [o];
+    const nrFelt = sandbox.document.getElementById('levFraktNr_' + o.id); nrFelt.value = '';
+    await sandbox.leggFraktPaaFaktura(o.id);
+    expect(nrFelt.value).toBe('30');
+    expect(o.leveranse.fraktProduktnr).toBe('30');
+  });
+});
+
+describe('runde 2: dekningshull i flytt/dra og pakke-raden', () => {
+  const lokal = (y, m, d, h = 0, min = 0) => new Date(y, m - 1, d, h, min);
+  const slipp = (id, dato, tid) => {
+    sandbox.document.elementFromPoint = () => ({ closest: () => ({ dataset: { dato, tid } }) });
+    app.kjor(`_dragOrdre = { id: '${id}', moved: true, ghostEl: null, kortEl: null, x: 0, y: 0, startX: 0, startY: 0 }`);
+    sandbox.document.removeEventListener = () => {};
+    sandbox.dragOrdreEnd({ clientX: 1, clientY: 1 });
+  };
+  const tikk = () => new Promise((ok) => setTimeout(ok, 10));
+  it('dra: visningen tegnes på nytt straks, og én gang til hvis skrivingen feiler', async () => {
+    sandbox.visToast = () => {}; let n = 0; sandbox.renderAll = () => { n++; };
+    const { db } = lagDb(); app.settDb(db);
+    const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }); S.ordrer = [o];
+    slipp(o.id, '2026-11-05', '13:00'); await tikk();
+    expect(n).toBe(1);                                               // lykket: bare straks-tegningen
+    const { db: feilDb } = lagDb({ feilPaa: (i) => i.tabell === 'ordrer' }); app.settDb(feilDb);
+    n = 0; slipp(o.id, '2026-11-06', '09:00'); await tikk();
+    expect(n).toBe(2);                                               // feilet: tegnes på nytt etter tilbakerullingen
+    expect(o).toMatchObject({ kalenderDato: '2026-11-05', kalenderTid: '13:00' });
+  });
+  it('Flytt: vinduet lukkes og visningen tegnes på nytt etter vellykket lagring, men vinduet blir stående åpent hvis skrivingen feiler', async () => {
+    const lukket = []; let n = 0;
+    sandbox.visToast = () => {}; sandbox.closeModal = (id) => lukket.push(id); sandbox.renderAll = () => { n++; };
+    const o = nyLeveranse({ kalender_dato: '2026-11-03', kalender_tid: '10:17' }); S.ordrer = [o];
+    const sett = () => { sandbox.document.getElementById('fl_dato').value = '2026-11-04'; sandbox.document.getElementById('fl_tid').value = '11:00'; app.kjor(`flyttOrdreId = '${o.id}'`); };
+    const { db: feilDb } = lagDb({ feilPaa: (i) => i.tabell === 'ordrer' }); app.settDb(feilDb);
+    sett(); await sandbox.bekreftFlytt();
+    expect(lukket).toEqual([]); expect(n).toBe(0);                   // feil: ingenting lukkes, ingenting tegnes
+    expect(o).toMatchObject({ kalenderDato: '2026-11-03', kalenderTid: '10:17' });
+    const { db } = lagDb(); app.settDb(db);
+    sett(); await sandbox.bekreftFlytt();
+    expect(lukket).toEqual(['flytt']); expect(n).toBe(1);
+    expect(o).toMatchObject({ kalenderDato: '2026-11-04', kalenderTid: '11:00' });
+  });
+  it('standardpakken: fjern-knappen settes inn i riktig element (velgeren og klassen finnes i raden)', () => {
+    const { db } = lagDb(); app.settDb(db); sandbox.visToast = () => {};
+    const o = nyLeveranse(); S.ordrer = [o];
+    expect(sandbox.leveransePakkerHTML(o)).toContain('class="pakke-fjern"');
+    const velgere = []; const stub = { innerHTML: '' };
+    const ekte = sandbox.document.querySelector; sandbox.document.querySelector = (s) => { velgere.push(s); return stub; };
+    try { sandbox.settKolli(o.id, 0, 'vekt', '4'); } finally { sandbox.document.querySelector = ekte; }
+    expect(velgere).toContain(`#levPakkerRader_${o.id} .pakke-fjern`);
+    expect(stub.innerHTML).toContain(`fjernKolli('${o.id}',0)`);
   });
 });

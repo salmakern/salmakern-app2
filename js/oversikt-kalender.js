@@ -389,7 +389,8 @@ function renderWeek() {
   const dayCols = dates.map((dt) => {
     const ds      = dt.toISOString().split('T')[0];
     const isToday = ds === todayStr;
-    const orders  = S.ordrer.filter(o => o.kalenderDato === ds && o.status === 'aktiv' && !erLeveranse(o));
+    // Leveranser (ordre uten bil) står i kalenderen på samme måte som biler: de legges inn automatisk når de opprettes (leveranseKalenderTidspunkt i leveranse.js).
+    const orders  = S.ordrer.filter(o => o.kalenderDato === ds && o.status === 'aktiv');
     const moter   = (S.moter||[]).filter(m => m.dato === ds);
 
     const slotEls = slots30.map(s => {
@@ -413,7 +414,7 @@ function renderWeek() {
         const si = statusInfo(o.ordreStatus);
         const [oh, om] = (o.kalenderTid || '09:00').split(':').map(Number);
         const beregnetTop = Math.max(0, (oh + om / 60 - (START_H + 0.5)) * HOUR_PX);
-        const height = (o.regnr && !o.chassis) ? Math.max(38, SLOT_PX) : Math.max(54, SLOT_PX); // romslig nok til at chassisnummer kan brytes over 2 linjer i en smal dagskolonne uten å flyte utover
+        const height = (!erLeveranse(o) && o.regnr && !o.chassis) ? Math.max(38, SLOT_PX) : Math.max(54, SLOT_PX); // romslig nok til at chassisnummer kan brytes over 2 linjer i en smal dagskolonne uten å flyte utover
         return { top: beregnetTop, height, html: (top, venstrePct, breddePct, totalKolonner) => {
           const smalt = totalKolonner > 1;
           // Smale kort (flere ordre side om side) bruker den kortere ordreLabel() (uten
@@ -423,7 +424,7 @@ function renderWeek() {
           return `<div class="cal-event${smalt?' cal-event-smal':''}" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;left:calc(${venstrePct}% + 2px);right:calc(${100-venstrePct-breddePct}% + 2px);background:${si.bg};border-color:${si.border}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
             <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0;overflow:hidden;height:100%">
-              <div class="cal-event-regnr" style="color:${si.txt}">${tittel}</div>
+              <div class="cal-event-regnr" style="color:${si.txt}">${erLeveranse(o) ? '🚚 ' : ''}${tittel}</div>
               <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${(!smalt&&o.tidBiltilsynetSted)?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
             </div>
             <div style="position:relative;flex-shrink:0">
@@ -866,7 +867,7 @@ function dragOrdreMove(e) {
     g.style.borderColor = si.border;
     g.style.background = si.bg;
     g.style.color = si.txt;
-    g.textContent = '📅 ' + (o ? ordreLabel(o) : 'Ordre');
+    g.textContent = '📅 ' + (o ? (erLeveranse(o) ? leveranseTittel(o) : ordreLabel(o)) : 'Ordre'); // textContent: en leveransetittel er fritekst og skal IKKE være HTML-escapet (ordreLabel esc()-er)
     document.body.appendChild(g);
     _dragOrdre.ghostEl = g;
     document.body.style.userSelect = 'none';
@@ -900,7 +901,13 @@ function dragOrdreEnd(e) {
   if (moved) {
     const slot = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cal-slot');
     const o = S.ordrer.find(x => x.id === id);
-    if (slot && o) {
+    if (slot && o && erLeveranse(o)) {
+      // Leveranse: bare kalendertiden endres (målrettet skriving). «Sted» er Time på biltilsynet, som bare gjelder biler, og Admin-ark røres aldri (chassis.nr kan være samme som en bil).
+      const dato = slot.dataset.dato, tid = slot.dataset.tid;
+      const lovet = leveranseSettKalender(o, dato, tid, 'Flyttet til kalender (dra): ' + dato + ' ' + tid);
+      renderAll();
+      lovet.then(ok => { if (!ok) renderAll(); });
+    } else if (slot && o) {
       o.kalenderDato = slot.dataset.dato;
       o.kalenderTid  = slot.dataset.tid;
       logChange(o, 'Flyttet til kalender (dra): ' + o.kalenderDato + ' ' + o.kalenderTid);
@@ -1013,6 +1020,14 @@ document.addEventListener('click', closeCalMenu);
 // Henrik: datoen "ble liggende" etter fjerning).
 async function fjernFraKalender(id) {
   const o = S.ordrer.find(x => x.id === id); if (!o) return;
+  if (erLeveranse(o)) {
+    // Leveranse: bare kalendertiden fjernes. Chassis.nr kan være samme som en bil, så Admin-ark røres ikke.
+    const ok = await leveranseSettKalender(o, '', '', 'Fjernet fra kalender');
+    renderOversikt();
+    if (activeOrdreId === id) buildOrdreDetail();
+    if (ok) visToast(`${leveranseTittel(o)} tatt ut av kalenderen`); // toasten bruker textContent: rå tittel
+    return;
+  }
   logChange(o, 'Fjernet fra kalender');
   if (o.chassis) {
     await adminArkLagreFelter({chassisNr: o.chassis, _erOrdre: true}, {

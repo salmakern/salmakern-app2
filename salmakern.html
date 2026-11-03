@@ -264,6 +264,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 .modal-box{max-width:680px;width:100%;background:#18181b;border:1px solid #27272a;border-radius:22px;padding:20px;margin-top:40px}
 
 /* CALENDAR */
+/* Pakke-rad i leveranser (js/leveranse.js, pakkeRadHTML): fem felt med egen overskrift. Smal skjerm: antall og vekt øverst, L/B/H under (ellers ble verdier som «12,5» kuttet i 47 px brede felt). */
+.pakke-rad{display:grid;grid-template-columns:64px repeat(4,minmax(0,1fr)) 34px;gap:6px;align-items:end;margin-bottom:8px}
+.pakke-felt{display:flex;flex-direction:column;gap:2px;min-width:0;margin:0}
+.pakke-felt>span{font-size:10px;color:#a1a1aa;line-height:1.2}
+.pakke-fjern{display:flex;align-items:flex-end;min-width:0}
+.pakke-fjern .btn{height:38px;padding:0;width:100%}
+@media(max-width:560px){.pakke-rad{grid-template-columns:repeat(3,minmax(0,1fr)) 34px}.pakke-felt:nth-child(2){grid-column:2 / 4}.pakke-fjern{grid-column:4;grid-row:1}}
 .cal-wrap{border:1px solid #27272a;border-radius:18px;overflow:hidden;margin-top:12px;background:#18181b}
 /* Telefon: la uka skyves sidelengs i stedet for å klemme fem dager inn på 390px.
    Dagkolonnene får en minstebredde slik at kortene fortsatt er lesbare. */
@@ -276,8 +283,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 .cal-day-num{font-size:19px;font-weight:700;width:32px;height:32px;border-radius:999px;display:flex;align-items:center;justify-content:center;margin:3px auto 0;color:#f4f4f5}
 .cal-day-num.cal-today-num{background:#ef4444;color:#fff}
 .cal-day-fravar{font-size:10px;margin:4px auto 0;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-body-scroll{overflow-y:auto;max-height:520px;background:#0f0f12}
-.cal-body{display:flex}
+.cal-body-scroll{overflow-y:auto;max-height:600px;background:#0f0f12} /* rutenettet er 544 px høyt (17 ruter à 32 px): med 520 var siste rute (15:30) nesten skjult og krevde rulling inne i kalenderen */
+.cal-body{display:flex;padding-bottom:24px} /* plass under siste rute så et kort på 15:30 (54 px høyt, 22 px under rutenettet) vises helt uten rulling */
 @media(max-width:700px){
   .cal-head,.cal-body{min-width:640px}
   .cal-gutter,.cal-times{width:38px}
@@ -1435,7 +1442,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div><label>Telefon mottaker</label><input id="lev_tlf" autocomplete="off"></div>
         <div><label>Gods / kolli</label><input id="lev_kolli" placeholder="F.eks. 2 pakker" autocomplete="off"></div>
       </div>
-      <div class="muted small" style="margin:12px 0 6px;letter-spacing:.8px">PAKKE (flere pakker kan legges til etterpå)</div>
+      <div class="muted small" style="margin:12px 0 6px;letter-spacing:.8px">PAKKER (vekt og mål per pakke)</div>
       <div class="grid g2">
         <div><label>Antall pakker</label><input id="lev_pakker" type="number" min="1" step="1" inputmode="numeric" placeholder="1"></div>
         <div><label>Vekt per pakke (kg)</label><input id="lev_vekt" type="number" min="0" step="0.1" inputmode="decimal"></div>
@@ -1445,6 +1452,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <input id="lev_bredde" type="number" min="0" step="0.1" inputmode="decimal" placeholder="B">
             <input id="lev_hoyde" type="number" min="0" step="0.1" inputmode="decimal" placeholder="H">
           </div></div>
+      </div>
+      <div id="lev_ekstra_pakker"></div>
+      <button type="button" class="btn sm" style="margin-top:8px" onclick="leggTilNyPakke()">+ Legg til pakke</button>
+      <div class="small muted" style="margin-top:4px">Har leveransen flere ulike pakker, legg til én rad for hver, med egen vekt og egne mål.</div>
+      <div class="grid g2" style="margin-top:12px">
         <div style="grid-column:1/-1"><label>Fraktpris (kr eks. mva)</label><input id="lev_fraktpris" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Det kunden skal belastes for frakten"></div>
       </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
