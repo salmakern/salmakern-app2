@@ -382,6 +382,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.hmsHandbok           = S.hmsHandbok           || null;
     S.flater           = S.flater           || [];
     S.lagervarer       = S.lagervarer       || [];
+    S.lagerHyller      = S.lagerHyller      || [];
+    S.lagerBestillinger = S.lagerBestillinger || [];
     S.lagerhistorikk   = S.lagerhistorikk   || [];
     S.lagerOppskrifter = S.lagerOppskrifter || [];
     S.adminArk         = S.adminArk         || [];
@@ -569,13 +571,19 @@ async function loadFromSupabase() {
   } catch(e) { console.error('Feil ved henting av flater:', e); }
   // Varelager hentes for seg selv - tabellene finnes kanskje ikke ennå (krever eget SQL-oppsett)
   try {
-    const [lvR, lhR, loR] = await Promise.all([
+    const [lvR, lhR, loR, hyR, beR] = await Promise.all([
       db.from('lagervarer').select('*').order('navn'),
       hentAlleRader(() => db.from('lagerhistorikk').select('*').order('created_at', {ascending:false}).order('id')),
-      db.from('lager_oppskrifter').select('*').order('navn')
+      db.from('lager_oppskrifter').select('*').order('navn'),
+      db.from('lager_hyller').select('*').order('rekkefolge').order('kode'),
+      hentAlleRader(() => db.from('lager_bestillinger').select('*').order('created_at', {ascending:false}).order('id'))
     ]);
     if (!lvR.error) S.lagervarer = (lvR.data||[]).map(dbToLagervare);
     else console.error('Feil ved henting av lagervarer:', lvR.error);
+    if (!hyR.error) S.lagerHyller = (hyR.data||[]).map(dbToLagerHylle);
+    else console.error('Feil ved henting av lager_hyller:', hyR.error);
+    if (!beR.error) S.lagerBestillinger = (beR.data||[]).map(dbToLagerBestilling);
+    else console.error('Feil ved henting av lager_bestillinger:', beR.error);
     if (!lhR.error) S.lagerhistorikk = (lhR.data||[]).map(dbToLagerhistorikk);
     else console.error('Feil ved henting av lagerhistorikk:', lhR.error);
     if (!loR.error) S.lagerOppskrifter = (loR.data||[]).map(dbToLagerOppskrift);
@@ -872,7 +880,14 @@ function dbToFlate(r) {
   return { id:r.id, flatenummer:r.flatenummer||'', kunde:r.kunde||'', status:r.status||'aktiv', primaerOrdreId:r.primaer_ordre_id||null, createdAt:r.created_at||'', vegvesenFingerprint:r.vegvesen_fingerprint||null };
 }
 function dbToLagervare(r) {
-  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', modell:r.modell||'', tegningsnummer:r.tegningsnummer||'', leverandor:r.leverandor||'', kostpris:r.kostpris==null?null:Number(r.kostpris), antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, rekkefolge:Number(r.rekkefolge)||0, createdAt:r.created_at||'' };
+  return { id:r.id, navn:r.navn||'', kategori:r.kategori||'', modell:r.modell||'', tegningsnummer:r.tegningsnummer||'', leverandor:r.leverandor||'', kostpris:r.kostpris==null?null:Number(r.kostpris), antall:Number(r.antall)||0, enhet:r.enhet||'stk', minAntall:Number(r.min_antall)||0, notat:r.notat||'', bestilt:!!r.bestilt, hylleId:r.hylle_id||null, rekkefolge:Number(r.rekkefolge)||0, createdAt:r.created_at||'' };
+}
+function dbToLagerHylle(r) {
+  return { id:r.id, kode:r.kode||'', navn:r.navn||'', rekkefolge:Number(r.rekkefolge)||0, createdAt:r.created_at||'' };
+}
+function dbToLagerBestilling(r) {
+  return { id:r.id, vareId:r.vare_id, antall:Number(r.antall)||0, ukjentAntall:!!r.ukjent_antall, mottattAntall:Number(r.mottatt_antall)||0, leverandor:r.leverandor||'', bestiltDato:r.bestilt_dato||null, forventetDato:r.forventet_dato||null,
+    status:r.status||'apen', bestiltAv:r.bestilt_av||'', kommentar:r.kommentar||'', mottattAt:r.mottatt_at||null, mottattAv:r.mottatt_av||'', createdAt:r.created_at||'' };
 }
 function dbToLagerhistorikk(r) {
   return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, oppskriftId:r.oppskrift_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
@@ -1065,6 +1080,29 @@ function subscribeRealtime() {
         aktivVareId ? renderVareDetalj() : renderLagerListe();
       }
       if (activeOrdreId) renderOrdreLagerbruk();
+      if (typeof oppdaterLagerHylleModaler === 'function') oppdaterLagerHylleModaler();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'lager_hyller'}, p => {
+      S.lagerHyller = S.lagerHyller || [];
+      if (p.eventType==='INSERT') {
+        if (!S.lagerHyller.find(h=>h.id===p.new.id)) S.lagerHyller.push(dbToLagerHylle(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.lagerHyller.findIndex(h=>h.id===p.new.id); if(i>=0) S.lagerHyller[i]=dbToLagerHylle(p.new); else S.lagerHyller.push(dbToLagerHylle(p.new));
+      } else if (p.eventType==='DELETE') {
+        S.lagerHyller = S.lagerHyller.filter(h=>h.id!==p.old.id);
+      }
+      if (typeof oppdaterLagerHylleModaler === 'function') oppdaterLagerHylleModaler();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'lager_bestillinger'}, p => {
+      S.lagerBestillinger = S.lagerBestillinger || [];
+      if (p.eventType==='INSERT') {
+        if (!S.lagerBestillinger.find(b=>b.id===p.new.id)) S.lagerBestillinger.unshift(dbToLagerBestilling(p.new));
+      } else if (p.eventType==='UPDATE') {
+        const i=S.lagerBestillinger.findIndex(b=>b.id===p.new.id); if(i>=0) S.lagerBestillinger[i]=dbToLagerBestilling(p.new); else S.lagerBestillinger.unshift(dbToLagerBestilling(p.new));
+      } else if (p.eventType==='DELETE') {
+        S.lagerBestillinger = S.lagerBestillinger.filter(b=>b.id!==p.old.id);
+      }
+      if (typeof oppdaterLagerHylleModaler === 'function') oppdaterLagerHylleModaler();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'lagerhistorikk'}, p => {
       S.lagerhistorikk = S.lagerhistorikk || [];
@@ -1278,7 +1316,7 @@ function defaultData() {
     ],
     timer: [],
     flater: [],
-    lagervarer: [], lagerhistorikk: [], lagerOppskrifter: [], adminArk: [],
+    lagervarer: [], lagerHyller: [], lagerBestillinger: [], lagerhistorikk: [], lagerOppskrifter: [], adminArk: [],
     nextId: 10,
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
@@ -1529,6 +1567,15 @@ async function tryLogin() {
         history.replaceState(null, '', location.pathname);
       }
       apneOrdreFraVarselHvisKlar();
+      // Åpnet via ?h=<hyllekode> (QR-etiketten på en lagerhylle, js/lager-hylle.js): hopp rett til hylla.
+      if (typeof apneHylleFraUrlHvisKlar === 'function') {
+        const hylleKode = new URLSearchParams(location.search).get('h');
+        if (hylleKode) {
+          pendingHylleKode = hylleKode;
+          history.replaceState(null, '', location.pathname);
+        }
+        apneHylleFraUrlHvisKlar();
+      }
     } catch(e) {
       console.warn('Datahenting etter innlogging feilet:', e);
       visToast('Klarte ikke å hente data. Trykk 🔄 øverst for å prøve igjen.');

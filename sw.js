@@ -35,7 +35,7 @@
 // v22 - s08-048 grunnlag: Bekreft av en portal-ordre kan fylle «Skal ha etter visning» og
 // fiken_linjer fra bestillingens produktlinjer (o.portalLinjer) - helt inert til
 // portal_koble_bestilling v5 og portal-bestilling faktisk sender feltet (2026-10-31)
-const CACHE = 'salmakern-v36';
+const CACHE = 'salmakern-v37';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
@@ -86,7 +86,9 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       fetch(e.request, {cache:'no-store'})
         .then(res => {
-          if (res && res.status === 200) {
+          // En sidelasting med søkestreng (?h=<hylle> fra en QR-etikett, ?ordre=<id> fra et varsel) lagres ikke: da ville hver hylle fått sin egen
+          // kopi av hele siden i cachen. Uten nett finner fallbacken under den vanlige kopien (ignoreSearch).
+          if (res && res.status === 200 && !(e.request.mode === 'navigate' && new URL(url).search)) {
             // res.clone() MÅ kalles synkront her, med en gang - se v9-notatet lenger ned.
             // Uten dette har catch-fallbacken under ingenting å falle tilbake på ved
             // reelt nettverksbrudd - appen lastet da ikke i det hele tatt frakoblet.
@@ -95,7 +97,7 @@ self.addEventListener('fetch', e => {
           }
           return res;
         })
-        .catch(() => caches.match(e.request))
+        .catch(() => caches.match(e.request, { ignoreSearch: true }))
     );
     return;
   }

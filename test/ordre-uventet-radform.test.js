@@ -159,7 +159,7 @@ for (const type of TYPER) {
         }
       }
       expect(funn).toEqual([]);
-    });
+    }, 60000); // tungt regnestykke (kolonner x varianter x 4 visninger): knapt 5 s alene, og over standardgrensen når hele suiten går samtidig
   });
 }
 

@@ -247,6 +247,18 @@ Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandle
    portal-ordren), faller den tilbake til å lage en VANLIG, ikke-koblet ordre - i sjeldne tilfeller kan det da finnes to ordre for samme bil (én portal-koblet, én ikke). Vurdert mot alternativet (ingen
    ordre i det hele tatt ved enhver usikker feil, som rammer alle vanlige rader) og bevisst latt være endret.
 
+## Lager: hyller og bestillinger (2026-11-03)
+
+Migrasjon `20261103200000_lager_hyller_og_bestillinger.sql` (kjørt 2026-11-03 etter Henriks ja; testet først i en rullet tilbake transaksjon, 28 av 28 kontroller; `supabase/tester/lager_hyller_og_bestillinger_TEST_body.sql`).
+
+- `lager_hyller` (`id`, `kode`, `navn`, `rekkefolge`): koden er unik på `upper(kode)` og begrenset til `^[A-Za-z0-9][A-Za-z0-9_-]{0,19}$` (den står i QR-lenken). `lagervarer.hylle_id` refererer med `on delete set null`: en slettet hylle sletter aldri varer.
+- `lager_bestillinger`: én rad per vare per bestilling (`antall` eller `ukjent_antall`, `leverandor`, `bestilt_dato`, `forventet_dato`, `status` apen/mottatt/kansellert, `mottatt_*`). Sletting av en vare tar bestillingene med (`on delete cascade`).
+- RLS på begge (`krever_innlogget_ansatt`, som resten) og begge i Realtime-publikasjonen. Appen skiller admin/ansatt selv (bare admin registrerer/kansellerer/oppretter hyller); databasen krever bare en innlogget ansatt, som for `lagervarer`.
+- RPC-ene (SECURITY DEFINER, `search_path = public`, krever `current_ansatt()`): `lager_registrer_bestillinger(jsonb)` (opptil 500 rader, setter `bestilt = true`), `lager_motta_bestilling(id, antall, ansatt, kommentar)` (radlås på bestilling og vare, øker beholdningen, skriver lagerhistorikk `inn`, setter `bestilt` etter gjenværende åpne bestillinger, `IKKE_APEN`
+  hvis den allerede er mottatt/kansellert), `lager_kanseller_bestilling(id)`.
+- **`endre_lagervare_antall_batch` er endret**: den nullstilte `bestilt` så snart beholdningen kom over minimum, også med en åpen bestilling (f.eks. en delleveranse). Nå nullstilles flagget bare uten åpen bestilling. Resten er uendret (hentet fra databasen før endringen).
+- Rollback: `drop function` for de tre nye, tilbakestill `endre_lagervare_antall_batch` til forrige definisjon, `drop table lager_bestillinger`, `alter table lagervarer drop column hylle_id`, `drop table lager_hyller`.
+
 ## Prislås (s09-023/s05-003, 2026-10-30/31)
 
 Fryser pris og mva-type på en fakturalinje når den legges til/endrer produktnummer, i stedet

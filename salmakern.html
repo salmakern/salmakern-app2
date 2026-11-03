@@ -694,7 +694,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <div class="h">Varelager</div>
               <div id="lagerVarselBadge" class="muted small" style="margin-top:2px"></div>
             </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;min-width:0;max-width:100%">
+              <button class="btn sm" onclick="apneSkannModal()">📷 Skann hylle</button>
+              <button class="btn sm" onclick="apneHyllerModal()">🏷 Hyller</button>
+              <button class="btn sm" onclick="apneBestillingerModal()">🚚 Bestillinger</button>
               <button class="btn sm" onclick="visOppskriftModeller()">📖 Oppskrifter</button>
               <button class="btn sm" onclick="visMaterialbehov()">📦 Materialbehov</button>
               <button class="btn sm" onclick="apneBestillingslisteGlobal()">📋 Bestillingsliste</button>
@@ -1847,6 +1850,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <script src="js/vegvesen-dokumenter.js"></script>
 <script src="js/hms.js"></script>
 <script src="js/leveranse.js"></script>
+<script src="js/lager-hylle.js"></script>
 <!-- Ansatt-detalj modal -->
 <div class="modal" id="ansattDetaljModal">
   <div class="modal-box" style="max-width:520px;width:95%">
@@ -1974,7 +1978,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div><label>Tegningsnummer <span class="muted">(valgfritt)</span></label><input id="nyVareTegningsnummer" placeholder="41-0982-B"></div>
         <div><label>Leverandør <span class="muted">(valgfritt)</span></label><input id="nyVareLeverandor" placeholder="f.eks. Norengros"></div>
       </div>
-      <div style="margin-top:8px"><label>Kostpris per enhet <span class="muted">(valgfritt, kr eks. mva)</span></label><input type="number" id="nyVareKostpris" step="any" placeholder="—"></div>
+      <div class="grid g2" style="margin-top:8px">
+        <div><label>Kostpris per enhet <span class="muted">(valgfritt, kr eks. mva)</span></label><input type="number" id="nyVareKostpris" step="any" placeholder="—"></div>
+        <div><label>Hylle <span class="muted">(valgfritt)</span></label><select id="nyVareHylle"><option value="">Ikke plassert</option></select></div>
+      </div>
       <div class="small muted" style="margin-top:6px">Sett Modell for varer som hører til én bilmodell (f.eks. EV9) - da grupperes de under modellen i lageroversikten, med Kategori som underkategori (f.eks. Modul-system, Kasse). La Modell stå tom for generelle deler som ikke hører til én bestemt modell.</div>
     </div>
 
