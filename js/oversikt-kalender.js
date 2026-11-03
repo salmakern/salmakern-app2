@@ -200,6 +200,7 @@ function renderOversikt(q) {
   const activeElHarFokusertValg = activeEl.contains(document.activeElement) && document.activeElement.tagName === 'SELECT';
   if (!activeElHarFokusertValg) activeEl.innerHTML = aktive.length
     ? aktive.map(o => {
+        try {
         const si = statusInfo(o.ordreStatus);
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
@@ -214,6 +215,7 @@ function renderOversikt(q) {
           <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
           <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
         </div>`;
+        } catch (e) { return ordreKortFeilHTML(o, e); }
       }).join('')
     : '<div class="muted small">Ingen aktive ordrer i kalender</div>';
 
@@ -221,6 +223,7 @@ function renderOversikt(q) {
   const pendElHarFokusertValg = pendEl.contains(document.activeElement) && document.activeElement.tagName === 'SELECT';
   if (!pendElHarFokusertValg) pendEl.innerHTML = pending.length
     ? pending.map(o => {
+        try {
         const si = statusInfo(o.ordreStatus);
         return `<div class="drag-card" onpointerdown="dragOrdreStart(event,'${o.id}')" style="position:relative;background:#18181b;border:1px solid ${o.prioritert?'#facc15':((o.bestiltFrakt&&o.ordreStatus!=='hentet')?BESTILT_FRAKT_BADGE_FARGE:si.border)};border-radius:18px;padding:12px;min-width:0">
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
@@ -238,6 +241,7 @@ function renderOversikt(q) {
             <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>
           </div>
         </div>`;
+        } catch (e) { return ordreKortFeilHTML(o, e); }
       }).join('')
     : '<div class="muted small">Ingen ventende ordrer</div>';
 
@@ -264,7 +268,7 @@ function renderStempletInnNa() {
     const varighet = minutter>=60 ? `${Math.floor(minutter/60)}t ${minutter%60}min` : `${minutter}min`;
     return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <span>${esc(a.navn)}</span>
-      <span class="small muted">siden ${siden.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'})} (${varighet})</span>
+      <span style="display:flex;align-items:center;gap:10px"><span class="small muted">siden ${siden.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'})} (${varighet})</span><button class="btn sm" onclick="apneStempleUtModal(${Number(a.id)})">Stemple ut</button></span>
     </div>`;
   }).join('');
 }
@@ -321,7 +325,9 @@ function plasserKalenderHendelser(items) {
     const totalKolonner = klyngeMaxKolonne[klyngeId[i]] + 1;
     const breddePct = 100 / totalKolonner;
     const venstrePct = kolonne[i] * breddePct;
-    return it.html(it.top, venstrePct, breddePct, totalKolonner);
+    // Én hendelse som ikke lar seg tegne (uventet dataform) skal ikke blanke hele uka.
+    try { return it.html(it.top, venstrePct, breddePct, totalKolonner); }
+    catch (e) { console.error('Kalenderhendelse kunne ikke tegnes:', e); return ''; }
   });
 }
 

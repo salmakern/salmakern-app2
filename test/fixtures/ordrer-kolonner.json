@@ -1,0 +1,496 @@
+{
+ "hentet": "2026-11-02",
+ "kilde": "information_schema.columns for public.ordrer (read-only)",
+ "kolonner": [
+  {
+   "kolonne": "id",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": false
+  },
+  {
+   "kolonne": "regnr",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "kunde",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "eier",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "type",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "variant",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "versjon",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "chassis",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "ankomstdato",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "status",
+   "type": "text",
+   "udt": "text",
+   "default": "'aktiv'::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "ordre_status",
+   "type": "text",
+   "udt": "text",
+   "default": "'ikke_paabegynt'::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "kalender_dato",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "kalender_tid",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "vekter",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "vekter_normalisert('{}'::jsonb)",
+   "nullable": true
+  },
+  {
+   "kolonne": "drivstoff",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'{}'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "utstyr",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'{}'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "bilder_ankomst",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "bilder_levering",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "ansatte_signert",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "signatur",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "godkjent",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": true
+  },
+  {
+   "kolonne": "godkjenner_navn",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "fakturert",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": true
+  },
+  {
+   "kolonne": "fakturert_av",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "ordre_start",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "ordre_stopp",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "notater",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "endringer",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "utstyr_sjekkliste",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "utstyr_mal_navn",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "visnings_sjekkliste",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "visnings_mal_navn",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "updated_at",
+   "type": "timestamp with time zone",
+   "udt": "timestamptz",
+   "default": "now()",
+   "nullable": true
+  },
+  {
+   "kolonne": "created_at",
+   "type": "timestamp with time zone",
+   "udt": "timestamptz",
+   "default": "now()",
+   "nullable": true
+  },
+  {
+   "kolonne": "merke",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "modell",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "ombygging",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'{}'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "ordre_timer_sessions",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "diagnose",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": true
+  },
+  {
+   "kolonne": "diagnose_av",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": true
+  },
+  {
+   "kolonne": "flate_id",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "prioritert",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": false
+  },
+  {
+   "kolonne": "dokumenter",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": false
+  },
+  {
+   "kolonne": "coc",
+   "type": "text",
+   "udt": "text",
+   "default": "'har_ikke'::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "fullmakt",
+   "type": "text",
+   "udt": "text",
+   "default": "'har_ikke'::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "godkjent_biltilsyn",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": false
+  },
+  {
+   "kolonne": "tid_biltilsynet",
+   "type": "date",
+   "udt": "date",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "tid_biltilsynet_tid",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "biltilsyn_varslet",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": false
+  },
+  {
+   "kolonne": "dato_klar_henting",
+   "type": "date",
+   "udt": "date",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "tid_biltilsynet_sted",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "bilder_avstand_skader",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "farge",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "klargjoring_timer_sessions",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": false
+  },
+  {
+   "kolonne": "fiken_linjer",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": false
+  },
+  {
+   "kolonne": "typegodkjenning",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "egenvekt_coc",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "forhandler_orgnr",
+   "type": "text",
+   "udt": "text",
+   "default": "''::text",
+   "nullable": false
+  },
+  {
+   "kolonne": "bilder_manglende_deler",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": true
+  },
+  {
+   "kolonne": "vegvesen_fingerprint",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "bestilt_frakt",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": false
+  },
+  {
+   "kolonne": "hente_klar_dato",
+   "type": "date",
+   "udt": "date",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "tilbud_nr",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "kjoreseddel_skilt",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "fiken_kladd_url",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "portal_bestilling_id",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "portal_bekreftet_at",
+   "type": "timestamp with time zone",
+   "udt": "timestamptz",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "portal_bekreftet_av",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "portal_modell_slug",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "portal_linjer",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": null,
+   "nullable": true
+  }
+ ]
+}

@@ -7,7 +7,8 @@
   "scripts": {
     "check": "node scripts/check.mjs",
     "test": "vitest run",
-    "lint": "eslint js/*.js"
+    "lint": "eslint js/*.js",
+    "sjekk-kolonner": "node scripts/sjekk-ordrer-kolonner.mjs"
   },
   "devDependencies": {
     "eslint": "^9.39.5",

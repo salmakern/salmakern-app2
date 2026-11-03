@@ -70,6 +70,14 @@ function varsleAdminOmFravaer(fravaerType, fraDato, tilDato, betalt) {
   }, { stille: true }).catch(e => console.warn('Fravær-varsel feilet:', e));
 }
 
+// Den gående klokka lagres lokalt (localStorage) så den overlever en omlasting. I en nettleser der lagring er blokkert
+// (Edge «Tracking Prevention», strenge innstillinger, privat modus) KASTER localStorage; før 2026-11-02 stoppet det
+// innloggingen (initTimerPage kjører i tryLogin) og kunne hindre at klokka startet. Disse tre svelger feilen: uten
+// lagring virker klokka fortsatt, den overlever bare ikke en omlasting.
+function timerStartHent(id) { try { return localStorage.getItem('timerStart_' + id); } catch (e) { return null; } }
+function timerStartSett(id, v) { try { localStorage.setItem('timerStart_' + id, v); } catch (e) { console.warn('Kunne ikke lagre klokka lokalt:', e && e.message); } }
+function timerStartFjern(id) { try { localStorage.removeItem('timerStart_' + id); } catch (e) { /* ingenting å fjerne */ } }
+
 function initTimerPage() {
   const d=new Date();
   document.getElementById('timerDatoLbl').textContent=d.toLocaleDateString('no',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -78,7 +86,7 @@ function initTimerPage() {
   renderTimerHistorikk();
   visSykemeldingPaaminnelse();
   // Gjenopprett pågående timer hvis siden ble lukket
-  const lagretStart = localStorage.getItem('timerStart_'+me?.id);
+  const lagretStart = timerStartHent(me?.id);
   if (lagretStart) {
     const ts = parseInt(lagretStart);
     const mins = Math.floor((Date.now()-ts)/60000);
@@ -89,8 +97,9 @@ function initTimerPage() {
       document.getElementById('stoppBtn').disabled=false;
       document.getElementById('startBtn').disabled=true;
       updateClock();
+      sjekkAdminUtstempling().catch(e => console.warn('sjekkAdminUtstempling:', e && e.message));
     } else {
-      localStorage.removeItem('timerStart_'+me?.id);
+      timerStartFjern(me?.id);
     }
   }
 }
@@ -313,7 +322,7 @@ function doStartTimer(notat) {
   const btn=document.getElementById('startBtn');
   if(btn){btn.textContent='▶ Start';btn.disabled=true;}
   timerStart=Date.now();
-  localStorage.setItem('timerStart_'+me?.id, timerStart);
+  timerStartSett(me?.id, timerStart);
   document.getElementById('stoppBtn').disabled=false;
   timerTick=setInterval(updateClock,1000);
   updateClock();
@@ -504,7 +513,7 @@ async function lagreTimer() {
     id:timerEntry.id, ansatt_id:me.id, ansatt:me.navn,
     dato:timerEntry.dato, type:timerType, start, stopp, mins
   }).then(r=>{if(r.error) { console.error('Timer lagringsfeil:',r.error.message); visToast('Kunne ikke lagre timeregistreringen - prøv igjen'); } });
-  localStorage.removeItem('timerStart_'+me?.id);
+  timerStartFjern(me?.id);
   renderTimerHistorikk();
   stoppTimer();
   timerStart=null;
@@ -731,3 +740,145 @@ function renderTimerMaaned() {
   }).join('');
 }
 
+
+// ---------------------------------------------------------------------------------------------------------------
+// ADMIN STEMPLER UT EN ANNEN ANSATT (2026-11-02, bedt om av Henrik: «det må være mulig for meg å logge ut ansatte,
+// stemple ut»). Typisk når noen har glemt å stemple ut. Admin trykker «Stemple ut» i «Stemplet inn nå» (Oversikt),
+// velger klokkeslett, og appen gjør DET SAMME som den ansattes egen utstempling (lagreTimer): registrerer timene som
+// vanlig arbeidstid med vanlig pauseregel, stopper ordre-klokka (Ombygging) og nullstiller stemplet_inn_siden. Ingen
+// databaseendring trengs: RLS lar admin sette inn timer_entries for andre, og ansatte_beskytt_skriving lar admin
+// skrive alt på ansatte.
+//
+// Rekkefølge og sikkerhet (timer = lønn, så ingenting skal kunne gå tapt eller dobles):
+//  1. Den ferske stemplingen leses fra databasen (ansatten kan ha stemplet ut selv i mellomtiden).
+//  2. Timen settes inn med en FAST id (tadm_<ansatt>_<innstemplingen>): et nytt forsøk etter en delvis feil, eller to
+//     administratorer samtidig, gir en duplikat-feil (23505) som regnes som «allerede registrert», aldri to rader.
+//  3. Først DERETTER nullstilles stemplingen, og bare hvis den fortsatt er den vi leste (.eq på verdien).
+//  Feiler trinn 2, skjer ingenting. Feiler trinn 3, står ansatten fortsatt stemplet inn (synlig), og et nytt forsøk er trygt.
+// Den ansattes EGEN enhet har klokka gående lokalt (localStorage): når stemplingen nullstilles utenfra, stopper
+// sjekkAdminUtstempling() den uten å registrere noe (se under), så samme tid ikke føres to ganger.
+// ---------------------------------------------------------------------------------------------------------------
+
+// Ren beregning (testes uten DOM): innstemplingen (ISO fra ansatte.stemplet_inn_siden) + klokkeslett «TT:MM» samme
+// dag → dato/start/stopp/minutter etter samme pauseregel som manuell registrering (beregnManuellMinutter).
+function beregnAdminUtstempling(stempletInnIso, stoppTid, naa) {
+  const inn = new Date(stempletInnIso);
+  if (!stempletInnIso || isNaN(inn.getTime())) return { feil: 'Fant ikke innstemplingstidspunktet.' };
+  if (!/^\d{2}:\d{2}$/.test(stoppTid || '')) return { feil: 'Velg klokkeslettet for utstemplingen.' };
+  const pad = n => String(n).padStart(2, '0');
+  const dato = `${inn.getFullYear()}-${pad(inn.getMonth() + 1)}-${pad(inn.getDate())}`;
+  const start = `${pad(inn.getHours())}:${pad(inn.getMinutes())}`;
+  const [h, m] = stoppTid.split(':').map(Number);
+  if (!(h >= 0 && h < 24 && m >= 0 && m < 60)) return { feil: 'Ugyldig klokkeslett.' };
+  const stoppAbs = new Date(inn); stoppAbs.setHours(h, m, 0, 0);
+  if (stoppAbs.getTime() > (naa || new Date()).getTime()) return { feil: 'Utstemplingen kan ikke ligge frem i tid.' };
+  const { raatid, mins } = beregnManuellMinutter(start, stoppTid);
+  if (raatid <= 0) return { feil: `Utstemplingen må være etter innstemplingen (${start}).` };
+  if (raatid > 16 * 60) return { feil: 'Mer enn 16 timer mellom inn og ut. Sjekk klokkeslettet.' };
+  return { dato, start, stopp: stoppTid, mins, raatid, pause: raatid - mins };
+}
+function adminUtstemplingEntryId(ansattId, stempletInnIso) { return 'tadm_' + ansattId + '_' + new Date(stempletInnIso).getTime(); }
+function formaterVarighet(mins) { return mins >= 60 ? `${Math.floor(mins / 60)} t ${mins % 60} min` : `${mins} min`; }
+
+let stempleUtAnsattId = null;
+function apneStempleUtModal(ansattId) {
+  if (!me || me.rolle !== 'admin') return;
+  const a = (S.ansatte || []).find(x => x.id === ansattId);
+  if (!a || !a.stempletInnSiden) { visToast('Den ansatte er ikke stemplet inn', 'feil'); return; }
+  stempleUtAnsattId = ansattId;
+  const inn = new Date(a.stempletInnSiden);
+  const pad = n => String(n).padStart(2, '0');
+  const erIdag = inn.toDateString() === new Date().toDateString();
+  document.getElementById('stempleUtNavn').textContent = a.navn;
+  document.getElementById('stempleUtInfo').textContent = 'Stemplet inn ' + inn.toLocaleDateString('no', { weekday: 'long', day: 'numeric', month: 'long' }) + ' kl. ' + pad(inn.getHours()) + ':' + pad(inn.getMinutes());
+  // I dag: nå. En glemt utstempling fra en tidligere dag: 15:00 som utgangspunkt (admin retter til det riktige).
+  const naa = new Date();
+  document.getElementById('stempleUtTid').value = erIdag ? pad(naa.getHours()) + ':' + pad(naa.getMinutes()) : '15:00';
+  oppdaterStempleUtOppsummering();
+  openModal('stempleUt');
+}
+function oppdaterStempleUtOppsummering() {
+  const el = document.getElementById('stempleUtOppsummering'); const knapp = document.getElementById('stempleUtBekreft');
+  const a = (S.ansatte || []).find(x => x.id === stempleUtAnsattId);
+  if (!el || !a || !a.stempletInnSiden) return;
+  const r = beregnAdminUtstempling(a.stempletInnSiden, document.getElementById('stempleUtTid').value);
+  if (r.feil) { el.style.color = '#fca5a5'; el.textContent = r.feil; if (knapp) knapp.disabled = true; return; }
+  el.style.color = '#86efac';
+  el.textContent = `${r.start} – ${r.stopp}: ${formaterVarighet(r.mins)} registreres` + (r.pause ? ` (${r.pause} min pause trukket)` : '');
+  if (knapp) knapp.disabled = false;
+}
+
+async function adminStempleUt() {
+  if (!me || me.rolle !== 'admin' || !db) return;
+  const knapp = document.getElementById('stempleUtBekreft');
+  if (knapp && knapp.disabled) return;
+  if (knapp) knapp.disabled = true;
+  try {
+    const id = stempleUtAnsattId;
+    const a = (S.ansatte || []).find(x => x.id === id);
+    if (!a) return;
+    // 1) Ferskt fra databasen.
+    const les = await db.from('ansatte').select('stemplet_inn_siden').eq('id', id).single();
+    if (les.error) { visToast('Kunne ikke sjekke stemplingen. Prøv igjen.', 'feil'); console.error('adminStempleUt: lesing feilet:', les.error.message); return; }
+    const innIso = les.data && les.data.stemplet_inn_siden;
+    if (!innIso) {
+      a.stempletInnSiden = null; renderStempletInnNa(); closeModal('stempleUt');
+      visToast(`${a.navn} er allerede stemplet ut`, 'ok'); return;
+    }
+    a.stempletInnSiden = innIso;
+    const r = beregnAdminUtstempling(innIso, document.getElementById('stempleUtTid').value);
+    if (r.feil) { visToast(r.feil, 'feil'); oppdaterStempleUtOppsummering(); return; }
+    // 2) Timene, med fast id (idempotent).
+    const rad = { id: adminUtstemplingEntryId(id, innIso), ansatt_id: id, ansatt: a.navn, dato: r.dato, type: 'normal', start: r.start, stopp: r.stopp, mins: r.mins };
+    const ins = await db.from('timer_entries').insert(rad);
+    if (ins.error && ins.error.code !== '23505') {
+      visToast('Kunne ikke registrere timene. Ingen er stemplet ut.', 'feil'); console.error('adminStempleUt: innsetting feilet:', ins.error.message); return;
+    }
+    // 3) Nullstill stemplingen, bare hvis den fortsatt er den vi leste.
+    const upd = await db.from('ansatte').update({ stemplet_inn_siden: null }).eq('id', id).eq('stemplet_inn_siden', innIso).select('id');
+    if (upd.error || !upd.data || !upd.data.length) {
+      console.error('adminStempleUt: nullstilling feilet:', upd.error && upd.error.message);
+      visToast('Timene er registrert, men stemplingen ble ikke nullstilt. Trykk «Stemple ut» igjen.', 'feil'); return;
+    }
+    // Lokalt: timen inn i S.timer (Realtime legger den ikke til to ganger), stemplingen nullstilt, ordre-klokka stoppet.
+    if (!(S.timer || []).find(t => t.id === rad.id)) S.timer.unshift(dbToTimer(rad));
+    a.stempletInnSiden = null;
+    for (const o of (S.ordrer || []).filter(o => ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', id))) {
+      await stoppOrdreTimerForAnsatt(o, 'ordreTimerSessions', id, a.navn);
+    }
+    if (typeof planleggLocalSpeiling === 'function') planleggLocalSpeiling();
+    renderStempletInnNa();
+    if (typeof renderTimerMaaned === 'function') { renderTimerHistorikk(); renderTimerMaaned(); }
+    closeModal('stempleUt');
+    visToast(`${a.navn} er stemplet ut kl. ${r.stopp} (${formaterVarighet(r.mins)} registrert)`, 'ok');
+  } finally {
+    if (knapp) knapp.disabled = false;
+  }
+}
+
+// Den ansattes egen enhet: klokka går lokalt (timerStart + localStorage) og vet ikke at admin har stemplet ut. Kalles
+// (a) fra Realtime når MIN stemplet_inn_siden går fra satt til tom uten at jeg selv gjorde det, og (b) når siden
+// gjenoppretter en lagret klokke ved oppstart. Klokka stoppes BARE hvis databasen viser at stemplingen er borte OG det
+// finnes en timeføring på meg opprettet etter at klokka startet (beviset på at tiden allerede er ført av en annen). Ellers
+// beholdes klokka: en mislykket innstemplingsskriving eller en urelatert oppdatering skal aldri slette en ekte klokke.
+async function sjekkAdminUtstempling() {
+  if (!me || !timerStart || !db) return false;
+  const start = timerStart;
+  const fersk = await db.from('ansatte').select('stemplet_inn_siden').eq('id', me.id).single();
+  if (fersk.error || !fersk.data || fersk.data.stemplet_inn_siden) return false;
+  const reg = await db.from('timer_entries').select('id').eq('ansatt_id', me.id).eq('type', 'normal')
+    .gte('created_at', new Date(start).toISOString()).limit(1);
+  if (reg.error || !reg.data || !reg.data.length) return false;
+  if (timerStart !== start) return false; // en ny klokke startet i mellomtiden
+  timerStartFjern(me.id);
+  timerStart = null;
+  stoppTimer();
+  const t = document.getElementById('clockT'); if (t) t.textContent = '00';
+  const m = document.getElementById('clockM'); if (m) m.textContent = '00';
+  const rng = document.getElementById('clockRange'); if (rng) rng.textContent = '--:-- – --:--';
+  const p = document.getElementById('clockPause'); if (p) p.textContent = '';
+  oppdaterKlokkeRing(0, false);
+  me.stempletInnSiden = null;
+  visToast('Du er stemplet ut av administrator. Timene er allerede registrert.', 'ok');
+  return true;
+}

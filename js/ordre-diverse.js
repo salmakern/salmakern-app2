@@ -972,6 +972,26 @@ async function gjenopprettFotos(id) {
   visToast(gjenopprettet + ' bilde(r) gjenopprettet fra Storage!', 'ok');
 }
 
+// En fil i bøtta ordre-dokumenter kan peke fra FLERE steder: et Vegvesen-dokument generert for en hel flåte lagres ÉN gang (under mappa
+// til første medlem) men står i dokumentlista til alle medlemmene, og en forhandlers fullmakt er EN fil (forhandlere/<id>/...) som kopieres
+// inn i hver ordre for forhandleren og eies av kontakten. Å slette filen fordi EN ordre slipper den, ga ødelagte lenker på de andre
+// (funnet 2026-11-02: 24 delte flåtefiler og 2 delte fullmaktfiler i de ekte dataene). Er du i tvil, returneres true (ikke slett).
+function dokumentSti(urlEllerSti) {
+  let sti = String(urlEllerSti || '');
+  const i = sti.indexOf('/ordre-dokumenter/');
+  if (i >= 0) sti = sti.slice(i + '/ordre-dokumenter/'.length);
+  sti = sti.split('?')[0];
+  try { return decodeURIComponent(sti); } catch (e) { return sti; }
+}
+function storageFilBrukesAvAndre(urlEllerSti, unntattOrdreIder) {
+  const sti = dokumentSti(urlEllerSti);
+  if (!sti) return true;
+  if (sti.startsWith('forhandlere/')) return true; // forhandlerfullmakt eies av kontakten, aldri av en enkelt ordre
+  if ((S.kontakter || []).some(k => k.fullmaktUrl && dokumentSti(k.fullmaktUrl) === sti)) return true;
+  const unntatt = unntattOrdreIder || [];
+  return (S.ordrer || []).some(x => !unntatt.includes(x.id) && (x.dokumenter || []).some(d => d.url && dokumentSti(d.url) === sti));
+}
+
 // Rydder opp ALLE Storage-filer som hører til en ordre (bilder - ankomst/levering/
 // avstand-skader/signatur - og dokumenter, alt ligger under en mappe navngitt med
 // ordre-id-en i sin respektive bucket) - kalles når selve ordren slettes for godt,
@@ -982,8 +1002,10 @@ async function slettOrdreStorageFiler(id) {
     try {
       const { data: filer, error } = await db.storage.from(bucket).list(String(id));
       if (error) { console.warn(`Kunne ikke liste ${bucket}-filer for ordre ${id}:`, error.message); continue; }
-      if (filer?.length) {
-        const { error: rmErr } = await db.storage.from(bucket).remove(filer.map(f => `${id}/${f.name}`));
+      // Delte dokumentfiler (flåte, fullmakt) beholdes så lenge en annen ordre peker på dem.
+      const skalSlettes = (filer || []).filter(f => bucket !== 'ordre-dokumenter' || !storageFilBrukesAvAndre(`${id}/${f.name}`, [id]));
+      if (skalSlettes.length) {
+        const { error: rmErr } = await db.storage.from(bucket).remove(skalSlettes.map(f => `${id}/${f.name}`));
         if (rmErr) console.warn(`Kunne ikke slette ${bucket}-filer for ordre ${id}:`, rmErr.message);
       }
     } catch (e) {
@@ -1101,7 +1123,8 @@ async function lastOppEtDokument(file, id) {
   o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter||[]), nyttDok];
   if (forrige?.url) {
     const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
-    if (gammeltFilnavn) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
+    // Den gamle filen kan være delt (flåte/fullmakt): da slettes den ikke, bare lenka på DENNE ordren er byttet ut.
+    if (gammeltFilnavn && !storageFilBrukesAvAndre(forrige.url, [id])) await db.storage.from('ordre-dokumenter').remove([gammeltFilnavn]);
     logChange(o, 'Erstattet dokument med ny versjon: ' + file.name);
   } else {
     logChange(o, 'Lastet opp dokument: ' + file.name);
@@ -1157,10 +1180,8 @@ async function slettDokument(id, idx) {
   const beroerte = kontekst ? kontekst.medlemmer.filter(m => (m.dokumenter||[]).some(d => d.navn===dok.navn && d.url===dok.url)) : [o];
   dokumentTapBevisst(beroerte.map(m => m.id), 1); // ETT dokument skal forsvinne per ordre - mer enn det er et avvik (diagnostikk i core.js)
 
-  if (db && dok.url) {
-    const filnavn = dok.url.split('/ordre-dokumenter/')[1];
-    if (filnavn) await db.storage.from('ordre-dokumenter').remove([filnavn]);
-  }
+  // Selve filen i Storage slettes til slutt (under), og bare hvis ingen ANDRE ordrer (utenom de som nå mister lenka) eller en
+  // forhandlers fullmakt peker på den - tidligere ble den slettet først og betingelsesløst.
   // Fjerning av selve dokumentlinja går nå via den atomiske oppdater_ordre_dokument()-
   // funksjonen (p_dokument=null = slett) PER berørt ordre, i stedet for å lese/filtrere/
   // skrive hele dokumenter-lista fra nettleserens eget minne - samme kappløpsrisiko som
@@ -1177,6 +1198,13 @@ async function slettDokument(id, idx) {
     logChange(m, 'Slettet dokument: ' + dok.navn);
     const listEl = document.getElementById('dokumenterListe_'+m.id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(m);
+  }
+  if (db && dok.url) {
+    const filnavn = dok.url.split('/ordre-dokumenter/')[1];
+    if (filnavn && !storageFilBrukesAvAndre(dok.url, beroerte.map(m => m.id))) {
+      const { error: rmFeil } = await db.storage.from('ordre-dokumenter').remove([filnavn]);
+      if (rmFeil) console.warn('Kunne ikke slette filen ' + filnavn + ' fra Storage:', rmFeil.message);
+    }
   }
   planleggLocalSpeiling();
 }

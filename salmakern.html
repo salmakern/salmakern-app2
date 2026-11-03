@@ -1355,6 +1355,23 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   </div>
 </div>
 
+<div class="modal" id="stempleUt">
+  <div class="modal-box">
+    <div class="h">Stemple ut <span id="stempleUtNavn"></span></div>
+    <div class="small muted" id="stempleUtInfo" style="margin-top:6px"></div>
+    <div style="margin-top:12px">
+      <label>Utstemplet kl.</label>
+      <input type="time" id="stempleUtTid" oninput="oppdaterStempleUtOppsummering()">
+    </div>
+    <div id="stempleUtOppsummering" class="small" style="margin-top:10px"></div>
+    <div class="small muted" style="margin-top:8px">Timene registreres på den ansatte som vanlig arbeidstid (pause trekkes etter vanlig regel), og klokka på ordrene stoppes. Den ansattes egen klokke stopper av seg selv.</div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" id="stempleUtBekreft" onclick="adminStempleUt()">Stemple ut</button>
+      <button class="btn" onclick="closeModal('stempleUt')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="nyttMote">
   <div class="modal-box">
     <div class="h">Nytt møte</div>

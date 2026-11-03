@@ -128,3 +128,34 @@ describe('renderOrdreList: ett ødelagt ordrekort skal ikke blanke lista', () =>
     expect(() => vm.runInContext('ordreKortFeilHTML(null, null)', sandbox)).not.toThrow();
   });
 });
+
+// Revisjon 2026-11-02 (samme feilklasse): bilder_ankomst/levering har default '[]', og `[].every(Boolean)` er sant, så en ordre
+// opprettet utenom appen så ut som «6 bilder ankomst» var oppfylt uten ett bilde.
+describe('normaliserBilder', () => {
+  it('tom liste, {}, null og feil type gir faste, tomme plasser', () => {
+    const m = nyttMiljo();
+    for (const x of [[], {}, null, undefined, 'x', 5]) {
+      expect(m.normaliserBilder(x, 6)).toEqual([null, null, null, null, null, null]);
+      expect(m.normaliserBilder(x, 3)).toEqual([null, null, null]);
+    }
+  });
+  it('beholder innfylte bilder på riktig plass, og ekstra bilder ut over antallet røres ikke', () => {
+    const m = nyttMiljo();
+    expect(m.normaliserBilder(['a', null, 'c'], 6)).toEqual(['a', null, 'c', null, null, null]);
+    expect(m.normaliserBilder(['1', '2', '3', '4'], 3)).toEqual(['1', '2', '3', '4']);
+  });
+  it('tomme strenger og andre falske verdier blir null (en tom plass er alltid null)', () => {
+    expect(nyttMiljo().normaliserBilder(['', 0, 'x'], 3)).toEqual([null, null, 'x']);
+  });
+  it('en ordre med bilder_ankomst = [] har IKKE «6 bilder ankomst» oppfylt', () => {
+    const o = nyttMiljo().dbToOrdre({ id: 'ord_1', bilder_ankomst: [], bilder_levering: [] });
+    expect(o.bilderAnkomst.every(Boolean)).toBe(false);
+    expect(o.bilderLevering.every(Boolean)).toBe(false);
+    expect(o.bilderAnkomst).toHaveLength(6);
+  });
+  it('seks bilder gir fortsatt oppfylt', () => {
+    const seks = ['1', '2', '3', '4', '5', '6'];
+    const o = nyttMiljo().dbToOrdre({ id: 'ord_1', bilder_ankomst: seks });
+    expect(o.bilderAnkomst.every(Boolean)).toBe(true);
+  });
+});

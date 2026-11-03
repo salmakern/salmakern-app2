@@ -1475,8 +1475,17 @@ function autoFyllForhandlerFullmakt(id) {
   if (!o.dokumenter.some(d => d.navn === fullmakt.navn)) {
     o.dokumenter = [...o.dokumenter, { navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
     logChange(o, 'La automatisk til fullmakt fra forhandler: ' + fullmakt.navn);
-    if (db) db.from('ordrer').update({dokumenter:o.dokumenter}).eq('id', id)
-      .then(r=>{if(r.error) console.error('Fullmakt-auto-vedlegg feilet:', r.error.message);});
+    // ATOMISK per dokument (oppdater_ordre_dokument, radlåst) i stedet for å skrive HELE dokumenter-lista fra denne økten sitt minne:
+    // et dokument en kollega la til/slettet samtidig (eller en flåte-generering) ble ellers overskrevet og forsvant (revisjon 2026-11-02).
+    if (db) db.rpc('oppdater_ordre_dokument', { p_ordre_id: id, p_navn: fullmakt.navn, p_dokument: o.dokumenter[o.dokumenter.length-1] })
+      .then(r=>{
+        if (r.error) { console.error('Fullmakt-auto-vedlegg feilet:', r.error.message); return; }
+        if (r.data?.dokumenter) {
+          o.dokumenter = r.data.dokumenter;
+          const el = document.getElementById('dokumenterListe_'+id);
+          if (el) el.innerHTML = dokumenterListeHTML(o);
+        }
+      });
     planleggLocalSpeiling();
     const listEl = document.getElementById('dokumenterListe_'+id);
     if (listEl) listEl.innerHTML = dokumenterListeHTML(o);

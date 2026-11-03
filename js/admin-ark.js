@@ -238,13 +238,13 @@ function adminArkFraktselskapVerdier(gjeldende) {
 function adminArkFinnKontaktEpost(navn, type) {
   if (!navn) return '';
   const treff = (S.kontakter||[]).find(k =>
-    k.navn.trim().toLowerCase() === navn.trim().toLowerCase() && (!type || k.type === type));
+    (k.navn||'').trim().toLowerCase() === navn.trim().toLowerCase() && (!type || k.type === type));
   if (treff) return treff.epost || '';
   if (type) return '';
   const nostetTreff = (S.kontakter||[])
     .filter(k => k.type === 'Forhandler')
     .flatMap(k => k.kontaktpersoner||[])
-    .find(p => p.navn.trim().toLowerCase() === navn.trim().toLowerCase());
+    .find(p => (p.navn||'').trim().toLowerCase() === navn.trim().toLowerCase());
   return nostetTreff?.epost || '';
 }
 

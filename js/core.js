@@ -397,11 +397,27 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('loadingOverlay').style.display = 'none';
 });
 
+// Henter ALLE rader i sider. Supabase/PostgREST kutter STILLE ved serverens max-rows (1000), og klienten brukte i tillegg
+// .limit(300) på timer_entries og .limit(500) på lagerhistorikk: med 351 timeføringer (2026-11-02) manglet de eldste i hver klient,
+// så Månedsoversikt, Årsstatistikk og årstotaler per ansatt regnet på ufullstendige data uten feilmelding, og det ble verre for hver
+// måned. lagSporring() må gi en NY spørring hver gang (ferdig sortert med en entydig sekundærnøkkel, ellers kan rader med lik
+// created_at hoppe over eller dobles mellom sidene). Svaret har samme form som en vanlig spørring: { data, error }.
+async function hentAlleRader(lagSporring, sideStorrelse = 1000) {
+  let alle = [];
+  for (let fra = 0; ; fra += sideStorrelse) {
+    const r = await lagSporring().range(fra, fra + sideStorrelse - 1);
+    if (r.error) return { data: null, error: r.error };
+    const side = r.data || [];
+    alle = alle.concat(side);
+    if (side.length < sideStorrelse) return { data: alle, error: null };
+  }
+}
+
 async function loadFromSupabase() {
   const [aR,oR,tR,sR,pmkR] = await Promise.all([
     db.from('ansatte').select('*').order('id'),
-    db.from('ordrer').select('*').order('created_at'),
-    db.from('timer_entries').select('*').order('created_at',{ascending:false}).limit(300),
+    hentAlleRader(() => db.from('ordrer').select('*').order('created_at').order('id')),
+    hentAlleRader(() => db.from('timer_entries').select('*').order('created_at',{ascending:false}).order('id')),
     db.from('innstillinger').select('*').eq('id',1).maybeSingle(),
     db.rpc('hent_portal_modell_kobling')
   ]);
@@ -548,7 +564,7 @@ async function loadFromSupabase() {
   try {
     const [lvR, lhR, loR] = await Promise.all([
       db.from('lagervarer').select('*').order('navn'),
-      db.from('lagerhistorikk').select('*').order('created_at', {ascending:false}).limit(500),
+      hentAlleRader(() => db.from('lagerhistorikk').select('*').order('created_at', {ascending:false}).order('id')),
       db.from('lager_oppskrifter').select('*').order('navn')
     ]);
     if (!lvR.error) S.lagervarer = (lvR.data||[]).map(dbToLagervare);
@@ -560,7 +576,7 @@ async function loadFromSupabase() {
   } catch(e) { console.error('Feil ved henting av varelager:', e); }
   // Admin-ark hentes for seg selv - tabellen finnes kanskje ikke ennå (krever eget SQL-oppsett)
   try {
-    const aaR = await db.from('admin_ark').select('*');
+    const aaR = await hentAlleRader(() => db.from('admin_ark').select('*').order('id'));
     if (!aaR.error) S.adminArk = (aaR.data||[]).map(dbToAdminArkRad);
     else console.error('Feil ved henting av admin_ark:', aaR.error);
   } catch(e) { console.error('Feil ved henting av admin_ark:', e); }
@@ -606,6 +622,14 @@ async function loadFromSupabase() {
 // de atomiske RPC-ene). Den gamle koden (`r.vekter||dv`) beholdt det tomme objektet, så tvangsflyt() kastet
 // «Cannot read properties of undefined (reading 'a')» og HELE Ordre-siden ble tom for alle da den første nye
 // ordren siden 30.10 ble opprettet (2026-11-02). Fyller nå inn manglende vektfelt (a/e/v) og beholder alt som finnes.
+// Bildelistene har faste plasser (6 ankomst, 6 levering, 3 avstand/skade). Databasens default er '[]' (ikke seks null), og
+// `r.x||[null x6]` beskytter ikke mot [] (truthy): en ordre opprettet utenom appen (SQL/migrasjon/edge) fikk en TOM liste, og
+// tvangsflyt() sin `.every(Boolean)` er sann for [] - «6 bilder ankomst» så ut som oppfylt uten ett eneste bilde. Fyller derfor
+// alltid opp til fast antall plasser (null), beholder det som finnes (også ekstra), og tåler {} / feil type.
+function normaliserBilder(v, antall) {
+  const kilde = Array.isArray(v) ? v : [];
+  return Array.from({ length: Math.max(antall, kilde.length) }, (_, i) => kilde[i] || null);
+}
 const VEKT_FELT = ['totalvekt','vogntog','foraksel','bakaksel'];
 function normaliserVekter(v) {
   const er = x => x && typeof x === 'object' && !Array.isArray(x);
@@ -624,10 +648,10 @@ function dbToOrdre(r) {
     kalenderDato:r.kalender_dato||'', kalenderTid:r.kalender_tid||'',
     vekter:normaliserVekter(r.vekter), drivstoff:r.drivstoff||{totalpris:'',satsId:''},
     utstyr:r.utstyr||{har:'',skalHa:'',hengerfeste:'ikke_hengerfeste',hengerfesteMontert:'ikke_montert',hengerfesteBestilt:'ikke_bestilt',skalHaBekreftet:false},
-    bilderAnkomst:r.bilder_ankomst||[null,null,null,null,null,null],
-    bilderLevering:r.bilder_levering||[null,null,null,null,null,null],
-    bilderAvstandSkader:r.bilder_avstand_skader||[null,null,null],
-    bilderManglendeDeler:r.bilder_manglende_deler||[],
+    bilderAnkomst:normaliserBilder(r.bilder_ankomst,6),
+    bilderLevering:normaliserBilder(r.bilder_levering,6),
+    bilderAvstandSkader:normaliserBilder(r.bilder_avstand_skader,3),
+    bilderManglendeDeler:Array.isArray(r.bilder_manglende_deler)?r.bilder_manglende_deler:[],
     ansatteSignert:r.ansatte_signert||[], signatur:r.signatur||null,
     godkjent:r.godkjent||false, godkjennerNavn:r.godkjenner_navn||'',
     diagnose:r.diagnose||false, diagnoseAv:r.diagnose_av||'',
@@ -679,10 +703,17 @@ function ordreKolonneKart() {
   dbToOrdre(new Proxy({id:'_'}, { get:(m, k) => { if (typeof k === 'string' && k !== 'id') kolonner.add(k); return m[k]; } }));
   const basis = dbToOrdre({id:'_'});
   const kart = {};
+  // To prøveverdier: et objekt og en liste. Normaliserere (normaliserVekter/normaliserBilder) tar bare imot «sin» type og ignorerer
+  // den andre, så en enkelt prøveverdi ville gjort at en kolonne ikke ble koblet til noen egenskap (og Realtime ville tømt den).
+  const prover = [{__prove:true}, ['__prove']];
   kolonner.forEach(kol => {
-    let ny = null;
-    try { ny = dbToOrdre({id:'_', [kol]:{__prove:true}}); } catch(_) {}
-    kart[kol] = ny ? Object.keys(ny).filter(p => JSON.stringify(ny[p]) !== JSON.stringify(basis[p])) : [];
+    const egenskaper = new Set();
+    prover.forEach(verdi => {
+      let ny = null;
+      try { ny = dbToOrdre({id:'_', [kol]:verdi}); } catch(_) {}
+      if (ny) Object.keys(ny).filter(p => JSON.stringify(ny[p]) !== JSON.stringify(basis[p])).forEach(p => egenskaper.add(p));
+    });
+    kart[kol] = [...egenskaper];
   });
   return (_ordreKolonneKart = kart);
 }
@@ -920,7 +951,14 @@ function subscribeRealtime() {
         if (!S.ansatte.find(a=>a.id===p.new.id)) S.ansatte.push(mapA(p.new));
       } else if (p.eventType==='UPDATE') {
         if (ignorerRealtimeAnsatt.has(String(p.new.id))) return;
-        const i=S.ansatte.findIndex(a=>a.id===p.new.id); if(i>=0) S.ansatte[i]=mapA(p.new);
+        const i=S.ansatte.findIndex(a=>a.id===p.new.id);
+        const varStemplet = i>=0 && !!S.ansatte[i].stempletInnSiden;
+        if(i>=0) S.ansatte[i]=mapA(p.new);
+        // Min stemplede-inn-tid ble nullstilt av noen andre (admin stemplet meg ut, eller jeg stemplet ut på en annen enhet):
+        // klokka som går lokalt hos meg må stoppes, ellers føres samme tid to ganger. Sjekken er forsiktig (se timer.js).
+        if (varStemplet && me && p.new.id===me.id && !p.new.stemplet_inn_siden && typeof sjekkAdminUtstempling==='function') {
+          sjekkAdminUtstempling().catch(e=>console.warn('sjekkAdminUtstempling:', e && e.message));
+        }
       } else if (p.eventType==='DELETE') {
         S.ansatte = S.ansatte.filter(a=>a.id!==p.old.id);
       }
@@ -943,7 +981,13 @@ function subscribeRealtime() {
         if (!S.flater.find(f=>f.id===p.new.id)) S.flater.push(dbToFlate(p.new));
       } else if (p.eventType==='UPDATE') {
         if (ignorerRealtimeFlate.has(String(p.new.id))) return;
-        const i=S.flater.findIndex(f=>f.id===p.new.id); if(i>=0) S.flater[i]=dbToFlate(p.new);
+        const i=S.flater.findIndex(f=>f.id===p.new.id);
+        if(i>=0) {
+          const ny = dbToFlate(p.new);
+          // Realtime utelater STORE, uendrede kolonner (se «Realtime utelater store kolonner» i CLAUDE.md): mangler fingeravtrykket i raden, beholdes lokal verdi.
+          if (!('vegvesen_fingerprint' in p.new)) ny.vegvesenFingerprint = S.flater[i].vegvesenFingerprint;
+          S.flater[i] = ny;
+        }
       } else if (p.eventType==='DELETE') {
         S.flater = S.flater.filter(f=>f.id!==p.old.id);
       }
@@ -982,7 +1026,13 @@ function subscribeRealtime() {
       if (p.eventType==='INSERT') {
         if (!S.lagerOppskrifter.find(o=>o.id===p.new.id)) S.lagerOppskrifter.push(dbToLagerOppskrift(p.new));
       } else if (p.eventType==='UPDATE') {
-        const i=S.lagerOppskrifter.findIndex(o=>o.id===p.new.id); if(i>=0) S.lagerOppskrifter[i]=dbToLagerOppskrift(p.new);
+        const i=S.lagerOppskrifter.findIndex(o=>o.id===p.new.id);
+        if(i>=0) {
+          const ny = dbToLagerOppskrift(p.new);
+          // Samme som for flater: en stor, uendret ingredienser-kolonne kan mangle i hendelsen, og skal ikke tømmes lokalt.
+          if (!('ingredienser' in p.new)) ny.ingredienser = S.lagerOppskrifter[i].ingredienser;
+          S.lagerOppskrifter[i] = ny;
+        }
       } else if (p.eventType==='DELETE') {
         S.lagerOppskrifter = S.lagerOppskrifter.filter(o=>o.id!==p.old.id);
       }
@@ -1404,7 +1454,8 @@ async function tryLogin() {
     if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
     const adminTab = document.getElementById('adminTab');
     if (adminTab) adminTab.style.display = (me.rolle === 'admin') ? '' : 'none';
-    initTimerPage();
+    // En feil i Timer-oppsettet (f.eks. blokkert lagring) skal aldri hindre selve innloggingen.
+    try { initTimerPage(); } catch (e) { console.error('initTimerPage feilet, innloggingen fortsetter:', e); }
     // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.
     // Viser samme lasteskjerm som ved oppstart, så det korte gapet ikke
     // ser ut som appen henger.
