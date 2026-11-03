@@ -63,7 +63,7 @@ function leveranseSjekkArkiver(o) {
 }
 
 // ─── Ny leveranse ───────────────────────────────────────────────────────────────────────────────────────────────────────
-const LEV_FELT_NY = ['lev_kunde', 'lev_eier', 'lev_merking', 'lev_regnr', 'lev_chassis', 'lev_adresse', 'lev_postnr', 'lev_sted', 'lev_tlf', 'lev_kolli', 'lev_hentedato'];
+const LEV_FELT_NY = ['lev_kunde', 'lev_eier', 'lev_merking', 'lev_regnr', 'lev_chassis', 'lev_adresse', 'lev_postnr', 'lev_sted', 'lev_tlf', 'lev_kolli', 'lev_hentedato', 'lev_pakker', 'lev_vekt', 'lev_lengde', 'lev_bredde', 'lev_hoyde', 'lev_fraktpris'];
 function apneNyLeveranseModal() {
   LEV_FELT_NY.forEach(i => { const el = document.getElementById(i); if (el) el.value = ''; });
   const sel = document.getElementById('lev_fraktselskap');
@@ -92,6 +92,10 @@ function opprettLeveranse() {
     merking, adresse: v('lev_adresse'), postnr: v('lev_postnr'), sted: v('lev_sted'), kontaktTlf: v('lev_tlf'),
     fraktselskap: v('lev_fraktselskap'), kolli: v('lev_kolli'), onsketHentedato: v('lev_hentedato'),
     fraktAuto: !!document.getElementById('lev_fraktauto')?.checked,
+    // Én pakke fra skjemaet (flere kan legges til i detaljen), bare hvis noe er fylt ut. fraktPris = det kunden skal belastes (kr eks. mva).
+    kolliListe: [v('lev_vekt'), v('lev_lengde'), v('lev_bredde'), v('lev_hoyde'), v('lev_pakker')].some(Boolean)
+      ? [{ antall: v('lev_pakker') || 1, vekt: v('lev_vekt'), lengde: v('lev_lengde'), bredde: v('lev_bredde'), hoyde: v('lev_hoyde') }] : [],
+    fraktPris: v('lev_fraktpris'),
   });
   ny._localAt = Date.now();
   S.ordrer.push(ny);
@@ -245,6 +249,85 @@ function renderLeveranseOversikt(q) {
   }).join('');
 }
 
+// ─── Pakker (vekt og mål) og fraktpris ─────────────────────────────────────────────────────────────────────────────────
+// Pakkene lagres i leveranse.kolliListe (antall, vekt per pakke i kg, lengde/bredde/høyde i cm) og tas med i fraktbestillingen. Fraktprisen (kr eks. mva, det kunden skal belastes)
+// legges på Fiken-fakturaen som en linje med fast beløp (som drivstoff), og sendes ALDRI til fraktselskapet.
+function leveranseFmtTall(n) { return typeof n === 'number' ? String(Math.round(n * 100) / 100).replace('.', ',') : ''; }
+function leveranseKolliTekst(l) {
+  const s = leveranseKolliSum(l);
+  if (!s.antall) return '';
+  return `${s.antall} pakke${s.antall === 1 ? '' : 'r'}` + (s.vekt ? ` · ${leveranseFmtTall(s.vekt)} kg` : '');
+}
+function leveransePakkerHTML(o) {
+  const l = o.leveranse; const erAdmin = me && me.rolle === 'admin';
+  const s = leveranseKolliSum(l);
+  const felt = (i, k, verdi, ekstra = '') => `<input type="number" min="0" step="0.1" inputmode="decimal" value="${verdi === '' ? '' : esc(String(verdi))}" ${ekstra} onchange="settKolli('${o.id}',${i},'${k}',this.value)" style="min-width:0">`;
+  const rader = l.kolliListe.map((p, i) => `<div style="display:grid;grid-template-columns:56px repeat(4,minmax(0,1fr)) 34px;gap:6px;align-items:center;margin-bottom:6px">
+      <input type="number" min="1" step="1" inputmode="numeric" value="${p.antall}" onchange="settKolli('${o.id}',${i},'antall',this.value)" title="Antall pakker av denne typen" style="min-width:0">
+      ${felt(i, 'vekt', p.vekt, 'title="Vekt per pakke (kg)"')}${felt(i, 'lengde', p.lengde, 'title="Lengde (cm)"')}${felt(i, 'bredde', p.bredde, 'title="Bredde (cm)"')}${felt(i, 'hoyde', p.hoyde, 'title="Høyde (cm)"')}
+      <button class="btn sm" onclick="fjernKolli('${o.id}',${i})" title="Fjern pakke" style="padding:5px 0">✕</button></div>`).join('');
+  const linjeFinnes = (o.fikenLinjer || []).some(x => l.fraktProduktnr && x.produktnummer === l.fraktProduktnr && x.belop !== undefined);
+  return `<div class="muted small" style="letter-spacing:.8px;margin-bottom:6px">PAKKER</div>
+    ${l.kolliListe.length ? `<div style="display:grid;grid-template-columns:56px repeat(4,minmax(0,1fr)) 34px;gap:6px;margin-bottom:4px" class="small muted"><span>Antall</span><span>Vekt kg</span><span>L cm</span><span>B cm</span><span>H cm</span><span></span></div>${rader}` : '<div class="small muted" style="margin-bottom:6px">Ingen pakker lagt inn ennå.</div>'}
+    <button class="btn sm" onclick="leggTilKolli('${o.id}')">+ Legg til pakke</button>
+    ${s.antall ? `<div class="small" style="margin-top:8px"><b>${esc(leveranseKolliTekst(l))}</b> totalt${s.utenVekt ? ` <span style="color:#fca5a5">(${s.utenVekt} pakke${s.utenVekt === 1 ? '' : 'r'} mangler vekt)</span>` : ''}</div>` : ''}
+    <div class="grid g2" style="gap:8px;margin-top:12px">
+      <div><label>Fraktpris (kr eks. mva)</label><input type="number" min="0" step="0.01" inputmode="decimal" value="${l.fraktPris === '' ? '' : esc(String(l.fraktPris))}" placeholder="Det kunden skal belastes" onchange="settFraktPris('${o.id}',this.value)"></div>
+      <div><label>Fiken-produktnr. for frakt</label><input value="${esc(l.fraktProduktnr)}" placeholder="F.eks. 30" autocomplete="off" onchange="sfLev('${o.id}','fraktProduktnr',this.value)"></div>
+    </div>
+    ${erAdmin ? `<button class="btn sm" style="margin-top:8px;width:100%" ${l.fraktPris === '' || !(l.fraktPris > 0) ? 'disabled' : ''} onclick="leggFraktPaaFaktura('${o.id}')">${linjeFinnes ? '↻ Oppdater frakt på fakturaen' : '＋ Legg frakt på fakturaen'}</button>
+    <div class="small muted" style="margin-top:4px">Legges som en fakturalinje med fast beløp (25 % mva). Produktnummeret må finnes i Fiken. Prisen sendes ikke til fraktselskapet.</div>` : ''}`;
+}
+// Lagrer en endret leveranse-kolonne og tegner bare pakke-blokken på nytt (resten av siden er urørt, så feltet man står i mister ikke fokus).
+function lagreLeveranseKolonne(o, ny, loggTekst) {
+  o.leveranse = normaliserLeveranse({ ...o.leveranse, ...ny });
+  logChange(o, 'Leveranse: ' + loggTekst);
+  save(o.id);
+  const el = document.getElementById('levPakker_' + o.id);
+  if (el) el.innerHTML = leveransePakkerHTML(o);
+}
+function leggTilKolli(id) {
+  const o = S.ordrer.find(x => x.id === id); if (!o || !erLeveranse(o)) return;
+  if (o.leveranse.kolliListe.length >= LEVERANSE_MAKS_PAKKER) { visToast('Maks ' + LEVERANSE_MAKS_PAKKER + ' pakker per leveranse'); return; }
+  // En ny pakke starter som en kopi av forrige (de er ofte like), uten å gjette vekt og mål hvis det ikke finnes noen.
+  const siste = o.leveranse.kolliListe[o.leveranse.kolliListe.length - 1];
+  lagreLeveranseKolonne(o, { kolliListe: [...o.leveranse.kolliListe, siste ? { ...siste } : { antall: 1, vekt: '', lengde: '', bredde: '', hoyde: '' }] }, 'pakke lagt til');
+}
+function settKolli(id, idx, felt, val) {
+  const o = S.ordrer.find(x => x.id === id); if (!o || !erLeveranse(o)) return;
+  if (!['antall', 'vekt', 'lengde', 'bredde', 'hoyde'].includes(felt)) return;
+  const liste = o.leveranse.kolliListe.map(p => ({ ...p }));
+  if (!liste[idx]) return;
+  liste[idx][felt] = val;
+  lagreLeveranseKolonne(o, { kolliListe: liste }, 'pakke ' + (idx + 1) + ' (' + felt + ') endret');
+}
+function fjernKolli(id, idx) {
+  const o = S.ordrer.find(x => x.id === id); if (!o || !erLeveranse(o)) return;
+  lagreLeveranseKolonne(o, { kolliListe: o.leveranse.kolliListe.filter((_, i) => i !== idx) }, 'pakke fjernet');
+}
+function settFraktPris(id, val) {
+  const o = S.ordrer.find(x => x.id === id); if (!o || !erLeveranse(o)) return;
+  lagreLeveranseKolonne(o, { fraktPris: val }, 'fraktpris endret');
+}
+// Siste brukte Fiken-produktnr for frakt huskes på denne enheten (forhåndsutfylles neste gang). Blokkert lagring (Edge Tracking Prevention) skal aldri kaste.
+function leveranseHuskFraktProduktnr(nr) { try { localStorage.setItem('leveranseFraktProduktnr', nr); } catch (e) { /* uten lagring huskes den ikke */ } }
+function leveranseSistFraktProduktnr() { try { return localStorage.getItem('leveranseFraktProduktnr') || ''; } catch (e) { return ''; } }
+async function leggFraktPaaFaktura(id) {
+  const o = S.ordrer.find(x => x.id === id); if (!o || !erLeveranse(o) || !me || me.rolle !== 'admin') return;
+  const l = o.leveranse; const pris = l.fraktPris;
+  if (pris === '' || !(pris > 0)) { visToast('Skriv inn fraktprisen først'); return; }
+  let nr = String(l.fraktProduktnr || '').trim();
+  if (!nr) nr = leveranseSistFraktProduktnr();
+  if (!nr) { visToast('Skriv inn Fiken-produktnummeret for frakt først'); return; }
+  if (o.fakturert && !confirm('Leveransen er allerede fakturert (kladden er laget i Fiken). Frakt-linjen kommer IKKE med i den kladden. Legge den til likevel?')) return;
+  if (l.fraktProduktnr !== nr) lagreLeveranseKolonne(o, { fraktProduktnr: nr }, 'Fiken-produktnr for frakt satt');
+  leveranseHuskFraktProduktnr(nr);
+  await oppdaterOrdreFikenLinje(o, nr, { produktnummer: nr, antall: 1, belop: pris });
+  logChange(o, `Frakt lagt på fakturaen: ${leveranseFmtTall(pris)} kr eks. mva (produkt ${nr})`);
+  const el = document.getElementById('levPakker_' + id); if (el) el.innerHTML = leveransePakkerHTML(o);
+  visToast(`Frakt (${leveranseFmtTall(pris)} kr eks. mva) lagt på fakturaen`, 'ok');
+}
+
 // ─── Kort i lister ──────────────────────────────────────────────────────────────────────────────────────────────────────
 function leveranseKortHTML(o) {
   const si = statusInfo(o.ordreStatus);
@@ -267,6 +350,7 @@ function leveranseKortHTML(o) {
       <div class="box" onclick="openOrdre('${o.id}')" style="padding:12px 14px;display:flex;flex-direction:column;gap:3px;cursor:pointer">
         <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Frakt</span><span style="color:${o.fraktBestiltAt ? '#86efac' : '#f4f4f5'}">${esc(fraktLinje)}</span></div>
         <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Til</span><span style="color:${stedLinje ? '#f4f4f5' : '#71717a'}">${esc(stedLinje) || '—'}</span></div>
+        ${leveranseKolliTekst(l) ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Pakker</span><span>${esc(leveranseKolliTekst(l))}</span></div>` : ''}
         ${l.sendtDato ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Sendt</span><span>${esc(leveranseDato(l.sendtDato))}</span></div>` : (l.onsketHentedato ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Hentes</span><span>${esc(leveranseDato(l.onsketHentedato))}</span></div>` : '')}
       </div>
       <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px">${fakturertKortHTML(o)}</div>
@@ -280,10 +364,12 @@ function leveranseFraktKortHTML(o) {
   const felt = (lbl, id, verdi, ekstra = '') => `<div><label>${lbl}</label><input id="${id}_${o.id}" value="${esc(verdi)}" autocomplete="off" ${ekstra}></div>`;
   const mangler = leveranseFraktMangler(o);
   const ekte = leveranseErEkteFraktselskap(l.fraktselskap);
-  const status = o.fraktBestiltAt
+  const kolliSum = leveranseKolliSum(l);
+  const vektHint = ekte && !o.fraktBestiltAt && (!kolliSum.antall || kolliSum.utenVekt) ? '<div class="small" style="color:#fde68a;margin-top:8px">Husk vekt og mål på pakkene før frakten bestilles: fraktselskapet trenger dem.</div>' : '';
+  const status = vektHint + (o.fraktBestiltAt
     ? `<div class="small" style="color:#86efac;margin-top:10px">✓ Fraktbestilling sendt til ${esc(l.fraktselskap)} ${esc(leveranseTidspunkt(o.fraktBestiltAt))}${o.fraktBestiltAv ? ' av ' + esc(o.fraktBestiltAv) : ''}</div>`
     : ekte ? `<div class="small muted" style="margin-top:10px">Fraktbestilling er ikke sendt.${l.fraktAuto ? ' Den sendes automatisk når statusen settes til «Klar til sending».' : ''}${mangler.length ? ' <span style="color:#fca5a5">Mangler: ' + esc(mangler.join(', ')) + '.</span>' : ''}</div>`
-    : l.fraktselskap ? `<div class="small muted" style="margin-top:10px">${esc(l.fraktselskap)}: ingen bestilling på e-post.</div>` : '';
+    : l.fraktselskap ? `<div class="small muted" style="margin-top:10px">${esc(l.fraktselskap)}: ingen bestilling på e-post.</div>` : '');
   return `<div class="card">
     <div class="h">Frakt</div>
     <div class="grid g2" style="gap:8px;margin-top:10px">
@@ -298,6 +384,7 @@ function leveranseFraktKortHTML(o) {
       <div style="grid-column:1/-1"><label>Gods / kolli</label><input id="levKolli_${o.id}" value="${esc(l.kolli)}" placeholder="F.eks. 2 pakker, 1 pall 120x80" autocomplete="off" onchange="sfLev('${o.id}','kolli',this.value)"></div>
       ${felt('Sendt dato', 'levSendt', l.sendtDato, `type="date" onchange="sfLev('${o.id}','sendtDato',this.value)"`)}
     </div>
+    <div id="levPakker_${o.id}" style="margin-top:14px;padding-top:12px;border-top:1px solid #27272a">${leveransePakkerHTML(o)}</div>
     <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
       <input type="checkbox" ${l.fraktAuto ? 'checked' : ''} onchange="sfLev('${o.id}','fraktAuto',this.checked)" style="width:15px;height:15px;accent-color:#22c55e">
       <span class="small">Bestill frakt automatisk på e-post når den settes til «Klar til sending»</span>

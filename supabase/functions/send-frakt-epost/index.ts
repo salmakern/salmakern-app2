@@ -263,6 +263,29 @@ async function leveranseBestilling(req: Request, payload: any): Promise<Response
   const hentedato = datoVisning(l.onsketHentedato)
   const ident = merking || tekst(o.regnr) || tekst(o.chassis) || 'Leveranse'
   const emne = `Bestilling av frakt - ${ident}`
+  // Pakkene (antall, vekt per pakke i kg, mål i cm) fra leveransen: fraktselskapet trenger vekt og mål. Tall valideres her (endelig, ikke negativt), maks 50 pakker.
+  // FraktPRISEN (det kunden belastes) tas aldri med: den hører til fakturaen, ikke bestillingen.
+  const tall = (x: unknown): number | null => {
+    if (x === '' || x === null || x === undefined || typeof x === 'boolean' || typeof x === 'object') return null
+    const n = typeof x === 'number' ? x : Number(String(x).trim().replace(',', '.'))
+    return Number.isFinite(n) && n >= 0 ? n : null
+  }
+  const fmtTall = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',')
+  const pakker: any[] = Array.isArray(l.kolliListe) ? l.kolliListe.filter((p: unknown) => p && typeof p === 'object' && !Array.isArray(p)).slice(0, 50) : []
+  let sumAntall = 0, sumVekt = 0
+  const pakkeLinjer: [string, string][] = pakker.map((p, i) => {
+    const antall = Math.max(1, Math.floor(tall(p.antall) ?? 1))
+    const vekt = tall(p.vekt), lengde = tall(p.lengde), bredde = tall(p.bredde), hoyde = tall(p.hoyde)
+    sumAntall += antall
+    if (vekt !== null) sumVekt += antall * vekt
+    const deler = [`${antall} stk`]
+    if (vekt !== null) deler.push(`${fmtTall(vekt)} kg per stk`)
+    if (lengde !== null && bredde !== null && hoyde !== null) deler.push(`${fmtTall(lengde)} x ${fmtTall(bredde)} x ${fmtTall(hoyde)} cm`)
+    return [`Pakke ${i + 1}`, deler.join(' · ')] as [string, string]
+  })
+  const pakkeOversikt: [string, string][] = pakker.length
+    ? [['Antall pakker', `${sumAntall} stk` + (sumVekt > 0 ? ` · totalvekt ${fmtTall(sumVekt)} kg` : '')], ...pakkeLinjer]
+    : []
   const linjer: [string, string][] = [
     ['Hentes hos', 'Telemark Salmakerverksted, Bataljonvegen 25, 3734 Skien'],
     ['Merking', merking || '-'],
@@ -273,6 +296,7 @@ async function leveranseBestilling(req: Request, payload: any): Promise<Response
     ['Leveres til', [adresse, [postnr, sted].filter(Boolean).join(' ')].filter(Boolean).join(', ')],
     ['Telefon mottaker', tlf || '-'],
     ['Gods / kolli', kolli || '-'],
+    ...pakkeOversikt,
   ]
   const klarHtml = hentedato ? `<p style="margin:0 0 16px">Forsendelsen er klar for å bli hentet fra ${escHtml(hentedato)}.</p>` : ''
   const klarTekst = hentedato ? `Forsendelsen er klar for å bli hentet fra ${hentedato}.\n\n` : ''

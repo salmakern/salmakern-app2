@@ -644,12 +644,36 @@ function normaliserBilder(v, antall) {
 // (frakt_bestilt_*) settes BARE av edge-funksjonen send-frakt-epost og LESES bare her (står ikke i ordreToDb), som portal_*-kolonnene. Lærdommen fra 2026-11-02 (en ordre i
 // uventet form blanket Ordre-lista for alle): kolonnen kan være {} eller mangle delfelt, så ALT går gjennom normaliserLeveranse() og ingen kode leser leveranse-feltene rått.
 const LEVERANSE_TEKSTFELT = ['merking','adresse','postnr','sted','kontaktTlf','fraktselskap','kolli','onsketHentedato','sporing','sendtDato'];
+// Pakker (vekt og mål) og fraktpris (Henrik 2026-11-03): tall lagres som tall («1,5» og «1.5» tolkes likt), alt annet blir tomt. Aldri negative, aldri NaN/Infinity.
+function leveranseTall(x) {
+  if (x === '' || x == null || typeof x === 'boolean' || typeof x === 'object') return '';
+  const n = typeof x === 'number' ? x : Number(String(x).trim().replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : '';
+}
+const LEVERANSE_MAKS_PAKKER = 50;
+function normaliserKolliListe(v) {
+  if (!Array.isArray(v)) return [];
+  return v.filter(p => p && typeof p === 'object' && !Array.isArray(p)).slice(0, LEVERANSE_MAKS_PAKKER).map(p => {
+    const antall = leveranseTall(p.antall);
+    return { antall: antall === '' || antall < 1 ? 1 : Math.floor(antall), vekt: leveranseTall(p.vekt), lengde: leveranseTall(p.lengde), bredde: leveranseTall(p.bredde), hoyde: leveranseTall(p.hoyde) };
+  });
+}
 function normaliserLeveranse(v) {
   const kilde = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
   const ut = { ...kilde };
   LEVERANSE_TEKSTFELT.forEach(k => { const x = kilde[k]; ut[k] = (typeof x === 'string' || typeof x === 'number') ? String(x) : ''; });
   ut.fraktAuto = kilde.fraktAuto !== false; // automatisk fraktbestilling er PÅ som standard (Henrik), kan slås av per leveranse
+  ut.kolliListe = normaliserKolliListe(kilde.kolliListe);   // pakkene: antall, vekt (kg per pakke), lengde/bredde/høyde (cm)
+  ut.fraktPris = leveranseTall(kilde.fraktPris);              // fraktprisen i kr eks. mva (det kunden skal belastes), '' = ikke satt
+  ut.fraktProduktnr = (typeof kilde.fraktProduktnr === 'string' || typeof kilde.fraktProduktnr === 'number') ? String(kilde.fraktProduktnr).trim().slice(0, 30) : '';
   return ut;
+}
+// Sum av pakkene: antall pakker, total vekt (kg) og antall pakker som mangler vekt (de teller ikke med i totalvekten).
+function leveranseKolliSum(l) {
+  const liste = normaliserKolliListe(l && l.kolliListe);
+  let antall = 0, vekt = 0, utenVekt = 0;
+  liste.forEach(p => { antall += p.antall; if (p.vekt === '') utenVekt += p.antall; else vekt += p.antall * p.vekt; });
+  return { antall, vekt: Math.round(vekt * 100) / 100, utenVekt };
 }
 function erLeveranse(o) { return !!o && o.ordretype === 'leveranse'; }
 // Tittelen en leveranse vises med i lister og detalj: merkingen, ellers reg.nr, ellers chassis (minst ett av dem kreves ved opprettelse). Rå tekst: kall esc() ved visning.

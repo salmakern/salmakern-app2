@@ -169,6 +169,9 @@ describe('[leveranse] uventet innhold i leveranse-kolonnen og fraktfeltene', () 
     {}, [], 'tekst', 5, { merking: 5, adresse: null, postnr: [], sted: {}, fraktAuto: 'ja' },
     { merking: 'X', fraktselskap: 'Finnes ikke i Kontakter', adresse: '', fraktAuto: false },
     { merking: 'a'.repeat(2000), kolli: 'b'.repeat(2000) }, { __proto__: null, merking: 'X' },
+    // pakker (vekt/mål) og fraktpris: feil type, tull og ekstreme verdier
+    { kolliListe: {} }, { kolliListe: 'x' }, { kolliListe: [null, 5, 'x', [], { antall: 'x', vekt: -1, lengde: NaN, bredde: {}, hoyde: [] }] },
+    { kolliListe: Array.from({ length: 200 }, () => ({ antall: 1e9, vekt: 1e9 })) }, { fraktPris: 'abc', fraktProduktnr: {} }, { fraktPris: -1, fraktProduktnr: [] }, { fraktPris: 1e308 },
   ];
   it('alle visninger tåler hver form for kolonnen leveranse', () => {
     const funn = [];

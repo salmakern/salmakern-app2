@@ -539,3 +539,152 @@ describe('chassis-koblinger ignorerer leveranser', () => {
     expect(les('js/admin-ark.js')).toContain('if (erLeveranse(o)) return false; // Admin-arket gjelder biler');
   });
 });
+
+describe('pakker (vekt og mål) og fraktpris', () => {
+  const lev = (l = {}, over = {}) => nyLeveranse(over, l);
+
+  it('normaliserKolliListe: tall (også med komma) beholdes, alt annet blir tomt, antall blir minst 1, maks 50, aldri negative/NaN', () => {
+    const l = sandbox.normaliserLeveranse({ kolliListe: [{ antall: '3', vekt: '1,5', lengde: 60, bredde: '40.5', hoyde: '' }, { antall: 0, vekt: -2, lengde: 'x', bredde: NaN, hoyde: Infinity }, null, 7, 'x', []] });
+    expect(l.kolliListe).toEqual([
+      { antall: 3, vekt: 1.5, lengde: 60, bredde: 40.5, hoyde: '' },
+      { antall: 1, vekt: '', lengde: '', bredde: '', hoyde: '' },
+    ]);
+    expect(sandbox.normaliserLeveranse({ kolliListe: Array.from({ length: 80 }, () => ({})) }).kolliListe).toHaveLength(50);
+    for (const feil of [{}, 'tekst', 5, null, undefined]) expect(sandbox.normaliserLeveranse({ kolliListe: feil }).kolliListe).toEqual([]);
+  });
+  it('fraktPris og fraktProduktnr: tall/tekst normaliseres, ugyldig blir tomt', () => {
+    expect(sandbox.normaliserLeveranse({ fraktPris: '450,50' }).fraktPris).toBe(450.5);
+    expect(sandbox.normaliserLeveranse({ fraktPris: -5 }).fraktPris).toBe('');
+    expect(sandbox.normaliserLeveranse({ fraktPris: 'gratis' }).fraktPris).toBe('');
+    expect(sandbox.normaliserLeveranse({ fraktPris: {} }).fraktPris).toBe('');
+    expect(sandbox.normaliserLeveranse({}).fraktPris).toBe('');
+    expect(sandbox.normaliserLeveranse({ fraktProduktnr: 30 }).fraktProduktnr).toBe('30');
+    expect(sandbox.normaliserLeveranse({ fraktProduktnr: {} }).fraktProduktnr).toBe('');
+  });
+  it('leveranseKolliSum: antall, totalvekt (antall x vekt) og antall pakker uten vekt', () => {
+    expect(sandbox.leveranseKolliSum({ kolliListe: [{ antall: 2, vekt: 10 }, { antall: 1, vekt: 5.5 }, { antall: 3, vekt: '' }] })).toEqual({ antall: 6, vekt: 25.5, utenVekt: 3 });
+    expect(sandbox.leveranseKolliSum({})).toEqual({ antall: 0, vekt: 0, utenVekt: 0 });
+    expect(sandbox.leveranseKolliSum(null)).toEqual({ antall: 0, vekt: 0, utenVekt: 0 });
+  });
+  it('leggTilKolli, settKolli og fjernKolli oppdaterer pakkene og lagrer; ny pakke kopierer forrige', () => {
+    const { db, kall } = lagDb(); app.settDb(db);
+    const o = lev({ kolliListe: [{ antall: 1, vekt: 10, lengde: 60, bredde: 40, hoyde: 30 }] }); S.ordrer = [o];
+    sandbox.leggTilKolli(o.id);
+    expect(o.leveranse.kolliListe).toHaveLength(2);
+    expect(o.leveranse.kolliListe[1]).toEqual({ antall: 1, vekt: 10, lengde: 60, bredde: 40, hoyde: 30 });
+    sandbox.settKolli(o.id, 1, 'vekt', '12,5');
+    sandbox.settKolli(o.id, 1, 'antall', '3');
+    expect(o.leveranse.kolliListe[1]).toMatchObject({ antall: 3, vekt: 12.5 });
+    expect(sandbox.leveranseKolliSum(o.leveranse)).toMatchObject({ antall: 4, vekt: 47.5 });
+    sandbox.fjernKolli(o.id, 0);
+    expect(o.leveranse.kolliListe).toHaveLength(1);
+    expect(kall.some((k) => k.tabell === 'ordrer')).toBe(true);
+  });
+  it('en ukjent pakke-indeks eller et ukjent felt endrer ingenting og kaster ikke', () => {
+    const { db } = lagDb(); app.settDb(db);
+    const o = lev({ kolliListe: [{ antall: 1, vekt: 10 }] }); S.ordrer = [o];
+    expect(() => sandbox.settKolli(o.id, 9, 'vekt', '5')).not.toThrow();
+    sandbox.settKolli(o.id, 0, 'hemmelig', '5');
+    expect(o.leveranse.kolliListe[0]).not.toHaveProperty('hemmelig');
+    expect(() => sandbox.settKolli('finnes-ikke', 0, 'vekt', '5')).not.toThrow();
+    expect(() => sandbox.fjernKolli('finnes-ikke', 0)).not.toThrow();
+  });
+  it('en bil-ordre kan ikke få pakker (funksjonene gjør ingenting)', () => {
+    const { db } = lagDb(); app.settDb(db);
+    const bil = nyBil(); S.ordrer = [bil];
+    sandbox.leggTilKolli(bil.id);
+    expect(bil.leveranse.kolliListe).toEqual([]);
+  });
+  it('maks 50 pakker', () => {
+    const { db } = lagDb(); app.settDb(db);
+    const o = lev({ kolliListe: Array.from({ length: 50 }, () => ({ antall: 1, vekt: 1 })) }); S.ordrer = [o];
+    sandbox.leggTilKolli(o.id);
+    expect(o.leveranse.kolliListe).toHaveLength(50);
+  });
+  it('settFraktPris lagrer prisen (komma tolkes), og ugyldig verdi gir tomt', () => {
+    const { db } = lagDb(); app.settDb(db);
+    const o = lev(); S.ordrer = [o];
+    sandbox.settFraktPris(o.id, '1250,75');
+    expect(o.leveranse.fraktPris).toBe(1250.75);
+    sandbox.settFraktPris(o.id, 'abc');
+    expect(o.leveranse.fraktPris).toBe('');
+  });
+
+  describe('legg frakt på fakturaen', () => {
+    const rpcKall = (kall) => kall.filter((k) => k.rpc === 'oppdater_ordre_fiken_linje').map((k) => k.args);
+    beforeEach(() => { sandbox.confirm = () => true; });
+
+    it('legger en linje med fast beløp (belop) og antall 1 på fakturaen, med riktig produktnummer', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      const o = lev({ fraktPris: 450, fraktProduktnr: '30' }); S.ordrer = [o];
+      await sandbox.leggFraktPaaFaktura(o.id);
+      expect(rpcKall(kall)).toEqual([{ p_ordre_id: o.id, p_produktnummer: '30', p_linje: { produktnummer: '30', antall: 1, belop: 450 } }]);
+    });
+    it('uten fraktpris, eller uten produktnummer, skjer ingenting', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      const a = lev({ fraktProduktnr: '30' }); S.ordrer = [a];
+      await sandbox.leggFraktPaaFaktura(a.id);
+      const b = lev({ fraktPris: 450 }, { id: 'ord_TESTLEV2' }); S.ordrer = [b];
+      await sandbox.leggFraktPaaFaktura(b.id);
+      const c = lev({ fraktPris: 0, fraktProduktnr: '30' }, { id: 'ord_TESTLEV3' }); S.ordrer = [c];
+      await sandbox.leggFraktPaaFaktura(c.id);
+      expect(rpcKall(kall)).toEqual([]);
+    });
+    it('bare admin kan legge frakt på fakturaen', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt' });
+      const o = lev({ fraktPris: 450, fraktProduktnr: '30' }); S.ordrer = [o];
+      await sandbox.leggFraktPaaFaktura(o.id);
+      expect(rpcKall(kall)).toEqual([]);
+    });
+    it('er leveransen allerede fakturert, må admin bekrefte; svarer admin nei, skjer ingenting', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      const o = lev({ fraktPris: 450, fraktProduktnr: '30' }, { fakturert: true }); S.ordrer = [o];
+      sandbox.confirm = () => false;
+      await sandbox.leggFraktPaaFaktura(o.id);
+      expect(rpcKall(kall)).toEqual([]);
+      sandbox.confirm = () => true;
+      await sandbox.leggFraktPaaFaktura(o.id);
+      expect(rpcKall(kall)).toHaveLength(1);
+    });
+    it('et nytt trykk oppdaterer samme linje (samme produktnummer), og en bil-ordre gjør ingenting', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      const o = lev({ fraktPris: 450, fraktProduktnr: '30' }); S.ordrer = [o];
+      await sandbox.leggFraktPaaFaktura(o.id);
+      sandbox.settFraktPris(o.id, '500');
+      await sandbox.leggFraktPaaFaktura(o.id);
+      expect(rpcKall(kall).map((a) => [a.p_produktnummer, a.p_linje.belop])).toEqual([['30', 450], ['30', 500]]);
+      const bil = nyBil(); S.ordrer = [bil];
+      await sandbox.leggFraktPaaFaktura(bil.id);
+      expect(rpcKall(kall)).toHaveLength(2);
+    });
+  });
+
+  describe('visning og opprettelse', () => {
+    const sett = (felt) => { Object.entries(felt).forEach(([k, v]) => { sandbox.document.getElementById(k).value = v; }); };
+    it('«Ny leveranse» lagrer én pakke og fraktprisen fra skjemaet; uten pakkefelt blir pakkelista tom', () => {
+      const { db } = lagDb(); app.settDb(db); edgeFake(); sandbox.alert = () => {};
+      sett({ lev_kunde: 'TEST Kunde AS', lev_merking: 'M1', lev_pakker: '2', lev_vekt: '7,5', lev_lengde: '60', lev_bredde: '40', lev_hoyde: '30', lev_fraktpris: '350' });
+      sandbox.opprettLeveranse();
+      expect(S.ordrer[S.ordrer.length - 1].leveranse.kolliListe).toEqual([{ antall: 2, vekt: 7.5, lengde: 60, bredde: 40, hoyde: 30 }]);
+      expect(S.ordrer[S.ordrer.length - 1].leveranse.fraktPris).toBe(350);
+      sett({ lev_kunde: 'TEST Kunde AS', lev_merking: 'M2', lev_pakker: '', lev_vekt: '', lev_lengde: '', lev_bredde: '', lev_hoyde: '', lev_fraktpris: '' });
+      sandbox.opprettLeveranse();
+      expect(S.ordrer[S.ordrer.length - 1].leveranse.kolliListe).toEqual([]);
+      expect(S.ordrer[S.ordrer.length - 1].leveranse.fraktPris).toBe('');
+    });
+    it('Frakt-kortet viser pakkelista, totalen og fraktprisen, og kortet i lista viser antall og vekt', () => {
+      const o = lev({ kolliListe: [{ antall: 2, vekt: 10, lengde: 60, bredde: 40, hoyde: 30 }], fraktPris: 450, fraktProduktnr: '30' }); S.ordrer = [o];
+      const html = sandbox.leveranseFraktKortHTML(o);
+      expect(html).toContain('PAKKER'); expect(html).toContain('2 pakker · 20 kg'); expect(html).toContain('value="450"'); expect(html).toContain('Legg frakt på fakturaen');
+      expect(sandbox.leveranseKortHTML(o)).toContain('2 pakker · 20 kg');
+    });
+    it('manglende vekt gir en tydelig melding, og en påminnelse om vekt og mål vises før frakten er bestilt', () => {
+      const a = lev({ kolliListe: [{ antall: 1, vekt: '' }] });
+      const html = sandbox.leveranseFraktKortHTML(a);
+      expect(html).toContain('1 pakke mangler vekt');
+      expect(html).toContain('Husk vekt og mål på pakkene');
+      expect(sandbox.leveranseFraktKortHTML(lev({ kolliListe: [{ antall: 1, vekt: 5, lengde: 1, bredde: 1, hoyde: 1 }] }))).not.toContain('Husk vekt og mål');
+    });
+  });
+});

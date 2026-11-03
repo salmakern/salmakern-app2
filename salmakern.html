@@ -1432,6 +1432,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div><label>Telefon mottaker</label><input id="lev_tlf" autocomplete="off"></div>
         <div><label>Gods / kolli</label><input id="lev_kolli" placeholder="F.eks. 2 pakker" autocomplete="off"></div>
       </div>
+      <div class="muted small" style="margin:12px 0 6px;letter-spacing:.8px">PAKKE (flere pakker kan legges til etterpå)</div>
+      <div class="grid g2">
+        <div><label>Antall pakker</label><input id="lev_pakker" type="number" min="1" step="1" inputmode="numeric" placeholder="1"></div>
+        <div><label>Vekt per pakke (kg)</label><input id="lev_vekt" type="number" min="0" step="0.1" inputmode="decimal"></div>
+        <div style="grid-column:1/-1"><label>Mål lengde × bredde × høyde (cm)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+            <input id="lev_lengde" type="number" min="0" step="0.1" inputmode="decimal" placeholder="L">
+            <input id="lev_bredde" type="number" min="0" step="0.1" inputmode="decimal" placeholder="B">
+            <input id="lev_hoyde" type="number" min="0" step="0.1" inputmode="decimal" placeholder="H">
+          </div></div>
+        <div style="grid-column:1/-1"><label>Fraktpris (kr eks. mva)</label><input id="lev_fraktpris" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Det kunden skal belastes for frakten"></div>
+      </div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
         <input type="checkbox" id="lev_fraktauto" checked style="width:15px;height:15px;accent-color:#22c55e">
         <span class="small">Bestill frakt automatisk på e-post når den settes til «Klar til sending»</span>

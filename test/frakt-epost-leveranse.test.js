@@ -230,3 +230,53 @@ describe('leveranse_bestilling: send på nytt (bare admin)', () => {
     }
   });
 });
+
+describe('leveranse_bestilling: pakker (vekt og mål) i e-posten', () => {
+  const med = (kolliListe, ekstra = {}) => [leveransen({ leveranse: { ...leveransen().leveranse, kolliListe, ...ekstra } })];
+
+  it('hver pakke står med antall, vekt per stk og mål, og totalvekten er antall x vekt (norsk desimalkomma)', async () => {
+    const { kall, resend } = await lastFunksjon({ ordre: med([{ antall: 2, vekt: 10, lengde: 60, bredde: 40, hoyde: 30 }, { antall: 1, vekt: 5.5, lengde: 120, bredde: 80, hoyde: 15.5 }]) });
+    expect((await kall(BEST)).status).toBe(200);
+    for (const del of ['Antall pakker: 3 stk · totalvekt 25,5 kg', 'Pakke 1: 2 stk · 10 kg per stk · 60 x 40 x 30 cm', 'Pakke 2: 1 stk · 5,5 kg per stk · 120 x 80 x 15,5 cm']) {
+      expect(resend[0].text).toContain(del); expect(resend[0].html).toContain(del);
+    }
+  });
+  it('en pakke uten vekt eller mål viser bare det som finnes, og uten vekt blir det ingen totalvekt', async () => {
+    const { kall, resend } = await lastFunksjon({ ordre: med([{ antall: 1, vekt: '', lengde: 50, bredde: '', hoyde: 20 }]) });
+    expect((await kall(BEST)).status).toBe(200);
+    expect(resend[0].text).toContain('Antall pakker: 1 stk\n');
+    expect(resend[0].text).toContain('Pakke 1: 1 stk\n');
+    expect(resend[0].text).not.toContain('totalvekt');
+    expect(resend[0].text).not.toContain(' cm'); // mål vises bare når alle tre finnes
+  });
+  it('ingen pakker: ingen pakkelinjer, og e-posten er som før', async () => {
+    const { kall, resend } = await lastFunksjon({ ordre: med([]) });
+    expect((await kall(BEST)).status).toBe(200);
+    expect(resend[0].text).not.toContain('Antall pakker');
+    expect(resend[0].text).toContain('Gods / kolli: 2 pakker');
+  });
+  it('ugyldige tall (negative, tekst, NaN, objekter) ignoreres, antall under 1 blir 1, og feil form på kolonnen gir ingen pakkelinjer', async () => {
+    const { kall, resend } = await lastFunksjon({ ordre: med([null, 5, 'x', [], { antall: 'abc', vekt: -3, lengde: 'ti', bredde: {}, hoyde: [] }, { antall: 0, vekt: '2,5' }]) });
+    expect((await kall(BEST)).status).toBe(200);
+    expect(resend[0].text).toContain('Antall pakker: 2 stk · totalvekt 2,5 kg');
+    expect(resend[0].text).toContain('Pakke 1: 1 stk\n');
+    expect(resend[0].text).toContain('Pakke 2: 1 stk · 2,5 kg per stk');
+    for (const feil of [{}, 'tekst', 5, null]) {
+      const f = await lastFunksjon({ ordre: med(feil) });
+      expect((await f.kall(BEST)).status).toBe(200);
+      expect(f.resend[0].text).not.toContain('Antall pakker');
+    }
+  });
+  it('maks 50 pakker tas med', async () => {
+    const { kall, resend } = await lastFunksjon({ ordre: med(Array.from({ length: 80 }, () => ({ antall: 1, vekt: 1 }))) });
+    expect((await kall(BEST)).status).toBe(200);
+    expect(resend[0].text).toContain('Antall pakker: 50 stk · totalvekt 50 kg');
+    expect(resend[0].text).not.toContain('Pakke 51');
+  });
+  it('FRAKTPRISEN (det kunden belastes) sendes aldri til fraktselskapet', async () => {
+    const { kall, resend } = await lastFunksjon({ ordre: med([{ antall: 1, vekt: 2 }], { fraktPris: 4711.55, fraktProduktnr: '77' }) });
+    expect((await kall(BEST)).status).toBe(200);
+    expect(JSON.stringify(resend[0])).not.toContain('4711');
+    expect(JSON.stringify(resend[0])).not.toContain('Fraktpris');
+  });
+});
