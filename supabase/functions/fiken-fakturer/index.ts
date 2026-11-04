@@ -383,9 +383,13 @@ Deno.serve(async (req) => {
     // lagringen var klient-initiert). fakturert settes også her av samme grunn; klientens egen
     // save() rett etter gjør det samme, men er nå en ufarlig duplikat, ikke den eneste lagringen.
     if (ordreId && draftUrl) {
+      // fiken_faktura_referanse (4.11, s90-20261104-5): ØYEBLIKKSBILDET av orderReference-teksten
+      // slik den faktisk ble sendt til Fiken NÅ - ikke noe fiken-faktura-status-synk skal regne ut
+      // på nytt senere fra ordrens DA VÆRENDE chassis/regnr, som kan endre seg (f.eks. et regnr
+      // lagt inn etter fakturering) og da aldri mer matche det som faktisk står i Fiken.
       const { error: lagreFeil } = await supabase
         .from('ordrer')
-        .update({ fiken_kladd_url: draftUrl, fakturert: true })
+        .update({ fiken_kladd_url: draftUrl, fakturert: true, fiken_faktura_referanse: ordreReferanse ?? null })
         .eq('id', ordreId)
       if (lagreFeil) console.error('Kunne ikke lagre fiken_kladd_url på ordren:', lagreFeil.message)
     }
