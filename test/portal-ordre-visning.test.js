@@ -254,6 +254,33 @@ describe('Bekreft', () => {
     await m.sandbox.portalBekreftOrdre('finnes_ikke');
     expect(m.logg.rpc).toHaveLength(0);
   });
+
+  // Regresjon 4.11 (portal-økta, demobestilling s90-20261031-7: fakturalinje 514 manglet etter
+  // Bekreft). Begge funksjonene gjør egne RPC-kall som skriver o.fikenLinjer for SAMME ordre -
+  // kalt uten await (som før) kunne den ene sin gamle lokale kopi overskrive den andre sin
+  // nettopp lagrede linje. Stubbene under simulerer sine egne interne await-RPC-kall (en ekte
+  // Promise.resolve()-runde), slik at testen ville FEILET mot den gamle, ikke-avventede koden
+  // (render ville da kommet før "ferdig"-merkene).
+  it('avventer autoVelgUtstyrMal OG leggTilPortalUtstyrLinjer i rekkefølge FØR re-rendring', async () => {
+    const rekkefolge = [];
+    m.sandbox.autoVelgUtstyrMal = async (id) => {
+      rekkefolge.push('autoMal-start:' + id);
+      await Promise.resolve();
+      rekkefolge.push('autoMal-ferdig');
+    };
+    m.sandbox.leggTilPortalUtstyrLinjer = async (id) => {
+      rekkefolge.push('portalLinjer-start:' + id);
+      await Promise.resolve();
+      rekkefolge.push('portalLinjer-ferdig');
+    };
+    m.sandbox.planleggRenderAll = () => { rekkefolge.push('render'); };
+    await m.sandbox.portalBekreftOrdre('ord_1788100000000_abc123');
+    expect(rekkefolge).toEqual([
+      'autoMal-start:ord_1788100000000_abc123', 'autoMal-ferdig',
+      'portalLinjer-start:ord_1788100000000_abc123', 'portalLinjer-ferdig',
+      'render',
+    ]);
+  });
 });
 
 describe('Avvis og slett', () => {

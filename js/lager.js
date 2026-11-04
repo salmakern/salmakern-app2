@@ -1581,8 +1581,18 @@ function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa, ordreId = activeOrd
 // manuelt i Fakturering-kortet etterpå.
 async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa, ordreId = activeOrdreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
-  const finnes = (o.fikenLinjer||[]).some(l=>l.produktnummer===produktnummer);
+  const eksisterende = (o.fikenLinjer||[]).find(l=>l.produktnummer===produktnummer);
+  const finnes = !!eksisterende;
   if (skalStaa === finnes) return;
+  // Rettet 4.11 (portal-økta, funn fra demobestilling s90-20261031-7): en linje med frosset
+  // portalrabatt (satt av leggTilPortalUtstyrLinjer under, s08-048) skal ALDRI fjernes av
+  // denne automatiske synkroniseringen - den kalles fra flere steder på HVERT render
+  // (synkroniserOmbyggingFikenLinjer ut fra Ombygging-boksen, autoVelgUtstyrMal sin
+  // Panorama-logikk) som ikke vet noe om en portal-bestillings avtalte rabatt. Fjernes linjen
+  // likevel, mister fakturaen rabatten for godt (nøyaktig det s08-048 skulle hindre - sett i
+  // produksjon: en EV9-ordres ombyggingslinje ble fjernet igjen på selve Bekreft-renderingen).
+  // Vil man faktisk fjerne en slik linje, gjøres det direkte i Fakturering-kortet.
+  if (!skalStaa && eksisterende && typeof eksisterende.rabatt === 'number') return;
   // Skriver nå ATOMISK via oppdater_ordre_fiken_linje() (radlås i databasen) i stedet for
   // å lese/endre/skrive hele fikenLinjer-arrayet fra nettleserens eget minne via den
   // generelle save() - denne funksjonen kalles fra flere automatiske synk-steder (EV9-
@@ -1634,7 +1644,13 @@ async function leggTilPortalUtstyrLinjer(ordreId) {
       p_ordre_id: o.id, p_produktnummer: linje.produktnummer,
       p_linje: { produktnummer: linje.produktnummer, antall: 1, rabatt: typeof linje.rabatt_prosent === 'number' ? linje.rabatt_prosent : 0 }
     });
-    if (error) { console.error('Kunne ikke legge til fakturalinje fra portal-bestilling:', error.message); continue; }
+    if (error) {
+      console.error('Kunne ikke legge til fakturalinje fra portal-bestilling:', error.message);
+      // Rettet 4.11 (portal-økta): en feilet linje var tidligere helt usynlig for den ansatte
+      // (bare konsollen) - en ufullstendig faktura kunne da sendes uten at noen merket det.
+      visToast(`Kunne ikke legge til fakturalinje ${linje.produktnummer} (${linje.navn}) fra bestillingen - sjekk Fakturering-kortet før fakturering.`, 'feil');
+      continue;
+    }
     o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
   }
   planleggLocalSpeiling();

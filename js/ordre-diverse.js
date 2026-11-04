@@ -1507,10 +1507,16 @@ async function portalBekreftOrdre(id) {
     visToast(nyBekreftelse ? 'Bestillingen er bekreftet' : 'Bestillingen var allerede bekreftet', 'ok');
     // Ordren ble opprettet i databasen, ikke av appen, så utstyrsmalen (som opprettOrdre() ellers velger ved opprettelse) velges først nå ved bekreftelse. Kalles også når
     // svaret på første forsøk gikk tapt og ordren allerede var bekreftet (autoVelgUtstyrMal gjør ingenting hvis malen allerede er valgt).
-    autoVelgUtstyrMal(id);
+    // Rettet 4.11 (portal-økta, demobestilling s90-20261031-7: fakturalinje 514 manglet etter
+    // Bekreft): MÅ avventes i rekkefølge, ikke startes uavhengig av hverandre - begge gjør
+    // RPC-kall som skriver o.fikenLinjer for SAMME ordre (autoVelgUtstyrMal sin egen
+    // Panorama-fjerning for KIA EV9, og leggTilPortalUtstyrLinjer sine portalLinjer), og
+    // kjørt samtidig kunne den ene sin gamle lokale kopi av fikenLinjer overskrive den andre
+    // sin nettopp lagrede linje.
+    await autoVelgUtstyrMal(id);
     // s08-048: produktlinjer fra bestillingen (utstyr+rabatt) inn i «Skal ha etter visning»
     // og fiken_linjer - gjør ingenting hvis ordren ikke har noen (o.portalLinjer tomt/null).
-    leggTilPortalUtstyrLinjer(id);
+    await leggTilPortalUtstyrLinjer(id);
     planleggRenderAll();
     if (activeOrdreId === id) buildOrdreDetail();
   } catch (e) {

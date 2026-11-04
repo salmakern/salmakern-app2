@@ -104,6 +104,27 @@ describe('synkroniserOmbyggingFikenLinjer (regresjon: ordre med huket boks men m
     expect(o.fikenLinjer.some(l => l.produktnummer === '500')).toBe(false);
   });
 
+  // Regresjon 4.11 (portal-økta, demobestilling s90-20261031-7): en portal-bestilt EV9-ordre
+  // fikk sin ombyggingslinje (500) MED frosset rabatt lagt til av leggTilPortalUtstyrLinjer
+  // ved Bekreft, men Ombygging-boksen (nyttKjoretoy/bruktKjoretoy) ble ALDRI huket av for en
+  // portal-ordre - så denne synken fjernet linjen (og rabatten) igjen på selve
+  // Bekreft-renderingen. Linjen skal nå stå urørt når den bærer en rabatt, uavhengig av boksen.
+  it('fjerner IKKE en linje med frosset portalrabatt, selv om ingen ombygging-boks er huket av', () => {
+    o.ombygging.nyttKjoretoy = false;
+    o.fikenLinjer.push({ produktnummer: '500', antall: 1, rabatt: 20 });
+    env.synkroniserOmbyggingFikenLinjer(o);
+    const linje = o.fikenLinjer.find(l => l.produktnummer === '500');
+    expect(linje).toBeDefined();
+    expect(linje.rabatt).toBe(20);
+  });
+
+  it('en linje UTEN rabatt fjernes fortsatt som før når ingen boks er huket av (ikke en portal-rabattlinje)', () => {
+    env.synkroniserOmbyggingFikenLinjer(o); // legger til 500 uten rabatt (boksen er huket av i beforeEach)
+    o.ombygging.nyttKjoretoy = false;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.some(l => l.produktnummer === '500')).toBe(false);
+  });
+
   it('legger til personbil-linjen når personbil-boksen er huket av', () => {
     o.ombygging.personbil = true;
     env.synkroniserOmbyggingFikenLinjer(o);

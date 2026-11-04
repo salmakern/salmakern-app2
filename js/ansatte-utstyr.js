@@ -1204,7 +1204,7 @@ function slettUtstyrMalIdx(i) {
 // begge stedene er enige om hva som teller som match. Overskriver ALDRI en allerede valgt
 // mal - kun hvis ordren ikke har noen fra før - for å unngå å nullstille avkrysset
 // fremgang på sjekklisten bare fordi noen retter en skrivefeil i Merke/Modell.
-function autoVelgUtstyrMal(ordreId) {
+async function autoVelgUtstyrMal(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   if (o.utstyrMalNavn) return;
   const mm = merkeModell(o).toLowerCase(); if (!mm) return;
@@ -1224,7 +1224,11 @@ function autoVelgUtstyrMal(ordreId) {
     // ordreId sendes med (ikke bare «åpen ordre»): autoVelgUtstyrMal kan kjøres etter en await (Bekreft av portal-ordre), da brukeren kan ha gått til en annen ordre.
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, true, ordreId);
     oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false, ordreId);
-    oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false, ordreId);
+    // Rettet 4.11 (portal-økta, demobestilling s90-20261031-7): MÅ avventes før funksjonen
+    // returnerer - ellers kjører dette fiken_linjer-RPC-kallet i konkurranse med
+    // leggTilPortalUtstyrLinjer() sine egne, uavhengige RPC-kall for SAMME ordre
+    // (portalBekreftOrdre kalte tidligere begge funksjonene uten await).
+    await oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, false, ordreId);
   }
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);
   if (container) container.innerHTML = utstyrSjekklisteHTML(o.utstyrSjekkliste||[], ordreId, 'toggleUtstyrPunkt', o.utstyrMalNavn||'');

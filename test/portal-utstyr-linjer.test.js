@@ -16,6 +16,7 @@ const kode = readFileSync(path.resolve(__dirname, '../js/lager.js'), 'utf8');
 function nyttMiljo(ordre) {
   const rpcKall = [];
   const consoleFeil = [];
+  const toaster = [];
   let rpcSvar = (produktnummer) => ({ data: { fikenLinjer: [...(ordre.fikenLinjer || []), { produktnummer, antall: 1 }] }, error: null });
   const sandbox = {
     console: { log() {}, error: (...a) => consoleFeil.push(a), warn() {}, info() {} },
@@ -25,10 +26,11 @@ function nyttMiljo(ordre) {
     db: { rpc: (navn, args) => { rpcKall.push([navn, args]); return Promise.resolve(rpcSvar(args.p_produktnummer)); } },
     su: (id, felt, val) => { const o = sandbox.S.ordrer.find((x) => x.id === id); o.utstyr[felt] = val; },
     planleggLocalSpeiling: () => {},
+    visToast: (...a) => toaster.push(a),
   };
   vm.createContext(sandbox);
   vm.runInContext(kode, sandbox, { filename: 'lager.js' });
-  return { sandbox, rpcKall, consoleFeil, settRpcSvar: (fn) => { rpcSvar = fn; } };
+  return { sandbox, rpcKall, consoleFeil, toaster, settRpcSvar: (fn) => { rpcSvar = fn; } };
 }
 
 function nyOrdre(overrides = {}) {
@@ -104,18 +106,20 @@ describe('leggTilPortalUtstyrLinjer', () => {
     expect(o.utstyr.skalHa).toBe('Takluke');
   });
 
-  it('RPC-feil på én linje: logges, men de andre linjene legges til likevel', async () => {
+  it('RPC-feil på én linje: logges OG vises som toast til den ansatte, men de andre linjene legges til likevel', async () => {
     const o = nyOrdre({ portalLinjer: [
       { produktnummer: '501', navn: 'Takluke', rabatt_prosent: 10 },
       { produktnummer: '502', navn: '6-seter svingbare', rabatt_prosent: 15 },
     ] });
-    const { sandbox, rpcKall, consoleFeil, settRpcSvar } = nyttMiljo(o);
+    const { sandbox, rpcKall, consoleFeil, toaster, settRpcSvar } = nyttMiljo(o);
     settRpcSvar((produktnummer) => produktnummer === '501'
       ? { data: null, error: { message: 'nettverksfeil' } }
       : { data: { fikenLinjer: [...o.fikenLinjer, { produktnummer, antall: 1 }] }, error: null });
     await sandbox.leggTilPortalUtstyrLinjer('ord_1');
     expect(rpcKall).toHaveLength(2);
     expect(consoleFeil).toHaveLength(1);
+    expect(toaster).toHaveLength(1);
+    expect(toaster[0][0]).toMatch(/501/);
     expect(o.utstyr.skalHa.split('\n')).toEqual(['Takluke', '6-seter svingbare']);
     expect(o.fikenLinjer.map((l) => l.produktnummer)).toEqual(['502']);
   });
