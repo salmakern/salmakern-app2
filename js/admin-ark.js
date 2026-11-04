@@ -657,6 +657,7 @@ function adminArkByggRader() {
       fraktselskap: ark?.fraktselskap || '',
       fullmaktVis: o.fullmakt || 'har_ikke',
       bestiltFrakt: ark?.bestiltFrakt || false,
+      fraktForberedtAt: ark?.fraktForberedtAt || null,
       hentetVarslet: ark?.hentetVarslet || false,
       utstyr: ark?.utstyr || '',
       vedtakVis: o.godkjentBiltilsyn ? 'gronn' : 'rod',
@@ -704,6 +705,7 @@ function adminArkByggRader() {
       fraktselskap: r.fraktselskap || '',
       fullmaktVis: null,
       bestiltFrakt: r.bestiltFrakt || false,
+      fraktForberedtAt: r.fraktForberedtAt || null,
       hentetVarslet: r.hentetVarslet || false,
       utstyr: r.utstyr || '',
       vedtakVis: null,
@@ -1332,14 +1334,22 @@ function renderAdminArk(scrollTilBunn) {
         const erHenterSelv = rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
         const erLeveringAvOss = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS;
         const bestillDisabled = manglerChassis || !rad.fraktselskap || erLeveringAvOss;
-        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Ingen bestilling nødvendig - Salmakern leverer selv' : (!rad.fraktselskap ? 'Velg fraktselskap først' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post')));
+        // Automatisk forberedt (s90-20261104-x, Henrik 4.11): ordren gikk selv til "Klar for
+        // henting" med fraktselskap valgt, så databasen har alt markert raden som klar for
+        // bekreftelse (frakt_forberedt_at) - trenger bare ÉTT trykk her for faktisk sending,
+        // samme dialog som før, bare forhåndsutfylt. Ren visningsmarkering (gul/puls), ingen
+        // egen knapp - klikket er identisk med "Bestill" ellers.
+        const erForberedtVenterBekreft = !!rad.fraktForberedtAt && !rad.bestiltFrakt;
+        const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Ingen bestilling nødvendig - Salmakern leverer selv' : (!rad.fraktselskap ? 'Velg fraktselskap først' : erForberedtVenterBekreft ? 'Automatisk forberedt da ordren ble Klar for henting - trykk for å bekrefte og sende' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post')));
         const hentetTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Varsle kontaktperson om at bilen er på vei til dere' : 'Varsle kontaktperson om at bilen er hentet');
         // Rødt rundt knappen før den er trykket, grønt etter - bedt om av Henrik
         // 2026-09-30, samme farger som resten av appen bruker for av/på-tilstander
-        // (STATUSER sine egne grønn/rød-par i core.js).
+        // (STATUSER sine egne grønn/rød-par i core.js). Gult (puls) i stedet for rødt når
+        // automatikken venter på bekreftelse - skal skille seg synlig fra "ingenting gjort ennå".
         const knappFarge = trykket => trykket ? 'border-color:#22c55e;color:#86efac' : 'border-color:#ef4444;color:#fca5a5';
+        const bestillStil = erForberedtVenterBekreft ? 'border-color:#eab308;color:#fde047;animation:adminArkFraktPuls 1.6s ease-in-out infinite' : knappFarge(rad.bestiltFrakt);
         return `<div style="display:flex;gap:4px;justify-content:center">
-          <button class="btn sm" style="padding:3px 7px;font-size:11px;${knappFarge(rad.bestiltFrakt)}" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">📧 Bestill</button>
+          <button class="btn sm" style="padding:3px 7px;font-size:11px;${bestillStil}" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">${erForberedtVenterBekreft?'📧 Bekreft bestilling':'📧 Bestill'}</button>
           <button class="btn sm" style="padding:3px 7px;font-size:11px;${knappFarge(rad.hentetVarslet)}" ${manglerChassis?'disabled':''} onclick="adminArkVarsleHentet('${chassis}')" title="${hentetTitel}">✔ Hentet</button>
         </div>`;
       }},

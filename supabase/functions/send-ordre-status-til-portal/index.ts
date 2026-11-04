@@ -16,11 +16,16 @@
 //     helt til Henrik sier fra ("i overgangen beholder Admin-ark knappen og portalen
 //     sender IKKE hentet-mail ... så ingen får to e-poster").
 //   - "klar_henting": false NÅR admin_ark-raden for samme chassis har fraktselskap
-//     "Hente selv" OG bestilt_frakt=true - det betyr Admin-arkets egen "Bestill"-dialog
-//     allerede har sendt varselet med henteklar-dato til kontaktpersonen for akkurat
-//     denne bilen (adminArkSendFraktBestilling, js/admin-ark.js). Er ikke det tilfellet
-//     (ingen admin_ark-rad, annet fraktselskap, eller ikke bestilt ennå), sendes portalens
-//     e-post som normalt - det finnes ingen annen varsling da.
+//     "Hente selv" OG (bestilt_frakt=true ELLER frakt_forberedt_at er satt) - det betyr
+//     Admin-arkets egen "Bestill"-dialog allerede har sendt (eller er i ferd med å bli
+//     bekreftet for å sende, se s90-20261104-x) varselet med henteklar-dato til
+//     kontaktpersonen for akkurat denne bilen (adminArkSendFraktBestilling, js/admin-ark.js).
+//     frakt_forberedt_at settes UMIDDELBART av databasetriggeren "ordre-frakt-forbered" idet
+//     statusen blir klar_henting (før selve e-posten er bekreftet/sendt av en ansatt) -
+//     nettopp for å vinne dette kappløpet mot denne funksjonens egen, nå umiddelbare,
+//     sending (20261101160000). Er ingen av delene satt (ingen admin_ark-rad, annet
+//     fraktselskap, eller ikke bestilt/forberedt ennå), sendes portalens e-post som normalt -
+//     det finnes ingen annen varsling da.
 //   - alle andre 5 statuser (på en bekreftet ordre): ALLTID true (ingen eksisterende manuell
 //     e-post å kollidere med).
 //
@@ -114,10 +119,10 @@ Deno.serve(async (req) => {
       if (sendEpost && rad.status === 'klar_henting' && chassis) {
         const { data: arkRad } = await supabase
           .from('admin_ark')
-          .select('fraktselskap, bestilt_frakt')
+          .select('fraktselskap, bestilt_frakt, frakt_forberedt_at')
           .ilike('chassis_nr', chassis.trim())
           .maybeSingle()
-        if (arkRad && arkRad.fraktselskap === 'Hente selv' && arkRad.bestilt_frakt === true) {
+        if (arkRad && arkRad.fraktselskap === 'Hente selv' && (arkRad.bestilt_frakt === true || arkRad.frakt_forberedt_at !== null)) {
           sendEpost = false
         }
       }

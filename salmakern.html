@@ -206,14 +206,14 @@ input,select,textarea{width:100%;padding:9px 12px;border-radius:12px;background:
    felt i appen, som er venstrejustert) - sett eksplisitt venstrejustering for å matche
    resten av skjemaene (oppdaget av Henrik 2026-10-29, "ankomstdato ikke på linje med
    resten"). */
-input[type="date"]{text-align:left}
+input[type="date"],input[type="datetime-local"]{text-align:left}
 /* iOS zoomer inn på felter med under 16px tekst. 16px på telefon fjerner
    hoppet uten å måtte blokkere pinch-zoom for hele appen. !important fordi
    statuspiller o.l. (f.eks. Ordre-sidens status-dropdown) setter sin egen,
    mindre font-size direkte i style-attributtet, som ellers vinner over denne. */
 @media(max-width:860px){
   input,select,textarea{font-size:16px!important}
-  input[type=date],input[type=time]{min-height:44px}
+  input[type=date],input[type=time],input[type=datetime-local]{min-height:44px}
 }
 input:focus,select:focus,textarea:focus{outline:none;border-color:#ef4444}
 label{font-size:11px;color:#a1a1aa;display:block;margin-bottom:3px;margin-top:8px}
@@ -254,6 +254,8 @@ tr:first-child td{padding-top:8px}
 
 /* CLOCK */
 @keyframes pulseGlow{0%,100%{box-shadow:0 0 26px rgba(34,197,94,.22)}50%{box-shadow:0 0 40px rgba(34,197,94,.38)}}
+/* Admin-ark: frakt automatisk forberedt, venter på ett bekreftelsestrykk (s90-20261104) */
+@keyframes adminArkFraktPuls{0%,100%{box-shadow:0 0 0 rgba(234,179,8,0)}50%{box-shadow:0 0 8px rgba(234,179,8,.7)}}
 
 /* CANVAS */
 canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:#0f0f12}
@@ -438,6 +440,11 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="card" id="stempletInnNaKort" style="margin-bottom:12px;display:none">
         <div class="h">Stemplet inn nå <span class="kort-admin-merke">ADMIN</span></div>
         <div id="stempletInnNaListe" style="margin-top:8px"></div>
+      </div>
+      <div class="card" id="langeKlokkerKort" style="margin-bottom:12px;display:none;border-color:rgba(251,191,36,.4)">
+        <div class="h">Ordreklokker som har gått lenge <span class="kort-admin-merke">ADMIN</span></div>
+        <div class="small muted" style="margin-top:4px">Ombygging-klokker som har stått i gang i over 10 timer, trolig glemt. De stoppes av seg selv etter 14 timer.</div>
+        <div id="langeKlokkerListe" style="margin-top:8px"></div>
       </div>
       <div class="grid g2" style="margin-bottom:12px">
         <div class="card" id="merMoterKort" style="margin-bottom:0;display:none">
@@ -1373,6 +1380,23 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="bekreftAdminMeldPaa()">Lagre</button>
       <button class="btn" onclick="closeModal('adminMeldPaa')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="stoppOkt">
+  <div class="modal-box">
+    <div class="h">Stopp Ombygging-klokka for <span id="stoppOktNavn"></span></div>
+    <div class="small muted" id="stoppOktInfo" style="margin-top:6px"></div>
+    <div style="margin-top:12px">
+      <label>Stoppet kl.</label>
+      <input type="datetime-local" id="stoppOktTid" oninput="oppdaterStoppOktOppsummering()" onchange="oppdaterStoppOktOppsummering()">
+    </div>
+    <div id="stoppOktOppsummering" class="small" style="margin-top:10px"></div>
+    <div class="small muted" style="margin-top:8px">Velg når klokka egentlig skulle stoppet. Den kan ikke stoppes før den startet eller frem i tid. Det føres en linje på ordren om at administrator stoppet den.</div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" id="stoppOktBekreft" onclick="bekreftStoppOkt()">Stopp klokka</button>
+      <button class="btn" onclick="closeModal('stoppOkt')">Avbryt</button>
     </div>
   </div>
 </div>

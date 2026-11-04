@@ -899,7 +899,7 @@ function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,
     forhandler:r.forhandler||'', kontaktperson:r.kontaktperson||'',
     serienummer:r.serienummer||'', mottatt:!!r.mottatt, papirer:r.papirer||'', dokumenter:!!r.dokumenter, fraktselskap:r.fraktselskap||'',
-    bestiltFrakt:!!r.bestilt_frakt, hentetVarslet:!!r.hentet_varslet, utstyr:r.utstyr||'',
+    bestiltFrakt:!!r.bestilt_frakt, fraktForberedtAt:r.frakt_forberedt_at||null, hentetVarslet:!!r.hentet_varslet, utstyr:r.utstyr||'',
     merknader:r.merknader||'', flateHypotetisk:r.flate_hypotetisk||'', timeBekreftet:r.time_bekreftet||'', timeBekreftetTid:r.time_bekreftet_tid||'', timeBekreftetSted:r.time_bekreftet_sted||'', ventendeTimer:r.ventende_timer||'', arkivert:!!r.arkivert,
     // _db: raden FAKTISK finnes i databasen (brukt av admin-ark.js til å skille en ekte
     // rad fra en tom reserverad som bare ligger i S.adminArk i minnet til noen skriver i
@@ -1577,6 +1577,8 @@ async function tryLogin() {
       await loadFromSupabase();
       subscribeRealtime();
       renderAll();
+      // Innstemplingen kom ikke frem forrige gang og ble reparert ved oppstart (før ordrene var lastet): gjenoppta Ombygging-klokkene på ordrene jeg er meldt på nå (js/timer.js). Feil her skal aldri hindre innloggingen.
+      if (typeof gjenopptaMineEtterInnlasting === 'function') gjenopptaMineEtterInnlasting().catch(e => console.warn('gjenopptaMineEtterInnlasting:', e && e.message));
       prosesserOfflineKo(); // send inn evt. lagringer som ble liggende i køen forrige økt
       // Åpnet via ?ordre=<id> i url-en (et push-varsel som måtte åpne et helt nytt
       // vindu/fane, se notificationclick i sw.js) - hopp rett til den ordren, og

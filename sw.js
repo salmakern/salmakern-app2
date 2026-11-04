@@ -1,3 +1,7 @@
+// v40 - s90-20261104-x: automatisk frakt-forberedelse ved status "Klar for henting"
+// (frakt_forberedt_at på admin_ark, satt av en ny databasetrigger) - "📧 Bestill"-knappen i
+// Admin-ark viser nå en gul, pulserende "Bekreft bestilling"-tilstand når dette har skjedd
+// og venter på ett bekreftelsestrykk (2026-11-04)
 // v13 - appen sender nå den innloggede ansattes token til edge-funksjonene (edgeFetch i
 // core.js) og utlogging avslutter Auth-sesjonen på ekte. Cache-navnet er bumpet slik at åpne
 // PWA-er henter den nye koden; uten bump ville de fortsatt sendt bare den offentlige nøkkelen.
@@ -35,7 +39,7 @@
 // v22 - s08-048 grunnlag: Bekreft av en portal-ordre kan fylle «Skal ha etter visning» og
 // fiken_linjer fra bestillingens produktlinjer (o.portalLinjer) - helt inert til
 // portal_koble_bestilling v5 og portal-bestilling faktisk sender feltet (2026-10-31)
-const CACHE = 'salmakern-v38';
+const CACHE = 'salmakern-v40';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
