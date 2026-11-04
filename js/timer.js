@@ -222,7 +222,9 @@ function startTimer() {
   {timeout:8000,maximumAge:30000});
 }
 
-function openTimerPIN(melding) {
+// Modusen settes ved HVER åpning (ikke bare i manuell flyt): et avbrutt PIN-vindu fra manuell føring skal ikke gjøre neste PIN-start til en lagring av den avbrutte føringen.
+function openTimerPIN(melding, modus) {
+  timerPINMode = modus || 'gps';
   const btn=document.getElementById('startBtn');
   if(btn){btn.textContent='▶ Start';btn.disabled=false;}
   document.getElementById('timerPINMsg').textContent=melding;
@@ -235,33 +237,47 @@ function bekreftTimerPIN() {
   const pin=document.getElementById('timerPINInput').value;
   if(pin!==S.dagensPIN){document.getElementById('timerPINErr').textContent='Feil PIN – prøv igjen';return;}
   closeModal('timerPIN');
-  if(timerPINMode==='manuell') {
+  // Modusen leses og nullstilles SYNKRONT: doLagreManuellTimer venter på et nettverkskall (overlapp-sjekken), og en ny PIN-runde i mellomtiden skulle ikke se «manuell» (det ga innstempling i stedet for føring).
+  const modus = timerPINMode; timerPINMode = 'gps';
+  if(modus==='manuell') {
     doLagreManuellTimer();
   } else {
     doStartTimer('Startet med PIN-overstyring');
   }
 }
 
-function doLagreManuellTimer() {
+let _manuellTimerLagrer = false;
+async function doLagreManuellTimer() {
   if(!me) return;
-  const start=document.getElementById('mFra').value;
-  const stopp=document.getElementById('mTil').value;
-  const { mins }=beregnManuellMinutter(start,stopp);
-  const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
-  const entry={
-    id:nyTimerId('t'), ansattId:me.id, ansatt:me.navn,
-    dato, type:'manuell', start, stopp, mins, _localAt:Date.now()
-  };
-  S.timer.push(entry);
-  if(db) db.from('timer_entries').insert({
-    id:entry.id,ansatt_id:me.id,ansatt:me.navn,
-    dato:entry.dato,type:'manuell',start,stopp,mins
-  }).then(r=>{if(r.error) { console.error('Timer feil:',r.error.message); visToast('Kunne ikke lagre timeregistreringen - prøv igjen'); } });
-  planleggLocalSpeiling();
-  renderTimerHistorikk(); renderTimerMaaned();
-  document.getElementById('mFra').value='';
-  document.getElementById('mTil').value='';
-  timerPINMode='gps';
+  if (_manuellTimerLagrer) return; // dobbelttrykk mens overlapp sjekkes skal ikke gi to føringer
+  _manuellTimerLagrer = true;
+  try {
+    const start=document.getElementById('mFra').value;
+    const stopp=document.getElementById('mTil').value;
+    // Feltene tømmes først når føringen er lagret: en ny PIN-runde som kommer etter at den forrige er ferdig skal ikke lagre en tom føring.
+    if(!start||!stopp){ visToast('Fyll inn fra- og til-tid', 'feil'); return; }
+    const { mins }=beregnManuellMinutter(start,stopp);
+    const dato=document.getElementById('mDato')?.value||new Date().toISOString().split('T')[0];
+    // Advarsel om overlapp med timer som allerede er ført samme dag (teller ellers to ganger i lønn). Avbryter brukeren, beholdes feltene så tidene kan rettes.
+    const overlapp = await finnOverlappendeTimeforinger(me.id, dato, start, stopp);
+    if (overlapp.length && !confirm(overlappAdvarselTekst('Du', dato, start, stopp, overlapp))) { timerPINMode='gps'; return; }
+    const entry={
+      id:nyTimerId('t'), ansattId:me.id, ansatt:me.navn,
+      dato, type:'manuell', start, stopp, mins, _localAt:Date.now()
+    };
+    S.timer.push(entry);
+    if(db) db.from('timer_entries').insert({
+      id:entry.id,ansatt_id:me.id,ansatt:me.navn,
+      dato:entry.dato,type:'manuell',start,stopp,mins
+    }).then(r=>{if(r.error) { console.error('Timer feil:',r.error.message); visToast('Kunne ikke lagre timeregistreringen - prøv igjen'); } });
+    planleggLocalSpeiling();
+    renderTimerHistorikk(); renderTimerMaaned();
+    document.getElementById('mFra').value='';
+    document.getElementById('mTil').value='';
+    timerPINMode='gps';
+  } finally {
+    _manuellTimerLagrer = false;
+  }
 }
 
 // Fremdriftsringen rundt klokka - klokkeGraderSist husker siste vinkel (0-360, andel
@@ -328,8 +344,15 @@ function doStartTimer(notat) {
   updateClock();
   console.log('Timer startet:',notat);
   oppdaterTilstandPille();
-  gjenopptaMineOrdreKlokkerVedInnstempling();
-  settStempletInnSiden(new Date().toISOString());
+  // Stemplingen MÅ være skrevet til databasen FØR Ombygging-klokkene gjenopptas: databasen starter bare en klokke for en ansatt den ser er stemplet inn (ansatt_kan_ha_ordreklokke).
+  settStempletInnSiden(new Date().toISOString())
+    .then(ok => {
+      if (ok) return gjenopptaMineOrdreKlokkerVedInnstempling();
+      // Stemplingen kom ikke frem til databasen (dårlig dekning): klokka går lokalt, men databasen starter ingen Ombygging-klokke for en som ikke er stemplet inn. Prøv igjen straks og si fra.
+      visToast('Klokka går, men innstemplingen ble ikke lagret på nettet. Prøver igjen straks.', 'feil');
+      setTimeout(() => { reparerManglendeStempling().then(r => { if (r) return gjenopptaMineOrdreKlokkerVedInnstempling(); }).catch(() => {}); }, 5000);
+    })
+    .catch(e => console.error('Kunne ikke gjenoppta ordreklokker ved innstempling:', e && e.message));
 }
 
 // Skriver tidspunktet jeg stemplet inn til min EGEN ansatte-rad (bedt om av Henrik
@@ -340,15 +363,17 @@ function doStartTimer(notat) {
 // STOPPES (se lagreTimer()) - ingen database-tilstand fantes for en PÅGÅENDE innstempling.
 // Målrettet enkelt-kolonne-skriving på egen rad - ingen samtidighets-/låseproblematikk siden
 // det aldri er mer enn én skriver (ansatten selv) per rad, samme mønster som session_token.
+// Returnerer et løfte (true = skrevet til databasen) slik at innstempling kan vente på at stemplingen faktisk står der før ordreklokkene gjenopptas.
 function settStempletInnSiden(iso) {
-  if (!me) return;
+  if (!me) return Promise.resolve(false);
   me.stempletInnSiden = iso;
   const egen = S.ansatte?.find(a=>a.id===me.id); if (egen) egen.stempletInnSiden = iso;
-  if (!db) return;
+  if (!db) return Promise.resolve(false);
   ignorerRealtimeAnsatt.add(String(me.id));
   setTimeout(()=>ignorerRealtimeAnsatt.delete(String(me.id)), 5000);
-  db.from('ansatte').update({ stemplet_inn_siden: iso }).eq('id', me.id)
-    .then(r=>{ if(r.error) console.error('Kunne ikke oppdatere stemplet_inn_siden:', r.error.message); });
+  return Promise.resolve(db.from('ansatte').update({ stemplet_inn_siden: iso }).eq('id', me.id))
+    .then(r=>{ if(r.error) { console.error('Kunne ikke oppdatere stemplet_inn_siden:', r.error.message); return false; } return true; })
+    .catch(e=>{ console.error('Kunne ikke oppdatere stemplet_inn_siden:', e && e.message); return false; });
 }
 
 // Kobler den daglige lønnsklokka sammen med Ombygging-klokka (den automatiske, se
@@ -361,12 +386,80 @@ function settStempletInnSiden(iso) {
 // og gjenopptar den automatisk neste gang jeg stempler inn igjen - uten at jeg må melde meg
 // på/av ordren på nytt. Gjelder BEVISST IKKE Klargjøring, som er en ren manuell klokke uten
 // noen kobling til status eller lønnsklokka i det hele tatt (se samme fil, samme dato).
+// Fra 2026-11-04 stoppes ALLE mine åpne Ombygging-klokker i ÉN databasefunksjon (stopp_ordreklokker_for_ansatt, også på ordre som ikke er lastet lokalt), i stedet for én økt om gangen fra
+// lokal kopi. Svikter den (ingen nett, eller databasen mangler den ennå), brukes den gamle veien som reserve. stoppMs (valgfri, bare admin): stopptidspunkt i ms, ellers nå.
+// Klokka går lokalt (timerStart), men databasen har ingen innstempling fordi skrivingen mislyktes (dårlig dekning ved innstempling, blokkert lagring). Da vil databasen aldri starte en Ombygging-klokke for meg, og
+// admin ser meg ikke i «Stemplet inn nå». Skriver stemplingen fra timerStart på nytt, men BARE når databasen er tom OG ingen timeføring er ført siden klokka startet: en tom stempling med en ført føring er en
+// admin-utstempling (sjekkAdminUtstempling stopper da klokka), og den skal aldri gjenopplives. Gir true når databasen nå viser at jeg er stemplet inn.
+const STEMPLING_MAKS_ALDER_MS = 16 * 3600000;   // samme grense som databasen (ansatt_kan_ha_ordreklokke) og admin-utstempling: en eldre innstempling er en glemt utstempling
+async function reparerManglendeStempling() {
+  if (!me || !timerStart || !db) return false;
+  const start = timerStart;
+  const fersk = await db.from('ansatte').select('stemplet_inn_siden').eq('id', me.id).single();
+  if (fersk.error || !fersk.data) return false;
+  if (fersk.data.stemplet_inn_siden) {
+    // Finnes en stempling, men er den over 16 t gammel, teller databasen den ikke, og den kan ikke repareres her (den lokale klokka er like gammel): ansatten må stemple ut og inn.
+    const ms = Date.parse(fersk.data.stemplet_inn_siden);
+    return !isNaN(ms) && ms > Date.now() - STEMPLING_MAKS_ALDER_MS;
+  }
+  if (start < Date.now() - STEMPLING_MAKS_ALDER_MS) return false;
+  const reg = await db.from('timer_entries').select('id').eq('ansatt_id', me.id).eq('type', 'normal').gte('created_at', new Date(start).toISOString()).limit(1);
+  if (reg.error || (reg.data && reg.data.length)) return false;
+  if (timerStart !== start) return false;
+  return await settStempletInnSiden(new Date(start).toISOString());
+}
+// Etter at en manglende innstempling er skrevet på nytt skal klokkene på ordrene jeg er meldt på gjenopptas. Ved oppstart kjører sjekkAdminUtstempling (initTimerPage) FØR ordrene er lastet (S.ordrer er tom):
+// da settes et merke, og tryLogin kjører gjenopptakelsen så snart dataene er lastet (gjenopptaMineEtterInnlasting).
+let _gjenopptaNaarDataErLastet = false;
+async function gjenopptaEtterReparasjon() {
+  if ((S.ordrer||[]).length) await gjenopptaMineOrdreKlokkerVedInnstempling();
+  else _gjenopptaNaarDataErLastet = true;
+}
+async function gjenopptaMineEtterInnlasting() {
+  if (!_gjenopptaNaarDataErLastet) return;
+  _gjenopptaNaarDataErLastet = false;
+  await gjenopptaMineOrdreKlokkerVedInnstempling();
+}
+// Databasen svarte at jeg (blant andre) ikke var stemplet inn da en fase startet (ikkeStemplet), men min lokale klokke går: da har innstemplingen aldri kommet frem. Reparer den og gjenoppta klokkene, og returner
+// de som FORTSATT ikke er stemplet inn (de skal få beskjeden), slik at ansatten ikke får en «ikke stemplet inn»-melding som motsier klokka på skjermen.
+async function selvhelIkkeStemplet(navn) {
+  const rest = Array.isArray(navn) ? navn.slice() : [];
+  if (me && timerStart && rest.includes(me.navn)) {
+    let ok = false;
+    try { ok = await reparerManglendeStempling(); } catch (e) { console.error('Kunne ikke reparere stemplingen:', e && e.message); }
+    if (ok) {
+      try { await gjenopptaMineOrdreKlokkerVedInnstempling(); } catch (e) { console.error('Kunne ikke gjenoppta klokkene:', e && e.message); }
+      return rest.filter(n => n !== me.navn);
+    }
+  }
+  return rest;
+}
+// Returnerer 'reserve' hvis den nye databasefunksjonen ikke kunne brukes og klokker ble stoppet «nå» via den gamle veien (da kan ikke et valgt klokkeslett brukes), 'feilet' hvis heller ikke den veien stoppet dem.
+async function stoppOrdreKlokkerForAnsatt(ansattId, ansattNavn, stoppMs) {
+  try {
+    const args = { p_ansatt_id: ansattId };
+    if (stoppMs != null) args.p_stopp_ms = stoppMs;
+    const { data, error } = await db.rpc('stopp_ordreklokker_for_ansatt', args);
+    if (!error && data) {
+      (data.ordrer || []).forEach(r => {
+        const o = (S.ordrer||[]).find(x => x.id === r.id);
+        if (o && Array.isArray(r.sessions)) o.ordreTimerSessions = r.sessions;
+      });
+      if ((data.antall || 0) > 0 && typeof buildOrdreDetail === 'function') buildOrdreDetail();
+      return;
+    }
+    if (error) console.error('Kunne ikke stoppe ordreklokker (bruker reserve):', error.message);
+  } catch (e) { console.error('Kunne ikke stoppe ordreklokker (bruker reserve):', e && e.message); }
+  const apne = (S.ordrer||[]).filter(o => ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', ansattId));
+  for (const o of apne) {
+    await stoppOrdreTimerForAnsatt(o, 'ordreTimerSessions', ansattId, ansattNavn);
+  }
+  if (!apne.length) return undefined;
+  return apne.every(o => !ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', ansattId)) ? 'reserve' : 'feilet';
+}
 async function stoppMineOrdreKlokkerVedUtstempling() {
   if (!me || !db) return;
-  const apne = (S.ordrer||[]).filter(o => ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', me.id));
-  for (const o of apne) {
-    await stoppOrdreTimerForAnsatt(o, 'ordreTimerSessions', me.id, me.navn);
-  }
+  await stoppOrdreKlokkerForAnsatt(me.id, me.navn);
 }
 async function gjenopptaMineOrdreKlokkerVedInnstempling() {
   if (!me || !db) return;
@@ -404,12 +497,12 @@ async function lagreTimer() {
   if(!me) return;
   let start='', stopp='', mins=0;
   if (timerType==='manuell') {
+    if (_manuellTimerLagrer) { visToast('Lagrer allerede føringen. Vent et øyeblikk.', 'ok'); return; }
     start=document.getElementById('mFra').value;
     stopp=document.getElementById('mTil').value;
     if(!start||!stopp){alert('Fyll inn fra- og til-tid');return;}
     // Krev dagens PIN for manuell registrering
-    timerPINMode='manuell';
-    openTimerPIN('Tast inn dagens PIN for å bekrefte manuell timeregistrering');
+    openTimerPIN('Tast inn dagens PIN for å bekrefte manuell timeregistrering', 'manuell');
     return;
   } else if (timerStart) {
     const ms=Date.now()-timerStart;
@@ -775,7 +868,43 @@ function beregnAdminUtstempling(stempletInnIso, stoppTid, naa) {
   const { raatid, mins } = beregnManuellMinutter(start, stoppTid);
   if (raatid <= 0) return { feil: `Utstemplingen må være etter innstemplingen (${start}).` };
   if (raatid > 16 * 60) return { feil: 'Mer enn 16 timer mellom inn og ut. Sjekk klokkeslettet.' };
-  return { dato, start, stopp: stoppTid, mins, raatid, pause: raatid - mins };
+  return { dato, start, stopp: stoppTid, mins, raatid, pause: raatid - mins, stoppMs: stoppAbs.getTime() };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// OVERLAPP MELLOM TIMEFØRINGER (2026-11-04): to føringer for samme ansatt som dekker samme tidsrom teller timene to ganger (lønn). Funnet i dataene: Ismail 2.11 og Henrik 30.9/7.10/10.10.
+// Appen advarer nå før en admin-utstempling og en manuell føring lagres; brukeren kan likevel velge å lagre (f.eks. en reell rettelse), men får se overlappet først.
+// ---------------------------------------------------------------------------------------------------------------
+function tidTilMinutter(t) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t || '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+// Ren sjekk (testes uten db): overlapper to tidsrom «HH:MM»–«HH:MM» (samme dag)? Et tidsrom som slutter før/samtidig som det starter regnes som over midnatt. Tidsrom som bare tangerer (slutt = start) overlapper ikke.
+function tidsrommOverlapper(aStart, aStopp, bStart, bStopp) {
+  let a1 = tidTilMinutter(aStart), a2 = tidTilMinutter(aStopp), b1 = tidTilMinutter(bStart), b2 = tidTilMinutter(bStopp);
+  if (a1 == null || a2 == null || b1 == null || b2 == null) return false;
+  if (a2 < a1) a2 += 1440;
+  if (b2 < b1) b2 += 1440;
+  if (a1 === a2 || b1 === b2) return false;   // start = stopp (Start og Stopp i samme minutt) er null varighet, ikke et døgn
+  return a1 < b2 && b1 < a2;
+}
+// Finner eksisterende arbeidstid (normal/manuell) for ansatten samme dato som overlapper start–stopp. Leser ferskt fra databasen (ikke bare S.timer). Svikter oppslaget, returneres tom liste
+// (en advarsel skal aldri hindre at timer kan føres). unntattId: en rad som ikke skal telle (f.eks. den som er i ferd med å lagres på nytt).
+async function finnOverlappendeTimeforinger(ansattId, dato, start, stopp, unntattId) {
+  if (!db) return [];
+  try {
+    // Høyst 4 sekunder: en advarsel skal aldri kunne holde føringen fanget (svak dekning kan la et kall henge uten å feile).
+    const svar = await Promise.race([Promise.resolve(db.from('timer_entries').select('id,type,start,stopp').eq('ansatt_id', ansattId).eq('dato', dato)), new Promise(ok => setTimeout(() => ok({ tidsavbrudd: true }), 4000))]);
+    if (svar && svar.tidsavbrudd) { console.error('Overlapp-sjekken tok for lang tid og ble hoppet over'); return []; }
+    const { data, error } = svar || {};
+    if (error || !Array.isArray(data)) { if (error) console.error('Kunne ikke sjekke overlapp i timeføringer:', error.message); return []; }
+    return data.filter(r => r && r.id !== unntattId && (r.type === 'normal' || r.type === 'manuell') && r.start && r.stopp && tidsrommOverlapper(start, stopp, r.start, r.stopp))
+      .map(r => ({ id: r.id, start: r.start, stopp: r.stopp }));
+  } catch (e) { console.error('Kunne ikke sjekke overlapp i timeføringer:', e && e.message); return []; }
+}
+function overlappAdvarselTekst(navn, dato, start, stopp, overlapp) {
+  const liste = overlapp.map(r => `${r.start}–${r.stopp}`).join(', ');
+  return `${navn} har allerede timer ${dato} som overlapper ${start}–${stopp}: ${liste}.\n\nLagres begge, telles tiden i overlappet to ganger i lønnsgrunnlaget. Vil du lagre likevel?`;
 }
 function adminUtstemplingEntryId(ansattId, stempletInnIso) { return 'tadm_' + ansattId + '_' + new Date(stempletInnIso).getTime(); }
 function formaterVarighet(mins) { return mins >= 60 ? `${Math.floor(mins / 60)} t ${mins % 60} min` : `${mins} min`; }
@@ -830,9 +959,19 @@ async function adminStempleUt() {
     if (r.feil) { visToast(r.feil, 'feil'); oppdaterStempleUtOppsummering(); return; }
     // 2) Timene, med fast id (idempotent).
     const rad = { id: adminUtstemplingEntryId(id, innIso), ansatt_id: id, ansatt: a.navn, dato: r.dato, type: 'normal', start: r.start, stopp: r.stopp, mins: r.mins };
+    // Advarsel hvis ansatten allerede har timer som dekker samme tidsrom (en rad med samme faste id er et nytt forsøk av denne utstemplingen og teller ikke). Ingen endring er gjort ennå, så Avbryt er trygt.
+    const overlapp = await finnOverlappendeTimeforinger(id, r.dato, r.start, r.stopp, rad.id);
+    if (overlapp.length && !confirm(overlappAdvarselTekst(a.navn, r.dato, r.start, r.stopp, overlapp))) return;
     const ins = await db.from('timer_entries').insert(rad);
     if (ins.error && ins.error.code !== '23505') {
       visToast('Kunne ikke registrere timene. Ingen er stemplet ut.', 'feil'); console.error('adminStempleUt: innsetting feilet:', ins.error.message); return;
+    }
+    if (ins.error) {
+      // 23505: samme innstempling er registrert før (nytt forsøk). Er den registrert med ANDRE klokkeslett enn de admin har valgt nå, ville skjermen og klokkene si noe annet enn lønnsgrunnlaget: avbryt med beskjed.
+      const ex = await db.from('timer_entries').select('start,stopp').eq('id', rad.id).single();
+      if (ex && ex.data && (ex.data.start !== rad.start || ex.data.stopp !== rad.stopp)) {
+        visToast(`Utstemplingen er allerede registrert som ${ex.data.start}–${ex.data.stopp}. Velg ${ex.data.stopp} for å fullføre, eller rediger føringen først.`, 'feil'); return;
+      }
     }
     // 3) Nullstill stemplingen, bare hvis den fortsatt er den vi leste.
     const upd = await db.from('ansatte').update({ stemplet_inn_siden: null }).eq('id', id).eq('stemplet_inn_siden', innIso).select('id');
@@ -843,14 +982,13 @@ async function adminStempleUt() {
     // Lokalt: timen inn i S.timer (Realtime legger den ikke til to ganger), stemplingen nullstilt, ordre-klokka stoppet.
     if (!(S.timer || []).find(t => t.id === rad.id)) S.timer.unshift(dbToTimer(rad));
     a.stempletInnSiden = null;
-    for (const o of (S.ordrer || []).filter(o => ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', id))) {
-      await stoppOrdreTimerForAnsatt(o, 'ordreTimerSessions', id, a.navn);
-    }
+    // Ordreklokkene stoppes på det VALGTE utstemplingstidspunktet (ikke nå): en økt som startet etter det får null varighet, aldri negativ eller tid etter utstemplingen.
+    const klokkeRes = await stoppOrdreKlokkerForAnsatt(id, a.navn, r.stoppMs);
     if (typeof planleggLocalSpeiling === 'function') planleggLocalSpeiling();
     renderStempletInnNa();
     if (typeof renderTimerMaaned === 'function') { renderTimerHistorikk(); renderTimerMaaned(); }
     closeModal('stempleUt');
-    visToast(`${a.navn} er stemplet ut kl. ${r.stopp} (${formaterVarighet(r.mins)} registrert)`, 'ok');
+    visToast(`${a.navn} er stemplet ut kl. ${r.stopp} (${formaterVarighet(r.mins)} registrert)` + (klokkeRes === 'reserve' ? `. Ordreklokkene ble stoppet nå, ikke kl. ${r.stopp} (kunne ikke stoppe på valgt tid).` : klokkeRes === 'feilet' ? '. Ordreklokkene kunne IKKE stoppes: stopp dem fra ordren (Stopp…).' : ''), klokkeRes === 'feilet' ? 'feil' : 'ok');
   } finally {
     if (knapp) knapp.disabled = false;
   }
@@ -868,7 +1006,11 @@ async function sjekkAdminUtstempling() {
   if (fersk.error || !fersk.data || fersk.data.stemplet_inn_siden) return false;
   const reg = await db.from('timer_entries').select('id').eq('ansatt_id', me.id).eq('type', 'normal')
     .gte('created_at', new Date(start).toISOString()).limit(1);
-  if (reg.error || !reg.data || !reg.data.length) return false;
+  if (reg.error || !reg.data || !reg.data.length) {
+    // Tom stempling og ingen føring: dette er IKKE en admin-utstempling (den fører timene først), men en innstempling som aldri kom frem til databasen. Skriv stemplingen på nytt.
+    if (!reg.error && timerStart === start && Date.now() - start < STEMPLING_MAKS_ALDER_MS && await settStempletInnSiden(new Date(start).toISOString())) await gjenopptaEtterReparasjon();
+    return false;
+  }
   if (timerStart !== start) return false; // en ny klokke startet i mellomtiden
   timerStartFjern(me.id);
   timerStart = null;

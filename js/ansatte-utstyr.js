@@ -1820,19 +1820,34 @@ function adminTimerTypeToggle() {
   document.getElementById('adminTimerTidWrap').style.display = fraværTyper.includes(type)?'none':'block';
 }
 
-function adminLagreTimer() {
+let _adminTimerLagrer = false;
+async function adminLagreTimer() {
+  if (_adminTimerLagrer) return;
   const id = document.getElementById('adminTimerId').value;
   const dato = document.getElementById('adminTimerDato').value;
   const type = document.getElementById('adminTimerType').value;
   const fra  = document.getElementById('adminTimerFra').value;
   const til  = document.getElementById('adminTimerTil').value;
+  const ansattIdFelt = document.getElementById('adminTimerAnsattId').value;   // leses FØR overlapp-sjekken: åpner admin et annet skjema mens den venter, skal føringen ikke havne på en annen ansatt
   const fraværTyper = ['syk','egenmelding','ferie','permisjon','ugyldig_fravaer'];
+  // En føring uten dato er ugyldig (og kunne ikke tolkes av noe som leser timene, f.eks. opprydningen av ordreklokker): krev dato.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dato || '')) { visToast('Velg dato for føringen', 'feil'); return; }
   let mins = 0, start = '–', stopp = '–';
   if (!fraværTyper.includes(type) && fra && til) {
     const [sh,sm]=fra.split(':').map(Number);
     const [eh,em]=til.split(':').map(Number);
     mins = Math.max(0,(eh*60+em)-(sh*60+sm)-30);
     start=fra; stopp=til;
+  }
+  // Advarsel hvis ansatten allerede har arbeidstid som overlapper (samme mekanisme som manuell føring og admin-utstempling): her oppsto de overlappende føringene som ligger i dataene (to føringer for samme tid = tiden teller to ganger i lønn).
+  if ((type === 'normal' || type === 'manuell') && start !== '–') {
+    _adminTimerLagrer = true;
+    try {
+      const ansattIdSjekk = id ? (S.timer.find(x=>x.id===id)||{}).ansattId : Number(ansattIdFelt);
+      const ansattSjekk = (S.ansatte||[]).find(x=>x.id===ansattIdSjekk);
+      const overlapp = ansattIdSjekk ? await finnOverlappendeTimeforinger(ansattIdSjekk, dato, start, stopp, id || undefined) : [];
+      if (overlapp.length && !confirm(overlappAdvarselTekst(ansattSjekk ? ansattSjekk.navn : 'Ansatten', dato, start, stopp, overlapp))) return;
+    } finally { _adminTimerLagrer = false; }
   }
 
   if (id) {
@@ -1843,7 +1858,7 @@ function adminLagreTimer() {
     if(db) db.from('timer_entries').update({dato,type,start,stopp,mins}).eq('id',id)
       .then(r=>{if(r.error)console.error(r.error.message);});
   } else {
-    const ansattId = document.getElementById('adminTimerAnsattId').value;
+    const ansattId = ansattIdFelt;
     const a = S.ansatte.find(x=>String(x.id)===ansattId); if(!a) return;
     const nyId = 't'+(++S.nextId);
     const timerEntry = { id:nyId, ansattId:a.id, ansatt:a.navn, dato, type, start, stopp, mins, _localAt:Date.now() };

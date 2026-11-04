@@ -266,6 +266,10 @@ async function endreLeveranseStatus(id, nyStatus) {
       else if (data) {
         o.ordreTimerSessions = data.sessions ?? o.ordreTimerSessions;
         if (handling === 'avslutt_fase') o.ansatteSignert = data.ansatteSignert ?? o.ansatteSignert;
+        if (data.ikkeStemplet && data.ikkeStemplet.length) {
+          const rest = await selvhelIkkeStemplet(data.ikkeStemplet);
+          if (rest.length) visToast('Arbeidsklokka startet ikke for ' + rest.join(', ') + ' (ikke stemplet inn). Den starter når de stempler inn.');
+        }
       }
     }
   }

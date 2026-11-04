@@ -182,6 +182,7 @@ function ordreKortFeilHTML(o, e) {
 function renderOversikt(q) {
   renderMoterListe();
   renderStempletInnNa();
+  renderLangeOrdreklokker();
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
   const mnd = now.getMonth(), yr = now.getFullYear();
@@ -278,6 +279,34 @@ function renderStempletInnNa() {
       <span style="display:flex;align-items:center;gap:10px"><span class="small muted">siden ${siden.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'})} (${varighet})</span><button class="btn sm" onclick="apneStempleUtModal(${Number(a.id)})">Stemple ut</button></span>
     </div>`;
   }).join('');
+}
+
+// Åpne Ombygging-klokker som har gått lenge (over 10 t, se ordreSesjonGlemt i ordre-diverse.js) - admin-only, skjult når det ikke finnes noen. Databasen stopper dem selv etter 14 t,
+// men admin kan stoppe dem før det og velge klokkeslettet (apneStoppOktModal).
+function renderLangeOrdreklokker() {
+  const kort = document.getElementById('langeKlokkerKort');
+  const liste = document.getElementById('langeKlokkerListe');
+  if (!kort || !liste) return;
+  const erAdmin = me && me.rolle === 'admin';
+  const funnet = [];
+  // Kalles først i renderOversikt: en rar verdi i en ordres klokkeliste (f.eks. null i lista) skal aldri blanke hele Oversikt (samme isolering per element som Ordre-lista), så hver ordre sjekkes for seg og alt står i try/catch.
+  if (erAdmin) (S.ordrer||[]).forEach(o => {
+    try { (Array.isArray(o.ordreTimerSessions) ? o.ordreTimerSessions : []).forEach(s => { if (s && typeof s === 'object' && s.ansattId != null && ordreSesjonGlemt(s)) funnet.push({ o, s }); }); }
+    catch (e) { console.error('renderLangeOrdreklokker: ordre hoppet over:', e && e.message); }
+  });
+  try {
+    kort.style.display = funnet.length ? 'block' : 'none';
+    if (!funnet.length) { liste.innerHTML = ''; return; }
+    funnet.sort((a, b) => a.s.start - b.s.start);
+    liste.innerHTML = funnet.map(({ o, s }) => {
+      const t = fmtTime(Date.now() - s.start);
+      const siden = new Date(s.start).toLocaleString('no-NO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="min-width:0"><b>${esc(s.ansatt||'?')}</b> <span class="small muted">· ${ordreLabel(o)} · siden ${siden} (${t})</span></span>
+        <button class="btn sm" onclick="apneStoppOktModal('${o.id}',${Number(s.ansattId)})">Stopp…</button>
+      </div>`;
+    }).join('');
+  } catch (e) { console.error('renderLangeOrdreklokker feilet:', e && e.message); kort.style.display = 'none'; }
 }
 
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }
@@ -633,7 +662,14 @@ async function endreStatus(id, nyStatus) {
     if (feltNy && feltNy !== feltForrige) {
       const { data, error } = await db.rpc('oppdater_ordre_timer_fase', { p_ordre_id:id, p_felt:feltTilKolonne(feltNy), p_handling:'start_alle_paameldte' });
       if (error) console.error('Kunne ikke starte '+ORDRE_TIMER_LABEL[feltNy]+'-fasen:', error.message);
-      else o[feltNy] = data.sessions ?? o[feltNy];
+      else {
+        o[feltNy] = data.sessions ?? o[feltNy];
+        // Påmeldte som ikke er stemplet inn får ingen klokke (den starter av seg selv når de stempler inn): si fra så ingen tror klokka går.
+        if (data.ikkeStemplet && data.ikkeStemplet.length) {
+          const rest = await selvhelIkkeStemplet(data.ikkeStemplet);   // innstemplingen min kom kanskje aldri frem: repareres og klokkene gjenopptas
+          if (rest.length) visToast('Ombygging-klokka startet ikke for ' + rest.join(', ') + ' (ikke stemplet inn). Den starter når de stempler inn.');
+        }
+      }
     }
   }
   // Merker "hentetVarslet" automatisk (grønn kantlinje på Hentet-knappen i Admin-ark) når

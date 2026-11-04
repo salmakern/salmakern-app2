@@ -143,17 +143,46 @@ function ansattHarApenOrdreSesjon(o, felt, ansattId) {
 // Finner andre ordre hvor denne ansatte har en gående klokke (glemt å melde seg av) - brukt
 // til å melde dem automatisk av derfra når de melder seg på en NY bil, slik at samme person
 // aldri får tid tikkende på to biler samtidig (bedt om av Henrik 2026-10-23).
+// Også en ordre jeg ennå er meldt på i en tidtatt fase uten en åpen økt (klokka ble stoppet av utstempling eller opprydding, men påmeldingen står): melder jeg meg på en ny bil FØR jeg stempler inn, er det den nye
+// jeg jobber på, og ellers ville innstemplingen siden startet klokke på BEGGE (gjenopptaMineOrdreKlokkerVedInnstempling starter for alle påmeldte ordrer i fase).
 function finnAndreApneOrdreForAnsatt(unntattOrdreId, ansattId) {
   return (S.ordrer||[]).filter(o => o.id !== unntattOrdreId && (
     ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', ansattId) ||
-    ansattHarApenOrdreSesjon(o, 'klargjoringTimerSessions', ansattId)
+    ansattHarApenOrdreSesjon(o, 'klargjoringTimerSessions', ansattId) ||
+    ((o.ansatteSignert||[]).some(a => a.id === ansattId) && !!ordreAktivFase(o))
   ));
 }
-async function startOrdreTimerForAnsatt(o, felt, ansattId, ansattNavn) {
-  if (!db) { o[felt]=o[felt]||[]; if(!ansattHarApenOrdreSesjon(o,felt,ansattId)) o[felt].push({start:Date.now(),stopp:null,ansattId,ansatt:ansattNavn}); return; }
+// Ombygging-klokka (ordreTimerSessions) kan BARE gå for en ansatt som er stemplet inn på lønnsklokka (2026-11-04, «A: reparer dagens» etter at Ismails klokke gikk en hel natt): ellers ble
+// tiden en rå klokke uten arbeid bak. Unntatt er ansatte som ikke fører lønn i appen (kan_fore_lonn = false): de kan ikke stemple og ville aldri fått en klokke. Klargjøring er en rent manuell
+// klokke og er ikke begrenset. DATABASEN avgjør alene (ansatt_kan_ha_ordreklokke): appen forhåndssjekker bevisst ikke ut fra lokal kopi av stemplingen (den kan være utdatert, f.eks. stemplet inn på en
+// annen enhet med Realtime nede), men spør databasen og viser beskjeden når den sier nei.
+const IKKE_STEMPLET_BESKJED = 'Du er ikke stemplet inn. Ombygging-klokka går bare mens du er stemplet inn: den starter av seg selv når du stempler inn.';
+// Ved manuell start starter ingenting av seg selv (man er kanskje ikke meldt på ordren, eller den står ikke i en fase som tidtas): be om å stemple inn og trykke Start igjen.
+// Velger meldingen: har den lokale klokka gått i over 16 t (glemt utstempling), er det den som må ryddes, ikke «stemple inn».
+function ikkeStempletBeskjed(manuell) {
+  if (typeof timerStart !== 'undefined' && timerStart && Date.now() - timerStart > 16 * 3600000)
+    return 'Klokka på Timer-siden har gått i over 16 timer (glemt utstempling?). Stemple ut og inn igjen, så kan Ombygging-klokka gå.';
+  return manuell ? IKKE_STEMPLET_MANUELL_BESKJED : IKKE_STEMPLET_BESKJED;
+}
+const IKKE_STEMPLET_MANUELL_BESKJED = 'Du er ikke stemplet inn. Ombygging-klokka går bare mens du er stemplet inn: stemple inn på Timer-siden og trykk «Start min klokke» igjen.';
+// Returnerer true (klokka står i gang), 'ikke_stemplet' (serveren sa nei fordi ansatten ikke er stemplet inn) eller false (annen feil).
+async function startOrdreTimerForAnsatt(o, felt, ansattId, ansattNavn, ettForsok) {
+  if (!db) { o[felt]=o[felt]||[]; if(!ansattHarApenOrdreSesjon(o,felt,ansattId)) o[felt].push({start:Date.now(),stopp:null,ansattId,ansatt:ansattNavn}); return true; }
   const { data, error } = await db.rpc('oppdater_ordre_timer_sesjon', { p_ordre_id:o.id, p_felt:feltTilKolonne(felt), p_handling:'start', p_ansatt_id:ansattId, p_ansatt:ansattNavn });
-  if (error) { console.error('Kunne ikke starte '+ORDRE_TIMER_LABEL[felt]+'-klokke:', error.message); return; }
+  if (error) {
+    if (String(error.message||'').includes('IKKE_STEMPLET_INN')) {
+      // Min egen klokke går lokalt, men databasen mangler innstemplingen (skrivingen mislyktes): reparer den og prøv ÉN gang til (se reparerManglendeStempling i timer.js).
+      if (!ettForsok && me && ansattId === me.id && typeof timerStart !== 'undefined' && timerStart && typeof reparerManglendeStempling === 'function') {
+        let reparert = false;
+        try { reparert = await reparerManglendeStempling(); } catch (e) { console.error('Kunne ikke reparere stemplingen:', e && e.message); }
+        if (reparert) return startOrdreTimerForAnsatt(o, felt, ansattId, ansattNavn, true);
+      }
+      return 'ikke_stemplet';
+    }
+    console.error('Kunne ikke starte '+ORDRE_TIMER_LABEL[felt]+'-klokke:', error.message); return false;
+  }
   o[felt] = data?.sessions ?? o[felt];
+  return true;
 }
 async function stoppOrdreTimerForAnsatt(o, felt, ansattId, ansattNavn) {
   if (!db) { (o[felt]||[]).forEach(s=>{ if(s.ansattId===ansattId && !s.stopp) s.stopp=Date.now(); }); return; }
@@ -181,7 +210,12 @@ async function meldPaa(id) {
   // en fase som skal tidtas - se ordreAktivFase(). Ingen klokke starter i "dødsonen" eller
   // når ordren allerede er ferdig.
   const felt = ordreAktivFase(o);
-  if (felt) { await startOrdreTimerForAnsatt(o, felt, me.id, me.navn); buildOrdreDetail(); }
+  if (felt) {
+    // Meldt på uten å være stemplet inn: påmeldingen står, men databasen starter ikke klokka. Den starter når vedkommende stempler inn (gjenopptaMineOrdreKlokkerVedInnstempling).
+    const r = await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+    if (r === 'ikke_stemplet') visToast(ikkeStempletBeskjed(false), 'feil');
+    buildOrdreDetail();
+  }
 }
 async function meldAv(id, opts) {
   const stille = opts && opts.stille;
@@ -223,9 +257,23 @@ function fmtTime(ms) {
   const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000);
   return `${h>0?h+'t ':''}${m}min`;
 }
+// En åpen Ombygging-økt over 10 timer er nesten sikkert glemt (en arbeidsdag er ca. 8 t): merkes «Glemt?» og vises på Oversikt for admin. Databasen stopper den uansett etter 14 t (stopp_forlatte_ordreklokker).
+const ORDRE_KLOKKE_GLEMT_MS = 10 * 3600000;
+function ordreSesjonGlemt(s, naa) { return !!s && !s.stopp && ((naa || Date.now()) - s.start) > ORDRE_KLOKKE_GLEMT_MS; }
+// Hvorfor en økt ble stoppet av systemet i stedet for av den ansatte selv (settes av databasen: autoStopp / stoppetAvAdmin).
+function ordreSesjonStoppMerke(s) {
+  if (!s || !s.stopp) return '';
+  if (s.stoppetAvAdmin) return 'stoppet av administrator';
+  if (s.autoStopp === 'ikke_stemplet_inn') return 'stoppet automatisk (ikke stemplet inn)';
+  if (s.autoStopp === 'glemt') return 'stoppet automatisk (gikk i over 14 t)';
+  return '';
+}
 function ordreTimerKortHTML(o, felt) {
   const sessions = o[felt]||[];
   const gaaende = sessions.filter(s=>!s.stopp);
+  const erAdmin = !!me && me.rolle === 'admin';
+  // «Glemt?» gjelder bare Ombygging-klokka (den som ryddes automatisk): Klargjøring er rent manuell og skal ikke se ut som om noe følger med.
+  const glemtMerke = felt === 'ordreTimerSessions';
   const migLoper = ordreTimerLoperForMeg(o, felt);
   const totalMs = ordreTimerTotalMs(o, felt);
   const h = Math.floor(totalMs/3600000);
@@ -238,7 +286,7 @@ function ordreTimerKortHTML(o, felt) {
       <div>
         <div class="h">${erLeveranse(o) && felt==='ordreTimerSessions' ? 'Arbeidstid' : ORDRE_TIMER_LABEL[felt]}</div>
         <div style="font-size:28px;font-weight:800;margin-top:4px;color:${gaaende.length?'#86efac':'#f4f4f5'}">${tidStr}</div>
-        ${gaaende.length?`<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå: ${gaaende.map(x=>esc(x.ansatt||'?')).join(', ')}</div>`:''}
+        ${gaaende.length?`<div class="small" style="color:#86efac;margin-top:2px">● Kjører nå: ${gaaende.map(x=>esc(x.ansatt||'?')+(glemtMerke && ordreSesjonGlemt(x)?' <span style="color:#fbbf24;font-weight:700">⚠ Glemt?</span>':'')).join(', ')}</div>`:''}
         <div class="small muted" style="margin-top:2px">${felt==='ordreTimerSessions' ? (erLeveranse(o) ? 'Starter/stopper normalt automatisk (meldt på + status \"Under arbeid\") - knappen er en manuell nødløsning' : 'Starter/stopper normalt automatisk (meldt på + status \"Påbegynt\") - knappen er en manuell nødløsning') : 'Rent manuell - trykk Start når du begynner, Stopp når du er ferdig'}</div>
       </div>
       <div style="display:flex;gap:8px">
@@ -251,9 +299,14 @@ function ordreTimerKortHTML(o, felt) {
     <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
       ${sessions.slice().reverse().map((s)=>{
         const ms=(s.stopp||Date.now())-s.start;
-        return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;font-size:13px">
-          <span class="muted">${esc(s.ansatt||'?')} · ${fmtTs(s.start)} → ${s.stopp?fmtTs(s.stopp):'<span style="color:#86efac">pågår</span>'}</span>
-          <span style="font-weight:700">${fmtTime(ms)}</span>
+        const merke = ordreSesjonStoppMerke(s);
+        const glemt = glemtMerke && ordreSesjonGlemt(s);
+        // Admin kan stoppe en åpen Ombygging-økt (også en annen ansatts) og velge klokkeslettet (se apneStoppOktModal).
+        const adminStopp = erAdmin && felt==='ordreTimerSessions' && !s.stopp && s.ansattId!=null
+          ? ` <button class="btn sm" onclick="apneStoppOktModal('${o.id}',${Number(s.ansattId)})">Stopp…</button>` : '';
+        return `<div class="box" style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px">
+          <span class="muted">${esc(s.ansatt||'?')} · ${fmtTs(s.start)} → ${s.stopp?fmtTs(s.stopp):'<span style="color:#86efac">pågår</span>'}${glemt?' <span style="color:#fbbf24;font-weight:700">⚠ Glemt?</span>':''}${merke?` <span style="color:#fbbf24">· ${merke}</span>`:''}</span>
+          <span style="font-weight:700;white-space:nowrap">${fmtTime(ms)}${adminStopp}</span>
         </div>`;
       }).join('')}
     </div>`:''}`;
@@ -277,15 +330,26 @@ function sikreOrdreTimerTicking(o) {
     if ((o[felt]||[]).some(s=>!s.stopp)) startOrdreTimerTick(o.id, felt);
   });
 }
+const ordreKlokkeStarter = new Set();   // «ordre|felt» som akkurat nå startes: dobbeltrykk skal ikke gi to logglinjer
 async function startOrdreTimer(id, felt) {
   const o=S.ordrer.find(x=>x.id===id); if(!o||!me||ansattHarApenOrdreSesjon(o,felt,me.id)) return;
-  if(!o[felt]) o[felt]=[];
-  o[felt].push({start:Date.now(), stopp:null, ansattId:me.id, ansatt:me.navn});
-  logChange(o, ORDRE_TIMER_LABEL[felt]+' startet manuelt av '+me.navn);
-  const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
-  if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
-  startOrdreTimerTick(id, felt);
-  await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+  const vern = id + '|' + felt;
+  if (ordreKlokkeStarter.has(vern)) return;
+  ordreKlokkeStarter.add(vern);
+  try {
+    // Databasen avgjør (Ombygging krever at man er stemplet inn), så økta vises først når den er startet der: ingen lokal «spøkelsesøkt» som må rulles tilbake.
+    const r = await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+    if (r === 'ikke_stemplet') { visToast(ikkeStempletBeskjed(true), 'feil'); return; }
+    if (r === false) { visToast('Kunne ikke starte klokka. Prøv igjen.', 'feil'); return; }
+    const na = S.ordrer.find(x=>x.id===id);          // objektet kan ha blitt byttet ut (Realtime) mens vi ventet
+    if (na && na !== o) na[felt] = o[felt];
+    logChange(na||o, ORDRE_TIMER_LABEL[felt]+' startet manuelt av '+me.navn);
+    const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
+    if(el) el.innerHTML=ordreTimerKortHTML(na||o, felt);
+    startOrdreTimerTick(id, felt);
+  } finally {
+    ordreKlokkeStarter.delete(vern);
+  }
 }
 async function stoppOrdreTimer(id, felt) {
   const o=S.ordrer.find(x=>x.id===id); if(!o||!me||!ansattHarApenOrdreSesjon(o,felt,me.id)) return;
@@ -294,6 +358,100 @@ async function stoppOrdreTimer(id, felt) {
   const el=document.getElementById('ordretimerKort_'+felt+'_'+id);
   if(el) el.innerHTML=ordreTimerKortHTML(o, felt);
   await stoppOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+}
+
+// ── Admin stopper en åpen Ombygging-klokke og velger når den stoppet (2026-11-04) ──
+// Brukes når noen har glemt å stoppe: admin velger klokkeslettet klokka egentlig skulle stoppet (aldri før start, aldri frem i tid). Selve stoppen gjøres i databasen
+// (stopp_ordreklokker_for_ansatt), som begrenser tiden på nytt og logger «stoppet av administrator» på ordren.
+function datoTilDatetimeLocal(ms) {
+  const d = new Date(ms); const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+// Utgangspunkt for stopptiden: startet økta i dag er det nå, ellers 15:00 samme dag som den startet (begrenset til [start, nå]); admin retter til det riktige.
+function standardStoppOkt(startMs, naaMs) {
+  const naa = naaMs == null ? Date.now() : naaMs;
+  const s = new Date(startMs);
+  if (s.toDateString() === new Date(naa).toDateString()) return datoTilDatetimeLocal(naa);
+  const kl15 = new Date(s); kl15.setHours(15, 0, 0, 0);
+  return datoTilDatetimeLocal(Math.max(startMs, Math.min(kl15.getTime(), naa)));
+}
+// Ren beregning (testes uten DOM): valgt «ÅÅÅÅ-MM-DDTHH:MM» (lokal tid) mot starten og nå.
+function beregnStoppOkt(startMs, valgt, naaMs) {
+  const naa = naaMs == null ? Date.now() : naaMs;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(valgt || '')) return { feil: 'Velg dato og klokkeslett for stoppen.' };
+  const stoppMs = new Date(valgt).getTime();
+  if (isNaN(stoppMs)) return { feil: 'Ugyldig dato eller klokkeslett.' };
+  if (stoppMs > naa + 60000) return { feil: 'Stoppen kan ikke ligge frem i tid.' };
+  // Starten har sekunder (databasen setter ms), mens feltet bare har hele minutter: sammenlign mot starten avrundet NED til minutt, og aldri gi en stopp før selve starten (databasen klemmer uansett).
+  const startMin = Math.floor(startMs / 60000) * 60000;
+  if (stoppMs < startMin) return { feil: 'Stoppen må være etter at klokka startet (' + datoTilDatetimeLocal(startMs).replace('T', ' kl. ') + ').' };
+  const stopp = Math.max(stoppMs, startMs);
+  return { stoppMs: stopp, ms: stopp - startMs };
+}
+let stoppOktOrdreId = null, stoppOktAnsattId = null;
+function apneStoppOktModal(ordreId, ansattId) {
+  if (!me || me.rolle !== 'admin') return;
+  const o = S.ordrer.find(x => x.id === ordreId);
+  const s = o && (o.ordreTimerSessions || []).find(x => x.ansattId === ansattId && !x.stopp);
+  if (!s) { visToast('Klokka er allerede stoppet', 'ok'); return; }
+  stoppOktOrdreId = ordreId; stoppOktAnsattId = ansattId;
+  document.getElementById('stoppOktNavn').textContent = s.ansatt || '';
+  document.getElementById('stoppOktInfo').textContent = ordreLabelFullTekst(o) + ' · startet ' + datoTilDatetimeLocal(s.start).replace('T', ' kl. ');
+  const felt = document.getElementById('stoppOktTid');
+  felt.min = datoTilDatetimeLocal(s.start); felt.max = datoTilDatetimeLocal(Date.now());
+  felt.value = standardStoppOkt(s.start);
+  oppdaterStoppOktOppsummering();
+  openModal('stoppOkt');
+}
+// Ren tekst (uten HTML) til vindustittelen; ordreLabel() gir escapet HTML og passer ikke i textContent.
+function ordreLabelFullTekst(o) { return erLeveranse(o) ? leveranseTittel(o) : (o.regnr || (o.chassis ? 'Chassis: ' + o.chassis : 'Uten reg.nr')); }
+function oppdaterStoppOktOppsummering() {
+  const el = document.getElementById('stoppOktOppsummering'); const knapp = document.getElementById('stoppOktBekreft');
+  const o = S.ordrer.find(x => x.id === stoppOktOrdreId);
+  const s = o && (o.ordreTimerSessions || []).find(x => x.ansattId === stoppOktAnsattId && !x.stopp);
+  if (!el || !s) return;
+  const r = beregnStoppOkt(s.start, document.getElementById('stoppOktTid').value);
+  if (r.feil) { el.style.color = '#fca5a5'; el.textContent = r.feil; if (knapp) knapp.disabled = true; return; }
+  el.style.color = '#86efac';
+  el.textContent = 'Økta blir ' + fmtTime(r.ms) + ' (rå tid, før fradrag for pause og tid uten stempling).';
+  if (knapp) knapp.disabled = false;
+}
+async function bekreftStoppOkt() {
+  if (!me || me.rolle !== 'admin' || !db) return;
+  const knapp = document.getElementById('stoppOktBekreft');
+  if (knapp && knapp.disabled) return;
+  if (knapp) knapp.disabled = true;
+  try {
+    const o = S.ordrer.find(x => x.id === stoppOktOrdreId);
+    const s = o && (o.ordreTimerSessions || []).find(x => x.ansattId === stoppOktAnsattId && !x.stopp);
+    if (!s) { closeModal('stoppOkt'); visToast('Klokka er allerede stoppet', 'ok'); return; }
+    const r = beregnStoppOkt(s.start, document.getElementById('stoppOktTid').value);
+    if (r.feil) { visToast(r.feil, 'feil'); oppdaterStoppOktOppsummering(); return; }
+    const { data, error } = await db.rpc('stopp_ordreklokker_for_ansatt', { p_ansatt_id: stoppOktAnsattId, p_ordre_id: o.id, p_stopp_ms: r.stoppMs });
+    if (error) {
+      const m = String(error.message || '');
+      visToast(m.includes('STOPP_I_FREMTIDEN') ? 'Stoppen kan ikke ligge frem i tid.' : m.includes('IKKE_TILLATT') ? 'Bare administrator kan stoppe en annens klokke.' : 'Kunne ikke stoppe klokka. Prøv igjen.', 'feil');
+      console.error('Kunne ikke stoppe ordreklokka:', m); return;
+    }
+    const ny = ((data && data.ordrer) || []).find(x => x.id === o.id);
+    const stoppet = !!(data && data.antall > 0);
+    if (ny && Array.isArray(ny.sessions)) o.ordreTimerSessions = ny.sessions;
+    else if (!stoppet) {
+      // Ingenting ble stoppet: klokka var allerede stoppet (av den ansatte, automatisk eller av en annen admin) og vår kopi er utdatert. Hent de ferske øktene.
+      try {
+        const f = await db.from('ordrer').select('ordre_timer_sessions').eq('id', o.id).single();
+        if (!f.error && f.data && Array.isArray(f.data.ordre_timer_sessions)) o.ordreTimerSessions = f.data.ordre_timer_sessions;
+      } catch (e) { console.error('Kunne ikke hente ferske klokker:', e && e.message); }
+    }
+    closeModal('stoppOkt');
+    const kort = document.getElementById('ordretimerKort_ordreTimerSessions_' + o.id);
+    if (kort) kort.innerHTML = ordreTimerKortHTML(o, 'ordreTimerSessions');
+    if (typeof renderLangeOrdreklokker === 'function') renderLangeOrdreklokker();
+    if (stoppet) visToast(`Klokka til ${s.ansatt || 'den ansatte'} er stoppet (${fmtTime(r.ms)})`, 'ok');
+    else visToast('Klokka var allerede stoppet (av den ansatte, automatisk eller av en annen administrator). Tidspunktet du valgte ble ikke brukt.', 'ok');
+  } finally {
+    if (knapp) knapp.disabled = false;
+  }
 }
 
 // ════════════════════════════════════════════════════
@@ -305,27 +463,62 @@ async function stoppOrdreTimer(id, felt) {
 // beregnes EFFEKTIV tid som overlappet mellom hver økt og den aktuelle ansattes faktiske
 // stemplede arbeidstid (timer_entries), hentet direkte fra databasen (ikke S.timer, som kun
 // holder de siste 300 radene på tvers av ALLE ansatte - for lite for en lengre periode).
+// Slår sammen tidsrom {start, slutt, vekt?} som overlapper hverandre til ikke-overlappende tidsrom (sortert på start); tidsrom som bare tangerer holdes adskilt. To timeføringer som dekker
+// samme tid (funnet i dataene 2026-11-04: Ismail 2.11 og Henrik 30.9/7.10/10.10) skal ikke telle tiden to ganger. En sammenslått gruppe får vekten til det LENGSTE tidsrommet i gruppen
+// (tilnærming: hvor pausen ligger er ukjent). Tidsrom med slutt <= start (ugyldige) droppes.
+function slaaSammenTidsrom(liste) {
+  const sortert = (liste||[]).filter(x => x && x.slutt > x.start).slice().sort((a,b) => a.start - b.start || a.slutt - b.slutt);
+  const ut = [];
+  let g = null;
+  sortert.forEach(iv => {
+    const lengde = iv.slutt - iv.start;
+    if (g && iv.start < g.slutt) {
+      g.slutt = Math.max(g.slutt, iv.slutt);
+      if (lengde > g.lengste) { g.lengste = lengde; g.vekt = iv.vekt; }
+    } else {
+      if (g) ut.push({ start: g.start, slutt: g.slutt, vekt: g.vekt });
+      g = { start: iv.start, slutt: iv.slutt, vekt: iv.vekt, lengste: lengde };
+    }
+  });
+  if (g) ut.push({ start: g.start, slutt: g.slutt, vekt: g.vekt });
+  return ut;
+}
+// Effektiv tid for øktene = overlappet mellom øktene og den ansattes faktiske arbeidstid, hvor
+//  - overlappende økter for samme ansatt og overlappende arbeidstider slås sammen først (ingen dobbelttelling),
+//  - hvert arbeidstidsrom har en vekt (netto minutter / rå tid) slik at pausen som er trukket fra i lønnen også er trukket fra her (vekt mangler = 1).
 function beregnOverlappMs(sesjoner, intervaller) {
-  let totalMs = 0;
+  const perAnsatt = {};
   (sesjoner||[]).forEach(s => {
     if (s.ansattId==null) return;
-    const mine = intervaller[s.ansattId]||[];
-    const sStart = s.start, sSlutt = s.stopp||Date.now();
-    mine.forEach(iv => {
-      const overlapStart = Math.max(sStart, iv.start);
-      const overlapSlutt = Math.min(sSlutt, iv.slutt);
-      if (overlapSlutt > overlapStart) totalMs += (overlapSlutt - overlapStart);
+    (perAnsatt[s.ansattId] = perAnsatt[s.ansattId]||[]).push({ start: s.start, slutt: s.stopp||Date.now() });
+  });
+  let totalMs = 0;
+  Object.keys(perAnsatt).forEach(id => {
+    const mine = slaaSammenTidsrom((intervaller||{})[id]||[]);
+    slaaSammenTidsrom(perAnsatt[id]).forEach(s => {
+      mine.forEach(iv => {
+        const overlapMs = Math.min(s.slutt, iv.slutt) - Math.max(s.start, iv.start);
+        if (overlapMs > 0) totalMs += overlapMs * (iv.vekt == null ? 1 : iv.vekt);
+      });
     });
   });
-  return totalMs;
+  return Math.round(totalMs);
+}
+// Vekten til en timeføring: netto minutter (etter pausetrekk) delt på rå tid mellom start og stopp, aldri over 1. Mangler/ugyldig mins gir 1 (da regnes hele tidsrommet).
+function arbeidstidVekt(mins, startMs, sluttMs) {
+  const m = Number(mins);
+  if (!(m > 0) || !(sluttMs > startMs)) return 1;
+  return Math.min(1, (m * 60000) / (sluttMs - startMs));
 }
 async function hentArbeidsintervaller(ansattIder, fraDato, tilDato) {
   const intervaller = {};
   if (!db || !ansattIder.length) return intervaller;
+  // Datoene utvides med én dag på hver side: kallerne gir UTC-datoer av lokale tidspunkter, og en vakt over midnatt hører til dagen FØR.
+  const dagForskyv = (d, n) => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() + n); return x.toISOString().split('T')[0]; };
   const { data, error } = await db.from('timer_entries')
-    .select('ansatt_id,dato,start,stopp,type')
+    .select('ansatt_id,dato,start,stopp,type,mins')
     .in('ansatt_id', ansattIder).in('type', ['normal','manuell'])
-    .gte('dato', fraDato).lte('dato', tilDato);
+    .gte('dato', dagForskyv(fraDato, -1)).lte('dato', dagForskyv(tilDato, 1));
   if (error) { console.error('Kunne ikke hente arbeidsintervaller:', error.message); return intervaller; }
   (data||[]).forEach(r => {
     if (!r.start || !r.stopp || r.start==='–' || r.stopp==='–') return;
@@ -333,7 +526,20 @@ async function hentArbeidsintervaller(ansattIder, fraDato, tilDato) {
     let slutt = new Date(r.dato+'T'+r.stopp).getTime();
     if (isNaN(start) || isNaN(slutt)) return;
     if (slutt < start) slutt += 24*3600000; // vakt som krysser midnatt, føre var
-    (intervaller[r.ansatt_id] = intervaller[r.ansatt_id]||[]).push({start, slutt});
+    (intervaller[r.ansatt_id] = intervaller[r.ansatt_id]||[]).push({ start, slutt, vekt: arbeidstidVekt(r.mins, start, slutt) });
+  });
+  // En ansatt som er stemplet inn akkurat nå har ennå ingen timeføring (den lages først ved utstempling): den pågående innstemplingen telles som arbeidstid frem til nå,
+  // ellers ville en klokke som går mens man jobber vist 0 effektiv tid. Pausetrekket regnes som for en ferdig føring (30 min ved 8 t eller mer).
+  const naa = Date.now();
+  (typeof S !== 'undefined' && S.ansatte || []).forEach(a => {
+    if (!a || !a.stempletInnSiden || !ansattIder.includes(a.id)) return;
+    const start = new Date(a.stempletInnSiden).getTime();
+    if (isNaN(start) || start >= naa) return;
+    // Tak på 16 t (som admin-utstempling): en glemt utstempling (stemplet inn mandag, ikke ut) skal ikke gjøre hele natta og neste dag til «arbeidstid» frem til noen stempler ut.
+    const slutt = Math.min(naa, start + 16 * 3600000);
+    const raaMin = Math.floor((slutt - start) / 60000);
+    const vekt = typeof beregnNettoMinutter === 'function' && raaMin > 0 ? beregnNettoMinutter(raaMin).netto / raaMin : 1;
+    (intervaller[a.id] = intervaller[a.id]||[]).push({ start, slutt, vekt });
   });
   return intervaller;
 }
