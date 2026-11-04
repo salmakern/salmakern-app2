@@ -822,7 +822,11 @@ async function adminArkLagreFelter(rad, endringer) {
     }
     ({ error } = await db.from('admin_ark').update(payload).eq('id', ark.id));
   }
-  if (error) { visToast('Kunne ikke lagre: ' + error.message); return; }
+  // Rettet 4.11 (s08-058): kalleren MÅ kunne se at lagringen feilet - uten en returverdi her
+  // kjørte limet etter en mislykket chassis-lagring likevel (cellEdited under), og den grønne
+  // «Ny ordre opprettet»-meldingen overskrev den røde «Kunne ikke lagre»-toasten, så en ansatt
+  // trodde alt var lagret mens admin_ark-raden i virkeligheten manglet chassisnummeret.
+  if (error) { visToast('Kunne ikke lagre: ' + error.message); return false; }
   // "Time på biltilsynet" på selve ordren speiler alltid Time bekreftet fra Admin-ark.
   // Verkstedkalenderen (kalender_dato/kalender_tid) skal speile den samme verdien begge
   // veier - settes Time bekreftet, settes kalenderen; fjernes Time bekreftet, fjernes den
@@ -852,6 +856,7 @@ async function adminArkLagreFelter(rad, endringer) {
       if (oErr) console.error('Kunne ikke oppdatere tid_biltilsynet på ordre:', oErr.message);
     }
   }
+  return true;
 }
 
 // Kalles når én eller flere Ventende timer-verdier bekreftes over på Time bekreftet -
@@ -1449,6 +1454,13 @@ function renderAdminArk(scrollTilBunn) {
     arkElForBredde.style.width = Math.min(naturligBredde, Math.max(400, naaTilgjengelig)) + 'px';
   }
 
+  // Rettet 4.11 (s08-058, funnet i ekte bruk 1.11): en vanlig re-rendring (f.eks. rett etter at et
+  // chassisnummer nettopp ble lagret, se cellEdited under) bygger HELE tabellen på nytt (destroy +
+  // new Tabulator), som alltid starter med scrollTop 0 - uavhengig av scrollTilBunn-fristen over, som
+  // bare styrer om den TVINGES til bunnen. Uten dette hoppet arket til toppen etter hver lagring, så
+  // neste klikk på samme skjermposisjon traff en annen rad. Fanges opp FØR destroy, gjenopprettes i
+  // tableBuilt/renderComplete under (samme to steder scroll-til-bunn gjør det, av samme grunn).
+  const forrigeScrollTop = (!scrollTilBunn && adminArkTable) ? document.getElementById('adminArkTabell')?.querySelector('.tabulator-tableholder')?.scrollTop : null;
   if (adminArkTable) { adminArkTable.destroy(); adminArkTable = null; }
   adminArkTable = new Tabulator('#adminArkTabell', {
     data,
@@ -1500,6 +1512,10 @@ function renderAdminArk(scrollTilBunn) {
     adminArkOppdaterTabellBredde();
     if (adminArkSokTekst) adminArkTable.setFilter(adminArkSokFilter, {ord: adminArkSokTekst.toLowerCase().split(/\s+/).filter(Boolean)});
     if (Date.now() < scrollTilBunnFrist) scrollAdminArkTilBunn();
+    else if (forrigeScrollTop != null) {
+      const nyHolder = document.getElementById('adminArkTabell')?.querySelector('.tabulator-tableholder');
+      if (nyHolder) nyHolder.scrollTop = forrigeScrollTop;
+    }
     // "Uendelig" scroll nedover (som Excel) - fyller på 10 nye tomme rader hver gang man
     // nærmer seg bunnen av det som faktisk er lastet, i stedet for en fast øvre grense.
     // Ny lytter må settes på hver gang siden hele tabellen (og dermed elementet) bygges på
@@ -1533,6 +1549,10 @@ function renderAdminArk(scrollTilBunn) {
   adminArkTable.on('renderComplete', () => {
     adminArkOppdaterTabellBredde();
     if (Date.now() < scrollTilBunnFrist) scrollAdminArkTilBunn();
+    else if (forrigeScrollTop != null) {
+      const nyHolder = document.getElementById('adminArkTabell')?.querySelector('.tabulator-tableholder');
+      if (nyHolder) nyHolder.scrollTop = forrigeScrollTop;
+    }
   });
 
   adminArkTable.on('cellEdited', cell => {
@@ -1611,7 +1631,7 @@ function renderAdminArk(scrollTilBunn) {
       // fullt gjenoppbygg av tabellen. Bruker row.update (ikke cell.setValue) - det siste
       // trigger et nytt cellEdited-kall og ender i en unødvendig dobbel-lagring.
       adminArkLagreFelter(rad, {timeBekreftet: tolket.dato, timeBekreftetTid: tolket.tid, timeBekreftetSted: tolket.sted})
-        .then(() => cell.getRow().update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid, tolket.sted) }));
+        .then((lagret) => { if (lagret) cell.getRow().update({ timeBekreftetVis: fmtTimeBekreftetVis(tolket.dato, tolket.tid, tolket.sted) }); });
       return;
     }
 
@@ -1635,7 +1655,12 @@ function renderAdminArk(scrollTilBunn) {
     // trigget et nytt cellEdited-kall.
     const verdi = felt === 'chassisNr' ? (cell.getValue()||'').replace(/[\s-]/g, '').toUpperCase() : cell.getValue();
     adminArkLagreFelter(rad, {[felt]: verdi})
-      .then(() => {
+      .then((lagret) => {
+        // Rettet 4.11 (s08-058): en mislykket lagring (nettfeil) skal aldri trigge limet under
+        // (automatisk ordreopprettelse for et nytt chassisnummer, knapp-reformatering) - raden i
+        // admin_ark fikk jo aldri den nye verdien. visToast('Kunne ikke lagre: ...') er allerede
+        // vist av adminArkLagreFelter selv.
+        if (!lagret) return;
         // "Frakt-e-post"-kolonnen (Bestill-knappen) leser fraktselskap/bestiltFrakt fra
         // raden sin i formatteren sin, men Tabulator tegner ikke den kolonnen på nytt bare
         // fordi EN ANNEN celle i raden endret verdi - uten dette ble "Bestill"-knappen

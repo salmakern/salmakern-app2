@@ -20,18 +20,18 @@ const coreKode = readFileSync(path.resolve(__dirname, '../js/core.js'), 'utf8');
 const adminArkKode = readFileSync(path.resolve(__dirname, '../js/admin-ark.js'), 'utf8');
 
 // Enkel fake av Supabase-klientens kjedede spørringsbygger: .from(tabell).upsert(payload, opts)
-// og .from(tabell).update(payload).eq(kol, verdi) - begge "await"-bare og uten feil som standard.
-function lagFakeDb(kall) {
+// og .from(tabell).update(payload).eq(kol, verdi) - begge "await"-bare, og feiler hvis `feil` er satt.
+function lagFakeDb(kall, feil = null) {
   return {
     from(tabell) {
       return {
         upsert(payload, opts) {
           kall.push({ tabell, type: 'upsert', payload, opts });
-          return Promise.resolve({ error: null });
+          return Promise.resolve({ error: feil });
         },
         update(payload) {
           kall.push({ tabell, type: 'update', payload });
-          return { eq: (kol, verdi) => { kall[kall.length - 1].eq = [kol, verdi]; return Promise.resolve({ error: null }); } };
+          return { eq: (kol, verdi) => { kall[kall.length - 1].eq = [kol, verdi]; return Promise.resolve({ error: feil }); } };
         },
       };
     },
@@ -43,7 +43,7 @@ function nyEnvironment() {
     console, Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     window: { addEventListener() {}, location: { hostname: 'localhost' } },
-    document: { addEventListener() {}, getElementById() { return null; }, createElement() { return { style: {}, appendChild(){} }; }, head: { appendChild() {} } },
+    document: { addEventListener() {}, getElementById() { return null; }, createElement() { return { style: {}, appendChild(){}, classList: { add() {}, remove() {} } }; }, head: { appendChild() {} }, body: { appendChild() {} } },
     location: { hostname: 'localhost' },
     setInterval() {}, clearInterval() {}, setTimeout(fn) { fn(); }, clearTimeout() {}
   };
@@ -52,6 +52,7 @@ function nyEnvironment() {
   vm.runInContext(adminArkKode, sandbox, { filename: 'admin-ark.js' });
   vm.runInContext(`
     function _setS(v){ S = v; }
+    function _getS(){ return S; }
     function _setDb(v){ db = v; }
     function _setMe(v){ me = v; }
     function _setAdminArkTable(v){ adminArkTable = v; }
@@ -130,6 +131,48 @@ describe('adminArkLagreFelter: tom reserverad vs. ekte databaserad', () => {
 
     expect(kall).toHaveLength(1);
     expect(kall[0].type).toBe('upsert');
+  });
+});
+
+// Regresjon s08-058 (funnet 1.11): adminArkLagreFelter ga ingen returverdi kallere kunne bruke
+// til å se at lagringen faktisk feilet - cellEdited-limet (bl.a. automatisk ordreopprettelse for
+// et nytt chassisnummer) kjørte likevel, og en grønn "Ny ordre opprettet"-melding kunne overskrive
+// den røde feilmeldingen. Rettet 4.11: funksjonen returnerer nå true/false.
+describe('adminArkLagreFelter: returverdi (true/false) så kalleren kan hoppe over limet ved feil', () => {
+  it('returnerer true etter en vellykket lagring (ny rad, UPSERT)', async () => {
+    const sandbox = nyEnvironment();
+    sandbox._setS({ ordrer: [], adminArk: [] });
+    sandbox._setDb(lagFakeDb([]));
+    const rad = { _arkId: null, _erOrdre: false, chassisNr: 'TESTWXYZ000000007' };
+    await expect(sandbox.adminArkLagreFelter(rad, { chassisNr: 'TESTWXYZ000000007' })).resolves.toBe(true);
+  });
+
+  it('returnerer true etter en vellykket lagring (eksisterende rad, UPDATE)', async () => {
+    const sandbox = nyEnvironment();
+    const ekteRad = sandbox.dbToAdminArkRad({ id: 'ark_ok_1', chassis_nr: 'TESTWXYZ000000008', aar: 2026, rekkefolge: 1, arkivert: false });
+    sandbox._setS({ ordrer: [], adminArk: [ekteRad] });
+    sandbox._setDb(lagFakeDb([]));
+    const rad = { _arkId: 'ark_ok_1', _erOrdre: false, chassisNr: 'TESTWXYZ000000008' };
+    await expect(sandbox.adminArkLagreFelter(rad, { merknader: 'x' })).resolves.toBe(true);
+  });
+
+  it('returnerer false (og viser toast) når UPSERT (ny rad) feiler - raden er IKKE markert lagret', async () => {
+    const sandbox = nyEnvironment();
+    sandbox._setS({ ordrer: [], adminArk: [] });
+    sandbox._setDb(lagFakeDb([], { message: 'nettverksfeil' }));
+    const rad = { _arkId: null, _erOrdre: false, chassisNr: 'TESTWXYZ000000009' };
+    await expect(sandbox.adminArkLagreFelter(rad, { chassisNr: 'TESTWXYZ000000009' })).resolves.toBe(false);
+    const ark = sandbox._getS().adminArk.find((r) => r.chassisNr === 'TESTWXYZ000000009');
+    expect(ark._db).toBeUndefined();
+  });
+
+  it('returnerer false når UPDATE (eksisterende rad) feiler', async () => {
+    const sandbox = nyEnvironment();
+    const ekteRad = sandbox.dbToAdminArkRad({ id: 'ark_feil_1', chassis_nr: 'TESTWXYZ000000010', aar: 2026, rekkefolge: 1, arkivert: false });
+    sandbox._setS({ ordrer: [], adminArk: [ekteRad] });
+    sandbox._setDb(lagFakeDb([], { message: 'nettverksfeil' }));
+    const rad = { _arkId: 'ark_feil_1', _erOrdre: false, chassisNr: 'TESTWXYZ000000010' };
+    await expect(sandbox.adminArkLagreFelter(rad, { merknader: 'x' })).resolves.toBe(false);
   });
 });
 
