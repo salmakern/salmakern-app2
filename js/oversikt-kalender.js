@@ -183,6 +183,7 @@ function renderOversikt(q) {
   renderMoterListe();
   renderStempletInnNa();
   renderLangeOrdreklokker();
+  renderKlarTilFakturering();
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
   const mnd = now.getMonth(), yr = now.getFullYear();
@@ -307,6 +308,51 @@ function renderLangeOrdreklokker() {
       </div>`;
     }).join('');
   } catch (e) { console.error('renderLangeOrdreklokker feilet:', e && e.message); kort.style.display = 'none'; }
+}
+
+// "Klar til fakturering" (s90-20261104-5 steg 2, avtalt rekkefølge for fakturering/lager,
+// 5.11): REN LESEVISNING - viser bare status, gjør ALDRI noe automatisk (ingen bulk-knapp,
+// ingen auto-fakturering). Grønn/gul/rød per ordre kommer fra samme fakturaSjekk(o)
+// (ordre-detalj.js) som faktisk blokkerer fakturerViaFiken - én kilde til sannhet, se
+// kommentaren ved fakturaSjekk for hvorfor. Admin-only (samme mønster som
+// renderStempletInnNa/renderLangeOrdreklokker over). Hver ordre i egen try/catch - en
+// uventet verdi på én ordre skal aldri blanke hele lista for alle (samme isolering som
+// Ordre-lista/renderLangeOrdreklokker).
+function renderKlarTilFakturering() {
+  const kort = document.getElementById('klarTilFaktureringKort');
+  const liste = document.getElementById('klarTilFaktureringListe');
+  if (!kort || !liste) return;
+  const erAdmin = me && me.rolle === 'admin';
+  kort.style.display = erAdmin ? 'block' : 'none';
+  if (!erAdmin) return;
+  try {
+    // Ordre klare til visning/henting (vanlig vei inn i fakturering) OG allerede hentede som
+    // ennå ikke er fakturert ("ikke avstemt" - fakturert tidligere via den gamle, manuelle
+    // veien, eller rett og slett ikke fakturert ennå - lista sier ikke hvilket, bare at den
+    // bør sjekkes). Leveranser har sin egen fakturerings-/arkiveringsflyt (leveranse.js) og
+    // tas ikke med her.
+    const kandidater = (S.ordrer||[]).filter(o => !erLeveranse(o) && o.status === 'aktiv' && !o.fakturert && ['klar_henting','vist_biltilsyn','hentet'].includes(o.ordreStatus));
+    if (!kandidater.length) { liste.innerHTML = '<div class="muted small">Ingen ordre venter på fakturering</div>'; return; }
+    const FARGE = { rod: '#ef4444', gul: '#facc15', gronn: '#22c55e' };
+    const RANG = { rod: 0, gul: 1, gronn: 2 };
+    const rader = kandidater.map(o => {
+      try { return { o, sjekk: fakturaSjekk(o) }; }
+      catch (e) { console.error('fakturaSjekk feilet for ordre ' + o.id + ':', e && e.message); return { o, sjekk: { niva: 'gul', grunner: [{ kode: 'feil', tekst: 'Kunne ikke sjekkes - se konsollen' }] } }; }
+    }).sort((a, b) => RANG[a.sjekk.niva] - RANG[b.sjekk.niva]);
+    liste.innerHTML = rader.map(({ o, sjekk }) => {
+      try {
+        const farge = FARGE[sjekk.niva] || FARGE.gul;
+        const grunnTekst = sjekk.grunner.map(g => esc(g.tekst)).join(' · ') || 'Klar til fakturering';
+        return `<div class="box" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;border-left:4px solid ${farge};cursor:pointer" onclick="openOrdre('${o.id}')">
+          <span style="width:10px;height:10px;border-radius:50%;background:${farge};flex-shrink:0;margin-top:4px"></span>
+          <div style="min-width:0">
+            <div><b>${esc(ordreLabelFull(o))}</b></div>
+            <div class="small muted">${grunnTekst}</div>
+          </div>
+        </div>`;
+      } catch (e) { return ordreKortFeilHTML(o, e); }
+    }).join('');
+  } catch (e) { console.error('renderKlarTilFakturering feilet:', e && e.message); kort.style.display = 'none'; }
 }
 
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }

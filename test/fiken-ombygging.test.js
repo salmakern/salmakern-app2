@@ -23,8 +23,9 @@ function nyEnvironment() {
     console, Math, Date, JSON, Array, Object, String, Number, Boolean, Set, Map, Promise, RegExp,
     document: { addEventListener() {}, getElementById() { return null; } },
     window: { addEventListener() {} },
-    S: { ordrer: [] },
+    S: { ordrer: [], fikenKundeAlias: [], fikenKundeRabatt: [] },
     activeOrdreId: null,
+    me: null,
     save() {},
     planleggLocalSpeiling() {},
     db: null,
@@ -325,5 +326,153 @@ describe('ombyggingBoksHTML: varsel når Merke/Modell avviker fra portalens mode
     // bare avviks-varselet, siden fakturering uansett bruker kanonisk tekst og fungerer fint.
     expect(html).not.toMatch(/Ingen kjent Fiken-produktlinje/);
     expect(html).toMatch(/stemmer ikke med modellen fra portal-bestillingen/);
+  });
+});
+
+// s90-20261104-5 steg 2 (avtalt rekkefølge for fakturering/lager, 5.11): fakturaSjekk(o) er den
+// DELTE sjekken bak både "Klar til fakturering"-lista og selve blokkeringen i fakturerViaFiken -
+// se kommentaren ved funksjonen (ordre-detalj.js) for bakgrunnen (funnet av uavhengig
+// gjennomgang 4.11: fakturerViaFiken brukte fritekst merke/modell i stedet for
+// kanoniskMerkeModell, så en portal-ordre for en modell uten hardkodet regex-match kunne bli
+// blokkert selv om ombyggingslinjen kom riktig fra bestillingen).
+describe('fakturaSjekk', () => {
+  function basisOrdre(overrides = {}) {
+    return {
+      id: 'ord_1', merke: 'KIA', modell: 'EV9', kunde: 'Test Kunde AS', ordreStatus: 'klar_henting',
+      ombygging: { nyttKjoretoy: false, bruktKjoretoy: false },
+      fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high', rabatt: 20 }],
+      ...overrides,
+    };
+  }
+
+  it('ingen fakturalinjer: rød, stopper rett der (ingen andre sjekker kjøres)', () => {
+    const env = nyEnvironment();
+    const sjekk = env.fakturaSjekk(basisOrdre({ fikenLinjer: [] }));
+    expect(sjekk.niva).toBe('rod');
+    expect(sjekk.grunner).toEqual([{ kode: 'ingen_linjer', tekst: 'Ingen fakturalinjer' }]);
+  });
+
+  it('ombygging huket av, modellen er ukjent (fritekst): rød', () => {
+    const env = nyEnvironment();
+    const o = basisOrdre({ merke: 'Ukjent', modell: 'Modell', ombygging: { nyttKjoretoy: true } });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.niva).toBe('rod');
+    expect(sjekk.grunner.some((g) => g.kode === 'ukjent_modell')).toBe(true);
+  });
+
+  it('ombygging huket av, fritekst er ukjent MEN portal-slug gir en kjent kanonisk modell: IKKE rød (selve fiksen 5.11)', () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = basisOrdre({ merke: 'Skrivefeil', modell: 'xyz', portalModellSlug: 'kia-ev9', ombygging: { nyttKjoretoy: true } });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'ukjent_modell')).toBe(false);
+  });
+
+  it('ingen kunde: rød', () => {
+    const env = nyEnvironment();
+    const sjekk = env.fakturaSjekk(basisOrdre({ kunde: '' }));
+    expect(sjekk.niva).toBe('rod');
+    expect(sjekk.grunner.some((g) => g.kode === 'ingen_kunde')).toBe(true);
+  });
+
+  it('en linje uten frosset pris (og ikke et overstyrt beløp): gul', () => {
+    const env = nyEnvironment();
+    const o = basisOrdre({ fikenLinjer: [{ produktnummer: '502', antall: 1, rabatt: 20 }] });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.niva).toBe('gul');
+    expect(sjekk.grunner.find((g) => g.kode === 'uten_frosset_pris').tekst).toMatch(/1 linje/);
+  });
+
+  it('et overstyrt beløp (f.eks. drivstoff) trenger ingen frosset pris: ikke gul for det', () => {
+    const env = nyEnvironment();
+    const o = basisOrdre({ fikenLinjer: [{ produktnummer: '21', antall: 1, belop: 500 }] });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'uten_frosset_pris')).toBe(false);
+  });
+
+  it('kunde satt, men ingen alias registrert i Fiken ennå: gul', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'En annen kunde', fiken_contact_id: 1 }];
+    const sjekk = env.fakturaSjekk(basisOrdre());
+    expect(sjekk.niva).toBe('gul');
+    expect(sjekk.grunner.some((g) => g.kode === 'ukjent_fiken_kunde')).toBe(true);
+  });
+
+  it('alias finnes, men ingen avtalt rabatt og linjen mangler frosset rabatt: gul', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    const o = basisOrdre({ fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high' }] }); // ingen rabatt-felt
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'ingen_avtalt_rabatt')).toBe(true);
+  });
+
+  it('alias finnes og en avtalt rabatt-rad finnes: ingen rabatt-advarsel selv uten frosset rabatt på linjen', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
+    const o = basisOrdre({ fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high' }] });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'ingen_avtalt_rabatt')).toBe(false);
+  });
+
+  it('linjen har en frosset rabatt (portal-ordre): ingen rabatt-advarsel, selv uten kjent alias/rabattrad', () => {
+    const env = nyEnvironment();
+    const sjekk = env.fakturaSjekk(basisOrdre()); // basisOrdre sin linje har rabatt:20, ingen alias satt opp
+    expect(sjekk.grunner.some((g) => g.kode === 'ingen_avtalt_rabatt')).toBe(false);
+  });
+
+  it('ordre allerede "hentet": merkes "ikke avstemt", men blir ikke rød av bare det', () => {
+    const env = nyEnvironment();
+    const sjekk = env.fakturaSjekk(basisOrdre({ ordreStatus: 'hentet' }));
+    expect(sjekk.niva).toBe('gul');
+    expect(sjekk.grunner.some((g) => g.kode === 'ikke_avstemt')).toBe(true);
+  });
+
+  it('alt i orden: grønn, ingen grunner', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
+    const sjekk = env.fakturaSjekk(basisOrdre());
+    expect(sjekk).toEqual({ niva: 'gronn', grunner: [] });
+  });
+});
+
+// fakturerViaFiken bruker nå fakturaSjekk() for selve blokkeringen (samme funksjon som "Klar
+// til fakturering"-lista viser) - dekker at den faktiske GATEN er rettet, ikke bare at
+// fakturaSjekk() i isolasjon er riktig (se testene over).
+describe('fakturerViaFiken: blokkering bruker fakturaSjekk (kanoniskMerkeModell), ikke fritekst direkte', () => {
+  it('stopper IKKE lenger en portal-ordre med ukjent fritekst merke/modell når portal-sluggen er en kjent modell (den faktiske bugen fra 4.11)', async () => {
+    const env = nyEnvironment();
+    env.S.portalModellKobling = [{ portal_modell_slug: 'kia-ev9', merke: 'KIA', modell: 'EV9' }];
+    const o = {
+      id: 'ord_1', merke: 'Skrivefeil', modell: 'xyz', portalModellSlug: 'kia-ev9', kunde: 'Test Kunde AS',
+      ombygging: { nyttKjoretoy: true }, fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high', rabatt: 20 }],
+    };
+    env.S.ordrer = [o];
+    env.me = { id: 1, navn: 'Test Admin', rolle: 'admin' };
+    const toaster = [];
+    env.visToast = (m) => toaster.push(m);
+    env.document.getElementById = () => null; // ingen knapp/avkrysning i DOM i denne testen
+    env.kallFikenFakturer = async () => 'ok'; // selve Fiken-kallet er ikke det denne testen dekker
+    await env.fakturerViaFiken('ord_1');
+    expect(toaster.some((m) => /Ingen kjent Fiken-produktlinje/.test(m))).toBe(false);
+  });
+
+  it('stopper fortsatt en ordre med ekte ukjent modell (ombygging huket av, ingen portal-slug)', async () => {
+    const env = nyEnvironment();
+    const o = {
+      id: 'ord_1', merke: 'Helt', modell: 'Ukjent', kunde: 'Test Kunde AS',
+      ombygging: { nyttKjoretoy: true }, fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high', rabatt: 20 }],
+    };
+    env.S.ordrer = [o];
+    env.me = { id: 1, navn: 'Test Admin', rolle: 'admin' };
+    const toaster = [];
+    env.visToast = (m) => toaster.push(m);
+    env.document.getElementById = () => null;
+    let kalt = false;
+    env.kallFikenFakturer = async () => { kalt = true; return 'ok'; };
+    await env.fakturerViaFiken('ord_1');
+    expect(toaster.some((m) => /Ingen kjent Fiken-produktlinje/.test(m))).toBe(true);
+    expect(kalt).toBe(false);
   });
 });

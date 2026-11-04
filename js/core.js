@@ -377,6 +377,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.hmsAvvik             = S.hmsAvvik             || [];
     S.hmsRisikovurderinger = S.hmsRisikovurderinger || [];
     S.hmsStoffkartotek     = S.hmsStoffkartotek     || [];
+    S.fikenKundeAlias      = S.fikenKundeAlias      || [];
+    S.fikenKundeRabatt     = S.fikenKundeRabatt     || [];
     S.hmsVernerunder       = S.hmsVernerunder       || [];
     S.hmsVernerundeMal     = S.hmsVernerundeMal     || null;
     S.hmsHandbok           = S.hmsHandbok           || null;
@@ -423,12 +425,17 @@ async function hentAlleRader(lagSporring, sideStorrelse = 1000) {
 }
 
 async function loadFromSupabase() {
-  const [aR,oR,tR,sR,pmkR] = await Promise.all([
+  const [aR,oR,tR,sR,pmkR,fkaR,fkrR] = await Promise.all([
     db.from('ansatte').select('*').order('id'),
     hentAlleRader(() => db.from('ordrer').select('*').order('created_at').order('id')),
     hentAlleRader(() => db.from('timer_entries').select('*').order('created_at',{ascending:false}).order('id')),
     db.from('innstillinger').select('*').eq('id',1).maybeSingle(),
-    db.rpc('hent_portal_modell_kobling')
+    db.rpc('hent_portal_modell_kobling'),
+    // Kun lesbare for admin (RLS) - svarer tomt for andre roller, helt greit siden "Klar til
+    // fakturering"/fakturaSjekk() (s90-20261104-5 steg 2) uansett bare er relevant for admin,
+    // som er de eneste som kan fakturere (TILLATTE_ROLLER i fiken-fakturer).
+    db.from('fiken_kunde_alias').select('alias, fiken_contact_id'),
+    db.from('fiken_kunde_rabatt').select('fiken_contact_id, rabatt_ombygging, rabatt_ekstra_utstyr')
   ]);
   // VIKTIG: må sjekkes for ALLE spørringer, ikke bare ansatte - hvis f.eks. ordre-
   // spørringen feiler forbigående (nettverksglipp, sesjonsfornyelse etter lang pause
@@ -445,6 +452,13 @@ async function loadFromSupabase() {
   // ikke kritisk nok til å kaste og blokkere hele innlastingen for det.
   if (pmkR.error) console.error('Henting av portal-modellkobling feilet:', pmkR.error.message);
   S.portalModellKobling = pmkR.data || [];
+  // Ikke-kritisk (bare admin-tilgjengelig, RLS) - en feilende lesing (gammel PWA-cache uten
+  // disse spørringene, forbigående nettfeil) skal bare gi en tom liste, ikke kaste og blokkere
+  // hele innlastingen for det (samme prinsipp som portalModellKobling over).
+  if (fkaR.error) console.error('Henting av fiken_kunde_alias feilet:', fkaR.error.message);
+  S.fikenKundeAlias = fkaR.data || [];
+  if (fkrR.error) console.error('Henting av fiken_kunde_rabatt feilet:', fkrR.error.message);
+  S.fikenKundeRabatt = fkrR.data || [];
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
   const prevTimer  = S.timer  ? [...S.timer]  : [];

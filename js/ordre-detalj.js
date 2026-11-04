@@ -742,17 +742,77 @@ async function kallFikenFakturer(id, ekstra) {
   }
 }
 
+// s90-20261104-5 steg 2 (avtalt rekkefølge for fakturering/lager, 5.11): ÉN delt sjekk brukt
+// BÅDE av "Klar til fakturering"-lista (renderKlarTilFakturering, oversikt-kalender.js, ren
+// lesevisning) OG av selve blokkeringen i fakturerViaFiken under - før dette hadde de to
+// stedene HVER SIN logikk, og fakturerViaFiken sin brukte ordrens frie merke/modell-tekst
+// (finnFikenOmbyggingModell(o.merke, o.modell)) i stedet for den nyere, portal-slug-bevisste
+// kanoniskMerkeModell() som resten av appen (synkroniserOmbyggingFikenLinjer) bruker siden
+// s09-012 steg 2 - en portal-ordre for en modell UTEN hardkodet regex-match (f.eks. Toyota
+// Land Cruiser 150, Dodge Durango) kunne dermed bli blokkert fra fakturering selv om
+// ombyggingslinjen kom riktig fra selve bestillingen (funnet av uavhengig gjennomgang 4.11,
+// s90-20261104-6). Returnerer { niva: 'gronn'|'gul'|'rod', grunner: [{kode, tekst}] } - 'rod'
+// er ting som faktisk stopper/bør stoppe fakturering, 'gul' er informasjon en admin bør se
+// over selv (ingen av 'gul'-funnene endrer dagens fakturerings-OPPFØRSEL - bare synliggjør
+// den, se s90-20261104-6 for de faktiske rettelsene som gjenstår i senere steg).
+function fakturaSjekk(o) {
+  const grunner = [];
+  let niva = 'gronn';
+  const leggTil = (kode, tekst, ny) => { grunner.push({ kode, tekst }); if (ny === 'rod') niva = 'rod'; else if (ny === 'gul' && niva !== 'rod') niva = 'gul'; };
+
+  if (!o.fikenLinjer || !o.fikenLinjer.length) {
+    leggTil('ingen_linjer', 'Ingen fakturalinjer', 'rod');
+    return { niva, grunner };
+  }
+
+  const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
+  if (erOmbyggingValgt) {
+    const kan = kanoniskMerkeModell(o);
+    if (!finnFikenOmbyggingModell(kan.merke, kan.modell)) {
+      leggTil('ukjent_modell', `Ingen kjent Fiken-produktlinje for «${kan.merke||''} ${kan.modell||''}»`.trim() + ' - ombyggingslinjen mangler', 'rod');
+    }
+  }
+
+  if (!o.kunde) leggTil('ingen_kunde', 'Kunde mangler på ordren', 'rod');
+
+  const utenFrossetPris = (o.fikenLinjer||[]).filter(l => {
+    const erOverstyrtBelop = l.belop !== undefined && l.belop !== null;
+    return !erOverstyrtBelop && !(typeof l.pris === 'number' && l.pris > 0);
+  });
+  if (utenFrossetPris.length) leggTil('uten_frosset_pris', `${utenFrossetPris.length} linje(r) uten frosset pris - Fiken sin pris akkurat nå blir brukt`, 'gul');
+
+  // S.fikenKundeAlias/S.fikenKundeRabatt lastes i loadFromSupabase() (kun lesbare for admin via
+  // RLS - uendret for andre roller, de kan ikke fakturere uansett). Kan være udefinert/tomt
+  // (f.eks. gammel PWA-cache uten denne lastingen ennå) - da hoppes denne delen bare over,
+  // akkurat som portalModellKobling allerede gjør ved feilende lasting.
+  const alias = o.kunde ? (S.fikenKundeAlias||[]).find(a => a.alias === o.kunde) : null;
+  if (o.kunde && (S.fikenKundeAlias||[]).length && !alias) {
+    leggTil('ukjent_fiken_kunde', 'Ukjent kunde i Fiken ennå - må velges manuelt ved fakturering', 'gul');
+  } else if (alias) {
+    const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
+    const rabattRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
+    if (manglerFrossetRabatt && !rabattRad) leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
+  }
+
+  // «Hentet»-ordre fakturert FØR denne sjekken fantes (s90-20261104-5, avtalt med Henrik:
+  // disse tas med merket slik, uten bulk-handling og uten automatikk).
+  if (o.ordreStatus === 'hentet') leggTil('ikke_avstemt', 'Hentet før denne sjekken fantes - ikke avstemt', niva === 'rod' ? 'rod' : 'gul');
+
+  return { niva, grunner };
+}
+
 async function fakturerViaFiken(id) {
   if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer || !o.fikenLinjer.length) { visToast('Legg til minst én fakturalinje først'); return; }
-  // Stopper fakturering helt hvis ombygging er huket av men modellen ikke har noen kjent
-  // Fiken-produktlinje (se ombyggingBoksHTML) - ellers kunne ordren bli fakturert med andre
-  // linjer (utstyr, drivstoff) men uten selve ombyggingsjobben, uten at noen oppdaget det
-  // før fakturaen allerede var sendt (funnet 2026-10-14).
-  const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
-  if (erOmbyggingValgt && !finnFikenOmbyggingModell(o.merke, o.modell)) {
-    visToast(`Ingen kjent Fiken-produktlinje for "${o.merke||''} ${o.modell||''}" - ombyggingslinjen mangler. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.`);
+  // Stopper fakturering helt ved en 'rod'-grunn (i dag kun: ombygging huket av men modellen
+  // har ingen kjent Fiken-produktlinje) - samme sjekk (fakturaSjekk) som "Klar til
+  // fakturering"-lista viser, se kommentaren der for hvorfor dette er delt (funnet 2026-10-14,
+  // rettet til å bruke kanoniskMerkeModell 5.11).
+  const sjekk = fakturaSjekk(o);
+  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde');
+  if (stopper) {
+    visToast(stopper.tekst + (stopper.kode === 'ukjent_modell' ? ' - legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.' : '.'));
     return;
   }
   fikenFaktureringBrukRabatt = document.getElementById('brukRabatt_'+id)?.checked ?? true;
