@@ -45,7 +45,11 @@
 // v22 - s08-048 grunnlag: Bekreft av en portal-ordre kan fylle «Skal ha etter visning» og
 // fiken_linjer fra bestillingens produktlinjer (o.portalLinjer) - helt inert til
 // portal_koble_bestilling v5 og portal-bestilling faktisk sender feltet (2026-10-31)
-const CACHE = 'salmakern-v41';
+// v42 - steg 2+3 i fakturering/sikkerhet (Henrik 5.11, via portal-økta): "Klar til
+// fakturering"-kortet på Oversikt + delt fakturaSjekk(o) (26ee3ef), og tre pengefeller rettet i
+// ordre-detalj.js - "Bekreft kunde for Fiken-faktura" overskriver ikke lenger en avtalt rabatt,
+// og «Fakturert»-avkrysningen har nå en bekreftelsesdialog og lagrer leveranse-arkivering riktig
+const CACHE = 'salmakern-v42';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
