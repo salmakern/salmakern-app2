@@ -117,13 +117,25 @@ Deno.serve(async (req) => {
       // ALDRI skal gi e-post (de har også egen vakt mot dette, men riktig her også).
       let sendEpost = rad.status_forrige !== null && !!rad.ordrer?.portal_bekreftet_at && !trengerEpostAlltidFalse(rad.status)
       if (sendEpost && rad.status === 'klar_henting' && chassis) {
-        const { data: arkRad } = await supabase
-          .from('admin_ark')
-          .select('fraktselskap, bestilt_frakt, frakt_forberedt_at')
-          .ilike('chassis_nr', chassis.trim())
-          .maybeSingle()
-        if (arkRad && arkRad.fraktselskap === 'Hente selv' && (arkRad.bestilt_frakt === true || arkRad.frakt_forberedt_at !== null)) {
-          sendEpost = false
+        // Rettet 4.11 (funn fra portal-økta, bekreftet mot ekte produksjonsdata): noen chassis har
+        // FLERE admin_ark-rader (arkivert + aktiv), og .maybeSingle() kaster da en feil - uten denne
+        // try/catch-en ville det veltet HELE kjøringen (alle inntil 100 køede rader i denne batchen),
+        // ikke bare denne ene raden. Filtrerer nå på ikke-arkivert (samme vilkår som triggeren
+        // ordre-frakt-forbered) og bruker limit(1) i stedet for maybeSingle. Fail-open ved feil: en
+        // usikker undertrykking (dobbel e-post i verste fall) er bedre enn å stoppe hele batchen.
+        try {
+          const { data: arkRader } = await supabase
+            .from('admin_ark')
+            .select('fraktselskap, bestilt_frakt, frakt_forberedt_at')
+            .eq('arkivert', false)
+            .ilike('chassis_nr', chassis.trim())
+            .limit(1)
+          const arkRad = arkRader?.[0]
+          if (arkRad && arkRad.fraktselskap === 'Hente selv' && (arkRad.bestilt_frakt === true || arkRad.frakt_forberedt_at !== null)) {
+            sendEpost = false
+          }
+        } catch (_e) {
+          // usikker undertrykking, fortsetter med sendEpost uendret - se kommentar over
         }
       }
 
