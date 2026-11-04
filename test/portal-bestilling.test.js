@@ -654,6 +654,13 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
     }
   });
 
+  // Flaket i CI 4.11 (Vitests standard 5000ms-testtidsavbrudd, ikke appens 6 s-logikk): last()
+  // skriver en midlertidig fil og gjør en EKTE dynamisk import (fil-I/O + transform) mens
+  // vi.useFakeTimers() er aktiv - det tar ekte klokketid som fake timers ikke kan gjøre noe med,
+  // og på en treg/delt CI-maskin kan summen av det og 20 × advanceTimersByTimeAsync(1000) sjelden
+  // overstige 5 s selv om selve retry-løkka (som skyver klokka til tidsavbruddet faktisk er
+  // registrert) er riktig. Gir testen en romslig egen grense i stedet for å gjette på hvor treg
+  // importen kan bli - samme funn verifisert mot GitHub Actions-loggen for den feilede kjøringen.
   it('push: henger databasen, gir push-steget opp etter 6 s og portalen får likevel sitt svar', async () => {
     vi.useFakeTimers();
     try {
@@ -669,7 +676,7 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og falsk supa
     } finally {
       vi.useRealTimers();
     }
-  });
+  }, 20000);
 
   it('push: bestilling_id med mellomrom i kantene claimes på samme trimmede verdi som Postgres bruker', async () => {
     const t = await last({ env: VAPID, tabeller: pushTabeller() });
