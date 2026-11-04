@@ -207,13 +207,13 @@ describe('fiken-fakturer: frosset rabatt vinner over kundens fiken_kunde_rabatt 
     expect(l.discount).toBe(15);
   });
 
-  it('frosset rabatt gjelder selv med brukRabatt:false (flagget styrer kun kategori-satsene)', async () => {
+  it('brukRabatt:false nuller ALLTID rabatten, også på en linje med frosset portal-rabatt (rettet 5.11 - "Bruk kundens avtalte rabatt" gjelder nå hele fakturaen, ikke bare kategori-satsene)', async () => {
     const svar = {
       fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
       fiken_kunde_rabatt: { data: { rabatt_ombygging: 50, rabatt_ekstra_utstyr: 50 }, error: null },
     };
     const [l] = await hentLinjer({ svar }, standardBody([linje('100', { rabatt: 12 })], { brukRabatt: false }));
-    expect(l.discount).toBe(12);
+    expect(l.discount).toBeUndefined();
   });
 
   it('to linjer samtidig: hver linje sin EGEN frosset rabatt brukes uavhengig av den andre', async () => {
@@ -227,6 +227,69 @@ describe('fiken-fakturer: frosset rabatt vinner over kundens fiken_kunde_rabatt 
     ]));
     expect(linjer[0].discount).toBe(7);
     expect(linjer[1].discount).toBe(13);
+  });
+});
+
+describe('fiken-fakturer: NULL i fiken_kunde_rabatt blokkerer fakturering i stedet for å anta 0% (rettet 5.11, pengefelle-fiks)', () => {
+  it('rabatt_ombygging er NULL (raden finnes, men ombygging er aldri avtalt): 400, ingen kladd opprettet', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: null, rabatt_ekstra_utstyr: 10 }, error: null },
+    };
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')])); // ombygging-produkt, ingen frosset rabatt
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/ombygging-rabatt er ikke satt/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('rabatt_ekstra_utstyr er NULL: 400 for en ekstra-utstyr-linje, men en ombygging-linje alene (kjent sats) går gjennom', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: null }, error: null },
+    };
+    const { kall } = await last({ svar });
+    const res = await kall(standardBody([linje('200')])); // ekstra utstyr
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/rabatt for ekstra utstyr er ikke satt/);
+
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')])); // bare ombygging - kjent sats
+    expect(l.discount).toBe(20);
+  });
+
+  it('NULL-kolonnen stopper IKKE en linje som har sin EGEN frosne rabatt (trenger aldri kategori-satsen)', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: null, rabatt_ekstra_utstyr: null }, error: null },
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100', { rabatt: 15 })]));
+    expect(l.discount).toBe(15);
+  });
+
+  it('NULL-kolonnen stopper IKKE en overstyrt-beløp-linje (drivstoff) som aldri bruker kategori-satsen', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: null, rabatt_ekstra_utstyr: null }, error: null },
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('21', { belop: 500 })]));
+    expect(l.discount).toBeUndefined();
+  });
+
+  it('ingen rad i fiken_kunde_rabatt i det hele tatt (aldri avtalt noe): fortsatt trygt å anta 0%, IKKE blokkert', async () => {
+    const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } }; // ingen fiken_kunde_rabatt-rad
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')]));
+    expect(l.discount).toBeUndefined();
+  });
+
+  it('brukRabatt:false hopper over NULL-sjekken helt (kategori-satsen trengs aldri når rabatten uansett nulles)', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: null, rabatt_ekstra_utstyr: null }, error: null },
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')], { brukRabatt: false }));
+    expect(l.discount).toBeUndefined();
   });
 });
 

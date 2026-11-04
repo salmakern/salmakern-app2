@@ -276,7 +276,12 @@ Deno.serve(async (req) => {
     }
 
     // Avtalt rabatt per kunde - kun forhåndsutfylt der historikken var konsekvent (se
-    // fiken_kunde_rabatt-migrasjonen), NULL/mangler rad betyr 0% til Henrik setter en verdi.
+    // fiken_kunde_rabatt-migrasjonen). Mangler HELE raden: aldri avtalt noe for denne kunden,
+    // trygt å anta 0%. Finnes raden, men ÉN av de to kolonnene er NULL: noen har satt opp den
+    // ENE satsen (f.eks. ombygging) men aldri tatt stilling til den andre (ekstra utstyr) -
+    // IKKE det samme som "avtalt 0%", og skal ALDRI stille anta 0% (rettet 5.11, uavhengig
+    // sikkerhetsgjennomgang: 68 av 100 rader i fiken_kunde_rabatt har NULL i minst én kolonne).
+    // Stopper fakturering HELT i stedet for å gjette - se sjekken rett under.
     const { data: rabattRad } = await supabase
       .from('fiken_kunde_rabatt')
       .select('rabatt_ombygging, rabatt_ekstra_utstyr')
@@ -285,10 +290,29 @@ Deno.serve(async (req) => {
     // Fiken sitt discount-felt på en fakturalinje forventes 0-100 (prosent), samme skala
     // som verdiene er lagret i her - ingen omregning nødvendig. brukRabatt===false betyr
     // admin har bevisst huket av "Bruk kundens avtalte rabatt" på DENNE fakturaen - null
-    // ut satsene uansett hva som er avtalt, i stedet for å måtte fjerne dem per linje etterpå.
+    // ut satsene uansett hva som er avtalt (rettet 5.11: gjelder nå ALLTID, også en linje med
+    // en frosset portal-rabatt - før dette ignorerte en slik linje avkrysningen helt, stikk i
+    // strid med det teksten "Bruk kundens avtalte rabatt" lover - se linjerMedIndeks under),
+    // i stedet for å måtte fjerne dem per linje etterpå.
     const rabattSkalBrukes = brukRabatt !== false
     const rabattOmbygging = rabattSkalBrukes ? (rabattRad?.rabatt_ombygging ?? 0) : 0
     const rabattEkstraUtstyr = rabattSkalBrukes ? (rabattRad?.rabatt_ekstra_utstyr ?? 0) : 0
+
+    if (rabattSkalBrukes && rabattRad) {
+      const trengerSats = (kategori: 'ombygging' | 'ekstra') => linjer.some((l: any) => {
+        const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
+        const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
+        if (erOverstyrtBelop || erLaastRabatt) return false // har sin egen kilde, trenger ikke denne satsen
+        const produkt = produktMap.get(String(l.produktnummer))
+        return !!produkt && erOmbyggingslinje(produkt.navn) === (kategori === 'ombygging')
+      })
+      if (rabattRad.rabatt_ombygging === null && trengerSats('ombygging')) {
+        return jsonSvar({ error: 'Kundens ombygging-rabatt er ikke satt i Fiken-rabatt (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».' }, 400)
+      }
+      if (rabattRad.rabatt_ekstra_utstyr === null && trengerSats('ekstra')) {
+        return jsonSvar({ error: 'Kundens rabatt for ekstra utstyr er ikke satt i Fiken-rabatt (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».' }, 400)
+      }
+    }
 
     // Kontaktperson (o.eier i appen, kalt "Kontaktperson" i PDF-rapporten) - kobles KUN
     // hvis en person med samme navn allerede finnes registrert på denne Fiken-kontakten.
@@ -346,8 +370,11 @@ Deno.serve(async (req) => {
         // ("rabattene skal være de som er i forhandlerportalen"). Linjer uten frosset rabatt
         // (vanlige ordre, eller portal-linjer lagt til før denne endringen) er uendret:
         // kundens avtalte sats, som før. Drivstoff (overstyrt beløp) skal ALDRI ha rabatt.
+        // rabattSkalBrukes er nå en TOPPNIVÅ-overstyring (rettet 5.11) - gjelder også en
+        // linje med frosset portal-rabatt. Før dette ignorerte en slik linje avkrysningen
+        // "Bruk kundens avtalte rabatt" helt, stikk i strid med det teksten lover.
         const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
-        const rabatt = erLaastRabatt ? l.rabatt : (erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr)
+        const rabatt = !rabattSkalBrukes ? 0 : (erLaastRabatt ? l.rabatt : (erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr))
         if (rabatt > 0) line.discount = rabatt
       }
       if (chassisNr && i === linjer.length - 1) line.comment = `Ch. nr. ${chassisNr}`
