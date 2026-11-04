@@ -1,3 +1,9 @@
+// v41 - rettet (funnet av portal-øktas kritiker-gjennomgang): sw.js ble IKKE bumpet ved forrige
+// to commits (5828a1c: synkroniserOmbyggingFikenLinjer fjernet ikke lenger en frosset
+// portalrabatt + portalBekreftOrdre avventer nå RPC-ene i rekkefølge; 106bbac: Admin-ark bevarer
+// scrollposisjon + stopper limet ved mislykket lagring) - en fane åpnet før disse commitene ville
+// kjørt den gamle, buggy koden på ubestemt tid (oppdateringsvarselet utløses kun når sw.js selv
+// endres). Ingen annen endring i selve service workeren (2026-11-04).
 // v40 - s90-20261104-x: automatisk frakt-forberedelse ved status "Klar for henting"
 // (frakt_forberedt_at på admin_ark, satt av en ny databasetrigger) - "📧 Bestill"-knappen i
 // Admin-ark viser nå en gul, pulserende "Bekreft bestilling"-tilstand når dette har skjedd
@@ -39,7 +45,7 @@
 // v22 - s08-048 grunnlag: Bekreft av en portal-ordre kan fylle «Skal ha etter visning» og
 // fiken_linjer fra bestillingens produktlinjer (o.portalLinjer) - helt inert til
 // portal_koble_bestilling v5 og portal-bestilling faktisk sender feltet (2026-10-31)
-const CACHE = 'salmakern-v40';
+const CACHE = 'salmakern-v41';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
