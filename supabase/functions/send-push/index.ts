@@ -204,7 +204,11 @@ Deno.serve(async (req) => {
 
     const raw = await req.text()
     if (!raw) {
-      console.error('Tom body mottatt. Method:', req.method, 'Headers:', JSON.stringify([...req.headers.entries()]))
+      // Rettet 5.11 (sikkerhetsgjennomgang): logget tidligere ALLE headere, inkl. Authorization
+      // (bearer-token) og apikey - en tom-body-forespørsel (f.eks. en utenforstående som prøver
+      // seg, eller en helt vanlig feilkonfigurert klient) ville da lagret ekte legitimasjon i
+      // klartekst i funksjonsloggene i opptil 7 dager, lesbart for alle med dashbord-tilgang.
+      console.error('Tom body mottatt. Method:', req.method)
       return new Response('tom body', { status: 400, headers: CORS_HEADERS })
     }
     const payload = JSON.parse(raw)
