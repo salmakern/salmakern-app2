@@ -844,11 +844,23 @@ async function bekreftFikenKunde() {
   btn.disabled = true; btn.textContent = 'Oppretter...';
 
   if (db) {
-    const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').checked ? FIKEN_RABATT_STANDARDSATS_OMBYGGING : 0;
-    const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').checked ? FIKEN_RABATT_STANDARDSATS_EKSTRA_UTSTYR : 0;
-    const rad = { fiken_contact_id: valgt.contactId, fiken_navn: valgt.navn, rabatt_ombygging: rabattOmbygging, rabatt_ekstra_utstyr: rabattEkstraUtstyr, oppdatert_av: me?.navn || '' };
-    const { error } = await db.from('fiken_kunde_rabatt').upsert(rad, { onConflict: 'fiken_contact_id' });
-    if (error) visToast('Kunne ikke lagre rabatt: ' + error.message);
+    // Pengefelle rettet 5.11 (sikkerhetsgjennomgang): denne modalen er ment for FØRSTE gang en
+    // Fiken-kobling settes opp for en kunde, men checkboksene starter alltid avkrysset (se
+    // needsBekreftelse-grenen over) uansett hva som faktisk er avtalt. Har den valgte
+    // Fiken-kunden (contactId) FRA FØR en rad i fiken_kunde_rabatt - f.eks. fordi en annen
+    // stavemåte/alias av samme kunde allerede er koblet et annet sted - ville et ubetinget
+    // upsert her stille overskrevet en ekte avtalt rabatt med 0 % bare fordi boksene sto
+    // uavkrysset i DENNE modalen. Finnes raden fra før: la den stå urørt, varsle i stedet.
+    const eksisterende = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === valgt.contactId);
+    if (eksisterende) {
+      visToast(`Kunden har allerede en avtalt rabatt i Fiken-rabatt (ombygging ${eksisterende.rabatt_ombygging ?? 'ikke satt'}%, ekstra utstyr ${eksisterende.rabatt_ekstra_utstyr ?? 'ikke satt'}%) - den er IKKE endret.`);
+    } else {
+      const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').checked ? FIKEN_RABATT_STANDARDSATS_OMBYGGING : 0;
+      const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').checked ? FIKEN_RABATT_STANDARDSATS_EKSTRA_UTSTYR : 0;
+      const rad = { fiken_contact_id: valgt.contactId, fiken_navn: valgt.navn, rabatt_ombygging: rabattOmbygging, rabatt_ekstra_utstyr: rabattEkstraUtstyr, oppdatert_av: me?.navn || '' };
+      const { error } = await db.from('fiken_kunde_rabatt').upsert(rad, { onConflict: 'fiken_contact_id' });
+      if (error) visToast('Kunne ikke lagre rabatt: ' + error.message);
+    }
   }
 
   kallFikenFakturer(fikenFaktureringOrdreId, {
@@ -864,16 +876,40 @@ async function bekreftFikenKunde() {
 function toggleFakturert(id) {
   if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
-  o.fakturert = !o.fakturert;
-  logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
-  leveranseSjekkArkiver(o); // en leveranse som er sendt og nå fakturert arkiveres (no-op for bil-ordrer)
-  save(id);
-  // Kan nå trykkes fra tre steder: Fakturering-kortet på selve ordresiden, Arkiv-kortet,
+  const nyVerdi = !o.fakturert;
+  // Kan nå trykkes fra flere steder: Fakturering-kortet på selve ordresiden, Arkiv-kortet,
   // og avkrysningen på ordrekortet i Ordreliste - oppdater den visningen man faktisk står
   // i, ikke bare anta at det er ordresiden (samme mønster som brukt for lager tidligere).
-  if (o.status === 'arkivert') renderArkiv();
-  else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
-  else buildOrdreDetail();
+  const tegnOppPaNytt = () => {
+    if (o.status === 'arkivert') renderArkiv();
+    else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
+    else buildOrdreDetail();
+  };
+  // Bekreftelse lagt til 5.11 (sikkerhetsgjennomgang, pengefelle - ingen dialog tidligere, lett å
+  // trykke ved en feil, f.eks. på ordrekortets lille checkbox under scrolling/dra). Å FJERNE
+  // merkingen er den farligste retningen: admin kan senere tro ordren aldri ble fakturert og
+  // opprette en NY, ekte kladd i Fiken for noe som allerede er fakturert. Avbrytes dialogen må
+  // checkboksen/kortet tegnes opp på nytt - nettleseren har allerede snudd checkboksen visuelt
+  // før onchange kjører.
+  const sporsmal = nyVerdi
+    ? 'Marker ordren som fakturert?'
+    : 'Fjerne fakturert-markeringen? Hvis ordren allerede ER fakturert i Fiken, kan dette føre til at den faktureres på nytt ved en feil.';
+  if (!confirm(sporsmal)) { tegnOppPaNytt(); return; }
+  o.fakturert = nyVerdi;
+  logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
+  const arkivert = leveranseSjekkArkiver(o); // en leveranse som er sendt og nå fakturert arkiveres (no-op for bil-ordrer)
+  save(id);
+  // save() utelater BEVISST status/ordre_status (se sendLagring i core.js) - uten dette egne,
+  // målrettede kallet (som endreLeveranseStatus() bruker) ble en leveranse arkivert her lokalt
+  // på skjermen, men sto fortsatt som "aktiv" i databasen og dukket opp igjen ved neste
+  // innlasting (rettet 5.11, pengefelle funnet i sikkerhetsgjennomgangen).
+  if (arkivert && db) {
+    ignorerRealtimeFor.add(id);
+    setTimeout(() => ignorerRealtimeFor.delete(id), 10000);
+    db.from('ordrer').update({ status: o.status, ordre_status: o.ordreStatus }).eq('id', id)
+      .then(r => { if (r.error) { console.error('Kunne ikke lagre automatisk arkivering:', r.error.message); visToast('Arkivering ble ikke lagret: ' + r.error.message); } });
+  }
+  tegnOppPaNytt();
 }
 
 function togglePrioritert(id) {
