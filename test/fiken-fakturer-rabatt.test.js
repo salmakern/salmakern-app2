@@ -45,6 +45,10 @@ if (!fikenFakturerKilde.includes(IMPORT_LINJE)) {
 
 const SLUG = 'telemark-salmakerverksted';
 const CONTACT_ID = 555;
+// ordreId er obligatorisk siden 5.11 (pengefelle-fiks: linjene leses nå fra ordrer.fiken_linjer
+// i databasen, ikke fra body.linjer) - standardBody() setter den alltid, og last().kall() fyller
+// automatisk ordrer-mocken med body.linjer sitt innhold med mindre testen selv setter svar.ordrer.
+const ORDRE_ID = 'ord_test_1';
 
 // Produkter som "finnes" i den falske Fiken-produktlisten. Navnet er det eneste
 // erOmbyggingslinje() ser på (case-uavhengig "ombygg"-match).
@@ -157,16 +161,26 @@ async function last({ svar = {}, produkter = ALLE_PRODUKTER, draftOk = true } = 
     // eq-kall mot den falske Supabase-klienten ({tabell, kolonne, verdi}) - les ETTER
     // await kall(...), se merknad ved klientInstans over.
     get eqKall() { return klientInstans?.eqKall ?? []; },
-    kall: (body) =>
-      handler(new Request('https://x.supabase.co/functions/v1/fiken-fakturer', {
+    kall: (body) => {
+      // Den ekte funksjonen leser ikke lenger body.linjer (rettet 5.11) - linjene kommer fra
+      // ordrer.fiken_linjer i databasen. Med mindre testen selv har satt svar.ordrer eksplisitt,
+      // bygger vi den falske ordre-raden her fra body.linjer, slik at de aller fleste testene
+      // (skrevet for å "sende" linjer via body) fortsetter å virke uendret.
+      // svar._manuellOrdre: lar en test sette opp ordrer-mocken selv (for å bevise at body.linjer
+      // faktisk IGNORERES av den ekte funksjonen) uten at denne auto-synken overskriver den.
+      if (!svar._manuellOrdre && Array.isArray(body.linjer)) {
+        svar.ordrer = { data: { fiken_kladd_url: null, fiken_linjer: body.linjer }, error: null };
+      }
+      return handler(new Request('https://x.supabase.co/functions/v1/fiken-fakturer', {
         method: 'POST',
         body: JSON.stringify(body),
-      })),
+      }));
+    },
   };
 }
 
 function standardBody(linjer, overrides = {}) {
-  return { kundeNavn: 'Test Kunde AS', linjer, ...overrides };
+  return { ordreId: ORDRE_ID, kundeNavn: 'Test Kunde AS', linjer, ...overrides };
 }
 
 // Hjelper: kjør ett kall og returner lines[] fra draft-POST-kroppen (kaster hvis kallet feilet,
@@ -529,5 +543,79 @@ describe('fiken-fakturer: ordrereferanse (leveranse vs bil)', () => {
     expect(a.orderReference).toBe('CH1');
     const b = await hentKladd(standardBody([linje('200')], { referanse: { x: 1 } }));
     expect(b.orderReference).toBeUndefined();
+  });
+});
+
+// ── Fakturalinjene leses fra databasen, ALDRI fra klientens body (pengefelle rettet 5.11) ──────
+describe('fiken-fakturer: fakturalinjene leses fra ordrer.fiken_linjer i databasen, body.linjer ignoreres fullstendig', () => {
+  it('body.linjer avviker fra databasens fiken_linjer: DATABASENS innhold brukes, body sitt forsøk har ingen effekt', async () => {
+    const svar = {
+      _manuellOrdre: true, // se kall() i last() - hindrer auto-synk fra body.linjer
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      // Databasen sier: én ekstra-utstyr-linje uten rabatt.
+      ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [linje('200')] }, error: null },
+    };
+    // body prøver å sende en helt annen (og mye billigere/rabattert) ombyggingslinje - en klient
+    // som enten er stale eller manipulert utenom appens UI.
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100', { belop: 1, rabatt: 100 })]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201);
+    expect(draftKall).toHaveLength(1);
+    expect(draftKall[0].lines).toHaveLength(1);
+    expect(draftKall[0].lines[0].productId).toBe(UTSTYR_PRODUKT.productId); // 200, IKKE 100 fra body
+    expect(draftKall[0].lines[0].discount).toBeUndefined(); // ingen frosset rabatt på DENNE linjen
+  });
+
+  it('mangler ordreId: 400, ingen kladd opprettet (linjene kan ikke slås opp uten en ordre å lese dem fra)', async () => {
+    const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')], { ordreId: undefined }));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/Mangler ordreId/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('ordreId peker på en ordre som ikke finnes: 404, ingen kladd opprettet', async () => {
+    const svar = {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: { data: null, error: null }, // ingen rad for denne ordreId-en
+    };
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(404);
+    expect(body.error).toMatch(/Fant ikke ordren/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('ordren finnes, men fiken_linjer er tom: 400 "ingen fakturalinjer", uansett hva body.linjer prøver å sende', async () => {
+    const svar = {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [] }, error: null },
+    };
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100'), linje('200')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/Ordren har ingen fakturalinjer/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('idempotens uendret: ordren har allerede en kladd-url - returneres direkte, uansett hva body.linjer inneholder', async () => {
+    const svar = {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: { data: { fiken_kladd_url: 'https://api.fiken.no/api/v2/companies/x/invoices/drafts/42', fiken_linjer: [linje('100')] }, error: null },
+    };
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('200')]));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, alleredeOpprettet: true, draftUrl: 'https://api.fiken.no/api/v2/companies/x/invoices/drafts/42' });
+    expect(draftKall).toHaveLength(0); // ingen NY kladd opprettet
   });
 });

@@ -113,7 +113,7 @@ const IMPORT_LINJE = "import { createClient } from 'jsr:@supabase/supabase-js@2'
 const SLUG = 'telemark-salmakerverksted';
 const CONTACT_ID = 777;
 
-function fakeSupabaseKlientFiken() {
+function fakeSupabaseKlientFiken(o) {
   return {
     from(tabell) {
       return {
@@ -123,7 +123,10 @@ function fakeSupabaseKlientFiken() {
               return {
                 maybeSingle: async () => {
                   if (tabell === 'fiken_kunde_alias') return { data: { fiken_contact_id: CONTACT_ID }, error: null };
-                  if (tabell === 'ordrer') return { data: { fiken_kladd_url: null }, error: null }; // idempotens: ingen kladd fra før
+                  // Rettet 5.11 (pengefelle-fiks): fiken-fakturer leser nå linjene fra ordrer.fiken_linjer
+                  // i stedet for klientens request-body - send DEN EKTE o.fikenLinjer her, akkurat slik
+                  // de ville stått i databasen etter de ekte RPC-kallene over, ikke en kopi i body.
+                  if (tabell === 'ordrer') return { data: { fiken_kladd_url: null, fiken_linjer: o.fikenLinjer }, error: null }; // idempotens: ingen kladd fra før
                   return { data: null, error: null }; // fiken_kunde_rabatt - ikke konsultert, alle linjer har frosset rabatt
                 },
               };
@@ -137,7 +140,7 @@ function fakeSupabaseKlientFiken() {
   };
 }
 
-async function kjorFikenFakturer(body) {
+async function kjorFikenFakturer(body, o) {
   globalThis.Deno = {
     env: { get: (k) => ({ FIKEN_API_KEY: 'fake-key', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'fake-service-key' }[k]) },
   };
@@ -171,7 +174,7 @@ async function kjorFikenFakturer(body) {
   const hovedFil = path.resolve(__dirname, `_helhetlig_fiken_fakturer_${suffix}.ts`);
   tmpFiler.push(shimFil, hovedFil);
   writeFileSync(shimFil, 'export function createClient() { return globalThis.__FAKE_SUPABASE_FACTORY__(); }\n');
-  globalThis.__FAKE_SUPABASE_FACTORY__ = () => fakeSupabaseKlientFiken();
+  globalThis.__FAKE_SUPABASE_FACTORY__ = () => fakeSupabaseKlientFiken(o);
   const tilpasset = fikenFakturerKilde.replace(IMPORT_LINJE, `import { createClient } from './${path.basename(shimFil)}'`);
   writeFileSync(hovedFil, tilpasset);
   await import(/* @vite-ignore */ pathToFileURL(hovedFil).href);
@@ -224,7 +227,7 @@ describe('Helhetlig kjede: portal-Bekreft -> åpne ordren -> fakturer mot falsk 
     const { status, svar, draftKropp } = await kjorFikenFakturer({
       ordreId: o.id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr || undefined,
       linjer: klient.sorterFikenLinjer(o.fikenLinjer), brukRabatt: true,
-    });
+    }, o);
     expect(status, JSON.stringify(svar)).toBe(201);
     expect(svar.ok).toBe(true);
 

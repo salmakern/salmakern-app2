@@ -159,6 +159,18 @@ function erOmbyggingslinje(produktnavn: string): boolean {
   return /ombygg/i.test(produktnavn || '')
 }
 
+// Samme sortering som klientens sorterFikenLinjer() (js/ordre-detalj.js) - avgjør blant annet
+// HVILKEN linje som får chassis-kommentaren (siste i lista), så server og klient må sortere likt.
+function sorterServerFikenLinjer(linjer: any[] | null | undefined): any[] {
+  const nr = (l: any) => String(l?.produktnummer ?? '').trim()
+  return [...(linjer || [])].sort((a, b) => {
+    const na = nr(a), nb = nr(b)
+    if (!na || !nb) return !na && !nb ? 0 : !na ? 1 : -1
+    if (/^\d+$/.test(na) && /^\d+$/.test(nb)) return Number(na) - Number(nb) || (na < nb ? -1 : na > nb ? 1 : 0)
+    return na < nb ? -1 : na > nb ? 1 : 0
+  })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
@@ -197,28 +209,39 @@ Deno.serve(async (req) => {
       return jsonSvar({ ok: true, contactId, navn }, 201)
     }
 
-    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, referanse, linjer, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
+    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, referanse, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
-    if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Mangler fakturalinjer' }, 400)
+    // Pengefelle rettet 5.11 (sikkerhetsgjennomgang): fakturalinjene ble tidligere lest RÅTT fra
+    // klientens request-body (body.linjer) - en hvilken som helst klient (en stale fane, eller
+    // noen som manuelt formet en forespørsel utenom appen) kunne dermed sende helt vilkårlige
+    // produkter/priser/rabatter til en EKTE Fiken-kladd uten at det noensinne var lagret på
+    // ordren. Linjene leses nå ALLTID fra ordren sin egen fiken_linjer-kolonne i databasen -
+    // den kolonnen skrives KUN via den atomiske RPC-en oppdater_ordre_fiken_linje(_ved_id) (se
+    // core.js), aldri av denne funksjonen eller av en full-rad save(), og er derfor alltid den
+    // ferskeste, server-godkjente sannheten uavhengig av hvor gammel klientens egen kopi er.
+    // ordreId er derfor ikke lenger valgfritt for selve faktureringen (opprettKunde-grenen over
+    // er upåvirket - den bruker aldri fakturalinjer).
+    if (!ordreId) return jsonSvar({ error: 'Mangler ordreId' }, 400)
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+    const { data: eksisterendeOrdre, error: ordreFeil } = await supabase
+      .from('ordrer')
+      .select('fiken_kladd_url, fiken_linjer')
+      .eq('id', ordreId)
+      .maybeSingle()
+    if (ordreFeil) return jsonSvar({ error: 'Kunne ikke sjekke ordren: ' + ordreFeil.message }, 500)
+    if (!eksisterendeOrdre) return jsonSvar({ error: 'Fant ikke ordren' }, 404)
     // Idempotens (s09-006): hvis denne ordren allerede har en lagret kladd-adresse, har en
     // tidligere (kanskje en annen administrators) kall allerede opprettet kladden i Fiken -
     // opprett ALDRI en ny, bare returner den eksisterende. Lukker race-vinduet der to
     // administratorer trykker fakturer nesten samtidig fra hver sin enhet, før Realtime har
     // rukket å vise den andres "fakturert"-endring.
-    if (ordreId) {
-      const { data: eksisterendeOrdre, error: ordreFeil } = await supabase
-        .from('ordrer')
-        .select('fiken_kladd_url')
-        .eq('id', ordreId)
-        .maybeSingle()
-      if (ordreFeil) return jsonSvar({ error: 'Kunne ikke sjekke ordren: ' + ordreFeil.message }, 500)
-      if (eksisterendeOrdre?.fiken_kladd_url) {
-        return jsonSvar({ ok: true, draftUrl: eksisterendeOrdre.fiken_kladd_url, alleredeOpprettet: true }, 200)
-      }
+    if (eksisterendeOrdre.fiken_kladd_url) {
+      return jsonSvar({ ok: true, draftUrl: eksisterendeOrdre.fiken_kladd_url, alleredeOpprettet: true }, 200)
     }
+    const linjer = sorterServerFikenLinjer(eksisterendeOrdre.fiken_linjer)
+    if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Ordren har ingen fakturalinjer' }, 400)
 
     let contactId: number | null = null
 
