@@ -13,11 +13,15 @@
 //    delte EDGE-AUTH-GATEN under).
 //
 // Portalens endepunkt: GET https://forhandler.salmaker.as/api/salmakern/rabatter med header
-// x-salmakern-rabatter-secret (EGEN hemmelighet - IKKE gjenbruk av SALMAKERN_HENT_SECRET, som er
-// domenespesifikk for selgere/persondata; rabattsatser er kommersielt sensitiv forhandleravtale-
-// informasjon og skal kunne roteres uavhengig - samme prinsipp som ble avtalt med portal-økta for
-// selgere 5.11). NAVNET PÅ HEMMELIGHETEN MÅ BEKREFTES MED PORTAL-ØKTA FØR UTRULLING (samme
-// prosess som SALMAKERN_HENT_SECRET ble avtalt/rettet).
+// x-salmakern-hent-secret - SAMME delte hemmelighet (SALMAKERN_HENT_SECRET) som
+// hent-selgere-fra-portalen bruker, allerede satt opp i produksjon. Avtalt med portal-økta 5.11:
+// jeg foreslo en egen hemmelighet per datadomene (rabatter er kommersielt sensitiv
+// forhandleravtale-informasjon), men portal-økta påpekte at det gir liten reell isolasjon (alle
+// edge-funksjoner i samme Supabase-prosjekt kan uansett lese alle secrets - RLS er det som faktisk
+// beskytter dataene) mot kostnaden av enda en hemmelighet å administrere/rotere/importere i
+// Vercel. Begge sider hadde allerede bygget og testet mot denne antagelsen da avtalen ble
+// bekreftet, så en egen hemmelighet tas som et eget, lite steg senere om/når cron-varianter med
+// forskjellige rotasjonsbehov gjør det ønskelig.
 //
 // Avtalt kontrakt (ENDELIG, portal-øktas side skrevet og enhetstestet, IKKE utlagt ennå):
 // { ok: true, versjon: 1, generert, antall: { forhandlere, med_ugyldig_sats },
@@ -31,7 +35,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const PORTAL_URL = 'https://forhandler.salmaker.as/api/salmakern/rabatter'
-const PORTAL_SECRET = Deno.env.get('SALMAKERN_RABATTER_SECRET')
+const PORTAL_SECRET = Deno.env.get('SALMAKERN_HENT_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -149,11 +153,11 @@ Deno.serve(async (req) => {
     const avvist = await innloggingsgate(req)
     if (avvist) return jsonSvar({ error: avvist.melding }, avvist.status)
 
-    if (!PORTAL_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet mot portalen (SALMAKERN_RABATTER_SECRET) er satt opp ennå' }, 500)
+    if (!PORTAL_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet mot portalen (SALMAKERN_HENT_SECRET) er satt opp ennå' }, 500)
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return jsonSvar({ error: 'Mangler Supabase-tilgang i funksjonen' }, 500)
 
     const portalRes = await fetch(PORTAL_URL, {
-      headers: { 'x-salmakern-rabatter-secret': PORTAL_SECRET },
+      headers: { 'x-salmakern-hent-secret': PORTAL_SECRET },
       signal: AbortSignal.timeout(15000),
     })
     if (!portalRes.ok) return jsonSvar({ error: `Portalen svarte ${portalRes.status}` }, 502)

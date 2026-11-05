@@ -51,7 +51,7 @@ function gyldigPortalData(overrides = {}) {
 // hent-selgere-fra-portalen.test.js bruker.
 const BASIS_ENV = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'fake-service-key', SUPABASE_ANON_KEY: 'fake-anon-key' };
 
-// env: {EDGE_AUTH_ENFORCE?, SALMAKERN_RABATTER_SECRET?}, slått sammen MED (aldri i stedet for) BASIS_ENV.
+// env: {EDGE_AUTH_ENFORCE?, SALMAKERN_HENT_SECRET?}, slått sammen MED (aldri i stedet for) BASIS_ENV.
 // portal: {status, body} eller en funksjon (req)=>Response - svaret fra portalens endepunkt.
 // rpcSvar: {data, error} - svaret fra den falske portal_rabatter_synk-RPC-en.
 async function last({ env = {}, portal = { status: 200, body: gyldigPortalData() }, rpcSvar = { data: { opprettet: 0, oppdatert: 0, uendret: 0, ugyldigRad: 0, ukjentKontaktId: 0 }, error: null } } = {}) {
@@ -107,13 +107,13 @@ describe('hent-rabatter-fra-portalen: innloggingsgate', () => {
 
 describe('hent-rabatter-fra-portalen: ansatt-gate', () => {
   it('myk modus (ingen EDGE_AUTH_ENFORCE): alle slipper gjennom til selve logikken', async () => {
-    const { kall } = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) } });
+    const { kall } = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) } });
     const res = await kall({ authorization: 'Bearer sb_publishable_ikke_en_jwt' });
     expect(res.status).toBe(200); // går helt til portal-henting (myk modus, gaten slipper gjennom)
   });
 
   it('håndhevet: admin slipper gjennom, en annen rolle avvises 403, ingen token avvises 401', async () => {
-    const env = { EDGE_AUTH_ENFORCE: 'hent-rabatter-fra-portalen', SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) };
+    const env = { EDGE_AUTH_ENFORCE: 'hent-rabatter-fra-portalen', SALMAKERN_HENT_SECRET: 'x'.repeat(40) };
     const admin = await last({ env });
     expect((await admin.kall({ authorization: `Bearer ${TOK.admin}` })).status).toBe(200);
 
@@ -128,28 +128,28 @@ describe('hent-rabatter-fra-portalen: ansatt-gate', () => {
 });
 
 describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til databasen', () => {
-  it('mangler SALMAKERN_RABATTER_SECRET i miljøet: 500, ingen portal-forespørsel gjort', async () => {
+  it('mangler SALMAKERN_HENT_SECRET i miljøet: 500, ingen portal-forespørsel gjort', async () => {
     const { kall, fetchKall } = await last({ env: {} });
     const res = await kall({});
     expect(res.status).toBe(500);
     expect(fetchKall.some((k) => k.url === PORTAL_URL)).toBe(false);
   });
 
-  it('sender riktig hemmelighet i x-salmakern-rabatter-secret til portalen', async () => {
-    const { kall, fetchKall } = await last({ env: { SALMAKERN_RABATTER_SECRET: 'min-hemmelighet-123' } });
+  it('sender riktig hemmelighet i x-salmakern-hent-secret til portalen', async () => {
+    const { kall, fetchKall } = await last({ env: { SALMAKERN_HENT_SECRET: 'min-hemmelighet-123' } });
     await kall({});
     const portalKall = fetchKall.find((k) => k.url === PORTAL_URL);
-    expect(portalKall.headers['x-salmakern-rabatter-secret']).toBe('min-hemmelighet-123');
+    expect(portalKall.headers['x-salmakern-hent-secret']).toBe('min-hemmelighet-123');
   });
 
   it('portalen svarer med feilkode: 502', async () => {
-    const { kall } = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 503, body: { error: 'nede' } } });
+    const { kall } = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 503, body: { error: 'nede' } } });
     const res = await kall({});
     expect(res.status).toBe(502);
   });
 
   it('portalen svarer med uventet/ugyldig form: 502, ingen RPC-kall', async () => {
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: { ok: true, forhandlere: [{ kontakt_id: 123 }] } } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: { ok: true, forhandlere: [{ kontakt_id: 123 }] } } });
     const res = await miljo.kall({});
     expect(res.status).toBe(502);
     // rpcKall er en getter - må leses ETTER kall(), aldri destruktureres tidlig.
@@ -159,7 +159,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
   it('portalens oppgitte antall.forhandlere stemmer ikke med den faktiske listen: 502, ingen RPC-kall', async () => {
     const data = gyldigPortalData();
     data.antall = { forhandlere: 5, med_ugyldig_sats: 0 }; // overstyrt til å avvike fra den faktiske (1) lista
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
     const res = await miljo.kall({});
     const svar = await res.json();
     expect(res.status).toBe(502);
@@ -174,7 +174,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
       ],
     });
     data.antall.med_ugyldig_sats = 0; // faktisk er det 1 (standard er null)
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
     const res = await miljo.kall({});
     expect(res.status).toBe(502);
     expect(miljo.rpcKall).toBeNull();
@@ -185,7 +185,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
       const data = gyldigPortalData({
         forhandlere: [{ kontakt_id: 'k_1', kontakt_navn: 'A', orgnr: null, portal_forhandler_id: 'pf_1', rabatt: gyldigRabatt({ standard: ugyldig }) }],
       });
-      const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+      const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
       const res = await miljo.kall({});
       expect(res.status, `sats ${JSON.stringify(ugyldig)} skal avvises`).toBe(502);
       expect(miljo.rpcKall).toBeNull();
@@ -196,7 +196,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
     const data = gyldigPortalData({
       forhandlere: [{ kontakt_id: 'k_1', kontakt_navn: 'A', orgnr: null, portal_forhandler_id: 'pf_1', rabatt: { standard: null, ekstrautstyr: 0, modulsystem: null } }],
     });
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
     const res = await miljo.kall({});
     expect(res.status).toBe(200);
     expect(miljo.rpcKall.args.p_forhandlere[0]).toMatchObject({ rabatt_standard: null, rabatt_ekstrautstyr: 0, rabatt_modulsystem: null });
@@ -206,7 +206,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
     const data = gyldigPortalData({
       forhandlere: [{ kontakt_id: 'k_1', kontakt_navn: '', orgnr: null, portal_forhandler_id: 'pf_1', rabatt: gyldigRabatt() }],
     });
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
     const res = await miljo.kall({});
     expect(res.status).toBe(200);
     expect(miljo.rpcKall.args.p_forhandlere[0].kontakt_navn).toBe('');
@@ -216,7 +216,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
     const data = gyldigPortalData({
       forhandlere: [{ kontakt_id: 'k_1', kontakt_navn: null, orgnr: null, portal_forhandler_id: 'pf_1', rabatt: gyldigRabatt() }],
     });
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
     const res = await miljo.kall({});
     expect(res.status).toBe(502);
     expect(miljo.rpcKall).toBeNull();
@@ -227,7 +227,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
       const data = gyldigPortalData({
         forhandlere: [{ kontakt_id: 'k_1', kontakt_navn: 'A', orgnr: null, portal_forhandler_id: 'pf_1', rabatt: gyldigRabatt(), [felt]: '' }],
       });
-      const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+      const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
       const res = await miljo.kall({});
       expect(res.status, `tomt ${felt} skal avvises`).toBe(502);
       expect(miljo.rpcKall).toBeNull();
@@ -238,7 +238,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
     const data = gyldigPortalData({
       forhandlere: [{ kontakt_id: 'k_1', kontakt_navn: 'A', orgnr: null, portal_forhandler_id: 'pf_1', rabatt: gyldigRabatt() }],
     });
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
     const res = await miljo.kall({});
     expect(res.status).toBe(200);
     expect(miljo.rpcKall.args.p_forhandlere[0].orgnr).toBeNull();
@@ -252,7 +252,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
       ],
     });
     const rapport = { opprettet: 2, oppdatert: 0, uendret: 0, ugyldigRad: 0, ukjentKontaktId: 0 };
-    const miljo = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data }, rpcSvar: { data: rapport, error: null } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data }, rpcSvar: { data: rapport, error: null } });
     const res = await miljo.kall({});
     const svar = await res.json();
     expect(res.status).toBe(200);
@@ -267,7 +267,7 @@ describe('hent-rabatter-fra-portalen: henting fra portalen og videresending til 
   });
 
   it('RPC-feil gir 500 med feilmeldingen', async () => {
-    const { kall } = await last({ env: { SALMAKERN_RABATTER_SECRET: 'x'.repeat(40) }, rpcSvar: { data: null, error: { message: 'Databasen nede' } } });
+    const { kall } = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, rpcSvar: { data: null, error: { message: 'Databasen nede' } } });
     const res = await kall({});
     const svar = await res.json();
     expect(res.status).toBe(500);
