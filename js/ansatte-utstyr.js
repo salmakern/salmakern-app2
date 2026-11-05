@@ -656,7 +656,8 @@ function renderKontakter() {
   const erAdmin = me && me.rolle==='admin';
   document.getElementById('merKontaktAdminBtn').innerHTML =
     '<button class="btn sm" onclick="apneForhandlerListe()">Forhandlere</button>' +
-    (erAdmin ? ' <button class="btn sm red" onclick="apneNyKontakt()">+ Ny kontakt</button>' : '');
+    (erAdmin ? ' <button class="btn sm red" onclick="apneNyKontakt()">+ Ny kontakt</button>' : '') +
+    (erAdmin ? ' <button class="btn sm" id="hentSelgereBtn" onclick="hentSelgereFraPortalen()">Hent selgere fra portalen</button>' : '');
   const el = document.getElementById('kontaktListe');
   const andre = S.kontakter.filter(k=>k.type!=='Forhandler');
   if (!andre.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
@@ -675,6 +676,38 @@ function renderKontakter() {
         </div>`:''}
       </div>
     </div>`).join('');
+}
+
+// "Hent selgere fra portalen" (5.11, Henriks ja: appen HENTER (pull) selgere fra
+// Forhandlerportalen inn i kontaktpersonene - portalen EIER dem, appen sletter/overskriver
+// aldri noe som ikke kommer derfra. Selve sammenslåingen (fem matcheregler, se
+// portal_selgere_synk) skjer atomisk server-side; denne knappen trigger bare kallet og viser
+// resultatet. S.kontakter oppdateres IKKE herfra - skrivingen kommer fra serveren via
+// edge-funksjonen, så den vanlige Realtime-hendelsen for innstillinger plukker den opp og
+// rendrer på nytt selv, akkurat som når en annen ansatt redigerer en kontaktperson.
+async function hentSelgereFraPortalen() {
+  if (!me || me.rolle !== 'admin') return;
+  const btn = document.getElementById('hentSelgereBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Henter...'; }
+  try {
+    const res = await edgeFetch('hent-selgere-fra-portalen', { method: 'POST' });
+    const svar = await res.json();
+    if (!res.ok || !svar.ok) { visToast('Kunne ikke hente selgere: ' + (svar.error || res.status)); return; }
+    const rader = svar.rapport || [];
+    const sum = (felt) => rader.reduce((t, r) => t + (r[felt] || 0), 0);
+    const deler = [`${svar.antallForhandlere} forhandlere sjekket`];
+    if (sum('opprettet')) deler.push(`${sum('opprettet')} nye`);
+    if (sum('oppdatert')) deler.push(`${sum('oppdatert')} oppdatert`);
+    if (sum('koblet')) deler.push(`${sum('koblet')} koblet`);
+    if (sum('konflikt') || svar.ukjentKontaktId || svar.navnMismatch) {
+      deler.push(`${sum('konflikt') + (svar.ukjentKontaktId||0) + (svar.navnMismatch||0)} trenger et manuelt blikk`);
+    }
+    visToast(deler.join(', '), 'ok');
+  } catch (e) {
+    visToast('Henting av selgere feilet: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Hent selgere fra portalen'; }
+  }
 }
 
 // Kontakter kan nå ha flere e-postadresser, kommaseparert i samme felt (bedt om av Henrik
