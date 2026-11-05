@@ -54,7 +54,11 @@
 // (lager_trekk_oppskrift/lager_angre_oppskrift_trekk) i stedet for et lokalt batch-objekt
 // med to separate databasekall - lukker en reell dobbelttrekk-bug (to ordre/oppskrift-par
 // allerede trukket to ganger i ekte data)
-const CACHE = 'salmakern-v43';
+// v44 - to funn fra portal-øktas uavhengige gjennomgang (5.11): fakturaSjekk() oppdager nå
+// NULL i én rabattkategori (viste tidligere grønt for ordre serveren avviser), "prøv igjen"
+// droppes på en permanent 4xx-avvisning. Pluss "Hent selgere fra portalen"-knappen i
+// Kontakter (edge-funksjonen er ikke utlagt ennå, så knappen gir feil til den er det)
+const CACHE = 'salmakern-v44';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
