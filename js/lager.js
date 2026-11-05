@@ -676,7 +676,11 @@ function varselMangelfullLevering(v, forventet, mottatt, mangler) {
 // i denne appen før (noen forsvinner stille) - se flyttVare() som løste det likt for
 // rekkefølge-oppdatering. Uten batch (vanlig enkelt-vare-endring) lagres som før, med
 // en gang.
-function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, lagerBatch, oppskriftId) {
+// altSkrevetServerside: true når kalleren allerede har skrevet BÅDE beholdning og historikk
+// atomisk selv (lager_trekk_oppskrift/lager_angre_oppskrift_trekk, 2026-11-05) - da gjør
+// denne funksjonen KUN den lokale, optimistiske oppdateringen og sideeffektene (badge,
+// lav-lager-varsel, push), uten å skrive til databasen på nytt (ville dobbeltskrevet).
+function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, lagerBatch, oppskriftId, altSkrevetServerside) {
   const varLavFor = v.minAntall > 0 && (Number(v.antall)||0) <= v.minAntall;
   // Lokal, optimistisk oppdatering for umiddelbar visning - selve databaseskrivingen under
   // er nå en ATOMISK tilvekst, ikke avhengig av at denne lokale verdien er korrekt.
@@ -692,23 +696,25 @@ function registrerLagerEndring(v, endring, type, ordreId, kommentar, batchId, la
   S.lagerhistorikk = S.lagerhistorikk || [];
   S.lagerhistorikk.unshift(hist);
 
-  // Selve beholdnings-endringen skrives nå som en ATOMISK tilvekst i databasen
-  // (endre_lagervare_antall_batch, se migrasjonen 20261022160000) i stedet for å skrive
-  // denne øktens lokalt beregnede ABSOLUTTVERDI - to uavhengige endringer på samme vare tett
-  // i tid (f.eks. manuelt uttak på én ordre og et automatisk oppskrift-trekk på en annen,
-  // begge mot samme delte lagervare) kunne ellers overskrive hverandre og la feil
-  // sluttantall bli stående (funnet 2026-10-22, samme rotårsak som
-  // dokumenter-/endringer-/fikenLinjer-kappløpet).
-  const vareDelta = {vareId:v.id, endring};
-  const historikkInnsetting = {id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, oppskrift_id:oppskriftId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''};
-  if (lagerBatch) {
-    lagerBatch.vareDeltaer.push(vareDelta);
-    lagerBatch.historikkInnsettinger.push(historikkInnsetting);
-  } else if (db) {
-    db.rpc('endre_lagervare_antall_batch', { p_endringer: [vareDelta] })
-      .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
-    db.from('lagerhistorikk').insert(historikkInnsetting)
-      .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
+  if (!altSkrevetServerside) {
+    // Selve beholdnings-endringen skrives nå som en ATOMISK tilvekst i databasen
+    // (endre_lagervare_antall_batch, se migrasjonen 20261022160000) i stedet for å skrive
+    // denne øktens lokalt beregnede ABSOLUTTVERDI - to uavhengige endringer på samme vare tett
+    // i tid (f.eks. manuelt uttak på én ordre og et automatisk oppskrift-trekk på en annen,
+    // begge mot samme delte lagervare) kunne ellers overskrive hverandre og la feil
+    // sluttantall bli stående (funnet 2026-10-22, samme rotårsak som
+    // dokumenter-/endringer-/fikenLinjer-kappløpet).
+    const vareDelta = {vareId:v.id, endring};
+    const historikkInnsetting = {id:hId, vare_id:v.id, vare_navn:v.navn, endring, type, ordre_id:ordreId||null, batch_id:batchId||null, oppskrift_id:oppskriftId||null, ansatt_navn: me?me.navn:'', kommentar:kommentar||''};
+    if (lagerBatch) {
+      lagerBatch.vareDeltaer.push(vareDelta);
+      lagerBatch.historikkInnsettinger.push(historikkInnsetting);
+    } else if (db) {
+      db.rpc('endre_lagervare_antall_batch', { p_endringer: [vareDelta] })
+        .then(r=>{if(r.error) console.error('Lagerbeholdning-oppdatering feilet:', r.error.message);});
+      db.from('lagerhistorikk').insert(historikkInnsetting)
+        .then(r=>{if(r.error) console.error('Lagerhistorikk-lagring feilet:', r.error.message);});
+    }
   }
   oppdaterLagerVarselBadge();
   renderGlobalLavLagerVarsel();
@@ -1498,29 +1504,44 @@ function renderOrdreLagerbruk() {
   apneOppskriftDropdowns.forEach(id => { const dd = document.getElementById(id); if (dd) dd.style.display = 'block'; });
 }
 
-function trekkOppskriftForOrdre(oppskriftId) {
+// Trekkes uansett beholdning, med vilje - en oppskrift brukes ofte på nytt før varene er
+// fylt opp igjen (f.eks. rekvirert, men ikke levert ennå), og skal fortsatt registreres/
+// trekkes nå - beholdningen går i minus til påfyllingen kommer og retter det opp. Ingen
+// sperre eller advarsel her, i motsetning til manuelt uttak i lagreLagerEndring() som ER en
+// bevisst engangshandling.
+//
+// Rettet 5.11 (s90-20261104-7, bekreftet mot ekte data: to ordre/oppskrift-par var alt
+// trukket to ganger): selve trekket (beholdning + historikk) gjøres nå ATOMISK og
+// IDEMPOTENT i én databasefunksjon (lager_trekk_oppskrift, samme mønster som
+// lager_motta_bestilling) i stedet for et lokalt batch-objekt med to separate
+// etterfølgende databasekall. Blir derfor async - checkboksen venter nå på et faktisk
+// svar fra databasen før den viser seg som huket, i stedet for å oppdatere seg selv
+// optimistisk med en gang.
+async function trekkOppskriftForOrdre(oppskriftId) {
   const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId); if (!r) return;
   const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
-  // Trekkes uansett beholdning, med vilje - en oppskrift brukes ofte på nytt før
-  // varene er fylt opp igjen (f.eks. rekvirert, men ikke levert ennå), og skal
-  // fortsatt registreres/trekkes nå - beholdningen går i minus til påfyllingen
-  // kommer og retter det opp. Ingen sperre eller advarsel her, i motsetning til
-  // manuelt uttak i lagreLagerEndring() som ER en bevisst engangshandling.
-
-  const batchId = 'batch_' + Date.now();
-  const lagerBatch = lagerBatchNy();
+  // Rent arbeid uten lagervarer (f.eks. montering) - ingen lagerendring å gjøre, samme
+  // tidlig-retur som før (unngår en helt unødvendig databaserundtur).
+  if (!(r.ingredienser||[]).length) { renderOrdreLagerbruk(); return; }
+  if (!db) { visToast('Ingen database-tilkobling'); return; }
+  const { data, error } = await db.rpc('lager_trekk_oppskrift', { p_ordre_id: o.id, p_oppskrift_id: r.id, p_ansatt: me?.navn || '' });
+  if (error) {
+    // ALLEREDE_TRUKKET betyr en annen fane/admin (eller et dobbeltklikk) alt har trukket
+    // nøyaktig denne - ikke en feil å varsle om, bare tegn opp den faktiske tilstanden.
+    if (error.message !== 'ALLEREDE_TRUKKET') visToast('Kunne ikke trekke fra lager: ' + error.message);
+    renderOrdreLagerbruk();
+    return;
+  }
   // Varsler om ingredienser som ikke lenger finnes i lageret (slettet siden oppskriften ble
   // laget) - disse ble tidligere bare hoppet stille over, slik at lagerbeholdningen driftet
   // bort fra virkeligheten uten at noen fikk vite det (funnet 2026-10-14). De andre
-  // ingrediensene trekkes fortsatt som normalt.
-  let antallIkkeFunnet = 0;
+  // ingrediensene er allerede trukket server-side; speiler dem lokalt her.
   (r.ingredienser||[]).forEach(i => {
     const v = (S.lagervarer||[]).find(x=>x.id===i.vareId);
-    if (!v) { antallIkkeFunnet++; return; }
-    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, batchId, lagerBatch, r.id);
+    if (!v) return;
+    registrerLagerEndring(v, -Math.abs(i.antall), 'ut', o.id, r.navn, data?.batchId, null, r.id, true);
   });
-  lagerBatchFlush(lagerBatch);
-  if (antallIkkeFunnet) visToast(`${r.navn}: ${antallIkkeFunnet} vare(r) i oppskriften finnes ikke lenger i lageret og ble ikke trukket. Rediger oppskriften under Lager → Oppskrifter.`);
+  if (data?.ikkeFunnet) visToast(`${r.navn}: ${data.ikkeFunnet} vare(r) i oppskriften finnes ikke lenger i lageret og ble ikke trukket. Rediger oppskriften under Lager → Oppskrifter.`);
   renderOrdreLagerbruk();
 }
 
@@ -1529,16 +1550,21 @@ function trekkOppskriftForOrdre(oppskriftId) {
 // angreLagerBatch() kan returnere tidlig via en confirm()-dialog brukeren avbryter, og da
 // må boksen tilbakestilles til riktig (fortsatt uendret) tilstand med en gang, ikke bare
 // stå igjen visuelt feil til noe annet tilfeldigvis rendrer siden på nytt.
-// MÅ vente på angreLagerBatch() (async, med en confirm()-dialog helt i starten) før
-// "Skal ha etter visning"-linjen sjekkes rett under - uten await der ville koden alltid
-// lest DEN GAMLE lagerhistorikk-raden (siden angreLagerBatch fortsatt hang på
-// confirm()-dialogen/sin egen DB-skriving), og dermed trodd oppskriften fortsatt var
-// huket av selv når brukeren bekreftet fjerning - linjen ble stående i Skal ha-teksten
-// i stedet for å forsvinne (bug rapportert av Henrik 2026-09-24).
+// MÅ vente på BÅDE trekkOppskriftForOrdre() og angreLagerBatch() (begge async - ekte
+// databaserundturer siden 2026-11-05, og angreLagerBatch har i tillegg en confirm()-dialog
+// helt i starten) før "Skal ha etter visning"-linjen sjekkes rett under - uten await ville
+// koden alltid lest DEN GAMLE lagerhistorikk-tilstanden, og dermed trodd oppskriften ikke
+// var huket/fortsatt var huket selv om den nettopp ble det motsatte - linjen i Skal ha-
+// teksten ble stående feil (opprinnelig bug rapportert av Henrik 2026-09-24, for angre-veien).
 async function toggleOppskriftPaaOrdre(oppskriftId, huket) {
   const r = (S.lagerOppskrifter||[]).find(x=>x.id===oppskriftId);
   if (huket) {
-    trekkOppskriftForOrdre(oppskriftId);
+    // trekkOppskriftForOrdre() er nå async (ekte databaserundtur, 2026-11-05) - MÅ ventes på
+    // av nøyaktig samme grunn som angreLagerBatch() allerede ble ventet på (se kommentaren
+    // over): uten await ville "Skal ha etter visning"-sjekken rett under lese lagerhistorikk
+    // FØR trekket faktisk er skrevet, og tro oppskriften ikke var huket selv om den nettopp
+    // ble det.
+    await trekkOppskriftForOrdre(oppskriftId);
   } else {
     const rad = r && (S.lagerhistorikk||[]).find(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn));
     if (rad) await angreLagerBatch(rad.batchId);
@@ -1658,34 +1684,31 @@ async function leggTilPortalUtstyrLinjer(ordreId) {
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
 
+// Rettet 5.11 (samme fiks som trekkOppskriftForOrdre - se kommentaren der): reverseringen
+// (beholdning + sletting av historikk) gjøres nå ATOMISK i databasefunksjonen
+// lager_angre_oppskrift_trekk i stedet for et lokalt batch-objekt med to separate
+// etterfølgende databasekall. ordreId/oppskriftId hentes fra de lokale historikk-radene selv
+// (alle rader i en batch deler samme ordre+oppskrift) - signaturen (batchId) er uendret, så
+// kallstedet i toggleOppskriftPaaOrdre trenger ingen endring.
 async function angreLagerBatch(batchId) {
   if (!confirm('Angre denne uttrekkingen og legge varene tilbake på lager?')) return;
   const rader = (S.lagerhistorikk||[]).filter(h=>h.batchId===batchId);
-  // Samler opp vare- og historikk-endringene og sender dem som to samlede kall i stedet for
-  // to Supabase-kall per vare i oppskriften - se registrerLagerEndring() sin kommentar for
-  // hvorfor. Selve beholdnings-reverseringen er nå en ATOMISK tilvekst (negativ delta) i
-  // databasen i stedet for en absoluttverdi beregnet fra nettleserens lokale kopi - samme
-  // rotårsak-fiks som registrerLagerEndring() (funnet 2026-10-22, se migrasjonen
-  // 20261022160000).
-  const vareDeltaer = [];
+  if (!rader.length) { renderOrdreLagerbruk(); return; }
+  const { ordreId, oppskriftId } = rader[0];
+  if (!db || !ordreId || !oppskriftId) { visToast('Mangler ordre/oppskrift-kobling for denne uttrekkingen'); renderOrdreLagerbruk(); return; }
+  const { error } = await db.rpc('lager_angre_oppskrift_trekk', { p_ordre_id: ordreId, p_oppskrift_id: oppskriftId });
+  if (error) {
+    // IKKE_TRUKKET betyr en annen fane/admin alt har angret denne - ikke en feil å varsle
+    // om, bare tegn opp den faktiske tilstanden.
+    if (error.message !== 'IKKE_TRUKKET') visToast('Kunne ikke angre: ' + error.message);
+    renderOrdreLagerbruk();
+    return;
+  }
   rader.forEach(h => {
     const v = (S.lagervarer||[]).find(x=>x.id===h.vareId);
-    if (v) {
-      v.antall = (Number(v.antall)||0) - h.endring;
-      vareDeltaer.push({vareId:v.id, endring: -h.endring});
-    }
+    if (v) v.antall = (Number(v.antall)||0) - h.endring;
   });
   S.lagerhistorikk = (S.lagerhistorikk||[]).filter(h=>h.batchId!==batchId);
-  if (db) {
-    if (vareDeltaer.length) {
-      const { error } = await db.rpc('endre_lagervare_antall_batch', { p_endringer: vareDeltaer });
-      if (error) console.error('Lagerbeholdning-batch-oppdatering feilet:', error.message);
-    }
-    if (rader.length) {
-      const { error } = await db.from('lagerhistorikk').delete().in('id', rader.map(h=>h.id));
-      if (error) console.error('Sletting av lagerhistorikk feilet:', error.message);
-    }
-  }
   oppdaterLagerVarselBadge();
   renderOrdreLagerbruk();
 }

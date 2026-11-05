@@ -49,7 +49,12 @@
 // fakturering"-kortet på Oversikt + delt fakturaSjekk(o) (26ee3ef), og tre pengefeller rettet i
 // ordre-detalj.js - "Bekreft kunde for Fiken-faktura" overskriver ikke lenger en avtalt rabatt,
 // og «Fakturert»-avkrysningen har nå en bekreftelsesdialog og lagrer leveranse-arkivering riktig
-const CACHE = 'salmakern-v42';
+// v43 - lager-forslag punkt 1 (Henrik 5.11): oppskrift-trekk/angre i js/lager.js
+// (trekkOppskriftForOrdre/angreLagerBatch) er nå atomisk og idempotent via to nye RPC-er
+// (lager_trekk_oppskrift/lager_angre_oppskrift_trekk) i stedet for et lokalt batch-objekt
+// med to separate databasekall - lukker en reell dobbelttrekk-bug (to ordre/oppskrift-par
+// allerede trukket to ganger i ekte data)
+const CACHE = 'salmakern-v43';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
