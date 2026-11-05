@@ -27,13 +27,17 @@ const TOK = { admin: 'eyJhbGciOiJIUzI1NiJ9.admin-token-del-helt-ok-for-test.sign
 const tmpFiler = [];
 afterEach(() => { while (tmpFiler.length) { try { unlinkSync(tmpFiler.pop()); } catch { /* allerede borte */ } } });
 
+// antall regnes automatisk ut fra den FAKTISKE forhandlere-lista (egen eller gitt i overrides) -
+// en test som vil teste selve antall-mismatch-sjekken overstyrer antall eksplisitt etterpå.
 function gyldigPortalData(overrides = {}) {
+  const forhandlere = overrides.forhandlere || [
+    { kontakt_id: 'k_test_1', kontakt_navn: 'TEST Forhandler', orgnr: '123456789', selgere: [{ portal_id: 'p_1', navn: 'Ola Nordmann', epost: 'ola@test.no' }] },
+  ];
   return {
     ok: true,
     generert: '2026-11-05T10:00:00.000Z',
-    forhandlere: [
-      { kontakt_id: 'k_test_1', kontakt_navn: 'TEST Forhandler', orgnr: '123456789', selgere: [{ portal_id: 'p_1', navn: 'Ola Nordmann', epost: 'ola@test.no' }] },
-    ],
+    antall: { forhandlere: forhandlere.length, selgere: forhandlere.reduce((s, f) => s + f.selgere.length, 0) },
+    forhandlere,
     ...overrides,
   };
 }
@@ -161,6 +165,41 @@ describe('hent-selgere-fra-portalen: henting fra portalen og videresending til d
     const res = await miljo.kall({});
     expect(res.status).toBe(502);
     // rpcKall er en getter - må leses ETTER kall(), aldri destruktureres tidlig (det ville bare tatt en frossen snap-shot av null).
+    expect(miljo.rpcKall).toBeNull();
+  });
+
+  it('portalens oppgitte antall stemmer ikke med den faktiske listen: 502, ingen RPC-kall (fanger et avkuttet/brutt svar)', async () => {
+    const data = gyldigPortalData();
+    data.antall = { forhandlere: 5, selgere: 20 }; // overstyrt til å avvike fra den faktiske (1) lista
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const res = await miljo.kall({});
+    const svar = await res.json();
+    expect(res.status).toBe(502);
+    expect(svar.error).toMatch(/antall/);
+    expect(miljo.rpcKall).toBeNull();
+  });
+
+  it('navn og kontakt_navn kan være tomme strenger (selger/forhandler uten navn registrert) - fortsatt et gyldig svar', async () => {
+    const data = gyldigPortalData({
+      forhandlere: [
+        { kontakt_id: 'k_1', kontakt_navn: '', orgnr: null, selgere: [{ portal_id: 'p_1', navn: '', epost: 'navnlos@test.no' }] },
+      ],
+    });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const res = await miljo.kall({});
+    expect(res.status).toBe(200); // ikke 502 - tomme strenger er gyldige, selve matchingen (portal_selgere_synk) håndterer resten
+    expect(miljo.rpcKall.args.p_forhandlere[0].kontakt_navn).toBe('');
+  });
+
+  it('en NULL-verdi (ikke en tom streng) for navn/kontakt_navn er fortsatt ugyldig - 502', async () => {
+    const data = gyldigPortalData({
+      forhandlere: [
+        { kontakt_id: 'k_1', kontakt_navn: null, orgnr: null, selgere: [] },
+      ],
+    });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data } });
+    const res = await miljo.kall({});
+    expect(res.status).toBe(502);
     expect(miljo.rpcKall).toBeNull();
   });
 

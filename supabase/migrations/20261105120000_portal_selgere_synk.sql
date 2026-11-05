@@ -17,22 +17,33 @@
 -- portalen er den eneste døra inn, og DEN har sin egen innloggingssjekk (ansatt-admin ELLER
 -- en delt hemmelighet for cron).
 --
+-- Navn-normalisering (rettet 5.11 etter portal-øktas presisering): portalen normaliserer sine
+-- navn (ett mellomrom, usynlige tegn og retningstegn fjernet, maks lengde) - appens EGNE lagrede
+-- navn er derimot fritekst tastet inn av ansatte over tid og kan ha doble mellomrom eller en
+-- gjenværende usynlig tegn fra copy-paste. portal_normaliser_navn() gjør DET SAMME med appens
+-- navn før sammenligning, slik at et navn som ser likt ut for et menneske faktisk MATCHER.
+--
 -- Matching, i denne rekkefølgen per selger (portal_id, navn, epost) innenfor forhandleren
 -- med riktig kontakt_id (ukjent kontakt_id, eller kontakt_navn som ikke stemmer med navnet i
 -- appen: hele forhandleren hoppes over og rapporteres - aldri gjett videre på feil forhandler):
 --  1) kontaktperson med portalId == portal_id fra før: oppdater e-post hvis endret, navnet
---     røres ALDRI (en ansatt kan ha rettet en skrivefeil portalen ikke vet om).
+--     røres ALDRI (en ansatt kan ha rettet en skrivefeil portalen ikke vet om). Virker uansett
+--     om navn er tomt - portalId er den sikreste nøkkelen og trenger ikke navnet i det hele tatt.
 --  2) ellers kontaktperson med SAMME e-post (uavhengig av store/små bokstaver): sett portalId,
---     ingenting annet endres.
---  3) ellers EN ENKELT kontaktperson UTEN e-post der navnet er identisk eller er et
---     ledd/fornavn av portalnavnet (f.eks. "Bjarne" -> "Bjarne Hellestø"): den overtas (får
---     e-post, portalId og navnet utvidet til portalens). Flere kandidater: IKKE overta noen
---     (for usikkert), fall gjennom til (5) og rapporter som konflikt.
+--     ingenting annet endres. Virker også uansett om navn er tomt.
+--  3) ellers (krever et IKKE-tomt navn fra portalen - se under) ÉN kontaktperson UTEN e-post der
+--     navnet er identisk eller er et ledd/fornavn av portalnavnet (f.eks. "Bjarne" -> "Bjarne
+--     Hellestø"): den overtas (får e-post, portalId og navnet utvidet til portalens). Flere
+--     kandidater: IKKE overta noen (for usikkert), fall gjennom til (5) og rapporter som konflikt.
 --  4) ellers kontaktperson med SAMME navn men ANNEN e-post (kjente eksempler: Frank Olaf
 --     Bakke, Tage Sirnes - ulik adresse i app og portal): IKKE legg til en dublett, la appens
 --     e-post stå urørt og rapporter avviket - en administrator avgjør manuelt.
 --  5) ellers: legg til en ny kontaktperson {id:'kp_portal_<portal_id>', navn, epost, tlf:'',
 --     notat:'Fra portalen', portalId}.
+-- En selger UTEN navn (portalen sender nå alltid en streng, tom hvis ukjent - aldri NULL, etter
+-- avtale 5.11) kan fortsatt kobles via regel 1/2 (portalId/e-post trenger ikke navn), men hopper
+-- over regel 3-5 (navnematching og "lag ny kontaktperson" ville laget/sammenlignet mot en TOM
+-- streng, som verken er trygt å matche på eller ønskelig å lagre som en ekte kontaktpersons navn).
 -- Idempotent av konstruksjon: når portalId først er satt på en kontaktperson, treffer alle
 -- senere kjøringer for samme selger regel (1) og gjør ingenting (eller bare oppdaterer
 -- e-post) - å kjøre funksjonen to ganger på rad med samme input endrer ingenting mer.
@@ -48,6 +59,22 @@
 -- portal-bestilling for samme prinsipp).
 --
 -- Rollback: drop function if exists public.portal_selgere_synk(jsonb);
+--           drop function if exists public.portal_normaliser_navn(text);
+
+-- Fjerner usynlige/retningsstyrende Unicode-tegn (zero-width space/joiner/non-joiner, venstre-/
+-- høyre-til-høyre-merker, bidi-innbygging/overstyring, ordforbinder, BOM) som kan henge igjen fra
+-- copy-paste, kollapser indre mellomrom til ett, trimmer kantene og gjør små bokstaver - samme
+-- normalisering portalen selv gjør på sin side før den sender navnet.
+create or replace function public.portal_normaliser_navn(p_navn text)
+returns text
+language sql
+immutable
+as $$
+  select lower(trim(both ' ' from regexp_replace(
+    regexp_replace(coalesce(p_navn, ''), '[​‌‍‎‏‪‫‬‭‮⁠﻿]', '', 'g'),
+    '\s+', ' ', 'g'
+  )));
+$$;
 
 create or replace function public.portal_selgere_synk(p_forhandlere jsonb)
 returns jsonb
@@ -98,7 +125,9 @@ begin
       v_rapport := v_rapport || jsonb_build_array(jsonb_build_object('forhandler', v_forhandler_payload->>'kontakt_navn', 'status', 'ukjent_kontakt_id'));
       continue;
     end if;
-    if lower(trim(coalesce(v_forhandler->>'navn', ''))) <> lower(trim(coalesce(v_forhandler_payload->>'kontakt_navn', ''))) then
+    -- En tom (eller manglende) kontakt_navn fra portalen stemmer naturlig ALDRI med en ekte
+    -- forhandlers navn i appen - havner her, akkurat som ønsket (hele forhandleren hoppes over).
+    if portal_normaliser_navn(v_forhandler->>'navn') <> portal_normaliser_navn(v_forhandler_payload->>'kontakt_navn') then
       v_navn_mismatch := v_navn_mismatch + 1;
       v_rapport := v_rapport || jsonb_build_array(jsonb_build_object('forhandler', v_forhandler->>'navn', 'status', 'navn_stemmer_ikke'));
       continue;
@@ -111,12 +140,15 @@ begin
       v_portal_id := v_selger->>'portal_id';
       v_navn := trim(coalesce(v_selger->>'navn', ''));
       v_epost := trim(coalesce(v_selger->>'epost', ''));
-      if v_portal_id is null or v_portal_id = '' or v_navn = '' or v_epost = '' then
+      -- Uten portal_id eller e-post er det ingenting trygt å matche på i det hele tatt - hopp
+      -- over. Et TOMT navn hopper IKKE over her lenger (rettet 5.11) - portalId/e-post-match
+      -- (regel 1/2 under) trenger ikke navnet, se migrasjonsnotatet.
+      if v_portal_id is null or v_portal_id = '' or v_epost = '' then
         v_hoppet_over := v_hoppet_over + 1;
         continue;
       end if;
 
-      -- Regel 1: match på portalId fra før
+      -- Regel 1: match på portalId fra før (uavhengig av om navn er tomt)
       v_match_idx := null; v_i := 0;
       for v_kp in select * from jsonb_array_elements(v_kontaktpersoner) loop
         if v_kp->>'portalId' = v_portal_id then v_match_idx := v_i; end if;
@@ -131,7 +163,7 @@ begin
         continue;
       end if;
 
-      -- Regel 2: match på e-post (uavhengig av store/små bokstaver)
+      -- Regel 2: match på e-post (uavhengig av store/små bokstaver, og uavhengig av om navn er tomt)
       v_match_idx := null; v_i := 0;
       for v_kp in select * from jsonb_array_elements(v_kontaktpersoner) loop
         if coalesce(v_kp->>'epost', '') <> '' and lower(trim(v_kp->>'epost')) = lower(v_epost) then v_match_idx := v_i; end if;
@@ -143,12 +175,21 @@ begin
         continue;
       end if;
 
-      -- Regel 3: ÉN kontaktperson uten e-post der navnet er likt eller et ledd/fornavn av portalnavnet
+      -- Uten navn er regel 3-5 verken trygge å matche på (ville sammenlignet mot en tom streng)
+      -- eller ønskelig å opprette en ny kontaktperson med (en kontaktperson uten navn) - hopp
+      -- over resten for DENNE selgeren (rettet 5.11, portal-øktas presisering: portalen kan
+      -- fortsatt sende en tom streng for en selger uten navn registrert).
+      if v_navn = '' then
+        v_hoppet_over := v_hoppet_over + 1;
+        continue;
+      end if;
+
+      -- Regel 3: ÉN kontaktperson uten e-post der navnet er identisk eller er et ledd/fornavn av portalnavnet
       v_kandidater := array[]::int[]; v_i := 0;
       for v_kp in select * from jsonb_array_elements(v_kontaktpersoner) loop
         if coalesce(v_kp->>'epost', '') = '' and coalesce(v_kp->>'navn', '') <> '' and (
-             lower(trim(v_kp->>'navn')) = lower(v_navn)
-             or lower(trim(v_kp->>'navn')) = any (string_to_array(lower(v_navn), ' '))
+             portal_normaliser_navn(v_kp->>'navn') = portal_normaliser_navn(v_navn)
+             or portal_normaliser_navn(v_kp->>'navn') = any (string_to_array(portal_normaliser_navn(v_navn), ' '))
            ) then
           v_kandidater := array_append(v_kandidater, v_i);
         end if;
@@ -170,7 +211,7 @@ begin
       -- Regel 4: samme navn, ANNEN e-post - ikke dupliser, rapporter, la appens e-post stå
       v_match_idx := null; v_i := 0;
       for v_kp in select * from jsonb_array_elements(v_kontaktpersoner) loop
-        if coalesce(v_kp->>'navn', '') <> '' and lower(trim(v_kp->>'navn')) = lower(v_navn)
+        if coalesce(v_kp->>'navn', '') <> '' and portal_normaliser_navn(v_kp->>'navn') = portal_normaliser_navn(v_navn)
            and coalesce(v_kp->>'epost', '') <> '' and lower(trim(v_kp->>'epost')) <> lower(v_epost) then
           v_match_idx := v_i;
         end if;

@@ -127,6 +127,57 @@ begin
     select (x->>'hoppetOver')::int = 3 and (x->>'opprettet')::int = 0
     from jsonb_array_elements(r->'rapport') x where x->>'forhandler' = 'TEST Forhandler B'
   ), r::text);
+
+  -- T7: en selger UTEN navn (portalen sender nå alltid en streng, aldri NULL) kobles fortsatt
+  -- via e-post-match (regel 2) - rettet 5.11 etter portal-øktas presisering.
+  -- Indeks 1 = "TEST Forhandler B" (opprettet som element nr. 2 i oppsettet øverst i filen).
+  update innstillinger set kontakter = jsonb_set(kontakter, '{1,kontaktpersoner}',
+    (kontakter->1->'kontaktpersoner') || jsonb_build_array(jsonb_build_object('id', 'kp_b1', 'navn', 'Navnløs Fra Før', 'epost', 'navnlos@test.no', 'tlf', '', 'notat', ''))
+  ) where id = 1;
+  r := portal_selgere_synk(jsonb_build_array(jsonb_build_object(
+    'kontakt_id', 'k_test_b', 'kontakt_navn', 'TEST Forhandler B', 'selgere', jsonb_build_array(
+      jsonb_build_object('portal_id', 'p_navnlos', 'navn', '', 'epost', 'NAVNLOS@test.no')
+    )
+  )));
+  select k->'kontaktpersoner' into v_kontakter from jsonb_array_elements((select kontakter from innstillinger where id = 1)) k where k->>'id' = 'k_test_b';
+  select kp into v_kp from jsonb_array_elements(v_kontakter) kp where kp->>'id' = 'kp_b1';
+  insert into _res(navn, ok, info) values ('T7 navnløs selger kobles via e-post-match (portalId satt, navn URØRT)', v_kp->>'portalId' = 'p_navnlos' and v_kp->>'navn' = 'Navnløs Fra Før', v_kp::text);
+  insert into _res(navn, ok, info) values ('T7 rapporten sier koblet=1, opprettet=0 for denne kjøringen', (
+    select (x->>'koblet')::int = 1 and (x->>'opprettet')::int = 0 from jsonb_array_elements(r->'rapport') x where x->>'forhandler' = 'TEST Forhandler B'
+  ), r::text);
+
+  -- T8: en selger UTEN navn og UTEN noe å matche mot: hoppes over, INGEN ny kontaktperson med tomt navn opprettes
+  r := portal_selgere_synk(jsonb_build_array(jsonb_build_object(
+    'kontakt_id', 'k_test_b', 'kontakt_navn', 'TEST Forhandler B', 'selgere', jsonb_build_array(
+      jsonb_build_object('portal_id', 'p_helt_ukjent', 'navn', '', 'epost', 'helt-ukjent@test.no')
+    )
+  )));
+  select k->'kontaktpersoner' into v_kontakter from jsonb_array_elements((select kontakter from innstillinger where id = 1)) k where k->>'id' = 'k_test_b';
+  insert into _res(navn, ok, info) values ('T8 ingen kontaktperson med tomt navn finnes etterpå', not exists (select 1 from jsonb_array_elements(v_kontakter) kp where kp->>'navn' = ''), v_kontakter::text);
+  insert into _res(navn, ok, info) values ('T8 rapporten sier hoppetOver=1, opprettet=0', (
+    select (x->>'hoppetOver')::int = 1 and (x->>'opprettet')::int = 0 from jsonb_array_elements(r->'rapport') x where x->>'forhandler' = 'TEST Forhandler B'
+  ), r::text);
+
+  -- T9: navn-normalisering (rettet 5.11) - doble mellomrom og en usynlig zero-width-space i
+  -- APPENS lagrede navn skal fortsatt matche portalens RENE navn, både på forhandler- og selger-nivå.
+  update innstillinger set kontakter = kontakter || jsonb_build_array(
+    jsonb_build_object('id', 'k_test_c', 'navn', 'TEST  Forhandler' || chr(8203) || ' C', 'type', 'Forhandler', 'kontaktpersoner', jsonb_build_array(
+      jsonb_build_object('id', 'kp_c1', 'navn', 'Kari' || chr(8203) || '  Spaces', 'epost', '', 'tlf', '', 'notat', '')
+    ))
+  );
+  r := portal_selgere_synk(jsonb_build_array(jsonb_build_object(
+    'kontakt_id', 'k_test_c', 'kontakt_navn', 'TEST Forhandler C', 'selgere', jsonb_build_array(
+      jsonb_build_object('portal_id', 'p_norm', 'navn', 'Kari Spaces', 'epost', 'kari.spaces@test.no')
+    )
+  )));
+  insert into _res(navn, ok, info) values ('T9 forhandler med doble mellomrom/usynlig tegn MATCHER portalens rene navn (ikke navn_stemmer_ikke)', (
+    select not exists (select 1 from jsonb_array_elements(r->'rapport') x where x->>'status' = 'navn_stemmer_ikke')
+       and exists (select 1 from jsonb_array_elements(r->'rapport') x where x ? 'koblet') -- den ekte oppsummerings-linjen (ikke en hoppet-over/konflikt-rapportlinje) finnes
+  ), r::text);
+  select k->'kontaktpersoner' into v_kontakter from jsonb_array_elements((select kontakter from innstillinger where id = 1)) k where k->>'id' = 'k_test_c';
+  select kp into v_kp from jsonb_array_elements(v_kontakter) kp where kp->>'id' = 'kp_c1';
+  insert into _res(navn, ok, info) values ('T9 selger med doble mellomrom/usynlig tegn i appens navn MATCHER portalens rene navn (regel 3, ikke en ny dublett)', v_kp->>'portalId' = 'p_norm' and v_kp->>'epost' = 'kari.spaces@test.no', v_kp::text);
+  insert into _res(navn, ok, info) values ('T9 ingen dublett-kontaktperson opprettet for Kari', jsonb_array_length(v_kontakter) = 1, v_kontakter::text);
 end;
 $test$;
 

@@ -106,14 +106,32 @@ async function selgereGate(req: Request): Promise<{ status: number; melding: str
 
 type PortalSvar = {
   ok: boolean
+  // utelatte_dubletter telles av portalen selv (samme e-post på flere brukere - laveste
+  // portal_id vinner der, resten telles her) - vi sjekker den ikke mot noe her, bare tar imot.
+  antall: { forhandlere: number; selgere: number; utelatte_dubletter?: number }
   forhandlere: Array<{ kontakt_id: string; kontakt_navn: string; orgnr: string | null; selgere: Array<{ portal_id: string; navn: string; epost: string }> }>
 }
 
+// navn/kontakt_navn er ALLTID strenger fra portalen (tom streng hvis ukjent, aldri null -
+// avtalt 5.11 etter at en tidligere null-verdi for en navnløs selger/forhandler avviste HELE
+// svaret her). En tom streng er fortsatt gyldig på dette nivået - selve matchingen
+// (portal_selgere_synk) håndterer det videre uten å opprette en kontaktperson uten navn.
 function gyldigPortalSvar(x: any): x is PortalSvar {
-  return !!x && x.ok === true && Array.isArray(x.forhandlere) && x.forhandlere.every((f: any) =>
-    typeof f?.kontakt_id === 'string' && typeof f?.kontakt_navn === 'string' && Array.isArray(f?.selgere) &&
-    f.selgere.every((s: any) => typeof s?.portal_id === 'string' && typeof s?.navn === 'string' && typeof s?.epost === 'string')
-  )
+  return !!x && x.ok === true
+    && typeof x?.antall?.forhandlere === 'number' && typeof x?.antall?.selgere === 'number'
+    && Array.isArray(x.forhandlere) && x.forhandlere.every((f: any) =>
+      typeof f?.kontakt_id === 'string' && typeof f?.kontakt_navn === 'string' && Array.isArray(f?.selgere) &&
+      f.selgere.every((s: any) => typeof s?.portal_id === 'string' && typeof s?.navn === 'string' && typeof s?.epost === 'string')
+    )
+}
+
+// Portalens eget antall-felt må stemme med den faktiske listen den sendte - en ekte, men
+// avkuttet/mistenkelig liten respons (f.eks. en feil på portalens side som gir et tomt
+// forhandlere-array) skal IKKE kunne tømme kontaktpersoner stille. Dette er en intern
+// konsistenssjekk (fanger opp et brutt/avkuttet svar), ikke en sammenligning mot historikk.
+function antallStemmer(x: PortalSvar): boolean {
+  const faktiskeSelgere = x.forhandlere.reduce((sum, f) => sum + f.selgere.length, 0)
+  return x.antall.forhandlere === x.forhandlere.length && x.antall.selgere === faktiskeSelgere
 }
 
 Deno.serve(async (req) => {
@@ -132,6 +150,7 @@ Deno.serve(async (req) => {
     if (!portalRes.ok) return jsonSvar({ error: `Portalen svarte ${portalRes.status}` }, 502)
     const portalData = await portalRes.json().catch(() => null)
     if (!gyldigPortalSvar(portalData)) return jsonSvar({ error: 'Uventet svarform fra portalen' }, 502)
+    if (!antallStemmer(portalData)) return jsonSvar({ error: 'Portalens oppgitte antall stemmer ikke med listen den faktisk sendte - avviser svaret' }, 502)
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     const { data, error } = await supabase.rpc('portal_selgere_synk', {
