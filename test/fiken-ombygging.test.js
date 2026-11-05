@@ -421,6 +421,37 @@ describe('fakturaSjekk', () => {
     expect(sjekk.grunner.some((g) => g.kode === 'ingen_avtalt_rabatt')).toBe(false);
   });
 
+  // Rettet 5.11 (uavhengig gjennomgang av s90-20261105-sikkerhet-pengefellene fant at lista
+  // viste GRØNT for ordre som fiken-fakturer sin NULL-sperre (09cf8f2) faktisk avviser 400 på -
+  // samme NULL-regel speilet her, se kommentaren i fakturaSjekk for hvorfor den er en grov
+  // tilnærming).
+  it('alias og rabattrad finnes, men EN kategori står NULL (ikke 0): rød, ikke grønn/gul - serveren vil avvise', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: 10 }];
+    const o = basisOrdre({ fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high' }] }); // ingen frosset rabatt på linjen
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.niva).toBe('rod');
+    expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(true);
+  });
+
+  it('alias og rabattrad finnes, BEGGE kategorier satt (0 er gyldig, ikke NULL): ingen advarsel', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 0, rabatt_ekstra_utstyr: 0 }];
+    const o = basisOrdre({ fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high' }] });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(false);
+  });
+
+  it('en kategori er NULL, men linjen har en FROSSET rabatt: ingen advarsel (trenger ikke kategorisatsen uansett)', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: null }];
+    const sjekk = env.fakturaSjekk(basisOrdre()); // basisOrdre sin linje har en frosset rabatt:20
+    expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(false);
+  });
+
   it('ordre allerede "hentet": merkes "ikke avstemt", men blir ikke rød av bare det', () => {
     const env = nyEnvironment();
     const sjekk = env.fakturaSjekk(basisOrdre({ ordreStatus: 'hentet' }));
@@ -474,5 +505,54 @@ describe('fakturerViaFiken: blokkering bruker fakturaSjekk (kanoniskMerkeModell)
     await env.fakturerViaFiken('ord_1');
     expect(toaster.some((m) => /Ingen kjent Fiken-produktlinje/.test(m))).toBe(true);
     expect(kalt).toBe(false);
+  });
+});
+
+// Rettet 5.11 (uavhengig gjennomgang): "prøv igjen" var misvisende på en 4xx-avvisning
+// (forretningsregel/validering) - feiler PRESIS likt på nytt forsøk uten at noe er rettet
+// først. Beholdes kun for transiente feil (nettverk, 5xx) der et nytt forsøk faktisk hjelper.
+describe('kallFikenFakturer: "prøv igjen" kun når et nytt forsøk faktisk kan hjelpe', () => {
+  function miljoMedEdgeFetch(svarEllerKaster) {
+    const env = nyEnvironment();
+    env.S.ordrer = [{ id: 'ord_1', kunde: 'Test Kunde AS', fikenLinjer: [] }];
+    env.me = { id: 1, navn: 'Test Admin', rolle: 'admin' };
+    env.document.getElementById = () => null;
+    env.erLeveranse = () => false; // definert i core.js, ikke lastet her - trengs for linjen som bygger body
+    const toaster = [];
+    env.visToast = (m) => toaster.push(m);
+    env.toaster = toaster;
+    env.edgeFetch = typeof svarEllerKaster === 'function'
+      ? svarEllerKaster
+      : async () => ({ ok: svarEllerKaster.status >= 200 && svarEllerKaster.status < 300, status: svarEllerKaster.status, json: async () => svarEllerKaster.body });
+    return env;
+  }
+
+  it('en 400-avvisning (manglende rabattsats e.l.) får IKKE "prøv igjen"', async () => {
+    const env = miljoMedEdgeFetch({ status: 400, body: { error: 'Kundens ombygging-rabatt er ikke satt i Fiken-rabatt' } });
+    const status = await env.kallFikenFakturer('ord_1', {});
+    expect(status).toBe('error');
+    expect(env.toaster[0]).toContain('Kundens ombygging-rabatt er ikke satt');
+    expect(env.toaster[0]).not.toContain('prøv igjen');
+  });
+
+  it('en 404 (ordren finnes ikke) får IKKE "prøv igjen"', async () => {
+    const env = miljoMedEdgeFetch({ status: 404, body: { error: 'Fant ikke ordren' } });
+    const status = await env.kallFikenFakturer('ord_1', {});
+    expect(status).toBe('error');
+    expect(env.toaster[0]).not.toContain('prøv igjen');
+  });
+
+  it('en 502 (Fiken selv avviste kladden) BEHOLDER "prøv igjen"', async () => {
+    const env = miljoMedEdgeFetch({ status: 502, body: { error: 'Fiken avviste kladden (502): midlertidig feil' } });
+    const status = await env.kallFikenFakturer('ord_1', {});
+    expect(status).toBe('error');
+    expect(env.toaster[0]).toContain('prøv igjen');
+  });
+
+  it('en ekte nettverksfeil (edgeFetch kaster, ingen status) BEHOLDER "prøv igjen"', async () => {
+    const env = miljoMedEdgeFetch(async () => { throw new Error('Ingen nettforbindelse'); });
+    const status = await env.kallFikenFakturer('ord_1', {});
+    expect(status).toBe('error');
+    expect(env.toaster[0]).toContain('prøv igjen');
   });
 });

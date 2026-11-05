@@ -717,7 +717,11 @@ async function kallFikenFakturer(id, ekstra) {
       openModal('fikenKundeBekreft');
       return 'needsBekreftelse';
     }
-    if (!res.ok || data.error) throw new Error(data.error || ('Fiken svarte ' + res.status));
+    if (!res.ok || data.error) {
+      const feil = new Error(data.error || ('Fiken svarte ' + res.status));
+      feil.status = res.status;
+      throw feil;
+    }
     o.fakturert = true;
     o.fikenKladdUrl = data.draftUrl || o.fikenKladdUrl;
     // s09-006: edge-funksjonen lagrer nå selv fiken_kladd_url + fakturert på ordren, atomisk,
@@ -737,7 +741,12 @@ async function kallFikenFakturer(id, ekstra) {
       : 'Kladd opprettet i Fiken - gå inn og send den derfra');
     return 'ok';
   } catch (e) {
-    visToast('Kunne ikke opprette faktura i Fiken: ' + e.message + ' - prøv igjen');
+    // Rettet 5.11 (uavhengig gjennomgang): "prøv igjen" er misvisende på en 4xx - en
+    // validerings-/forretningsregel-avvisning (manglende rabattsats, ukjent produkt osv.)
+    // feiler PRESIS likt neste gang uten at noe faktisk er rettet først. Beholdes kun for
+    // transiente feil (nettverk, 5xx) der et nytt forsøk faktisk kan hjelpe.
+    const varigAvvist = typeof e.status === 'number' && e.status >= 400 && e.status < 500;
+    visToast('Kunne ikke opprette faktura i Fiken: ' + e.message + (varigAvvist ? '' : ' - prøv igjen'));
     return 'error';
   }
 }
@@ -791,7 +800,17 @@ function fakturaSjekk(o) {
   } else if (alias) {
     const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
     const rabattRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
-    if (manglerFrossetRabatt && !rabattRad) leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
+    if (manglerFrossetRabatt && !rabattRad) {
+      leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
+    } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
+      // Rettet 5.11 (uavhengig gjennomgang fant at lista viste GRØNT for ordre serveren
+      // faktisk avviser 400 på): samme NULL-regel som fiken-fakturer sin sperre (09cf8f2).
+      // Grov tilnærming med vilje - sjekker ikke NØYAKTIG hvilken kategori hver linje faller
+      // i slik serveren gjør (klienten har ikke nødvendigvis Fiken sitt produktnavn
+      // tilgjengelig), så den kan varsle noen ordre som i praksis ikke rammes - det er en
+      // bevisst avveining: heller varsle for mye enn å vise et falskt grønt lys.
+      leggTil('rabatt_kategori_mangler', 'Kundens rabatt er ikke fullstendig satt i Fiken-rabatt (minst én kategori står tomt, ikke 0 %) - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist', 'rod');
+    }
   }
 
   // «Hentet»-ordre fakturert FØR denne sjekken fantes (s90-20261104-5, avtalt med Henrik:
