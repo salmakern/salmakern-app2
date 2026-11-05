@@ -58,7 +58,7 @@
 // NULL i én rabattkategori (viste tidligere grønt for ordre serveren avviser), "prøv igjen"
 // droppes på en permanent 4xx-avvisning. Pluss "Hent selgere fra portalen"-knappen i
 // Kontakter (edge-funksjonen er ikke utlagt ennå, så knappen gir feil til den er det)
-const CACHE = 'salmakern-v44';
+const CACHE = 'salmakern-v45';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

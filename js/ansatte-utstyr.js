@@ -657,7 +657,8 @@ function renderKontakter() {
   document.getElementById('merKontaktAdminBtn').innerHTML =
     '<button class="btn sm" onclick="apneForhandlerListe()">Forhandlere</button>' +
     (erAdmin ? ' <button class="btn sm red" onclick="apneNyKontakt()">+ Ny kontakt</button>' : '') +
-    (erAdmin ? ' <button class="btn sm" id="hentSelgereBtn" onclick="hentSelgereFraPortalen()">Hent selgere fra portalen</button>' : '');
+    (erAdmin ? ' <button class="btn sm" id="hentSelgereBtn" onclick="hentSelgereFraPortalen()">Hent selgere fra portalen</button>' : '') +
+    (erAdmin ? ' <button class="btn sm" id="hentRabatterBtn" onclick="hentRabatterFraPortalen()">Hent rabatter fra portalen</button>' : '');
   const el = document.getElementById('kontaktListe');
   const andre = S.kontakter.filter(k=>k.type!=='Forhandler');
   if (!andre.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
@@ -707,6 +708,33 @@ async function hentSelgereFraPortalen() {
     visToast('Henting av selgere feilet: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Hent selgere fra portalen'; }
+  }
+}
+
+// "Hent rabatter fra portalen" (5.11, Henriks ja: "Ja det er bare å starte" - rabatt-prosjektet
+// steg 1 av 4: "bygg+verifiser henting av portalsatser"). Henter forhandler-rabattsatser fra
+// Forhandlerportalen inn i en EGEN, rå tabell (portal_kunde_rabatt) - IKKE inn i
+// fiken_kunde_rabatt, og IKKE koblet til fakturering ennå (se migrasjon
+// 20261105130000_portal_rabatter_synk for hvorfor). Denne knappen henter og viser bare
+// resultatet - ingenting i S endres herfra.
+async function hentRabatterFraPortalen() {
+  if (!me || me.rolle !== 'admin') return;
+  const btn = document.getElementById('hentRabatterBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Henter...'; }
+  try {
+    const res = await edgeFetch('hent-rabatter-fra-portalen', { method: 'POST' });
+    const svar = await res.json();
+    if (!res.ok || !svar.ok) { visToast('Kunne ikke hente rabatter: ' + (svar.error || res.status)); return; }
+    const deler = [`${svar.antallForhandlere} forhandlere sjekket`];
+    if (svar.opprettet) deler.push(`${svar.opprettet} nye`);
+    if (svar.oppdatert) deler.push(`${svar.oppdatert} oppdatert`);
+    if (svar.uendret) deler.push(`${svar.uendret} uendret`);
+    if (svar.ugyldigRad || svar.ukjentKontaktId) deler.push(`${(svar.ugyldigRad||0) + (svar.ukjentKontaktId||0)} trenger et manuelt blikk`);
+    visToast(deler.join(', '), 'ok');
+  } catch (e) {
+    visToast('Henting av rabatter feilet: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Hent rabatter fra portalen'; }
   }
 }
 

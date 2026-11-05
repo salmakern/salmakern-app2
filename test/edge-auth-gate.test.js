@@ -17,12 +17,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FUNKSJONER = ['fiken-fakturer', 'send-frakt-epost', 'vegvesen-oppslag', 'send-push'];
+// hent-selgere-fra-portalen er bevisst IKKE lagt til her ennå (den har sin egen
+// SERVER-KALLER-blokk for cron, akkurat som send-push - å ta den med krever samtidig å
+// generalisere "bare send-push har en server-blokk"-testen under, en separat jobb).
+const FUNKSJONER = ['fiken-fakturer', 'send-frakt-epost', 'vegvesen-oppslag', 'send-push', 'hent-rabatter-fra-portalen'];
 const TILLATTE_ROLLER_PER_FN = {
   'fiken-fakturer': ['admin'],
   'send-frakt-epost': ['admin'],
   'vegvesen-oppslag': ['admin', 'godkjenner', 'ansatt', 'verneombud'],
   'send-push': ['admin', 'godkjenner', 'ansatt', 'verneombud'],
+  'hent-rabatter-fra-portalen': ['admin'],
 };
 // Funksjonen handleren kaller først (send-push går via sendPushGate, som delegerer til den delte gaten).
 const GATEKALL_PER_FN = { 'send-push': 'sendPushGate' };
