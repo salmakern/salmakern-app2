@@ -11,14 +11,14 @@
 //    HENT_SELGERE_SERVER_SECRET) - ingen ansatt-sesjon finnes da.
 //
 // Portalens endepunkt: GET https://forhandler.salmaker.as/api/salmakern/selgere med header
-// x-salmakern-selgere-secret (EGEN hemmelighet - gir persondata, derfor ALDRI gjenbruk av
+// x-salmakern-hent-secret (EGEN hemmelighet - gir persondata, derfor ALDRI gjenbruk av
 // SALMAKERN_STATUS_SECRET, etter avtale med portal-økta). Svarformen er avtalt kontrakt:
 // { ok: true, generert, forhandlere: [{ kontakt_id, kontakt_navn, orgnr, selgere: [{portal_id, navn, epost}] }] }
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const PORTAL_URL = 'https://forhandler.salmaker.as/api/salmakern/selgere'
-const PORTAL_SECRET = Deno.env.get('SALMAKERN_SELGERE_SECRET')
+const PORTAL_SECRET = Deno.env.get('SALMAKERN_HENT_SECRET')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -122,11 +122,11 @@ Deno.serve(async (req) => {
     const avvist = await selgereGate(req)
     if (avvist) return jsonSvar({ error: avvist.melding }, avvist.status)
 
-    if (!PORTAL_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet mot portalen (SALMAKERN_SELGERE_SECRET) er satt opp ennå' }, 500)
+    if (!PORTAL_SECRET) return jsonSvar({ error: 'Ingen delt hemmelighet mot portalen (SALMAKERN_HENT_SECRET) er satt opp ennå' }, 500)
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return jsonSvar({ error: 'Mangler Supabase-tilgang i funksjonen' }, 500)
 
     const portalRes = await fetch(PORTAL_URL, {
-      headers: { 'x-salmakern-selgere-secret': PORTAL_SECRET },
+      headers: { 'x-salmakern-hent-secret': PORTAL_SECRET },
       signal: AbortSignal.timeout(15000),
     })
     if (!portalRes.ok) return jsonSvar({ error: `Portalen svarte ${portalRes.status}` }, 502)

@@ -42,7 +42,7 @@ function gyldigPortalData(overrides = {}) {
 // Supabase-tilgang gir 500) - samme minimumsmiljø som fiken-fakturer-rabatt.test.js bruker.
 const BASIS_ENV = { SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'fake-service-key', SUPABASE_ANON_KEY: 'fake-anon-key' };
 
-// env: {EDGE_AUTH_ENFORCE?, HENT_SELGERE_SERVER_SECRET?, SALMAKERN_SELGERE_SECRET?}, slått
+// env: {EDGE_AUTH_ENFORCE?, HENT_SELGERE_SERVER_SECRET?, SALMAKERN_HENT_SECRET?}, slått
 // sammen MED (aldri i stedet for) BASIS_ENV.
 // portal: {status, body} eller en funksjon (req)=>Response - svaret fra portalens endepunkt.
 // rpcSvar: {data, error} - svaret fra den falske portal_selgere_synk-RPC-en.
@@ -99,13 +99,13 @@ describe('hent-selgere-fra-portalen: innloggingsgate', () => {
 
 describe('hent-selgere-fra-portalen: ansatt-gate og server-hemmelighet', () => {
   it('myk modus (ingen EDGE_AUTH_ENFORCE): alle slipper gjennom til selve logikken', async () => {
-    const { kall } = await last({ env: { SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) } });
+    const { kall } = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) } });
     const res = await kall({ authorization: 'Bearer sb_publishable_ikke_en_jwt' });
     expect(res.status).toBe(200); // går helt til portal-henting (myk modus, gaten slipper gjennom)
   });
 
   it('håndhevet: admin slipper gjennom, en annen rolle avvises 403, ingen token avvises 401', async () => {
-    const env = { EDGE_AUTH_ENFORCE: 'hent-selgere-fra-portalen', SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) };
+    const env = { EDGE_AUTH_ENFORCE: 'hent-selgere-fra-portalen', SALMAKERN_HENT_SECRET: 'x'.repeat(40) };
     const admin = await last({ env });
     expect((await admin.kall({ authorization: `Bearer ${TOK.admin}` })).status).toBe(200);
 
@@ -120,7 +120,7 @@ describe('hent-selgere-fra-portalen: ansatt-gate og server-hemmelighet', () => {
 
   it('server-kall med riktig delt hemmelighet (x-server-secret) slipper gjennom håndhevet modus uten ansatt-oppslag', async () => {
     const HEMMELIGHET = 'test-server-hemmelighet-0123456789-abcdefghij';
-    const env = { EDGE_AUTH_ENFORCE: '*', HENT_SELGERE_SERVER_SECRET: HEMMELIGHET, SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) };
+    const env = { EDGE_AUTH_ENFORCE: '*', HENT_SELGERE_SERVER_SECRET: HEMMELIGHET, SALMAKERN_HENT_SECRET: 'x'.repeat(40) };
     const { kall, fetchKall } = await last({ env });
     const res = await kall({ 'x-server-secret': HEMMELIGHET });
     expect(res.status).toBe(200);
@@ -128,7 +128,7 @@ describe('hent-selgere-fra-portalen: ansatt-gate og server-hemmelighet', () => {
   });
 
   it('feil server-hemmelighet faller tilbake til vanlig ansatt-gate (avvist uten gyldig token)', async () => {
-    const env = { EDGE_AUTH_ENFORCE: '*', HENT_SELGERE_SERVER_SECRET: 'x'.repeat(40), SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) };
+    const env = { EDGE_AUTH_ENFORCE: '*', HENT_SELGERE_SERVER_SECRET: 'x'.repeat(40), SALMAKERN_HENT_SECRET: 'x'.repeat(40) };
     const { kall } = await last({ env });
     const res = await kall({ 'x-server-secret': 'feil-hemmelighet-helt-og-holdent' });
     expect(res.status).toBe(401);
@@ -136,28 +136,28 @@ describe('hent-selgere-fra-portalen: ansatt-gate og server-hemmelighet', () => {
 });
 
 describe('hent-selgere-fra-portalen: henting fra portalen og videresending til databasen', () => {
-  it('mangler SALMAKERN_SELGERE_SECRET i miljøet: 500, ingen portal-forespørsel gjort', async () => {
+  it('mangler SALMAKERN_HENT_SECRET i miljøet: 500, ingen portal-forespørsel gjort', async () => {
     const { kall, fetchKall } = await last({ env: {} });
     const res = await kall({});
     expect(res.status).toBe(500);
     expect(fetchKall.some((k) => k.url === PORTAL_URL)).toBe(false);
   });
 
-  it('sender riktig hemmelighet i x-salmakern-selgere-secret til portalen', async () => {
-    const { kall, fetchKall } = await last({ env: { SALMAKERN_SELGERE_SECRET: 'min-hemmelighet-123' } });
+  it('sender riktig hemmelighet i x-salmakern-hent-secret til portalen', async () => {
+    const { kall, fetchKall } = await last({ env: { SALMAKERN_HENT_SECRET: 'min-hemmelighet-123' } });
     await kall({});
     const portalKall = fetchKall.find((k) => k.url === PORTAL_URL);
-    expect(portalKall.headers['x-salmakern-selgere-secret']).toBe('min-hemmelighet-123');
+    expect(portalKall.headers['x-salmakern-hent-secret']).toBe('min-hemmelighet-123');
   });
 
   it('portalen svarer med feilkode: 502', async () => {
-    const { kall } = await last({ env: { SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) }, portal: { status: 503, body: { error: 'nede' } } });
+    const { kall } = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 503, body: { error: 'nede' } } });
     const res = await kall({});
     expect(res.status).toBe(502);
   });
 
   it('portalen svarer med uventet/ugyldig form: 502, ingen RPC-kall', async () => {
-    const miljo = await last({ env: { SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: { ok: true, forhandlere: [{ kontakt_id: 123 }] } } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: { ok: true, forhandlere: [{ kontakt_id: 123 }] } } });
     const res = await miljo.kall({});
     expect(res.status).toBe(502);
     // rpcKall er en getter - må leses ETTER kall(), aldri destruktureres tidlig (det ville bare tatt en frossen snap-shot av null).
@@ -172,7 +172,7 @@ describe('hent-selgere-fra-portalen: henting fra portalen og videresending til d
       ],
     });
     const rapport = { rapport: [{ forhandler: 'A', opprettet: 1 }], navnMismatch: 0, ukjentKontaktId: 0 };
-    const miljo = await last({ env: { SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data }, rpcSvar: { data: rapport, error: null } });
+    const miljo = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, portal: { status: 200, body: data }, rpcSvar: { data: rapport, error: null } });
     const res = await miljo.kall({});
     const svar = await res.json();
     expect(res.status).toBe(200);
@@ -186,7 +186,7 @@ describe('hent-selgere-fra-portalen: henting fra portalen og videresending til d
   });
 
   it('RPC-feil gir 500 med feilmeldingen', async () => {
-    const { kall } = await last({ env: { SALMAKERN_SELGERE_SECRET: 'x'.repeat(40) }, rpcSvar: { data: null, error: { message: 'Databasen nede' } } });
+    const { kall } = await last({ env: { SALMAKERN_HENT_SECRET: 'x'.repeat(40) }, rpcSvar: { data: null, error: { message: 'Databasen nede' } } });
     const res = await kall({});
     const svar = await res.json();
     expect(res.status).toBe(500);
