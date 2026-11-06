@@ -1,0 +1,20 @@
+# Holder interne/utviklingsfiler unna GitHub Pages-publiseringen av salmaker.as.
+# Rører INGENTING annet (ingen egen "theme"/"plugins" osv.) - bare hvilke filer
+# Jekyll kopierer til den publiserte nettsiden. Selve den offentlige nettsiden
+# (nettside/, salmakern.html, js/, sw.js, assets/, logoer/, manifest.json,
+# ikonene, CNAME) er IKKE i denne listen og publiseres som før.
+exclude:
+  - CLAUDE.md
+  - supabase
+  - test
+  - scripts
+  - package.json
+  - package-lock.json
+  - eslint.config.js
+  - jsconfig.json
+  - vitest.config.mjs
+  - auto-deploy.ps1
+  - start-auto-deploy.bat
+  - netlify.toml
+  - .claude
+  - .github
