@@ -1483,11 +1483,14 @@ function adminSettNyPin(id) {
   if (!db) return;
   db.rpc('admin_sett_pin', {p_ansatt_id:id, p_ny_pin:pin.trim()}).then(r=>{
     if (r.error) {
-      alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN-en er allerede i bruk av en annen ansatt'
-        : r.error.message.includes('KUN_ADMIN') ? 'Kun admin kan sette PIN for andre'
+      alert(r.error.message.includes('KUN_ADMIN') ? 'Kun admin kan sette PIN for andre'
+        : r.error.message.includes('FOR_MANGE_FORSOK') ? 'For mange forsøk på kort tid - prøv igjen om noen minutter'
         : 'Feil ved lagring: '+r.error.message);
       return;
     }
+    // endre_egen_pin/admin_sett_pin raiser IKKE lenger for PIN_I_BRUK (ville slettet rate-limit-
+    // registreringen i samme slengen, se migrasjon 20261106000000) - svaret kommer i stedet som data.
+    if (r.data === 'PIN_I_BRUK') { alert('Denne PIN-en er allerede i bruk av en annen ansatt'); return; }
     visToast(`Ny PIN satt for ${a.navn}`, 'ok');
   });
 }
@@ -1525,9 +1528,12 @@ function lagreEgenPin() {
   if (!db) return;
   db.rpc('endre_egen_pin', {p_ny_pin:pin}).then(r=>{
     if (r.error) {
-      alert(r.error.message.includes('PIN_I_BRUK') ? 'Denne PIN-en er allerede i bruk av en annen ansatt' : 'Feil ved lagring: '+r.error.message);
+      alert(r.error.message.includes('FOR_MANGE_FORSOK') ? 'For mange forsøk på kort tid - prøv igjen om noen minutter' : 'Feil ved lagring: '+r.error.message);
       return;
     }
+    // endre_egen_pin raiser IKKE lenger for PIN_I_BRUK (ville slettet rate-limit-registreringen
+    // i samme slengen, se migrasjon 20261106000000) - svaret kommer i stedet som data.
+    if (r.data === 'PIN_I_BRUK') { alert('Denne PIN-en er allerede i bruk av en annen ansatt'); return; }
     document.getElementById('mpPinForm').style.display = 'none';
     visToast('PIN endret', 'ok');
   });
