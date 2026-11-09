@@ -7,11 +7,12 @@
 <meta name="description" content="Send en forespørsel til Telemark Salmakerverksted – vi tar kontakt innen 1–2 virkedager.">
 <link rel="icon" type="image/png" sizes="192x192" href="ikoner/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="ikoner/icon-512.png">
-<link rel="stylesheet" href="site.css?v=16">
+<link rel="stylesheet" href="site.css?v=17">
 <style>
   .form-error { border: 1px solid #7a2f27; background: #2a1815; color: #f0a79d; font-size: 15px; line-height: 1.5; padding: 12px 16px; }
   .form-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
   .form-error[hidden] { display: none; }
+  .form-hint { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text-muted); }
 </style>
 <noscript><style>#bestillingForm > :not(noscript) { display: none; }</style></noscript>
 </head>
@@ -104,10 +105,11 @@
             <input type="text" name="aarsmodell" placeholder="2024" maxlength="20">
           </label>
         </div>
-        <label class="form-field">
-          <span class="flabel mono">HVA ØNSKER DU? *</span>
-          <textarea name="melding" rows="6" maxlength="2000" placeholder="Skillevegg og gulv, ønsker også kasser på venstre side. Bilen er ny og skal registreres som varebil." required></textarea>
-        </label>
+        <div class="form-field">
+          <label class="flabel mono" for="melding">HVA ØNSKER DU?</label>
+          <textarea id="melding" name="melding" rows="6" maxlength="2000" aria-describedby="meldingHjelp" placeholder="Skillevegg og gulv, ønsker også kasser på venstre side. Bilen er ny og skal registreres som varebil."></textarea>
+          <p class="form-hint" id="meldingHjelp">Usikker på innredning? Skriv hva du skal bruke bilen til, så foreslår vi en løsning.</p>
+        </div>
         <div class="form-hp" aria-hidden="true">
           <label>La dette feltet stå tomt <input type="text" name="kontaktref" tabindex="-1" autocomplete="off"></label>
         </div>
