@@ -68,6 +68,10 @@ header.site-header {
 }
 .header-inner { max-width: var(--max-w); margin: 0 auto; padding: 14px var(--pad-x); display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
 .logo-link { display: flex; align-items: center; margin-right: auto; }
+/* Logoen og samarbeidspartneren (Modul-System, 2026-11-09, Henrik: «flytt modul-system-logoen opp ved siden av Salmaker'n-logoen») står side om side til venstre; menyen blir på høyre side. */
+.header-brand { display: flex; align-items: center; gap: 18px; margin-right: auto; min-width: 0; }
+.header-brand .logo-link { margin-right: 0; }
+.header-partner { height: 28px; width: auto; padding-left: 18px; border-left: 1px solid var(--border); flex-shrink: 0; }
 .logo-link img { height: 60px; width: auto; } /* 2026-11-02: 40 -> 60 px (Henrik valgte alternativ B: dagens logo, større). Se justeringer under 1120px og 720px i RESPONSIVE. */
 .main-nav { display: flex; align-items: center; gap: 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; flex-wrap: wrap; }
 .nav-link { color: var(--text-muted); transition: color 0.18s ease; }
@@ -108,6 +112,9 @@ h3 { font-size: 20px; letter-spacing: -0.01em; text-transform: none; margin-bott
 .hero.has-slides .hero-media.is-leaving { opacity: 0; animation: kenburns 24s ease-out both; }
 .hero-modell { position: absolute; right: var(--pad-x); bottom: 22px; z-index: 2; font-size: 11px; letter-spacing: 0.18em; color: var(--text); background: var(--bg); border-left: 2px solid var(--red); padding: 7px 12px; text-decoration: none; transition: background 0.18s ease; }
 .hero-modell:hover { background: var(--red); }
+/* Godkjent påbyggerverksted-merket øverst til høyre i heroen (2026-11-09, Henrik tegnet plasseringen): samme høyrekant som .hero-modell nederst. */
+.hero-godkjenning { position: absolute; top: 30px; right: var(--pad-x); z-index: 2; height: 66px; width: auto; background: var(--text); padding: 6px 12px; border-radius: 2px; }
+@media (max-width: 720px) { .hero-godkjenning { top: 14px; right: 20px; height: 40px; padding: 4px 8px; } }
 @media (max-width: 720px) { .hero-modell { right: 20px; bottom: 14px; font-size: 10px; letter-spacing: 0.14em; padding: 6px 10px; } }
 .hero-content { position: relative; max-width: var(--max-w); margin: 0 auto; padding: 140px var(--pad-x) 66px; width: 100%; animation: rise 0.7s ease both; }
 .hero-tag { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--text); background: var(--bg); border-left: 2px solid var(--red); padding: 7px 12px; margin-bottom: 22px; }
@@ -123,16 +130,16 @@ h3 { font-size: 20px; letter-spacing: -0.01em; text-transform: none; margin-bott
 
 /* ─── TICKER ────────────────────────────────────────────── */
 .ticker { background: var(--red); color: #fff; overflow: hidden; border-top: 1px solid var(--border); }
-.ticker-track { display: flex; width: max-content; animation: ticker 53s linear infinite; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; padding: 11px 0; }
-.ticker-track span { padding-right: 28px; white-space: nowrap; }
+.ticker-track { display: flex; width: max-content; animation: ticker 59s linear infinite; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; padding: 11px 0; }
+.ticker-track span, .ticker-track a { padding-right: 28px; white-space: nowrap; }
+.ticker-track .ticker-kopi { display: flex; padding-right: 0; } /* andre halvdel av løkka (hele gruppen, skjult for skjermlesere): må være NØYAKTIG like bred som første halvdel, ellers hopper rulleteksten ved omstart (animasjonen flytter -50 %) */
+/* Navnene i rulleteksten er lenker til modellsiden (2026-11-09). Rulleteksten stopper når musa står over den, så et navn går an å treffe. */
+.ticker-track a { color: inherit; text-decoration: none; transition: opacity 0.15s ease; }
+.ticker-track a:hover, .ticker-track a:focus-visible { text-decoration: underline; text-underline-offset: 4px; }
+.ticker:hover .ticker-track, .ticker:focus-within .ticker-track { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) { .ticker-track { animation: none; overflow-x: auto; } }
 
 /* ─── PARTNER STRIP ─────────────────────────────────────── */
-.partner-strip { background: var(--surface); border-top: 1px solid var(--border); }
-.partner-strip .section-inner { padding: 18px var(--pad-x); display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
-.partner-strip .mono { font-size: 11px; letter-spacing: 0.16em; color: var(--text-label); }
-.partner-strip img.partner-logo { height: 26px; width: auto; }
-.partner-strip img.partner-logo.on-light { height: 42px; background: var(--text); padding: 4px 8px; border-radius: 2px; }
 
 /* ─── STATS ROW ─────────────────────────────────────────── */
 .stats-row { border-top: 1px solid var(--surface); }
@@ -401,9 +408,12 @@ h3 { font-size: 20px; letter-spacing: -0.01em; text-transform: none; margin-bott
   .nav-cta { padding: 11px 14px; }
   .header-inner { gap: 20px; }
   .logo-link img { height: 52px; } /* 60 px gir for bred logo til at menyen får én rad ved siden av den */
+  .header-brand { gap: 14px; }
+  .header-partner { height: 24px; padding-left: 14px; }
 }
 @media (max-width: 720px) {
   .logo-link img { height: 50px; }
+  .header-partner { height: 22px; padding-left: 12px; }
   /* Holder mobil-headeren så lav som mulig: den er klebrig, så hver ekstra rad koster skjermplass */
   .main-nav { gap: 10px 14px; font-size: 11px; letter-spacing: 0.06em; }
   .nav-cta { padding: 10px 14px; }
