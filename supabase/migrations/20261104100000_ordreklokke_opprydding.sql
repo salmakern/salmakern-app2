@@ -1,4 +1,4 @@
--- Ikke kjørt ennå (skrives 2026-11-04, kjøres etter Henriks samtykke). Test først: supabase/tester/ordreklokke_opprydding_TEST_body.sql (rullet tilbake).
+-- Kjørt i produksjon 2026-11-04 kveld. Etterfulgt av 20261109100000_ordreklokke_trygg_parse.sql (trygg parse av timeføringer i cron). Test: supabase/tester/ordreklokke_opprydding_TEST_body.sql (rullet tilbake).
 -- Bakgrunn (Henrik 2026-11-04, «reparer dagens»): en Ombygging-klokke (ordrer.ordre_timer_sessions) kunne stå åpen hele natta: Ismails økt startet 3.11 kl. 13:56 og gikk til den ble stoppet manuelt dagen etter,
 -- fordi han aldri var stemplet inn. Av 40 økter var 10 over 10 timer (lengste 66,8 t) og 16 uten stemplet tid i det hele tatt. Klokka er koblet til lønnsklokka bare ved en EGEN utstempling.
 -- Reparasjonen i databasen:

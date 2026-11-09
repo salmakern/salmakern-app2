@@ -398,9 +398,11 @@ async function reparerManglendeStempling() {
   const fersk = await db.from('ansatte').select('stemplet_inn_siden').eq('id', me.id).single();
   if (fersk.error || !fersk.data) return false;
   if (fersk.data.stemplet_inn_siden) {
-    // Finnes en stempling, men er den over 16 t gammel, teller databasen den ikke, og den kan ikke repareres her (den lokale klokka er like gammel): ansatten må stemple ut og inn.
     const ms = Date.parse(fersk.data.stemplet_inn_siden);
-    return !isNaN(ms) && ms > Date.now() - STEMPLING_MAKS_ALDER_MS;
+    if (!isNaN(ms) && ms > Date.now() - STEMPLING_MAKS_ALDER_MS) return true;   // fersk stempling: ingenting å reparere
+    // En GAMMEL stempling (over 16 t: glemt utstempling i går) teller ikke i databasen. Er min lokale klokke YNGRE enn den (jeg startet en ny i dag, men innstemplingen kom aldri frem), skal den gamle overskrives
+    // (under, med de samme vaktene som for en tom stempling). Er den lokale klokka like gammel eller eldre, kan ikke noe repareres her: ansatten må stemple ut og inn.
+    if (isNaN(ms) || !(start > ms)) return false;
   }
   if (start < Date.now() - STEMPLING_MAKS_ALDER_MS) return false;
   const reg = await db.from('timer_entries').select('id').eq('ansatt_id', me.id).eq('type', 'normal').gte('created_at', new Date(start).toISOString()).limit(1);
@@ -416,6 +418,10 @@ async function gjenopptaEtterReparasjon() {
   else _gjenopptaNaarDataErLastet = true;
 }
 async function gjenopptaMineEtterInnlasting() {
+  // En stempling reparert ved oppstart (før S.ansatte var lastet) fant ingen rad å oppdatere lokalt, og innlastingen kan ha lest raden FØR skrivingen: synk min egen rad, ellers oppdager ikke Realtime-handleren
+  // (varStemplet i core.js) en senere admin-utstempling, og min lokale klokke går videre og kan føre samme tid to ganger. me.stempletInnSiden er bare satt hvis DENNE økta har skrevet stemplingen.
+  const egen = me && (S.ansatte||[]).find(a => a.id === me.id);
+  if (egen && me.stempletInnSiden && !egen.stempletInnSiden) egen.stempletInnSiden = me.stempletInnSiden;
   if (!_gjenopptaNaarDataErLastet) return;
   _gjenopptaNaarDataErLastet = false;
   await gjenopptaMineOrdreKlokkerVedInnstempling();
@@ -428,8 +434,10 @@ async function selvhelIkkeStemplet(navn) {
     let ok = false;
     try { ok = await reparerManglendeStempling(); } catch (e) { console.error('Kunne ikke reparere stemplingen:', e && e.message); }
     if (ok) {
-      try { await gjenopptaMineOrdreKlokkerVedInnstempling(); } catch (e) { console.error('Kunne ikke gjenoppta klokkene:', e && e.message); }
-      return rest.filter(n => n !== me.navn);
+      // Jeg fjernes fra beskjedlisten BARE hvis klokkene faktisk ble startet: feilet gjenopptakelsen (nettfeil, databasen sier fortsatt nei), skal jeg fortsatt få beskjeden.
+      let startet = false;
+      try { startet = (await gjenopptaMineOrdreKlokkerVedInnstempling()) === true; } catch (e) { console.error('Kunne ikke gjenoppta klokkene:', e && e.message); }
+      if (startet) return rest.filter(n => n !== me.navn);
     }
   }
   return rest;
@@ -461,13 +469,19 @@ async function stoppMineOrdreKlokkerVedUtstempling() {
   if (!me || !db) return;
   await stoppOrdreKlokkerForAnsatt(me.id, me.navn);
 }
+// Gir true hvis alle klokker som skulle startes ble startet (eller ingen skulle det), false hvis noen start ble avvist eller feilet.
 async function gjenopptaMineOrdreKlokkerVedInnstempling() {
-  if (!me || !db) return;
+  if (!me || !db) return true;
+  let alleOk = true;
   const mine = (S.ordrer||[]).filter(o => (o.ansatteSignert||[]).some(a=>a.id===me.id));
   for (const o of mine) {
     const felt = ordreAktivFase(o);
-    if (felt && !ansattHarApenOrdreSesjon(o, felt, me.id)) await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+    if (felt && !ansattHarApenOrdreSesjon(o, felt, me.id)) {
+      const r = await startOrdreTimerForAnsatt(o, felt, me.id, me.navn);
+      if (r !== true) alleOk = false;
+    }
   }
+  return alleOk;
 }
 
 function stoppTimer() {

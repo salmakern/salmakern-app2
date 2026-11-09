@@ -924,3 +924,135 @@ describe('finnOverlappendeTimeforinger: en kastet feil hindrer aldri en føring'
     expect(await sandbox.finnOverlappendeTimeforinger(5, '2026-11-02', '08:00', '12:00')).toEqual([]);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// Rettelser fra runde 3 (etterkontroll 2026-11-09)
+// ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('reparerManglendeStempling: en GAMMEL databasestempling (glemt utstempling i går) og en ung lokal klokke', () => {
+  const lag = ({ stempling, foringer = [] }) => lagTabellDb((q) => {
+    if (q.tabell === 'ansatte' && q.select) return { data: { stemplet_inn_siden: stempling }, error: null };
+    if (q.tabell === 'timer_entries' && q.select) return { data: foringer, error: null };
+    return { data: null, error: null };
+  });
+  const gammel = () => new Date(Date.now() - 20 * 3600000).toISOString();
+  it('i går glemt utstempling, i dag en ny klokke hvis innstemplingsskriving mislyktes: den gamle stemplingen overskrives med den lokale klokka', async () => {
+    const start = Date.now() - 1 * 3600000; app.settTimerStart(start);
+    const { db, kall } = lag({ stempling: gammel() }); app.settDb(db);
+    expect(await sandbox.reparerManglendeStempling()).toBe(true);
+    expect(kall.find((k) => k.update).update).toEqual({ stemplet_inn_siden: new Date(start).toISOString() });
+  });
+  it('men er en føring ført siden klokka startet (utstemplet), gjenopplives ingenting', async () => {
+    app.settTimerStart(Date.now() - 1 * 3600000);
+    const { db, kall } = lag({ stempling: gammel(), foringer: [{ id: 'x' }] }); app.settDb(db);
+    expect(await sandbox.reparerManglendeStempling()).toBe(false);
+    expect(kall.some((k) => k.update)).toBe(false);
+  });
+  it('en stempling som ikke er over 16 t gammel (selv «frem i tid») regnes som fersk: true, og ingenting skrives', async () => {
+    app.settTimerStart(Date.now() - 3 * 3600000);
+    const { db, kall } = lag({ stempling: new Date(Date.now() - 1 * 3600000 + 17 * 3600000).toISOString() }); app.settDb(db);   // «fremtidig» stempling: lokal start er før den
+    expect(await sandbox.reparerManglendeStempling()).toBe(true);        // en stempling som ikke er over 16 t gammel er fersk (true), og ingenting skrives
+    expect(kall.some((k) => k.update)).toBe(false);
+  });
+  it('ugyldig stempling (ikke en dato): ingen skriving, false', async () => {
+    app.settTimerStart(Date.now() - 1 * 3600000);
+    const { db, kall } = lag({ stempling: 'ikke-en-dato' }); app.settDb(db);
+    expect(await sandbox.reparerManglendeStempling()).toBe(false);
+    expect(kall.some((k) => k.update)).toBe(false);
+  });
+  it('kjeden: startkallet avvises mot en gammel stempling, repareres, og lykkes ved andre forsøk', async () => {
+    app.settTimerStart(Date.now() - 1 * 3600000);
+    let n = 0;
+    const { db, kall } = lagTabellDb((q) => {
+      if (q.tabell === 'ansatte' && q.select) return { data: { stemplet_inn_siden: gammel() }, error: null };
+      if (q.tabell === 'timer_entries' && q.select) return { data: [], error: null };
+      return { data: null, error: null };
+    }, { oppdater_ordre_timer_sesjon: () => (++n === 1 ? ikkeStemplet() : { data: { sessions: [{ start: 1, stopp: null, ansattId: 2, ansatt: 'TEST - Ansatt' }] }, error: null }) }); app.settDb(db);
+    expect(await sandbox.startOrdreTimerForAnsatt(S.ordrer[0], 'ordreTimerSessions', 2, 'TEST - Ansatt')).toBe(true);
+    expect(kall.some((k) => k.update && k.update.stemplet_inn_siden)).toBe(true);
+  });
+});
+
+describe('meldPaa: avmeldingen fra gamle ordrer gjelder bare når den NYE ordren selv tidtas', () => {
+  const signert = (a) => ({ data: a.p_ansatt ? [a.p_ansatt] : [], error: null });
+  it('ny bil som IKKE står i tidtatt fase (Ikke påbegynt): jeg beholder påmeldingen på bilen jeg faktisk jobber på', async () => {
+    const a = nyOrdre('ord_A'); a.ansatteSignert = [{ id: 2, navn: 'TEST - Ansatt' }];
+    const b = nyOrdre('ord_B', 'ikke_paabegynt'); S.ordrer = [a, b];
+    const { db, kall } = lagDb({ oppdater_ordre_ansatt_signert: signert }); app.settDb(db);
+    await sandbox.meldPaa('ord_B');
+    expect(a.ansatteSignert.map((x) => x.id)).toEqual([2]);
+    expect(b.ansatteSignert.map((x) => x.id)).toEqual([2]);
+    expect(kall.filter((k) => k.navn === 'oppdater_ordre_ansatt_signert' && k.args.p_ordre_id === 'ord_A')).toEqual([]);
+  });
+  it('en gammel ordre med ÅPEN klokke meldes fortsatt av, uavhengig av fasen på den nye (uendret oppførsel: aldri to klokker samtidig)', async () => {
+    const a = nyOrdre('ord_A'); a.ansatteSignert = [{ id: 2, navn: 'TEST - Ansatt' }]; a.ordreTimerSessions = [{ start: 1, stopp: null, ansattId: 2, ansatt: 'TEST - Ansatt' }];
+    const b = nyOrdre('ord_B', 'ikke_paabegynt'); S.ordrer = [a, b];
+    const { db } = lagDb({ oppdater_ordre_ansatt_signert: signert, oppdater_ordre_timer_sesjon: () => ({ data: { sessions: [{ start: 1, stopp: 9, ansattId: 2 }] }, error: null }) }); app.settDb(db);
+    await sandbox.meldPaa('ord_B');
+    expect(a.ansatteSignert.map((x) => x.id)).toEqual([]);
+  });
+});
+
+describe('gjenopptaMineOrdreKlokkerVedInnstempling: gir beskjed om alt lyktes, og selvhelIkkeStemplet bruker det', () => {
+  const tabeller = (q) => {
+    if (q.tabell === 'ansatte' && q.select) return { data: { stemplet_inn_siden: null }, error: null };
+    if (q.tabell === 'timer_entries' && q.select) return { data: [], error: null };
+    return { data: null, error: null };
+  };
+  const startOk = () => ({ data: { sessions: [{ start: 1, stopp: null, ansattId: 2, ansatt: 'TEST - Ansatt' }] }, error: null });
+  it('returverdi: true når alle starter, true når ingenting skal startes, false når en start avvises eller feiler', async () => {
+    S.ordrer[0].ansatteSignert = [{ id: 2 }];
+    let { db } = lagDb({ oppdater_ordre_timer_sesjon: startOk }); app.settDb(db);
+    expect(await sandbox.gjenopptaMineOrdreKlokkerVedInnstempling()).toBe(true);
+    expect(await sandbox.gjenopptaMineOrdreKlokkerVedInnstempling()).toBe(true);            // nå har jeg en åpen økt: ingenting å starte
+    S.ordrer[0].ordreTimerSessions = [];
+    ({ db } = lagDb({ oppdater_ordre_timer_sesjon: ikkeStemplet })); app.settDb(db);
+    expect(await sandbox.gjenopptaMineOrdreKlokkerVedInnstempling()).toBe(false);
+    ({ db } = lagDb({ oppdater_ordre_timer_sesjon: () => ({ data: null, error: { message: 'Failed to fetch' } }) })); app.settDb(db);
+    expect(await sandbox.gjenopptaMineOrdreKlokkerVedInnstempling()).toBe(false);
+  });
+  it('uten db eller innlogget: true (ingenting å gjøre)', async () => {
+    expect(await sandbox.gjenopptaMineOrdreKlokkerVedInnstempling()).toBe(true);
+  });
+  it('stemplingen repareres, men starten av klokka feiler (nettfeil): jeg ER FORTSATT i beskjedlisten (jeg får beskjeden)', async () => {
+    app.settTimerStart(Date.now() - 2 * 3600000); S.ordrer[0].ansatteSignert = [{ id: 2 }];
+    const { db } = lagTabellDb(tabeller, { oppdater_ordre_timer_sesjon: () => ({ data: null, error: { message: 'Failed to fetch' } }) }); app.settDb(db);
+    expect(await sandbox.selvhelIkkeStemplet(['TEST - Ansatt', 'Ismail'])).toEqual(['TEST - Ansatt', 'Ismail']);
+    expect(S.ordrer[0].ordreTimerSessions).toEqual([]);
+  });
+  it('og lykkes starten, er jeg ute av lista (uendret)', async () => {
+    app.settTimerStart(Date.now() - 2 * 3600000); S.ordrer[0].ansatteSignert = [{ id: 2 }];
+    const { db } = lagTabellDb(tabeller, { oppdater_ordre_timer_sesjon: startOk }); app.settDb(db);
+    expect(await sandbox.selvhelIkkeStemplet(['TEST - Ansatt', 'Ismail'])).toEqual(['Ismail']);
+  });
+});
+
+describe('gjenopptaMineEtterInnlasting: min egen stemplingstilstand i S.ansatte synkes etter reparasjon ved oppstart', () => {
+  afterEach(() => { app.kjor('_gjenopptaNaarDataErLastet = false'); });
+  it('stemplingen ble skrevet ved oppstart (me.stempletInnSiden), men innlastingen leste raden før skrivingen: raden i S.ansatte får stemplingen (så en senere admin-utstempling oppdages)', async () => {
+    const iso = new Date(Date.now() - 2 * 3600000).toISOString();
+    app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt', kanForeLonn: true, stempletInnSiden: iso });
+    S.ansatte = [{ id: 2, navn: 'TEST - Ansatt', aktiv: true, stempletInnSiden: null }, { id: 3, navn: 'Kollega', aktiv: true, stempletInnSiden: null }];
+    await sandbox.gjenopptaMineEtterInnlasting();
+    expect(S.ansatte[0].stempletInnSiden).toBe(iso);
+    expect(S.ansatte[1].stempletInnSiden).toBeNull();            // bare min egen rad
+  });
+  it('en verdi som allerede står i raden overskrives ikke', async () => {
+    const nyere = new Date(Date.now() - 1 * 3600000).toISOString();
+    app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt', kanForeLonn: true, stempletInnSiden: new Date(Date.now() - 2 * 3600000).toISOString() });
+    S.ansatte = [{ id: 2, navn: 'TEST - Ansatt', aktiv: true, stempletInnSiden: nyere }];
+    await sandbox.gjenopptaMineEtterInnlasting();
+    expect(S.ansatte[0].stempletInnSiden).toBe(nyere);
+  });
+  it('har denne økta ikke skrevet noen stempling (me.stempletInnSiden mangler), røres raden ikke', async () => {
+    app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt', kanForeLonn: true });
+    S.ansatte = [{ id: 2, navn: 'TEST - Ansatt', aktiv: true, stempletInnSiden: null }];
+    await sandbox.gjenopptaMineEtterInnlasting();
+    expect(S.ansatte[0].stempletInnSiden).toBeNull();
+  });
+  it('ingen innlogget eller ingen rad: aldri kast', async () => {
+    app.settMe(null); S.ansatte = [];
+    await expect(sandbox.gjenopptaMineEtterInnlasting()).resolves.toBeUndefined();
+    app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt', stempletInnSiden: 'x' });
+    await expect(sandbox.gjenopptaMineEtterInnlasting()).resolves.toBeUndefined();
+  });
+});

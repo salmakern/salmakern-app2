@@ -1,10 +1,10 @@
 -- Test av 20261104100000_ordreklokke_opprydding.sql. ALLTID i en transaksjon som rulles tilbake: ingenting blir stående, og ingen åpen app ser noe (realtime sender først ved commit).
 -- Kjøring (fra rotmappen), UTENOM natta (00-03 norsk tid: testen lager timeføringer i dag og bruker «nå minus 3 timer»):
---   (echo "begin;"; cat supabase/migrations/20261104100000_ordreklokke_opprydding.sql; cat supabase/tester/ordreklokke_opprydding_TEST_body.sql; echo "rollback;") > "$TEMP/t.sql"
+--   (echo "begin;"; cat supabase/migrations/20261104100000_ordreklokke_opprydding.sql supabase/migrations/20261109100000_ordreklokke_trygg_parse.sql; cat supabase/tester/ordreklokke_opprydding_TEST_body.sql; echo "rollback;") > "$TEMP/t.sql"
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --yes --file "$TEMP/t.sql"
 -- Siste setning før rollback skriver ut resultatlinjene: alle skal ha ok = true.
 -- NB: stopp_forlatte_ordreklokker() kjøres her mot ALLE ordrer (også ekte), men alt rulles tilbake. Testene sjekker derfor bare TEST-ordrene, og tallene den returnerer vises bare som info.
--- Testen logger inn som en eksisterende admin INNE I transaksjonen (JWT-claims settes lokalt), og lager TEST-ansatte (990201-990207) og TEST-ordrer (TEST-okl-*) som forsvinner ved rollback.
+-- Testen logger inn som en eksisterende admin INNE I transaksjonen (JWT-claims settes lokalt), og lager TEST-ansatte (990201-990208) og TEST-ordrer (TEST-okl-*) som forsvinner ved rollback.
 
 create temp table _res (n serial, navn text, ok boolean, info text);
 
@@ -19,7 +19,8 @@ begin
   -- TEST-ansatte: A = ikke stemplet inn, B = stemplet inn (kan logge inn uten token), C = fører ikke lønn (kan ikke stemple)
   insert into ansatte (id, navn, rolle, aktiv, flere_enheter) values (990201, 'TEST - A ikke stemplet', 'ansatt', true, true), (990202, 'TEST - B stemplet', 'ansatt', true, true), (990203, 'TEST - C uten lonn', 'ansatt', true, true),
     (990204, 'TEST - D gammel stempling', 'ansatt', true, true), (990205, 'TEST - E darlig timeforing', 'ansatt', true, true),
-    (990206, 'TEST - F stemplet 15 t', 'ansatt', true, true), (990207, 'TEST - G stemplet 17 t', 'ansatt', true, true);
+    (990206, 'TEST - F stemplet 15 t', 'ansatt', true, true), (990207, 'TEST - G stemplet 17 t', 'ansatt', true, true),
+    (990208, 'TEST - H gyldig og ugyldig foring', 'ansatt', true, true);
   update ansatte set stemplet_inn_siden = now() - interval '2 hours' where id = 990202;
   update ansatte set stemplet_inn_siden = now() - interval '20 hours' where id = 990204;   -- D: glemt utstempling (over 16 t), teller ikke som stemplet inn
   update ansatte set stemplet_inn_siden = now() - interval '15 hours' where id = 990206;   -- F: rett under 16 t-grensen
@@ -166,6 +167,13 @@ begin
   insert into ordrer (id, status, ordre_status) values ('TEST-okl-11', 'aktiv', 'paabegynt');
   update ordrer set ordre_timer_sessions = jsonb_build_array(jsonb_build_object('start', v_now - 30 * 60000, 'stopp', null, 'ansattId', 990202, 'ansatt', 'TEST - B')) where id = 'TEST-okl-11';
   select ctid::text into v_ctid1 from ordrer where id = 'TEST-okl-11';
+  -- TEST-okl-12: H er ikke stemplet inn og har TO timeføringer: en gyldig (slutter for en time siden) og en som passerer regex-vaktene men ikke kan tolkes (30. februar). Én ugyldig rad skal ikke ødelegge oppslaget:
+  -- økta skal stoppes ved slutten av den GYLDIGE føringen (ikke ved starten).
+  insert into timer_entries (id, ansatt_id, ansatt, dato, type, start, stopp, mins) values
+    ('TEST-okl-te-5', 990208, 'TEST - H', (v_sluttstopp at time zone 'Europe/Oslo')::date::text, 'normal', to_char(v_sluttstart at time zone 'Europe/Oslo', 'HH24:MI'), to_char(v_sluttstopp at time zone 'Europe/Oslo', 'HH24:MI'), 120),
+    ('TEST-okl-te-6', 990208, 'TEST - H', '2026-02-30', 'normal', '07:00', '08:00', 60);
+  insert into ordrer (id, status, ordre_status) values ('TEST-okl-12', 'aktiv', 'paabegynt');
+  update ordrer set ordre_timer_sessions = jsonb_build_array(jsonb_build_object('start', v_now - 2 * 3600000, 'stopp', null, 'ansattId', 990208, 'ansatt', 'TEST - H')) where id = 'TEST-okl-12';
 
   perform set_config('request.jwt.claims', '', true);   -- cron kjører uten innlogging
   r := stopp_forlatte_ordreklokker();
@@ -200,6 +208,9 @@ begin
   insert into _res(navn, ok, info) values ('T5 feilisolasjon: den gyldige økta på samme ordre stoppes likevel', (v_s->3->>'stopp') is not null and v_s->3->>'autoStopp' = 'ikke_stemplet_inn', (v_s->3)::text);
   insert into _res(navn, ok, info) values ('T5 F (stemplet inn for 15 t siden) og D (gammel stempling, under 14 t) sine økter på TEST-okl-9 er urørte',
     (v_s->4->>'stopp') is null and (v_s->5->>'stopp') is null and not (v_s->4 ? 'autoStopp') and not (v_s->5 ? 'autoStopp'), v_s::text);
+  select ordre_timer_sessions into v_s from ordrer where id = 'TEST-okl-12';
+  insert into _res(navn, ok, info) values ('T5 én ugyldig timeføring (30. februar) ødelegger ikke oppslaget: økta stoppes ved slutten av den GYLDIGE føringen (nå minus 1 t), ikke ved starten',
+    abs((v_s->0->>'stopp')::bigint - (extract(epoch from date_trunc('minute', v_sluttstopp)) * 1000)::bigint) <= 60000 and (v_s->0->>'stopp')::bigint > (v_s->0->>'start')::bigint and v_s->0->>'autoStopp' = 'ikke_stemplet_inn', (v_s->0)::text);
   select ordre_timer_sessions into v_s from ordrer where id = 'TEST-okl-10';
   insert into _res(navn, ok, info) values ('T5 delblokk-isolasjon: en ordre som kaster ved oppdatering hoppes over (økta urørt, feil = 1), mens de andre ordrene ble behandlet som vanlig',
     (v_s->0->>'stopp') is null and (r->>'feil')::int = 1, r::text);
@@ -227,6 +238,10 @@ begin
   insert into _res(navn, ok, info) values ('T6 hjelperen ansatt_kan_ha_ordreklokke kan IKKE kalles av anon/authenticated/PUBLIC (ellers kan hvem som helst se hvem som er stemplet inn)',
     not has_function_privilege('anon', 'public.ansatt_kan_ha_ordreklokke(bigint)', 'execute') and not has_function_privilege('authenticated', 'public.ansatt_kan_ha_ordreklokke(bigint)', 'execute')
     and not exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = 'public.ansatt_kan_ha_ordreklokke(bigint)'::regprocedure and a.grantee = 0 and a.privilege_type = 'EXECUTE'), null);
+  insert into _res(navn, ok, info) values ('T6 hjelperen timeforing_slutt_ms kan ikke kalles av anon/authenticated',
+    not has_function_privilege('anon', 'public.timeforing_slutt_ms(text, text, text)', 'execute') and not has_function_privilege('authenticated', 'public.timeforing_slutt_ms(text, text, text)', 'execute'), null);
+  insert into _res(navn, ok, info) values ('T6 timeforing_slutt_ms: gyldig rad gir ms, ugyldig (30. februar, 25:00) og tom dato gir null (aldri en feil)',
+    timeforing_slutt_ms('2026-11-03', '07:00', '15:30') is not null and timeforing_slutt_ms('2026-02-30', '07:00', '08:00') is null and timeforing_slutt_ms('2026-11-03', '07:00', '25:00') is null and timeforing_slutt_ms('', '07:00', '08:00') is null, null);
   insert into _res(navn, ok, info) values ('T6 cron-jobben er planlagt hvert 10. minutt', (select count(*) from cron.job where jobname = 'stopp-forlatte-ordreklokker' and schedule = '*/10 * * * *') = 1, null);
 end;
 $test$;

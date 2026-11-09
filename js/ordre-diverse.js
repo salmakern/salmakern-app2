@@ -145,11 +145,15 @@ function ansattHarApenOrdreSesjon(o, felt, ansattId) {
 // aldri får tid tikkende på to biler samtidig (bedt om av Henrik 2026-10-23).
 // Også en ordre jeg ennå er meldt på i en tidtatt fase uten en åpen økt (klokka ble stoppet av utstempling eller opprydding, men påmeldingen står): melder jeg meg på en ny bil FØR jeg stempler inn, er det den nye
 // jeg jobber på, og ellers ville innstemplingen siden startet klokke på BEGGE (gjenopptaMineOrdreKlokkerVedInnstempling starter for alle påmeldte ordrer i fase).
+// Den utvidede avmeldingen gjelder BARE når den nye ordren selv står i en tidtatt fase: melder jeg meg på en bil som ennå ikke tidtas (f.eks. Ikke påbegynt), starter ingen klokke der, og jeg skal ikke miste påmeldingen
+// på bilen jeg faktisk jobber på.
 function finnAndreApneOrdreForAnsatt(unntattOrdreId, ansattId) {
+  const nyOrdre = (S.ordrer||[]).find(x => x.id === unntattOrdreId);
+  const nyTidtatt = !!(nyOrdre && ordreAktivFase(nyOrdre));
   return (S.ordrer||[]).filter(o => o.id !== unntattOrdreId && (
     ansattHarApenOrdreSesjon(o, 'ordreTimerSessions', ansattId) ||
     ansattHarApenOrdreSesjon(o, 'klargjoringTimerSessions', ansattId) ||
-    ((o.ansatteSignert||[]).some(a => a.id === ansattId) && !!ordreAktivFase(o))
+    (nyTidtatt && (o.ansatteSignert||[]).some(a => a.id === ansattId) && !!ordreAktivFase(o))
   ));
 }
 // Ombygging-klokka (ordreTimerSessions) kan BARE gå for en ansatt som er stemplet inn på lønnsklokka (2026-11-04, «A: reparer dagens» etter at Ismails klokke gikk en hel natt): ellers ble
