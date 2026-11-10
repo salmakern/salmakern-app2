@@ -147,6 +147,30 @@ function leveranseArkiverKnappHTML(o, stil) {
   if (!leveranseKanArkiveres(o)) return '';
   return `<button class="btn sm" onclick="event.stopPropagation();arkiverLeveranse('${o.id}')" title="Fjern den fakturerte leveransen fra Ordre-siden (den ligger i Arkiv)" style="${stil}">Arkiver</button>`;
 }
+// Fakturering på leveransekortet i Ordre-lista (Henrik 2026-11-10: «det må også være en knapp til fakturering og som sier at den er fakturert»): «Fakturer» oppretter kladd i Fiken
+// (samme fakturerViaFiken som i leveransens side, med bekreftelse først fordi det lager en ekte kladd), og «Merk fakturert» setter bare markeringen (toggleFakturert, som har egen bekreftelse).
+// Bare admin, som i dag. Er den fakturert, står «✔ Fakturert» (også for godkjenner, som har «Arkiver»). Å angre markeringen gjøres i leveransens side. Erstatter den lille avkryssingen på dette kortet.
+function leveranseFaktureringKortHTML(o) {
+  const erAdmin = !!me && me.rolle === 'admin';
+  if (o.fakturert) return erAdmin || (!!me && me.rolle === 'godkjenner') ? '<span class="pill ok" style="font-size:11px;margin:0">✔ Fakturert</span>' : '';
+  if (!erAdmin) return '';
+  const stil = 'padding:4px 11px;font-size:11px;border-radius:10px';
+  return `<button class="btn sm red" onclick="event.stopPropagation();leveranseFakturerFraKort('${o.id}')" title="Opprett kladd i Fiken" style="${stil}">Fakturer</button>`
+    + `<button class="btn sm" onclick="event.stopPropagation();toggleFakturert('${o.id}')" title="Sett at leveransen er fakturert, uten å lage kladd i Fiken" style="${stil}">Merk fakturert</button>`;
+}
+const _levFakturerPaagaar = new Set();
+async function leveranseFakturerFraKort(id) {
+  if (!me || me.rolle !== 'admin') return;
+  const o = S.ordrer.find(x => x.id === id);
+  if (!o || !erLeveranse(o) || o.fakturert || _levFakturerPaagaar.has(id)) return;
+  const antall = (o.fikenLinjer || []).length;
+  if (!antall) { visToast('Legg til minst én fakturalinje først'); openOrdre(id); return; } // linjene legges til i leveransens Fakturering-boks
+  // Samme rabattvalg som fakturerViaFiken leser (avkrysningen i leveransens side hvis den er tegnet, ellers på).
+  const brukRabatt = document.getElementById('brukRabatt_' + id)?.checked ?? true;
+  if (!confirm(`Opprette kladd i Fiken for «${o.kunde || ''}» med ${antall} ${antall === 1 ? 'fakturalinje' : 'fakturalinjer'}? ${brukRabatt ? 'Kundens avtalte rabatt brukes.' : 'Kundens avtalte rabatt brukes IKKE.'} Linjene kan sjekkes i leveransen først.`)) return;
+  _levFakturerPaagaar.add(id); // et nytt trykk mens kladden opprettes gjør ingenting
+  try { await fakturerViaFiken(id); } finally { _levFakturerPaagaar.delete(id); }
+}
 async function arkiverLeveranse(id) {
   const o = S.ordrer.find(x => x.id === id);
   if (!o || !leveranseKanArkiveres(o)) return;
@@ -527,7 +551,7 @@ function leveranseKortHTML(o, opts) {
         ${o.status === 'aktiv' ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Kalender</span><span style="color:${o.kalenderDato ? '#f4f4f5' : '#71717a'}">${o.kalenderDato ? '📅 ' + esc(leveranseKalenderTekst(o)) : 'Ikke i kalender'}</span></div>` : ''}
         ${l.sendtDato ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Sendt</span><span>${esc(leveranseDato(l.sendtDato))}</span></div>` : (l.onsketHentedato ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Hentes</span><span>${esc(leveranseDato(l.onsketHentedato))}</span></div>` : '')}
       </div>
-      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px">${opts && opts.drag ? '' : leveranseArkiverKnappHTML(o, 'padding:4px 11px;font-size:11px;border-radius:10px')}${fakturertKortHTML(o)}</div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px 10px;flex-wrap:wrap">${opts && opts.drag ? fakturertKortHTML(o) : leveranseArkiverKnappHTML(o, 'padding:4px 11px;font-size:11px;border-radius:10px') + leveranseFaktureringKortHTML(o)}</div>
     </div>`;
 }
 

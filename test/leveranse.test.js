@@ -437,6 +437,94 @@ describe('arkivering', () => {
   });
 });
 
+// «Det må også være en knapp til fakturering og som sier at den er fakturert» (Henrik 2026-11-10): leveransekortet i Ordre-lista (bare admin) får «Fakturer» (kladd i Fiken, med bekreftelse)
+// og «Merk fakturert» i stedet for den lille avkryssingen. Selve Fiken-kallet dekkes av andre tester; her testes bare knappene og veien fra kortet. Ingen ekte Fiken, database eller e-post.
+describe('Fakturering på leveransekortet i Ordre-lista', () => {
+  const FAKTURER = (id) => `leveranseFakturerFraKort('${id}')`;
+  const MERK = (id) => `toggleFakturert('${id}')`;
+  const rolle = (r) => app.settMe({ id: 9, navn: 'TEST - ' + r, rolle: r });
+  const medLinjer = (antall = 2, over = {}) => { const o = nyLeveranse({ ordre_status: 'klar_sending', ...over }); o.fikenLinjer = Array.from({ length: antall }, (_, i) => ({ id: 'l' + i, produktnummer: '100' + i, antall: 1 })); return o; };
+  const EKTE_FUNK = {};
+  beforeEach(() => { EKTE_FUNK.openOrdre = sandbox.openOrdre; EKTE_FUNK.fakturerViaFiken = sandbox.fakturerViaFiken; });
+  afterEach(() => { Object.assign(sandbox, EKTE_FUNK); });
+
+  it('admin: en ikke-fakturert leveranse får «Fakturer» og «Merk fakturert» i stedet for avkryssingen; Oversikt-kortet er uendret', () => {
+    const o = nyLeveranse({ ordre_status: 'klar_sending' });
+    const html = sandbox.leveranseKortHTML(o);
+    expect(html).toContain(FAKTURER(o.id)); expect(html).toContain(MERK(o.id));
+    expect(html).toContain('>Fakturer</button>'); expect(html).toContain('>Merk fakturert</button>');
+    expect(html).not.toContain('type="checkbox"');
+    const oversikt = sandbox.leveranseKortHTML(o, { drag: true });
+    expect(oversikt).toContain('type="checkbox"'); expect(oversikt).not.toContain('leveranseFakturerFraKort');
+  });
+  it('fakturert: «✔ Fakturert» for admin og godkjenner uten Fakturer-knapper, og ingenting for en vanlig ansatt', () => {
+    const o = nyLeveranse({ ordre_status: 'klar_sending', fakturert: true });
+    const admin = sandbox.leveranseKortHTML(o);
+    expect(admin).toContain('✔ Fakturert'); expect(admin).not.toContain('leveranseFakturerFraKort'); expect(admin).not.toContain('toggleFakturert');
+    rolle('godkjenner');
+    const godkjenner = sandbox.leveranseKortHTML(o);
+    expect(godkjenner).toContain('✔ Fakturert'); expect(godkjenner).toContain('arkiverLeveranse');
+    rolle('ansatt');
+    expect(sandbox.leveranseKortHTML(o)).not.toContain('✔ Fakturert');
+  });
+  it('godkjenner og vanlig ansatt får ingen faktureringsknapper på en ikke-fakturert leveranse', () => {
+    const o = nyLeveranse({ ordre_status: 'klar_sending' });
+    for (const r of ['godkjenner', 'ansatt']) {
+      rolle(r);
+      const html = sandbox.leveranseKortHTML(o);
+      expect(html).not.toContain('leveranseFakturerFraKort'); expect(html).not.toContain('toggleFakturert');
+    }
+  });
+  it('«Fakturer» uten fakturalinjer: beskjed og leveransen åpnes, ingen kladd', async () => {
+    const toasts = []; sandbox.visToast = (t) => { toasts.push(t); };
+    const apnet = []; sandbox.openOrdre = (id) => apnet.push(id);
+    let faktura = 0; sandbox.fakturerViaFiken = async () => { faktura++; };
+    sandbox.confirm = () => { throw new Error('skal ikke spørre'); };
+    const o = nyLeveranse({ ordre_status: 'klar_sending' }); S.ordrer = [o];
+    await sandbox.leveranseFakturerFraKort(o.id);
+    expect(toasts.join(' ')).toContain('fakturalinje'); expect(apnet).toEqual([o.id]); expect(faktura).toBe(0);
+  });
+  it('med linjer: bekreftelsen viser kunde, antall og rabatt; Avbryt gjør ingenting; OK oppretter kladden én gang', async () => {
+    const sporsmal = []; let svar = false; sandbox.confirm = (t) => { sporsmal.push(t); return svar; };
+    const kall = []; sandbox.fakturerViaFiken = async (id) => { kall.push(id); };
+    const o = medLinjer(2); S.ordrer = [o];
+    sandbox.document.getElementById('brukRabatt_' + o.id).checked = true;
+    await sandbox.leveranseFakturerFraKort(o.id);
+    expect(kall).toEqual([]);
+    expect(sporsmal[0]).toContain('TEST Kunde AS'); expect(sporsmal[0]).toContain('2 fakturalinjer'); expect(sporsmal[0]).toContain('rabatt brukes.');
+    svar = true;
+    await sandbox.leveranseFakturerFraKort(o.id);
+    expect(kall).toEqual([o.id]);
+    sandbox.document.getElementById('brukRabatt_' + o.id).checked = false; // avkrysningen i leveransens side er avslått: bekreftelsen sier det
+    await sandbox.leveranseFakturerFraKort(o.id);
+    expect(sporsmal[2]).toContain('IKKE');
+    sandbox.document.getElementById('brukRabatt_' + o.id).checked = true;
+  });
+  it('et nytt trykk mens kladden opprettes gjør ingenting (ingen dobbel faktura)', async () => {
+    sandbox.confirm = () => true;
+    let slipp; const venter = new Promise((r) => { slipp = r; });
+    let antall = 0; sandbox.fakturerViaFiken = () => { antall++; return venter; };
+    const o = medLinjer(1); S.ordrer = [o];
+    const a = sandbox.leveranseFakturerFraKort(o.id);
+    await sandbox.leveranseFakturerFraKort(o.id);
+    expect(antall).toBe(1);
+    slipp(); await a;
+    await sandbox.leveranseFakturerFraKort(o.id); // ferdig: neste trykk er et nytt forsøk (en feilet kladd kan prøves igjen)
+    expect(antall).toBe(2);
+  });
+  it('en vanlig ansatt, en bil og en allerede fakturert leveranse oppretter aldri en kladd', async () => {
+    sandbox.confirm = () => { throw new Error('skal ikke spørre'); };
+    let faktura = 0; sandbox.fakturerViaFiken = async () => { faktura++; };
+    const fak = medLinjer(1, { fakturert: true }), bil = nyBil(); bil.fikenLinjer = [{ id: 'l0', produktnummer: '1', antall: 1 }];
+    S.ordrer = [fak, bil];
+    await sandbox.leveranseFakturerFraKort(fak.id); await sandbox.leveranseFakturerFraKort(bil.id);
+    rolle('ansatt');
+    const ny = medLinjer(1, { id: 'ord_TESTLEV2' }); S.ordrer.push(ny);
+    await sandbox.leveranseFakturerFraKort(ny.id);
+    expect(faktura).toBe(0);
+  });
+});
+
 describe('statusnedtrekk og lister', () => {
   it('en leveranse får bare leveranse-statusene, en bil bare bil-statusene', () => {
     S.ordrer = [nyLeveranse(), nyBil()];

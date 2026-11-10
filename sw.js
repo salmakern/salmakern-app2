@@ -60,7 +60,7 @@
 // Kontakter (edge-funksjonen er ikke utlagt ennå, så knappen gir feil til den er det)
 // v47 - Ombygging-klokka, etterkontroll 9.11: reparerManglendeStempling overskriver en gammel (glemt) databasestempling når den lokale klokka er ung, påmelding melder bare av gamle ordrer når den nye selv
 // tidtas, selvhelIkkeStemplet beholder beskjeden når gjenopptakelsen feilet, og min egen stemplingstilstand synkes etter reparasjon ved oppstart (ellers oppdages ikke en senere admin-utstempling)
-const CACHE = 'salmakern-v48';
+const CACHE = 'salmakern-v49';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
