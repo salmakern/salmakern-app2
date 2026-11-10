@@ -5,7 +5,7 @@
 // frakt_bestilt_at/av/til settes bare av edge-funksjonen send-frakt-epost og leses her (fraktBestiltAt/Av/Til).
 //
 // Statusløype: Under arbeid -> Klar til sending (fraktbestillingen går ut på e-post av seg selv, hvis ikke slått av) -> Sendt.
-// «Fakturert» er den vanlige fakturert-markeringen (Fiken-kladd). En leveranse som er sendt OG fakturert arkiveres automatisk.
+// «Fakturert» er den vanlige fakturert-markeringen (Fiken-kladd). En leveranse som er sendt OG fakturert arkiveres automatisk; en fakturert leveranse som ikke blir «Sendt» arkiveres av godkjenner/admin med «Arkiver» (arkiverLeveranse).
 // Identifikasjon: chassis.nr, reg.nr ELLER annen merking (minst ett kreves, samme regel som «Ny ordre»).
 // Ingen tvangsflyt, biltilsyn, vekter, bilder, ombygging eller godkjenning (tvangsflyt() gir [] for en leveranse).
 // Laster ETTER admin-ark.js (bruker FRAKTSELSKAP_*-konstantene og adminArkFinnKontaktEpost).
@@ -137,6 +137,22 @@ function leveranseSjekkArkiver(o) {
   o.status = 'arkivert';
   logChange(o, 'Arkivert automatisk (sendt og fakturert)');
   return true;
+}
+// En fakturert leveranse som ikke blir satt til «Sendt» (f.eks. «Hente selv») arkiveres ikke av seg selv. Godkjenner/admin fjerner den fra Ordre-siden med «Arkiver»
+// (bedt om av Henrik 2026-11-10: «det må være mulig å fjerne leveransene fra ordre siden når de er fakturert»). Samme regel som for bil-ordrer: bare godkjenner/admin kan arkivere.
+function leveranseKanArkiveres(o) {
+  return !!me && (me.rolle === 'godkjenner' || me.rolle === 'admin') && erLeveranse(o) && o.status === 'aktiv' && !!o.fakturert;
+}
+function leveranseArkiverKnappHTML(o, stil) {
+  if (!leveranseKanArkiveres(o)) return '';
+  return `<button class="btn sm" onclick="event.stopPropagation();arkiverLeveranse('${o.id}')" title="Fjern den fakturerte leveransen fra Ordre-siden (den ligger i Arkiv)" style="${stil}">Arkiver</button>`;
+}
+async function arkiverLeveranse(id) {
+  const o = S.ordrer.find(x => x.id === id);
+  if (!o || !leveranseKanArkiveres(o)) return;
+  // Arbeidsklokka går mens en leveranse står «Under arbeid», og arkivering stopper den ikke: statusen må flyttes først («Klar til sending» eller «Sendt» stopper klokka).
+  if (ordreAktivFase(o) === 'ordreTimerSessions') { visToast('Sett leveransen til «Klar til sending» eller «Sendt» først, så stoppes arbeidsklokka. Deretter kan den arkiveres.'); return; }
+  await arkiver(id); // samme målrettede skriving, logglinje og tilbakerulling ved feil som for bil-ordrer
 }
 
 // ─── Ny leveranse ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -511,7 +527,7 @@ function leveranseKortHTML(o, opts) {
         ${o.status === 'aktiv' ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Kalender</span><span style="color:${o.kalenderDato ? '#f4f4f5' : '#71717a'}">${o.kalenderDato ? '📅 ' + esc(leveranseKalenderTekst(o)) : 'Ikke i kalender'}</span></div>` : ''}
         ${l.sendtDato ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Sendt</span><span>${esc(leveranseDato(l.sendtDato))}</span></div>` : (l.onsketHentedato ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Hentes</span><span>${esc(leveranseDato(l.onsketHentedato))}</span></div>` : '')}
       </div>
-      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px">${fakturertKortHTML(o)}</div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px">${opts && opts.drag ? '' : leveranseArkiverKnappHTML(o, 'padding:4px 11px;font-size:11px;border-radius:10px')}${fakturertKortHTML(o)}</div>
     </div>`;
 }
 
@@ -568,6 +584,7 @@ function buildLeveranseDetail(o) {
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;${o.prioritert ? 'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15' : ''}">${o.prioritert ? 'Prioritert ✕' : '+ Prioriter'}</button>
       <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:10px;padding:5px 9px;font-size:11px">Oppdater</button>
+      ${leveranseArkiverKnappHTML(o, 'border-radius:10px;padding:5px 9px;font-size:11px')}
       ${erAdmin ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">Slett leveranse</button>` : ''}
     </div>
   </div>

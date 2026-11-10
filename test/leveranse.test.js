@@ -367,6 +367,74 @@ describe('arkivering', () => {
     expect(o.status).toBe('arkivert');
     expect(kall.some((k) => k.tabell === 'ordrer')).toBe(true);
   });
+
+  // «Det må være mulig å fjerne leveransene fra ordre siden når de er fakturert» (Henrik 2026-11-10): en fakturert leveranse som ikke blir «Sendt» (f.eks. «Hente selv»)
+  // arkiveres ikke av seg selv, så godkjenner/admin får en «Arkiver»-knapp. Alt går via den vanlige arkiver() (målrettet skriving, logglinje, tilbakerulling ved feil).
+  describe('«Arkiver» på en fakturert leveranse', () => {
+    const fakturert = (over = {}) => nyLeveranse({ ordre_status: 'klar_sending', fakturert: true, ...over });
+    const knapp = (id) => `arkiverLeveranse('${id}')`;
+
+    it('leveranseKanArkiveres: bare en aktiv, fakturert LEVERANSE, og bare for godkjenner og admin', () => {
+      expect(sandbox.leveranseKanArkiveres(fakturert())).toBe(true);
+      expect(sandbox.leveranseKanArkiveres(nyLeveranse({ ordre_status: 'klar_sending' }))).toBe(false);          // ikke fakturert
+      expect(sandbox.leveranseKanArkiveres(fakturert({ status: 'arkivert' }))).toBe(false);                      // alt arkivert
+      expect(sandbox.leveranseKanArkiveres(nyBil({ fakturert: true }))).toBe(false);                             // en bil
+      app.settMe({ id: 2, navn: 'TEST - Godkjenner', rolle: 'godkjenner' });
+      expect(sandbox.leveranseKanArkiveres(fakturert())).toBe(true);
+      app.settMe({ id: 3, navn: 'TEST - Ansatt', rolle: 'ansatt' });
+      expect(sandbox.leveranseKanArkiveres(fakturert())).toBe(false);
+      app.settMe(null);
+      expect(sandbox.leveranseKanArkiveres(fakturert())).toBe(false);
+    });
+    it('knappen står på kortet i Ordre-lista og i detaljen, men ikke på Oversikt-kortet, ikke uten fakturert, ikke for en ansatt og ikke på en arkivert leveranse', () => {
+      const o = fakturert(); S.ordrer = [o];
+      expect(sandbox.leveranseKortHTML(o)).toContain(knapp(o.id));
+      expect(sandbox.leveranseKortHTML(o, { drag: true })).not.toContain('arkiverLeveranse');
+      expect(sandbox.leveranseKortHTML(nyLeveranse({ ordre_status: 'klar_sending' }))).not.toContain('arkiverLeveranse');
+      app.settAktivOrdre(o.id); sandbox.buildOrdreDetail();
+      expect(sandbox.document.getElementById('ordreDetail').innerHTML).toContain(knapp(o.id));
+      const a = fakturert({ status: 'arkivert' }); S.ordrer = [a]; app.settAktivOrdre(a.id); sandbox.buildOrdreDetail();
+      expect(sandbox.document.getElementById('ordreDetail').innerHTML).not.toContain('arkiverLeveranse');
+      app.settMe({ id: 3, navn: 'TEST - Ansatt', rolle: 'ansatt' });
+      expect(sandbox.leveranseKortHTML(o)).not.toContain('arkiverLeveranse');
+    });
+    it('arkiverLeveranse arkiverer, skriver bare status til databasen og legger inn en logglinje', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      const o = fakturert(); S.ordrer = [o];
+      await sandbox.arkiverLeveranse(o.id);
+      expect(o.status).toBe('arkivert');
+      expect(oppdateringer(kall)).toEqual([{ status: 'arkivert' }]);
+      expect(o.endringer.some((e) => e.txt === 'Arkivert')).toBe(true);
+    });
+    it('står den fortsatt «Under arbeid» (arbeidsklokka kan gå), arkiveres den ikke: bare en beskjed', async () => {
+      const toasts = []; sandbox.visToast = (t) => { toasts.push(t); };
+      const { db, kall } = lagDb(); app.settDb(db);
+      const o = fakturert({ ordre_status: 'under_arbeid' }); S.ordrer = [o];
+      await sandbox.arkiverLeveranse(o.id);
+      expect(o.status).toBe('aktiv');
+      expect(oppdateringer(kall)).toEqual([]);
+      expect(toasts.join(' ')).toContain('Klar til sending');
+    });
+    it('databasefeil: arkiveringen rulles tilbake og en beskjed vises', async () => {
+      const toasts = []; sandbox.visToast = (t) => { toasts.push(t); };
+      const { db } = lagDb({ feilPaa: (info) => info.tabell === 'ordrer' && info.kall.some(([m]) => m === 'update') }); app.settDb(db);
+      const o = fakturert(); S.ordrer = [o];
+      await sandbox.arkiverLeveranse(o.id);
+      expect(o.status).toBe('aktiv');
+      expect(toasts.join(' ')).toContain('Kunne ikke arkivere');
+    });
+    it('en ikke-fakturert leveranse, en bil og en vanlig ansatt blir aldri arkivert', async () => {
+      const { db, kall } = lagDb(); app.settDb(db);
+      const ikkeFak = nyLeveranse({ ordre_status: 'klar_sending' }), bil = nyBil({ fakturert: true });
+      S.ordrer = [ikkeFak, bil];
+      await sandbox.arkiverLeveranse(ikkeFak.id); await sandbox.arkiverLeveranse(bil.id);
+      app.settMe({ id: 3, navn: 'TEST - Ansatt', rolle: 'ansatt' });
+      const f = fakturert({ id: 'ord_TESTLEV2' }); S.ordrer.push(f);
+      await sandbox.arkiverLeveranse(f.id);
+      expect([ikkeFak.status, bil.status, f.status]).toEqual(['aktiv', 'aktiv', 'aktiv']);
+      expect(oppdateringer(kall)).toEqual([]);
+    });
+  });
 });
 
 describe('statusnedtrekk og lister', () => {
