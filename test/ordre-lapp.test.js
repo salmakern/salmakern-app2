@@ -202,3 +202,41 @@ describe('ordre-lapp: «🖨 Lapp» på ordren (eldre ordrer og ny lapp)', () =>
     expect(les('js/ordre-detalj.js')).toContain("${typeof ordreLappKnappHTML === 'function' ? ordreLappKnappHTML(o) : ''}");
   });
 });
+
+describe('del-lapp 50 mm (annen PC, merke deler til bilen)', () => {
+  it('linjene er merke + modell og hele chassis.nr, med store bokstaver; reg.nr når chassis mangler', () => {
+    expect(sandbox.delLappLinjer(ordre(1, { merke: 'Kia', modell: 'EV9', chassis: 'knaae8158v6088145' }))).toEqual(['KIA EV9', 'KNAAE8158V6088145']);
+    expect(sandbox.delLappLinjer(ordre(1, { merke: '', modell: '', chassis: '', regnr: 'US15133' }))).toEqual(['US15133']);
+    expect(sandbox.delLappLinjer(ordre(1, { merke: '', modell: '', chassis: 'KNAAE8158V6088145', regnr: 'EL12345' }))).toEqual(['EL12345', 'KNAAE8158V6088145']);
+  });
+  it('dokumentet er stående 50 x 230 mm, uten QR, og fritekst escapes', () => {
+    const html = sandbox.byggDelLappDokument([ordre(1, { merke: '<b>x</b>', modell: 'EV9' })]);
+    expect(html).toContain('@page{size:50mm 230mm;margin:0}');
+    expect(html).toContain('rotate(-90deg)');
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('<b>x</b>');
+    expect(html).not.toContain('<B>');
+    expect(html).toContain('&lt;B');
+  });
+  it('hver linje har sin egen skrift: chassis.nr stort selv med langt modellnavn', () => {
+    const html = sandbox.delLappHTML(ordre(1, { merke: 'Mercedes-Benz', modell: 'Sprinter 519 CDI', chassis: 'WDB12345678901234' }));
+    const str = [...html.matchAll(/font-size:([\d.]+)mm/g)].map((m) => Number(m[1]));
+    expect(str[1]).toBeGreaterThan(str[0]);
+    expect(17 * 0.75 * str[1]).toBeLessThanOrEqual(218.01);
+  });
+  it('lapptypen velges per PC: del-lapp skrives ut uten QR, ordre-lapp er standard', async () => {
+    sandbox.settOrdreLappStasjon(true);
+    expect(sandbox.ordreLappType()).toBe('ordre');
+    sandbox.settOrdreLappType('del');
+    expect(sandbox.ordreLappType()).toBe('del');
+    const ny = ordre(Date.now() + 90, { merke: 'KIA', modell: 'EV9' });
+    S.ordrer = [ny];
+    sandbox.ordreLappNyOrdre(ny); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('Del-lapp');
+    expect(utskrifter[0]).toContain('KIA EV9');
+    expect(utskrifter[0]).not.toContain('<svg');
+    sandbox.settOrdreLappType('noe rart');
+    expect(sandbox.ordreLappType()).toBe('ordre');
+  });
+});

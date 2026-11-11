@@ -75,7 +75,8 @@
 // v53 - ordre-lapp: ryddigere kort i Mer (avkrysning til venstre, riktig tekst om stasjonsvinduet og papiret «Ordre-lapp 25 x 60 mm»)
 // v54 - skanning av ordre-lapper inne i appen (📷 Skann på Ordre-siden): iPhone åpner kamera-QR i Safari, ikke i appen på hjemskjermen
 // v55 - «🖨 Lapp» i ordredetaljen (bare der Leitz-stasjonen er slått på): lapp til eldre ordrer og ny lapp ved behov
-const CACHE = 'salmakern-v56';
+// v57 - del-lapp 50 mm (merke + modell og chassis, stor skrift) som valg per PC ved siden av ordre-lappen 25 mm
+const CACHE = 'salmakern-v57';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
