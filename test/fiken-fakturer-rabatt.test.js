@@ -86,6 +86,11 @@ function fakeSupabaseKlient(svar) {
                 : (svarForTabell ?? { data: null, error: null });
               return { maybeSingle: async () => rad };
             },
+            // Støtter kun fiken_priser sitt .not('kategori','is',null)-kall (kategoriMap i
+            // index.ts) - ingen av testene her setter svar.fiken_priser, så standard er en
+            // TOM liste (ingen eksplisitte kategorier), som gir nøyaktig samme oppførsel som
+            // FØR kategoriMap fantes (ren navnegjetting via erOmbyggingslinje()).
+            not: async () => svar.fiken_priser ?? { data: [], error: null },
           };
         },
         upsert: async () => ({ error: null }),
@@ -617,5 +622,52 @@ describe('fiken-fakturer: fakturalinjene leses fra ordrer.fiken_linjer i databas
     expect(res.status).toBe(200);
     expect(body).toMatchObject({ ok: true, alleredeOpprettet: true, draftUrl: 'https://api.fiken.no/api/v2/companies/x/invoices/drafts/42' });
     expect(draftKall).toHaveLength(0); // ingen NY kladd opprettet
+  });
+});
+
+// fiken_priser.kategori (migrasjon 20261111200000, Henrik 11.11): en eksplisitt,
+// forhåndsbekreftet kategori per produktnummer skal overstyre navnegjetting
+// (erOmbyggingslinje) i BEGGE retninger - produktnavnet alene bestemmer ingenting når en
+// kategori er satt. Uten noen rad i fiken_priser (ingen av testene over setter svar.fiken_priser)
+// er oppførselen uendret ren navnegjetting, som alle testene over allerede beviser.
+describe('fiken-fakturer: fiken_priser.kategori overstyrer navnegjetting (migrasjon 20261111200000)', () => {
+  it('produkt UTEN "ombygg" i navnet (200, "Ekstra utstyr - gulvmatte"), eksplisitt kategorisert som ombygging: får rabatt_ombygging, ikke rabatt_ekstra_utstyr', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+      fiken_priser: { data: [{ produktnummer: '200', kategori: 'ombygging' }], error: null },
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('200')]));
+    expect(l.discount).toBe(20);
+  });
+
+  it('produkt MED "ombygg" i navnet (100, "Standard ombygging"), eksplisitt kategorisert som ekstra_utstyr: får rabatt_ekstra_utstyr, ikke rabatt_ombygging (motsatt retning - dekker 412-tilfellet "Gummimatte standard ombygging")', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+      fiken_priser: { data: [{ produktnummer: '100', kategori: 'ekstra_utstyr' }], error: null },
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')]));
+    expect(l.discount).toBe(10);
+  });
+
+  it('produktnummer UTEN rad i fiken_priser.kategori: faller tilbake til navnegjetting som før (uendret oppførsel)', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+      fiken_priser: { data: [{ produktnummer: '999', kategori: 'ombygging' }], error: null }, // annet produktnummer enn det som faktureres
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('200')])); // "Ekstra utstyr - gulvmatte" - ingen "ombygg" i navnet
+    expect(l.discount).toBe(10); // ekstra_utstyr-satsen, som før kategori-kolonnen fantes
+  });
+
+  it('en eksplisitt kategori endrer ALDRI en frosset rabatt (l.rabatt vinner fortsatt over alt, se fakta 1 over)', async () => {
+    const svar = {
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+      fiken_priser: { data: [{ produktnummer: '200', kategori: 'ombygging' }], error: null },
+    };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('200', { rabatt: 5 })]));
+    expect(l.discount).toBe(5);
   });
 });

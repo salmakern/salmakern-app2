@@ -131,6 +131,10 @@ function fakeSupabaseKlientFiken(o) {
                 },
               };
             },
+            // fiken_priser sitt .not('kategori','is',null) (kategoriMap i index.ts) - tom
+            // liste her, akkurat som uten denne testens egen fiken_kunde_rabatt-respons:
+            // ingen eksplisitte kategorier, ren navnegjetting som før.
+            not: async () => ({ data: [], error: null }),
           };
         },
         upsert: async () => ({ error: null }),

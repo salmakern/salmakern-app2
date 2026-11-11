@@ -159,6 +159,23 @@ function erOmbyggingslinje(produktnavn: string): boolean {
   return /ombygg/i.test(produktnavn || '')
 }
 
+// Navnegjetting over feiler på tre bekreftede måter (11.11, Henrik + gjennomgang mot ekte
+// produktnavn): (1) skrivefeil i selve ombygging-produktnavnet (2401 "Varebilombyyging",
+// 3200 "Varebilombyging" - manglet/dobbel bokstav, treffer ikke /ombygg/i), (2) et tilfeldig
+// "ombygging"-ord i et ekstrautstyr-produkts navn (412 "Gummimatte standard ombygging" -
+// feilaktig 20% i stedet for 10%), og (3) faste tilleggsprodukter (utstyr-sjekklistepunkter,
+// se ansatte-utstyr.js) som Henrik bekreftet HØRER TIL ombygging-jobben selv om produktnavnet
+// ikke inneholder "ombygg" (Takluke, Panorama, 4-seter, m.fl.). `fiken_priser.kategori`
+// (migrasjon 20261111200000) er en eksplisitt, forhåndsbekreftet kategori per produktnummer -
+// brukes her når satt, ellers faller vi tilbake på navnegjetting som før (NULL = uendret
+// oppførsel for alt Henrik ikke har sett på ennå). `kategoriMap` fylles rett under.
+function linjeKategori(produkt: { navn: string }, kategoriMap: Map<string, 'ombygging' | 'ekstra_utstyr'>, produktnummer: string): 'ombygging' | 'ekstra' {
+  const eksplisitt = kategoriMap.get(produktnummer)
+  if (eksplisitt === 'ombygging') return 'ombygging'
+  if (eksplisitt === 'ekstra_utstyr') return 'ekstra'
+  return erOmbyggingslinje(produkt.navn) ? 'ombygging' : 'ekstra'
+}
+
 // Samme sortering som klientens sorterFikenLinjer() (js/ordre-detalj.js) - avgjør blant annet
 // HVILKEN linje som får chassis-kommentaren (siste i lista), så server og klient må sortere likt.
 function sorterServerFikenLinjer(linjer: any[] | null | undefined): any[] {
@@ -287,6 +304,11 @@ Deno.serve(async (req) => {
 
     const slug = await hentCompanySlug()
     const produktMap = await hentProduktnummerTilId(slug)
+    // Eksplisitt, forhåndsbekreftet kategori per produktnummer (se linjeKategori() over) -
+    // egen, liten spørring (ikke en del av produktMap, siden den kommer fra Fiken sitt API
+    // og ikke kjenner til vårt eget kategori-felt).
+    const { data: kategoriRader } = await supabase.from('fiken_priser').select('produktnummer, kategori').not('kategori', 'is', null)
+    const kategoriMap = new Map<string, 'ombygging' | 'ekstra_utstyr'>((kategoriRader || []).map((r: any) => [String(r.produktnummer), r.kategori]))
     const ukjente = linjer.map((l: any) => l.produktnummer).filter((n: string) => !produktMap.has(String(n)))
     if (ukjente.length) return jsonSvar({ error: `Fant ikke Fiken-produkt for produktnummer: ${ukjente.join(', ')}` }, 400)
     // Hver fakturalinje MÅ ha en konto (bekreftet av Henrik) - stopp heller kladden helt
@@ -327,7 +349,7 @@ Deno.serve(async (req) => {
         const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
         if (erOverstyrtBelop || erLaastRabatt) return false // har sin egen kilde, trenger ikke denne satsen
         const produkt = produktMap.get(String(l.produktnummer))
-        return !!produkt && erOmbyggingslinje(produkt.navn) === (kategori === 'ombygging')
+        return !!produkt && linjeKategori(produkt, kategoriMap, String(l.produktnummer)) === kategori
       })
       if (rabattRad.rabatt_ombygging === null && trengerSats('ombygging')) {
         return jsonSvar({ error: 'Kundens ombygging-rabatt er ikke satt i Fiken-rabatt (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».' }, 400)
@@ -397,7 +419,7 @@ Deno.serve(async (req) => {
         // linje med frosset portal-rabatt. Før dette ignorerte en slik linje avkrysningen
         // "Bruk kundens avtalte rabatt" helt, stikk i strid med det teksten lover.
         const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
-        const rabatt = !rabattSkalBrukes ? 0 : (erLaastRabatt ? l.rabatt : (erOmbyggingslinje(produkt.navn) ? rabattOmbygging : rabattEkstraUtstyr))
+        const rabatt = !rabattSkalBrukes ? 0 : (erLaastRabatt ? l.rabatt : (linjeKategori(produkt, kategoriMap, String(l.produktnummer)) === 'ombygging' ? rabattOmbygging : rabattEkstraUtstyr))
         if (rabatt > 0) line.discount = rabatt
       }
       if (chassisNr && i === linjer.length - 1) line.comment = `Ch. nr. ${chassisNr}`
