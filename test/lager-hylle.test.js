@@ -263,7 +263,7 @@ describe('skanning', () => {
 
   it('en kjent hylle-QR åpner hylla; en ukjent kode og en fremmed QR gir beskjed uten å åpne noe', () => {
     expect(sandbox.behandleSkannet('https://eksempel.no/noe')).toBe(false);
-    expect(el('skannStatus').textContent).toMatch(/ikke en hylle-QR/);
+    expect(el('skannStatus').textContent).toMatch(/ikke en QR-kode fra appen/);
     expect(sandbox.behandleSkannet('https://salmaker.as/salmakern.html?h=Q9')).toBe(false);
     expect(el('skannStatus').textContent).toMatch(/Fant ingen hylle med koden Q9/);
     expect(app.kjor('_aktivHylleId')).toBe(null);

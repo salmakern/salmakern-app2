@@ -22,6 +22,14 @@ function hylleKodeFraTekst(tekst) {
   try { kandidat = decodeURIComponent(kandidat); } catch (e) { /* behold teksten som den er */ }
   return normaliserHylleKode(kandidat);
 }
+// Ordre-lappen (js/ordre-lapp.js) har QR med salmakern.html?ordre=<id>. Gir id-en, eller tom streng hvis teksten ikke er en ordre-lenke.
+function ordreIdFraTekst(tekst) {
+  const m = String(tekst == null ? '' : tekst).trim().match(/[?&]ordre=([^&#\s]+)/i);
+  if (!m) return '';
+  let id = m[1];
+  try { id = decodeURIComponent(id); } catch (e) { return ''; }
+  return /^ord_[A-Za-z0-9_]{1,60}$/.test(id) ? id : '';
+}
 function finnHylle(kode) {
   const k = normaliserHylleKode(kode).toUpperCase();
   return k ? (S.lagerHyller || []).find(h => String(h.kode).toUpperCase() === k) || null : null;
@@ -390,7 +398,7 @@ let _skann = null;
 let _skannNr = 0; // økes hver gang skann-vinduet åpnes eller lukkes, så en forsinket kameratillatelse etter lukking ikke starter kameraet
 function apneSkannModal() {
   stoppSkann(); _skannNr++;
-  lagerModal('lagerSkannModal', `<div class="row"><div class="h">Skann hylle</div><button class="btn sm" onclick="lukkSkannModal()">Lukk</button></div>
+  lagerModal('lagerSkannModal', `<div class="row"><div class="h">Skann QR-kode</div><button class="btn sm" onclick="lukkSkannModal()">Lukk</button></div>
     <div style="margin-top:10px;position:relative;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:1/1;max-height:60vh"><video id="skannVideo" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
     <div id="skannStatus" class="small muted" style="margin-top:8px">Starter kameraet...</div>
     <div style="margin-top:10px"><label>Eller skriv hyllekoden</label>
@@ -403,11 +411,20 @@ function apneHylleFraSkannfelt() {
   const k = document.getElementById('skannKode')?.value || '';
   if (apneHylleMedKode(k)) lukkSkannModal();
 }
-// Den skannede teksten (lenke eller kode) -> hylle. Returnerer true når hylla ble åpnet (og kameraet stoppes).
+// Den skannede teksten -> ordre (ordre-lapp) eller hylle (lenke eller kode). Returnerer true når noe ble åpnet (og kameraet stoppes).
+// Skanning inne i appen er nødvendig på iPhone: kameraet åpner alltid QR-lenker i Safari, ikke i appen på hjemskjermen.
 function behandleSkannet(tekst) {
   const status = document.getElementById('skannStatus');
+  const ordreId = ordreIdFraTekst(tekst);
+  if (ordreId) {
+    const o = (S.ordrer || []).find(x => x.id === ordreId);
+    if (!o) { if (status) status.textContent = 'Fant ikke ordren på lappen (kan være slettet). Trykk 🔄 hvis den er helt ny.'; return false; }
+    lukkSkannModal();
+    openOrdre(o.id, o.status === 'arkivert');
+    return true;
+  }
   const k = hylleKodeFraTekst(tekst);
-  if (!k) { if (status) status.textContent = 'Dette er ikke en hylle-QR. Prøv en annen.'; return false; }
+  if (!k) { if (status) status.textContent = 'Dette er ikke en QR-kode fra appen (ordre-lapp eller hylle). Prøv en annen.'; return false; }
   if (!finnHylle(k)) { if (status) status.textContent = `Fant ingen hylle med koden ${k}.`; return false; }
   lukkSkannModal();
   apneHylleMedKode(k);
@@ -431,7 +448,7 @@ async function startSkann() {
   const lastJsQr = async () => { try { await lastSkript('js/vendor/jsQR.js'); return true; } catch (e) { if (status) status.textContent = 'Kunne ikke laste skanneren. Skriv hyllekoden under.'; return false; } };
   if (!detektor && !(await lastJsQr())) return;
   if (mitt !== _skannNr) return;
-  if (status) status.textContent = 'Hold kameraet mot QR-koden på hylla.';
+  if (status) status.textContent = 'Hold kameraet mot QR-koden på ordre-lappen eller hylla.';
   const lerret = document.createElement('canvas'); const ctx = lerret.getContext('2d', { willReadFrequently: true });
   const lop = async () => {
     if (!_skann || !_skann.aktiv || mitt !== _skannNr) return;

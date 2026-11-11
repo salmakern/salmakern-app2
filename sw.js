@@ -68,7 +68,8 @@
 // v50 - ordre-lapp på Leitz Icon (js/ordre-lapp.js): utskriftsstasjon skriver ut en 60 x 25 mm lapp med QR for hver ny bil-ordre (Henrik 11.11)
 // v52 - ordre-lapp: stående side 25 x 60 mm med rotert innhold (Leitz-driverens rull «Continuous - 1"» er stående; liggende side ga en tom lapp)
 // v53 - ordre-lapp: ryddigere kort i Mer (avkrysning til venstre, riktig tekst om stasjonsvinduet og papiret «Ordre-lapp 25 x 60 mm»)
-const CACHE = 'salmakern-v53';
+// v54 - skanning av ordre-lapper inne i appen (📷 Skann på Ordre-siden): iPhone åpner kamera-QR i Safari, ikke i appen på hjemskjermen
+const CACHE = 'salmakern-v54';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

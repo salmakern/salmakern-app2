@@ -151,3 +151,30 @@ describe('ordre-lapp: utskriftsstasjon', () => {
     expect(les('js/core.js')).toMatch(/eventType==='INSERT'\) \{\n.*S\.ordrer\.push\(dbToOrdre\(p\.new\)\).*\n.*\n\s*if \(typeof ordreLappNyOrdre === 'function'\)/);
   });
 });
+
+describe('ordre-lapp: skanning inne i appen (iPhone åpner kamera-QR i Safari)', () => {
+  it('leser ordre-id ut av lappens lenke, og avviser alt annet', () => {
+    expect(sandbox.ordreIdFraTekst('https://salmaker.as/salmakern.html?ordre=ord_1762851234567')).toBe('ord_1762851234567');
+    expect(sandbox.ordreIdFraTekst('salmaker.as/salmakern.html?ordre=ord_1762851234567_ab12cd')).toBe('ord_1762851234567_ab12cd');
+    expect(sandbox.ordreIdFraTekst('https://salmaker.as/salmakern.html?h=A1')).toBe('');
+    expect(sandbox.ordreIdFraTekst("https://x/?ordre=ord_1');alert(1)//")).toBe('');
+    expect(sandbox.ordreIdFraTekst('https://x/?ordre=%E0%A4%A')).toBe('');
+    expect(sandbox.ordreIdFraTekst(null)).toBe('');
+  });
+  it('en skannet lapp (QR lest tilbake med jsQR) åpner ordren, også en arkivert', () => {
+    const apnet = [];
+    const gammel = sandbox.openOrdre;
+    sandbox.openOrdre = (id, fraArkiv) => apnet.push([id, fraArkiv]);
+    try {
+      S.ordrer = [ordre(1762851234567), ordre(1762851234999, { status: 'arkivert' })];
+      expect(sandbox.behandleSkannet(lesQr(sandbox.ordreLappUrl('ord_1762851234567')))).toBe(true);
+      expect(sandbox.behandleSkannet(lesQr(sandbox.ordreLappUrl('ord_1762851234999')))).toBe(true);
+      expect(apnet).toEqual([['ord_1762851234567', false], ['ord_1762851234999', true]]);
+      expect(sandbox.behandleSkannet(sandbox.ordreLappUrl('ord_1700000000000'))).toBe(false); // ukjent/slettet ordre: kameraet fortsetter
+      expect(apnet).toHaveLength(2);
+    } finally { sandbox.openOrdre = gammel; }
+  });
+  it('Skann-knappen står på Ordre-siden', () => {
+    expect(les('salmakern.html')).toMatch(/onclick="apneSkannModal\(\)"[^>]*>📷 Skann<\/button>\s*<button class="btn" onclick="apneNyLeveranseModal\(\)"/);
+  });
+});
