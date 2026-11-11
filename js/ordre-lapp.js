@@ -127,9 +127,9 @@ function renderOrdreLappKort() {
   const el = document.getElementById('ordreLappKortInnhold');
   if (!el) return;
   const fra = ordreLappStasjonFra();
-  el.innerHTML = `<label style="display:flex;gap:8px;align-items:flex-start;margin:8px 0;cursor:pointer">
-      <input type="checkbox" ${fra ? 'checked' : ''} onchange="settOrdreLappStasjon(this.checked)" style="margin-top:3px">
+  el.innerHTML = `<label style="display:flex;gap:10px;align-items:center;margin:10px 0 6px;cursor:pointer;font-size:13.5px;color:inherit">
+      <input type="checkbox" ${fra ? 'checked' : ''} onchange="settOrdreLappStasjon(this.checked)" style="width:18px;height:18px;flex:none;margin:0;padding:0">
       <span>Denne PC-en skriver ut en lapp for hver ny ordre</span></label>
-    <div class="small muted" style="margin-bottom:8px">${fra ? 'På siden ' + esc(ordreLappDato(fra)) + '. ' : ''}Bare på PC-en der Leitz Icon er standardskriver. Lappen er 60 x 25 mm med QR-kode til ordren.</div>
+    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Leitz-stasjonsvinduet på PC-en med skriveren. Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).</div>
     <button class="btn sm" onclick="skrivUtTestOrdreLapp()">🖨 Skriv ut testlapp</button>`;
 }
