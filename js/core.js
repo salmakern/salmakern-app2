@@ -1012,6 +1012,8 @@ function subscribeRealtime() {
     .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
       if (p.eventType==='INSERT') {
         if (!S.ordrer.find(o=>o.id===p.new.id)) { S.ordrer.push(dbToOrdre(p.new)); planleggRenderAll(); }
+        // Utskriftsstasjon for ordre-lapper (js/ordre-lapp.js): også ordrer denne enheten selv opprettet. Feil her skal aldri stoppe Realtime.
+        if (typeof ordreLappNyOrdre === 'function') { try { ordreLappNyOrdre(S.ordrer.find(o=>o.id===p.new.id)); } catch (e) { console.warn('ordreLappNyOrdre:', e && e.message); } }
       } else if (p.eventType==='UPDATE') {
         if (ignorerRealtimeFor.has(p.new.id)) { if (activeOrdreId===p.new.id) dokLogg('rt_ignorert', {id:p.new.id}); return; }
         const i=S.ordrer.findIndex(o=>o.id===p.new.id);

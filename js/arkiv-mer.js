@@ -252,6 +252,8 @@ function toggleMerSeksjon(labelEl, gridId) {
 }
 
 function renderMer() {
+  // Ordre-lapper på Leitz Icon (js/ordre-lapp.js): innstillingen i Mer, og utskrift av ordrer stasjonen gikk glipp av (renderAll kjører etter hver innlasting).
+  if (typeof renderOrdreLappKort === 'function') { try { renderOrdreLappKort(); ordreLappTaIgjen(); } catch (e) { console.warn('ordre-lapp:', e && e.message); } }
   const erAdmin = me && me.rolle === 'admin';
   const erGodkjenner = me && (me.rolle === 'godkjenner' || me.rolle === 'admin');
 

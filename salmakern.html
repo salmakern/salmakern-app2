@@ -887,6 +887,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           </div>
           <button class="btn sm red" id="gpsSettBtn" onclick="settGPSLokasjon()">Sett arbeidsplasslokasjon</button>
         </div>
+        <div class="card" id="merOrdreLappKort">
+          <div class="h">Ordre-lapper (Leitz Icon)</div>
+          <div id="ordreLappKortInnhold"></div>
+        </div>
         <div class="card" id="merHmsKort">
           <div class="h">HMS</div>
           <div id="merHmsBadge" class="small muted" style="margin:6px 0"></div>
@@ -1892,6 +1896,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <script src="js/hms.js"></script>
 <script src="js/leveranse.js"></script>
 <script src="js/lager-hylle.js"></script>
+<script src="js/ordre-lapp.js"></script>
 <!-- Ansatt-detalj modal -->
 <div class="modal" id="ansattDetaljModal">
   <div class="modal-box" style="max-width:520px;width:95%">

@@ -14,7 +14,7 @@ const jsDir = path.resolve(__dirname, '../../js');
 // Samme rekkefølge som <script>-taggene i salmakern.html.
 export const APP_FILER = [
   'core.js', 'oversikt-kalender.js', 'ordre-detalj.js', 'ordre-diverse.js', 'timer.js', 'arkiv-mer.js',
-  'ansatte-utstyr.js', 'eksport-varsler.js', 'flate.js', 'lager.js', 'admin-ark.js', 'vegvesen-dokumenter.js', 'hms.js', 'leveranse.js', 'lager-hylle.js',
+  'ansatte-utstyr.js', 'eksport-varsler.js', 'flate.js', 'lager.js', 'admin-ark.js', 'vegvesen-dokumenter.js', 'hms.js', 'leveranse.js', 'lager-hylle.js', 'ordre-lapp.js',
 ];
 
 function lagStub(elementer, id) {
