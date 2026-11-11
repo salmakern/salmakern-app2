@@ -1,3 +1,8 @@
+// v51 - XSS-sikkerhetsgjennomgang (s90-20261105-sikkerhet, punkt 5): 13 bekreftede steder der
+// ansatt-/eksternt fritekst (utstyr-malnavn/biltype/punkter, "Time bekreftet"-sted, "Ventende
+// timer", ansattnavn/-mobil under redigering, drivstoffsats-navn, Vegvesen-oppslagets
+// merke/modell/aar) nådde innerHTML uten esc() - rettet i admin-ark.js, ansatte-utstyr.js,
+// arkiv-mer.js, ordre-detalj.js og ordre-diverse.js (2026-11-11).
 // v41 - rettet (funnet av portal-øktas kritiker-gjennomgang): sw.js ble IKKE bumpet ved forrige
 // to commits (5828a1c: synkroniserOmbyggingFikenLinjer fjernet ikke lenger en frosset
 // portalrabatt + portalBekreftOrdre avventer nå RPC-ene i rekkefølge; 106bbac: Admin-ark bevarer
@@ -61,7 +66,7 @@
 // v47 - Ombygging-klokka, etterkontroll 9.11: reparerManglendeStempling overskriver en gammel (glemt) databasestempling når den lokale klokka er ung, påmelding melder bare av gamle ordrer når den nye selv
 // tidtas, selvhelIkkeStemplet beholder beskjeden når gjenopptakelsen feilet, og min egen stemplingstilstand synkes etter reparasjon ved oppstart (ellers oppdages ikke en senere admin-utstempling)
 // v50 - ordre-lapp på Leitz Icon (js/ordre-lapp.js): utskriftsstasjon skriver ut en 60 x 25 mm lapp med QR for hver ny bil-ordre (Henrik 11.11)
-const CACHE = 'salmakern-v50';
+const CACHE = 'salmakern-v51';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

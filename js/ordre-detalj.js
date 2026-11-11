@@ -47,7 +47,7 @@ function utstyrMalDropdown(ordreId, selectId, applyFn, biltype, gjeldendeMalNavn
   return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
     <select id="${selectId}" style="flex:1;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px;font-size:12px">
       <option value="">– Velg mal –</option>
-      ${maler.map((m,i)=>`<option value="${i}" ${i===gjeldendeIdx?'selected':''}>${m.navn}${m.biltype?' ('+m.biltype+')':''}</option>`).join('')}
+      ${maler.map((m,i)=>`<option value="${i}" ${i===gjeldendeIdx?'selected':''}>${esc(m.navn)}${m.biltype?' ('+esc(m.biltype)+')':''}</option>`).join('')}
     </select>
     <button class="btn sm red" onclick="const si=document.getElementById('${selectId}').selectedIndex-1; if(si>=0) ${applyFn}('${ordreId}',si)">Bruk</button>
   </div>`;
@@ -58,7 +58,7 @@ function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
   const ok = sjekk.filter(p=>p.ok).length;
   return `<div style="margin-top:8px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <span class="small muted">${malNavn}</span>
+      <span class="small muted">${esc(malNavn)}</span>
       <span class="pill ${ok===sjekk.length?'ok':'warn'}">${ok}/${sjekk.length} ✓</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 8px">
@@ -1916,7 +1916,7 @@ function drivstoffKortHTML(o) {
       <label>Sats</label>
       <select onchange="sd('${o.id}','satsId',this.value)" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px">
         <option value="">– Ingen sats –</option>
-        ${satser.map(s=>`<option value="${s.id}" ${satsId===s.id?'selected':''}>${s.navn}</option>`).join('')}
+        ${satser.map(s=>`<option value="${s.id}" ${satsId===s.id?'selected':''}>${esc(s.navn)}</option>`).join('')}
       </select>
     </div>
     ${endringHTML}

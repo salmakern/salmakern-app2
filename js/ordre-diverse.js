@@ -1027,7 +1027,7 @@ async function slaOppRegnr(ordreId) {
     if (chassis && chassis.length === 17) { o.chassis = chassis; }
     logChange(o, 'Bilinfo hentet fra Statens vegvesen: '+merke+' '+modell);
     save(ordreId); buildOrdreDetail();
-    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${merke} ${modell} ${aar}</span>`;
+    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${esc(merke)} ${esc(modell)} ${esc(aar)}</span>`;
   } catch(e) {
     if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Ikke funnet – fyll inn manuelt</span>';
   }
@@ -1063,7 +1063,7 @@ async function slaOppRegnrNyOrdre() {
       const chassisTel = document.getElementById('n_chassis_tel');
       if (chassisTel) chassisTel.textContent = '17/17';
     }
-    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${merke} ${modell} ${aar}</span>`;
+    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${esc(merke)} ${esc(modell)} ${esc(aar)}</span>`;
   } catch(e) {
     if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Ikke funnet – fyll inn manuelt</span>';
   }

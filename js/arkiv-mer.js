@@ -312,7 +312,7 @@ function renderMer() {
     if (!_ansattKontaktinfo) hentAnsattKontaktinfo().then(() => renderMer());
     const kontaktinfo = _ansattKontaktinfo || {};
     al.innerHTML = S.ansatte.map(a=>`<div class="box" style="margin-bottom:6px"><div class="row" style="flex-wrap:wrap;gap:6px;align-items:center">
-      <input id="ansattNavn_${a.id}" value="${fokusertNavnId==='ansattNavn_'+a.id?document.getElementById(fokusertNavnId).value:esc(a.navn)}" onchange="endreAnsattNavn(${a.id},this.value)" style="width:auto;max-width:170px;padding:5px 8px;font-size:12px;font-weight:700">
+      <input id="ansattNavn_${a.id}" value="${fokusertNavnId==='ansattNavn_'+a.id?esc(document.getElementById(fokusertNavnId).value):esc(a.navn)}" onchange="endreAnsattNavn(${a.id},this.value)" style="width:auto;max-width:170px;padding:5px 8px;font-size:12px;font-weight:700">
       ${!a.aktiv?'<span class="small err-text">Inaktiv</span>':''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <select onchange="endreAnsattRolle(${a.id},this.value)" style="width:auto;padding:5px 8px;font-size:12px">
@@ -322,7 +322,7 @@ function renderMer() {
           <option value="admin" ${a.rolle==='admin'?'selected':''}>Admin</option>
         </select>
         <input type="date" value="${a.ansettelsesdato||''}" onchange="settAnsattAnsettelsesdato(${a.id},this.value)" title="Ansettelsesdato - styrer 2-månedersregelen for egenmelding. Tom = ikke sperret ennå." style="width:auto;padding:5px 8px;font-size:12px">
-        <input id="ansattMobil_${a.id}" type="tel" placeholder="Mobilnr." value="${fokusertMobilId==='ansattMobil_'+a.id?document.getElementById(fokusertMobilId).value:esc(kontaktinfo[a.id]?.mobil||'')}" onchange="endreAnsattMobil(${a.id},this.value)" title="Mobilnummer - brukes til SMS-bekreftelse ved kjøreseddel" style="width:auto;max-width:120px;padding:5px 8px;font-size:12px">
+        <input id="ansattMobil_${a.id}" type="tel" placeholder="Mobilnr." value="${fokusertMobilId==='ansattMobil_'+a.id?esc(document.getElementById(fokusertMobilId).value):esc(kontaktinfo[a.id]?.mobil||'')}" onchange="endreAnsattMobil(${a.id},this.value)" title="Mobilnummer - brukes til SMS-bekreftelse ved kjøreseddel" style="width:auto;max-width:120px;padding:5px 8px;font-size:12px">
         <input type="date" value="${kontaktinfo[a.id]?.fodselsdato||''}" onchange="settAnsattFodselsdato(${a.id},this.value)" title="Fødselsdato - trengs for å skrive kjøreseddel" style="width:auto;padding:5px 8px;font-size:12px">
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
         <button class="btn sm" onclick="adminSettNyPin(${a.id})" title="Sett en ny PIN for denne ansatte, f.eks. ved glemt PIN">🔑 Sett PIN</button>
@@ -888,7 +888,7 @@ function renderAarsStatistikk() {
     if (totMins === 0) return '';
     return `<div class="box" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <b>${a.navn}</b>
+        <b>${esc(a.navn)}</b>
         <span class="small muted">${fmtTid(totMins)} totalt</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:flex-end;height:60px">

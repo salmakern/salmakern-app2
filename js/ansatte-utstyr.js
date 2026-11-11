@@ -1229,9 +1229,9 @@ function renderUtstyrMaler() {
     <div class="box" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
         <div>
-          <b>${m.navn}</b>
-          ${m.biltype?`<span class="pill" style="font-size:11px;margin-left:4px">${m.biltype}</span>`:'<span class="pill" style="font-size:11px;margin-left:4px">Alle biler</span>'}
-          <div class="small muted" style="margin-top:4px">${m.punkter.length} punkter: ${m.punkter.slice(0,4).join(', ')}${m.punkter.length>4?'...':''}</div>
+          <b>${esc(m.navn)}</b>
+          ${m.biltype?`<span class="pill" style="font-size:11px;margin-left:4px">${esc(m.biltype)}</span>`:'<span class="pill" style="font-size:11px;margin-left:4px">Alle biler</span>'}
+          <div class="small muted" style="margin-top:4px">${m.punkter.length} punkter: ${m.punkter.slice(0,4).map(esc).join(', ')}${m.punkter.length>4?'...':''}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button onclick="redigerUtstyrMalIdx(${i})" style="background:none;border:none;color:#a1a1aa;cursor:pointer;font-size:15px;padding:0" title="Rediger">✏️</button>

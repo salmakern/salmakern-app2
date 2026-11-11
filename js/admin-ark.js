@@ -1371,7 +1371,7 @@ function renderAdminArk(scrollTilBunn) {
     {title:'Time bekreftet', field:'timeBekreftetVis', width: adminArkMaalBredde(data,'timeBekreftetVis','Time bekreftet',115), headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-slippmal admin-ark-tb-celle',
       formatter: (cell, params, onRendered) => {
-        const verdi = cell.getValue() || '';
+        const verdi = esc(cell.getValue() || '');
         onRendered(() => {
           const el = cell.getElement();
           if (!kanRedigere || !verdi) return;
@@ -1388,7 +1388,7 @@ function renderAdminArk(scrollTilBunn) {
     {title:'Ventende timer', field:'ventendeTimer', minWidth:100, headerSort:false, hozAlign:'center', editor: kanRedigere ? 'input' : false,
       cssClass:'admin-ark-vt-celle',
       formatter: (cell, params, onRendered) => {
-        const verdi = cell.getValue() || '';
+        const verdi = esc(cell.getValue() || '');
         const radIdx = cell.getRow().getPosition();
         onRendered(() => {
           const el = cell.getElement();
