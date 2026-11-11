@@ -66,7 +66,8 @@
 // v47 - Ombygging-klokka, etterkontroll 9.11: reparerManglendeStempling overskriver en gammel (glemt) databasestempling når den lokale klokka er ung, påmelding melder bare av gamle ordrer når den nye selv
 // tidtas, selvhelIkkeStemplet beholder beskjeden når gjenopptakelsen feilet, og min egen stemplingstilstand synkes etter reparasjon ved oppstart (ellers oppdages ikke en senere admin-utstempling)
 // v50 - ordre-lapp på Leitz Icon (js/ordre-lapp.js): utskriftsstasjon skriver ut en 60 x 25 mm lapp med QR for hver ny bil-ordre (Henrik 11.11)
-const CACHE = 'salmakern-v51';
+// v52 - ordre-lapp: stående side 25 x 60 mm med rotert innhold (Leitz-driverens rull «Continuous - 1"» er stående; liggende side ga en tom lapp)
+const CACHE = 'salmakern-v52';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

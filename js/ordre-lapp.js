@@ -30,17 +30,20 @@ function ordreLappHTML(o) {
   const bil = [o.merke, o.modell].filter(Boolean).join(' ');
   const ms = ordreLappIdMs(o.id);
   const linje3 = [bil, o.chassis && o.regnr ? o.regnr : '', ms ? ordreLappDato(ms) : ''].filter(Boolean).join(' · ');
-  return `<div class="lapp"><div class="qr">${qrSvg(ordreLappUrl(o.id))}</div><div class="tekst">`
+  return `<div class="side"><div class="lapp"><div class="qr">${qrSvg(ordreLappUrl(o.id))}</div><div class="tekst">`
     + `<div class="hoved" style="font-size:${ordreLappSkriftMm(hoved)}mm">${esc(hoved)}</div>`
     + `<div class="kunde">${esc(o.kunde || '')}</div>`
-    + `<div class="info">${esc(linje3)}</div></div></div>`;
+    + `<div class="info">${esc(linje3)}</div></div></div></div>`;
 }
+// Leitz-driveren beskriver rullen «Continuous - 1"» som STÅENDE: 25 mm bred (på tvers av rullen) og 2,7 m lang. En liggende side (60 x 25) fikk Edge til å snu siden, og innholdet
+// havnet utenfor trykkområdet (testet 2026-11-11: 17,5 cm helt tom lapp). Derfor er siden stående 25 x 60 mm, og selve lappen (60 x 25) roteres 90 grader inni den.
 function byggOrdreLappDokument(ordrer) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>Ordre-lapp</title><style>
     *{box-sizing:border-box}html,body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000;background:#fff}
-    @page{size:60mm 25mm;margin:0}
-    .lapp{width:60mm;height:25mm;padding:2mm 2mm 2mm 1.5mm;display:flex;align-items:center;gap:1.5mm;overflow:hidden;page-break-after:always;break-after:page}
-    .lapp:last-child{page-break-after:auto;break-after:auto}
+    @page{size:25mm 60mm;margin:0}
+    .side{width:25mm;height:60mm;position:relative;overflow:hidden;page-break-after:always;break-after:page}
+    .side:last-child{page-break-after:auto;break-after:auto}
+    .lapp{position:absolute;left:0;top:0;width:60mm;height:25mm;transform-origin:0 0;transform:translateX(25mm) rotate(90deg);padding:2mm 2mm 2mm 1.5mm;display:flex;align-items:center;gap:1.5mm;overflow:hidden}
     .qr{width:21mm;height:21mm;flex:none}
     .tekst{flex:1;min-width:0;display:flex;flex-direction:column;gap:1.2mm}
     .hoved{font-weight:700;white-space:nowrap;line-height:1.1}

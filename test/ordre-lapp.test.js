@@ -11,7 +11,7 @@ import { lastApp } from './helpers/app-harness.js';
 const app = lastApp();
 const { sandbox, S } = app;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const les = (f) => readFileSync(path.resolve(__dirname, '../' + f), 'utf8');
+const les = (f) => readFileSync(path.resolve(__dirname, '../' + f), 'utf8').replace(/\r\n/g, '\n');
 vm.runInContext(les('js/vendor/qrcode.js'), sandbox, { filename: 'qrcode.js' });
 vm.runInContext(les('js/vendor/jsQR.js'), sandbox, { filename: 'jsQR.js' });
 
@@ -54,7 +54,8 @@ describe('ordre-lapp: innhold', () => {
   });
   it('lappen har hele chassis.nr, kunde, merke/modell og 60 x 25 mm side', () => {
     const html = sandbox.byggOrdreLappDokument([ordre(1762851234567, { regnr: 'EL12345' })]);
-    expect(html).toContain('@page{size:60mm 25mm;margin:0}');
+    expect(html).toContain('@page{size:25mm 60mm;margin:0}'); // stående, som driverens «Continuous - 1"»
+    expect(html).toContain('rotate(90deg)');
     expect(html).toContain('WDB12345678901234');
     expect(html).toContain('Kunde AS');
     expect(html).toContain('Mercedes Vito · EL12345 · ');
