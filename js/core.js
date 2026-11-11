@@ -124,7 +124,7 @@ function visToast(melding, type='feil') {
   el.textContent = melding;
   el.style.opacity = '1'; el.style.display = 'block';
   clearTimeout(el._tid);
-  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 5000);
+  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 8000);
 }
 
 // ════════════════════════════════════════════════════
@@ -315,6 +315,7 @@ function apneOrdreFraVarselHvisKlar() {
 }
 let activeOrdreId = null;
 let openedFromArkiv = false;
+let openedFraOversikt = false; // tilbakeOrdreList() sender tilbake til Oversikt i stedet for Ordre-lista når ordren ble åpnet derfra
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
 const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
 const ignorerRealtimeAdminArk = new Set(); // admin_ark-ID-er vi nettopp lagret

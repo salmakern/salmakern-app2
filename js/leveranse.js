@@ -535,7 +535,7 @@ function leveranseKortHTML(o, opts) {
   return `<div${dra} style="position:relative;background:#18181b;border:1px solid ${o.prioritert ? '#facc15' : si.border};border-radius:18px;padding:16px 17px 14px;display:flex;flex-direction:column;gap:12px;min-width:0">
       ${o.prioritert ? '<span style="position:absolute;top:-9px;left:14px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>' : ''}
       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px 12px">
-        <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1 1 0;min-width:0">
+        <div onclick="openOrdre('${o.id}'${opts && opts.drag ? ',false,true' : ''})" style="cursor:pointer;flex:1 1 0;min-width:0">
           <div style="margin-bottom:5px">${leveranseBadgeHTML()}</div>
           <b style="font-size:16px;letter-spacing:-.2px;line-height:1.25;word-break:break-word">${esc(leveranseTittel(o))}</b>
           ${o.regnr && o.regnr !== leveranseTittel(o) ? `<div class="small muted" style="margin-top:2px">${esc(o.regnr)}</div>` : ''}
@@ -544,7 +544,7 @@ function leveranseKortHTML(o, opts) {
         </div>
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:5px 10px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
       </div>
-      <div class="box" onclick="openOrdre('${o.id}')" style="padding:12px 14px;display:flex;flex-direction:column;gap:3px;cursor:pointer">
+      <div class="box" onclick="openOrdre('${o.id}'${opts && opts.drag ? ',false,true' : ''})" style="padding:12px 14px;display:flex;flex-direction:column;gap:3px;cursor:pointer">
         <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Frakt</span><span style="color:${o.fraktBestiltAt ? '#86efac' : '#f4f4f5'}">${esc(fraktLinje)}</span></div>
         <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Til</span><span style="color:${stedLinje ? '#f4f4f5' : '#71717a'}">${esc(stedLinje) || '—'}</span></div>
         ${leveranseKolliTekst(l) ? `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:54px">Pakker</span><span>${esc(leveranseKolliTekst(l))}</span></div>` : ''}

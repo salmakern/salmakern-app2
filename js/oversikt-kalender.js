@@ -213,14 +213,14 @@ function renderOversikt(q) {
           ${o.prioritert?'<span style="position:absolute;top:-9px;left:12px;background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:#facc15;letter-spacing:.03em">PRIORITERT</span>':''}
           ${bestiltFraktBadgeHTML(o, 'right:12px')}
           <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:6px">
-            <b style="cursor:pointer" onclick="openOrdre('${o.id}')">${ordreLabelFull(o)}</b>
+            <b style="cursor:pointer" onclick="openOrdre('${o.id}',false,true)">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
-          ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
-          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
-          <div class="small muted" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
-          <div class="small" onclick="openOrdre('${o.id}')" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
+          ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
+          <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
+          <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
+          <div class="small" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
         </div>`;
         } catch (e) { return ordreKortFeilHTML(o, e); }
       }).join('')
@@ -244,7 +244,7 @@ function renderOversikt(q) {
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
-            <button class="btn sm" onclick="openOrdre('${o.id}')">Åpne</button>
+            <button class="btn sm" onclick="openOrdre('${o.id}',false,true)">Åpne</button>
             <button class="btn sm red" onclick="openFlytt('${o.id}')">Flytt til kalender</button>
           </div>
         </div>`;
@@ -343,7 +343,7 @@ function renderKlarTilFakturering() {
       try {
         const farge = FARGE[sjekk.niva] || FARGE.gul;
         const grunnTekst = sjekk.grunner.map(g => esc(g.tekst)).join(' · ') || 'Klar til fakturering';
-        return `<div class="box" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;border-left:4px solid ${farge};cursor:pointer" onclick="openOrdre('${o.id}')">
+        return `<div class="box" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;border-left:4px solid ${farge};cursor:pointer" onclick="openOrdre('${o.id}',false,true)">
           <span style="width:10px;height:10px;border-radius:50%;background:${farge};flex-shrink:0;margin-top:4px"></span>
           <div style="min-width:0">
             <div><b>${esc(ordreLabelFull(o))}</b></div>
@@ -498,7 +498,7 @@ function renderWeek() {
           const tittel = smalt ? ordreLabel(o) : ordreLabelFull(o);
           return `<div class="cal-event${smalt?' cal-event-smal':''}" onpointerdown="dragOrdreStart(event,'${o.id}')" style="top:${top}px;height:${height}px;left:calc(${venstrePct}% + 2px);right:calc(${100-venstrePct-breddePct}% + 2px);background:${si.bg};border-color:${si.border}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
-            <div onclick="openOrdre('${o.id}')" style="cursor:pointer;flex:1;min-width:0;overflow:hidden;height:100%">
+            <div onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer;flex:1;min-width:0;overflow:hidden;height:100%">
               <div class="cal-event-regnr" style="color:${si.txt}">${erLeveranse(o) ? '🚚 ' : ''}${tittel}</div>
               <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${(!smalt&&o.tidBiltilsynetSted)?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
             </div>

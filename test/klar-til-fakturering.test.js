@@ -46,8 +46,8 @@ describe('Oversikt: «Klar til fakturering» (admin, ren lesevisning)', () => {
     ];
     sandbox.renderKlarTilFakturering();
     const html = sandbox.document.getElementById('klarTilFaktureringListe').innerHTML;
-    expect(html).toContain("openOrdre('ord_rod')");
-    expect(html).toContain("openOrdre('ord_gronn')");
+    expect(html).toContain("openOrdre('ord_rod',false,true)");
+    expect(html).toContain("openOrdre('ord_gronn',false,true)");
     expect(html).toContain('Ingen fakturalinjer');
     // Rød skal stå FØR grønn i den sammensatte HTML-strengen.
     expect(html.indexOf('ord_rod')).toBeLessThan(html.indexOf('ord_gronn'));
@@ -75,7 +75,7 @@ describe('Oversikt: «Klar til fakturering» (admin, ren lesevisning)', () => {
     S.ordrer = [nyOrdre({ id: 'ord_rar', fikenLinjer: 'ikke en liste' }), nyOrdre({ id: 'ord_ok' })];
     expect(() => sandbox.renderKlarTilFakturering()).not.toThrow();
     const html = sandbox.document.getElementById('klarTilFaktureringListe').innerHTML;
-    expect(html).toContain("openOrdre('ord_ok')");
+    expect(html).toContain("openOrdre('ord_ok',false,true)");
   });
 
   it('ren lesevisning: gjør aldri noe skrivende selv - ingen db-kall trigget av selve renderingen', () => {

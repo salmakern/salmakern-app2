@@ -3,10 +3,11 @@
 // ════════════════════════════════════════════════════
 let ordreListScrollY = 0;
 
-function openOrdre(id, fraArkiv=false) {
+function openOrdre(id, fraArkiv=false, fraOversikt=false) {
   ordreListScrollY = window.scrollY;
   activeOrdreId = id;
   openedFromArkiv = fraArkiv;
+  openedFraOversikt = fraOversikt;
   apneOppskriftDropdowns.clear(); // ikke arv en åpen Ombygging/Ekstra utstyr-liste fra forrige ordre
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('ordre').classList.add('active');
@@ -21,19 +22,26 @@ function openOrdre(id, fraArkiv=false) {
 function tilbakeOrdreList() {
   activeOrdreId = null;
   document.getElementById('ordreDetail').style.display = 'none';
+  document.getElementById('ordreList').style.display = 'block';
   if (openedFromArkiv) {
     openedFromArkiv = false;
-    document.getElementById('ordreList').style.display = 'block';
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.getElementById('arkiv').classList.add('active');
     document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.tab')[3].classList.add('active');
     renderArkiv();
+  } else if (openedFraOversikt) {
+    openedFraOversikt = false;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('oversikt').classList.add('active');
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab')[0].classList.add('active');
+    renderOversikt();
   } else {
-    openedFromArkiv = false;
-    document.getElementById('ordreList').style.display = 'block';
     renderOrdreList();
   }
+  openedFromArkiv = false;
+  openedFraOversikt = false;
   setTimeout(() => window.scrollTo(0, ordreListScrollY), 0);
 }
 
@@ -153,7 +161,7 @@ function buildOrdreDetail() {
 
   document.getElementById('ordreDetail').innerHTML = `
   <div style="position:sticky;top:var(--top-h,0px);z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-    <button class="btn sm" onclick="tilbakeOrdreList()" style="padding:5px 9px;font-size:11px">${openedFromArkiv ? '← Tilbake til arkiv' : '← Alle ordrer'}</button>
+    <button class="btn sm" onclick="tilbakeOrdreList()" style="padding:5px 9px;font-size:11px">${openedFromArkiv ? '← Tilbake til arkiv' : openedFraOversikt ? '← Oversikt' : '← Alle ordrer'}</button>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'Prioritert ✕':'+ Prioriter'}</button>
       <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:10px;padding:5px 9px;font-size:11px">PDF</button>
@@ -1717,8 +1725,18 @@ function logChange(o, txt) {
   const entry = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt};
   o.endringer.push(entry);
   if (db && o.id) {
-    db.rpc('legg_til_ordre_endring', { p_ordre_id: o.id, p_av: entry.av, p_tid: entry.tid, p_tekst: txt })
-      .then(r => { if (r.error) console.error('Kunne ikke lagre endringslogg:', r.error.message); });
+    // Fire-and-forget ga tidligere INGEN gjenforsøk ved feil (f.eks. midlertidig nettbrudd) - linjen
+    // forsvant da stille (console.error er usynlig for en vanlig ansatt) og kom aldri tilbake, siden
+    // den aldri nådde databasen og dermed ikke fulgte med ved neste omlasting. Ett nytt forsøk etter
+    // 3 s, og først hvis BEGGE feiler vises et synlig varsel (bedre enn å late som ingenting skjedde).
+    const sendEndring = (forsokNr) => db.rpc('legg_til_ordre_endring', { p_ordre_id: o.id, p_av: entry.av, p_tid: entry.tid, p_tekst: txt })
+      .then(r => {
+        if (!r.error) return;
+        if (forsokNr === 1) { setTimeout(() => sendEndring(2), 3000); return; }
+        console.error('Kunne ikke lagre endringslogg (etter nytt forsøk):', r.error.message);
+        visToast('Kunne ikke lagre en endringslogg-linje - last siden på nytt senere for å sjekke om den kom med');
+      });
+    sendEndring(1);
   }
 }
 

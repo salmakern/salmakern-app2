@@ -932,10 +932,10 @@ describe('kalender: opprettelse, visning og flytting', () => {
       S.ordrer = [nyLeveranse({ kalender_dato: '2026-11-04', kalender_tid: '13:00' }), nyBil({ kalender_dato: '2026-11-05', kalender_tid: '09:00' })];
       const html = medFastNaa(uke);
       expect(html).toContain('🚚 TEST-merking');
-      expect(html).toContain("openOrdre('ord_TESTLEV1')");
+      expect(html).toContain("openOrdre('ord_TESTLEV1',false,true)");
       expect(html).toContain('13:00');
       expect(html).toContain('Under arbeid');
-      expect(html).toContain("openOrdre('ord_TESTBIL1')");
+      expect(html).toContain("openOrdre('ord_TESTBIL1',false,true)");
       expect(html.match(/🚚/g)).toHaveLength(1);
     });
     it('arkivert, uten kalenderdato, eller i en annen uke vises ikke', () => {
@@ -947,8 +947,8 @@ describe('kalender: opprettelse, visning og flytting', () => {
     it('et uventet kalenderfelt (tom tid, skadet verdi) gir aldri en tom uke', () => {
       S.ordrer = [nyLeveranse({ id: 'ord_D', kalender_dato: '2026-11-04', kalender_tid: '' }), nyLeveranse({ id: 'ord_E', kalender_dato: '2026-11-04', kalender_tid: '<b>' }), nyBil({ kalender_dato: '2026-11-05', kalender_tid: '09:00' })];
       const html = medFastNaa(uke);
-      expect(html).toContain("openOrdre('ord_D')");
-      expect(html).toContain("openOrdre('ord_TESTBIL1')");
+      expect(html).toContain("openOrdre('ord_D',false,true)");
+      expect(html).toContain("openOrdre('ord_TESTBIL1',false,true)");
     });
   });
 
@@ -1258,7 +1258,7 @@ describe('gjennomgang: kalenderkort og tekst', () => {
   }
   const uke = () => { const tilbake = fastNaa(lokal(2026, 11, 3, 10, 17)); try { sandbox.renderWeek(); return sandbox.document.getElementById('weekCal').innerHTML; } finally { tilbake(); } };
   // Henter ut selve hendelseskortet for en ordre (fra «cal-event» til neste «cal-event»)
-  const kortFor = (html, id) => { const ut = html.split(/<div class="cal-event(?: cal-event-smal)?" /).find((d) => d.includes(`openOrdre('${id}')`)); return ut || ''; };
+  const kortFor = (html, id) => { const ut = html.split(/<div class="cal-event(?: cal-event-smal)?" /).find((d) => d.includes(`openOrdre('${id}',false,true)`)); return ut || ''; };
 
   it('kortet til en leveranse er alltid den høye varianten (54 px), selv med reg.nr og uten chassis; bil med reg.nr uten chassis er fortsatt 38 px', () => {
     S.ordrer = [nyLeveranse({ regnr: 'AB12345', kalender_dato: '2026-11-04', kalender_tid: '10:00' }), nyBil({ chassis: '', regnr: 'CD67890', kalender_dato: '2026-11-05', kalender_tid: '10:00' })];

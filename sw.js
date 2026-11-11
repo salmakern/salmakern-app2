@@ -1,3 +1,8 @@
+// v56 - tre småfiks (Henrik valgte "alle under liten jobb" fra backloggen 11.11): (1) "Tilbake"
+// fra en ordre åpnet på OVERSIKT går nå dit (ikke til Ordre-lista) - ny openedFraOversikt-flagg,
+// Ordre-lista sine egne kort er UENDRET (de går fortsatt tilbake til Ordre-lista); (2) varsler
+// (visToast) står nå 8 sek i stedet for 5; (3) logChange() gjør ett nytt forsøk ved mislykket
+// lagring og varsler synlig hvis begge feiler, i stedet for å forsvinne stille.
 // v51 - XSS-sikkerhetsgjennomgang (s90-20261105-sikkerhet, punkt 5): 13 bekreftede steder der
 // ansatt-/eksternt fritekst (utstyr-malnavn/biltype/punkter, "Time bekreftet"-sted, "Ventende
 // timer", ansattnavn/-mobil under redigering, drivstoffsats-navn, Vegvesen-oppslagets
@@ -70,7 +75,7 @@
 // v53 - ordre-lapp: ryddigere kort i Mer (avkrysning til venstre, riktig tekst om stasjonsvinduet og papiret «Ordre-lapp 25 x 60 mm»)
 // v54 - skanning av ordre-lapper inne i appen (📷 Skann på Ordre-siden): iPhone åpner kamera-QR i Safari, ikke i appen på hjemskjermen
 // v55 - «🖨 Lapp» i ordredetaljen (bare der Leitz-stasjonen er slått på): lapp til eldre ordrer og ny lapp ved behov
-const CACHE = 'salmakern-v55';
+const CACHE = 'salmakern-v56';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
