@@ -123,6 +123,18 @@ function settOrdreLappStasjon(paa) {
 function skrivUtTestOrdreLapp() {
   skrivUtOrdreLapper([{ id: 'ord_' + Date.now(), chassis: 'TESTWXYZ000000001', regnr: '', kunde: 'TEST - prøveutskrift', merke: 'Leitz', modell: 'Icon 25 mm', status: 'aktiv' }]);
 }
+// «🖨 Lapp» i ordredetaljens topprad (Henrik 2026-11-11: lapp til ordrer som fantes før stasjonen, og ny lapp hvis en blir ødelagt). Bare på en enhet der stasjonen
+// er slått på (PC-en med skriveren), og bare for bil-ordrer. Merker ordren som utskrevet, så den automatiske utskriften ikke tar den en gang til.
+function ordreLappKnappHTML(o) {
+  if (!ordreLappStasjonFra() || !o || erLeveranse(o)) return '';
+  return `<button class="btn sm" onclick="skrivUtOrdreLappFor('${esc(o.id).replace(/'/g, "\\'")}')" title="Skriv ut ordre-lapp på Leitz Icon" style="border-radius:10px;padding:5px 9px;font-size:11px">🖨 Lapp</button>`;
+}
+function skrivUtOrdreLappFor(id) {
+  const o = (S.ordrer || []).find(x => x.id === id);
+  if (!o) { visToast('Fant ikke ordren'); return; }
+  ordreLappMerk([o.id]);
+  skrivUtOrdreLapper([o]);
+}
 function renderOrdreLappKort() {
   const el = document.getElementById('ordreLappKortInnhold');
   if (!el) return;

@@ -157,6 +157,7 @@ function buildOrdreDetail() {
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'Prioritert ✕':'+ Prioriter'}</button>
       <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:10px;padding:5px 9px;font-size:11px">PDF</button>
+      ${typeof ordreLappKnappHTML === 'function' ? ordreLappKnappHTML(o) : ''}
       <button id="kjoreseddelBtn_${o.id}" class="btn sm" onclick="apneKjoreseddelModal('${o.id}')" title="Velg hvilket prøveskilt som er i bruk på denne bilen" style="border-radius:10px;padding:5px 9px;font-size:11px">${o.kjoreseddelSkilt?esc(o.kjoreseddelSkilt):'Skilt'}</button>
       <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:10px;padding:5px 9px;font-size:11px">Oppdater</button>
       ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">Slett ordre</button>` : ''}

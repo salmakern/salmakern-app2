@@ -69,7 +69,8 @@
 // v52 - ordre-lapp: stående side 25 x 60 mm med rotert innhold (Leitz-driverens rull «Continuous - 1"» er stående; liggende side ga en tom lapp)
 // v53 - ordre-lapp: ryddigere kort i Mer (avkrysning til venstre, riktig tekst om stasjonsvinduet og papiret «Ordre-lapp 25 x 60 mm»)
 // v54 - skanning av ordre-lapper inne i appen (📷 Skann på Ordre-siden): iPhone åpner kamera-QR i Safari, ikke i appen på hjemskjermen
-const CACHE = 'salmakern-v54';
+// v55 - «🖨 Lapp» i ordredetaljen (bare der Leitz-stasjonen er slått på): lapp til eldre ordrer og ny lapp ved behov
+const CACHE = 'salmakern-v55';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

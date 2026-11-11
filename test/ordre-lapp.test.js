@@ -178,3 +178,27 @@ describe('ordre-lapp: skanning inne i appen (iPhone åpner kamera-QR i Safari)',
     expect(les('salmakern.html')).toMatch(/onclick="apneSkannModal\(\)"[^>]*>📷 Skann<\/button>\s*<button class="btn" onclick="apneNyLeveranseModal\(\)"/);
   });
 });
+
+describe('ordre-lapp: «🖨 Lapp» på ordren (eldre ordrer og ny lapp)', () => {
+  it('vises bare der stasjonen er på, og ikke for leveranser', () => {
+    expect(sandbox.ordreLappKnappHTML(ordre(1762851234567))).toBe('');
+    sandbox.settOrdreLappStasjon(true);
+    expect(sandbox.ordreLappKnappHTML(ordre(1762851234567))).toContain("skrivUtOrdreLappFor('ord_1762851234567')");
+    expect(sandbox.ordreLappKnappHTML(ordre(1762851234567, { ordretype: 'leveranse' }))).toBe('');
+  });
+  it('skriver ut en eldre ordre og merker den, så den automatiske utskriften ikke tar den igjen', async () => {
+    sandbox.settOrdreLappStasjon(true);
+    const gammel = ordre(Date.now() + 70, { chassis: 'TESTWXYZ000000007' });
+    S.ordrer = [gammel];
+    sandbox.skrivUtOrdreLappFor(gammel.id); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('TESTWXYZ000000007');
+    sandbox.ordreLappNyOrdre(gammel); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1);
+    sandbox.skrivUtOrdreLappFor(gammel.id); await vent(); // ny lapp på forespørsel går alltid
+    expect(utskrifter).toHaveLength(2);
+  });
+  it('knappen står i ordredetaljens topprad', () => {
+    expect(les('js/ordre-detalj.js')).toContain("${typeof ordreLappKnappHTML === 'function' ? ordreLappKnappHTML(o) : ''}");
+  });
+});
