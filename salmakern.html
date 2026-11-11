@@ -915,6 +915,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="btn" id="merDrivstoffSatser" style="display:none" onclick="visMerDrivstoffSatser()">Drivstoff-satser</button>
         <button class="btn" id="merUtstyrMaler" style="display:none" onclick="visMerUtstyrMaler()">Utstyr-maler (ankomst)</button>
         <button class="btn" id="merStandardtiderBtn" style="display:none" onclick="visMerStandardtider()">Standardtider (bil-effektivitet)</button>
+        <button class="btn" id="merBiltilsynReisetiderBtn" style="display:none" onclick="visMerBiltilsynReisetider()">Reisetid pr. kontrollstasjon</button>
       </div>
 
       </div>
@@ -1045,6 +1046,18 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
           <div class="h">Standardtider (bil-effektivitet)</div>
           <div class="muted small" style="margin-bottom:8px">Forventet Ombygging-tid per modell (Klargjøring telles ikke med, siden det er en ren manuell klokke) - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
           <div id="standardtiderListe" style="margin-top:10px"></div>
+        </div>
+      </div>
+
+      <div id="merBiltilsynReisetiderView" style="display:none">
+        <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
+        <div class="card">
+          <div class="row">
+            <div class="h">Reisetid pr. kontrollstasjon</div>
+            <button class="btn sm red" onclick="openModal('nyBiltilsynReisetid')">+ Ny reisetid</button>
+          </div>
+          <div class="muted small" style="margin-bottom:8px">Varselet om «Time på biltilsynet» sendes denne reisetiden før timen i stedet for faste 30 minutter, for stasjoner som er lagt inn her. Ukjente/ikke-registrerte stasjonsnavn bruker fortsatt 30 minutter.</div>
+          <div id="biltilsynReisetiderListe" style="margin-top:10px"></div>
         </div>
       </div>
 
@@ -1722,6 +1735,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="lagreDrivstoffSats()">Lagre sats</button>
       <button class="btn" onclick="closeModal('nyDrivstoffSats')">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="nyBiltilsynReisetid">
+  <div class="modal-box">
+    <div class="h">Ny reisetid</div>
+    <label style="margin-top:12px">Stasjonsnavn * (slik det skrives i «Time bekreftet»)</label>
+    <input id="brSted">
+    <label>Reisetid (minutter før timen) *</label>
+    <input id="brMinutter" type="number" step="1" min="1">
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn red" onclick="lagreBiltilsynReisetid()">Lagre</button>
+      <button class="btn" onclick="closeModal('nyBiltilsynReisetid')">Avbryt</button>
     </div>
   </div>
 </div>

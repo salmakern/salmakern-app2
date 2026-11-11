@@ -1131,6 +1131,13 @@ async function vegvesenBeregnOgSettEndring(o) {
     if (error) console.error('Kunne ikke lagre beregnet vektfordeling:', error.message);
     else o.vekter = data || o.vekter;
   }
+  // Denne beregningen kjører alltid på FLÅTENS PRIMÆRKJØRETØY (se kilde = kontekst ?
+  // kontekst.primaer : o i kalleren) - uten dette kallet sto Endring-tallene fortsatt med
+  // gamle/tomme verdier på resten av flåten etter en automatisk beregning, selv om manuell
+  // vektinntasting allerede synker riktig (sv() i ordre-detalj.js kaller det samme).
+  // synkroniserFraPrimaer() no-oper trygt hvis o ikke faktisk er en flåte-primær (Henrik
+  // 11.11: bekreftet at det er nettopp denne automatiske beregningen som ikke synket ut).
+  if (typeof synkroniserFraPrimaer === 'function') synkroniserFraPrimaer(o.id);
   // Oppdaterer de synlige "Endring"-inputfeltene med en gang - uten dette sto de med
   // gammel/tom verdi helt til noe HELT ANNET tilfeldigvis trigget en ny full rendering av
   // ordresiden (se oppdaterVektInputVerdierIDOM() i ordre-detalj.js, funnet 2026-10-22).

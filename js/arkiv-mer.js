@@ -370,6 +370,7 @@ function renderMer() {
   document.getElementById('merDrivstoffSatser').style.display = erAdmin ? '' : 'none';
   document.getElementById('merUtstyrMaler').style.display     = erAdmin ? '' : 'none';
   document.getElementById('merStandardtiderBtn').style.display = erAdmin ? '' : 'none';
+  document.getElementById('merBiltilsynReisetiderBtn').style.display = erAdmin ? '' : 'none';
 
   renderBeskjeder();
   renderKontakter();
@@ -377,7 +378,7 @@ function renderMer() {
   renderMoterListe();
   renderGodkjennerChat();
   if (erGodkjenner) { if (stempelkortAktiv) renderStempelkort(); else if (statVis==='aar') renderAarsStatistikk(); else renderTimerOversikt(); }
-  if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); }
+  if (erAdmin) { renderOrdreRapport(); renderDrivstoffSatser(); renderUtstyrMaler(); renderBiltilsynReisetider(); }
 }
 
 // Innholdet holdes ferskt av renderMer() (kjøres uansett hvilken side som er åpen, se
@@ -441,8 +442,14 @@ function visMerStandardtider() {
   renderStandardtider();
   window.scrollTo(0, 0);
 }
+function visMerBiltilsynReisetider() {
+  document.getElementById('merHovedView').style.display = 'none';
+  document.getElementById('merBiltilsynReisetiderView').style.display = 'block';
+  renderBiltilsynReisetider();
+  window.scrollTo(0, 0);
+}
 function tilbakeFraMerDetalj() {
-  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView','merStandardtiderView','merHmsView']
+  ['merDrivstoffSatserView','merUtstyrMalerView','merAnsatteView','merTimerView','merOrdreRapportView','merFravarKalenderView','merStandardtiderView','merHmsView','merBiltilsynReisetiderView']
     .forEach(id => document.getElementById(id).style.display = 'none');
   document.getElementById('merHovedView').style.display = 'block';
 }

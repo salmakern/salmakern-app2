@@ -301,7 +301,7 @@ const FOTO_SIDER = {
 };
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], biltilsynReisetider:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null};
 let me = null;
 // Satt av et klikk på et push-varsel om en bestemt ordre (postMessage fra sw.js) - kan
 // komme inn før innlogging/datahenting er ferdig, derfor mellomlagres den her og
@@ -372,6 +372,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Sikre at alle felt finnes etter localStorage-lasting
     S.utstyrMaler      = S.utstyrMaler      || [];
     S.drivstoffSatser  = S.drivstoffSatser  || [];
+    S.biltilsynReisetider = S.biltilsynReisetider || [];
     S.beskjeder        = S.beskjeder        || [];
     S.kontakter        = S.kontakter        || [];
     S.standardtider    = S.standardtider    || {};
@@ -543,6 +544,7 @@ async function loadFromSupabase() {
     S.gps            = {lat: sR.data?.gps_lat||null, lng: sR.data?.gps_lng||null, radius: sR.data?.gps_radius||300};
     S.utstyrMaler    = sR.data?.utstyr_maler    || [];
     S.drivstoffSatser= sR.data?.drivstoff_satser|| [];
+    S.biltilsynReisetider = sR.data?.biltilsyn_reisetider || [];
     S.beskjeder      = sR.data?.beskjeder       || [];
     S.kontakter      = sR.data?.kontakter       || [];
     S.standardtider  = sR.data?.standardtider   || {};
@@ -1200,6 +1202,7 @@ function subscribeRealtime() {
       // drivstoffsats eller genererte en ny PIN.
       if ('utstyr_maler' in row) S.utstyrMaler = row.utstyr_maler || [];
       if ('drivstoff_satser' in row) S.drivstoffSatser = row.drivstoff_satser || [];
+      if ('biltilsyn_reisetider' in row) S.biltilsynReisetider = row.biltilsyn_reisetider || [];
       if ('beskjeder' in row) S.beskjeder = row.beskjeder || [];
       if ('kontakter' in row) S.kontakter = row.kontakter || [];
       if ('standardtider' in row) S.standardtider = row.standardtider || {};
@@ -1337,7 +1340,7 @@ function defaultData() {
     nextId: 10,
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
-    beskjeder: [], kontakter: [], hms: [], utstyrMaler: [], drivstoffSatser: []
+    beskjeder: [], kontakter: [], hms: [], utstyrMaler: [], drivstoffSatser: [], biltilsynReisetider: []
   };
 }
 

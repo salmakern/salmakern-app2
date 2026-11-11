@@ -53,6 +53,46 @@ function renderDrivstoffSatser() {
     </div>`).join('');
 }
 
+// Reisetid pr. kontrollstasjon (s90-...: 11.11, Henrik valgte selv å fylle inn reisetider
+// manuelt per stasjonsnavn, fremfor automatisk kart-oppslag). Samme lagre/slett/render-
+// mønster som drivstoffSatser over. Brukes av supabase/functions/send-push sin
+// paaminnelser_sjekk til å erstatte den faste 30-minutters-grensen for «Time på
+// biltilsynet» når stedet (tid_biltilsynet_sted) matcher et registrert navn (case-
+// insensitivt, trimmet). Ukjente/uregistrerte stasjonsnavn faller tilbake på 30 min.
+function lagreBiltilsynReisetid() {
+  const sted = document.getElementById('brSted').value.trim();
+  const minutter = parseInt(document.getElementById('brMinutter').value, 10);
+  if (!sted) { alert('Stasjonsnavn er påkrevd'); return; }
+  if (!minutter || minutter < 1) { alert('Reisetid (minutter) er påkrevd og må være minst 1'); return; }
+  S.biltilsynReisetider = (S.biltilsynReisetider||[]).filter(r => r.sted.toLowerCase() !== sted.toLowerCase());
+  S.biltilsynReisetider.push({id:'br'+(++S.nextId), sted, minutter});
+  saveInnstillinger();
+  closeModal('nyBiltilsynReisetid');
+  ['brSted','brMinutter'].forEach(i=>{ const el=document.getElementById(i); if(el) el.value=''; });
+  renderBiltilsynReisetider();
+}
+
+function slettBiltilsynReisetid(id) {
+  if (!confirm('Slette denne reisetiden?')) return;
+  S.biltilsynReisetider = (S.biltilsynReisetider||[]).filter(r=>r.id!==id);
+  saveInnstillinger();
+  renderBiltilsynReisetider();
+}
+
+function renderBiltilsynReisetider() {
+  const el = document.getElementById('biltilsynReisetiderListe'); if(!el) return;
+  const liste = (S.biltilsynReisetider||[]).slice().sort((a,b)=>a.sted.localeCompare(b.sted,'no'));
+  if (!liste.length) { el.innerHTML='<div class="muted small">Ingen reisetider lagt inn ennå - alle stasjoner bruker 30 minutter</div>'; return; }
+  el.innerHTML = liste.map(r=>`
+    <div class="box" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div>
+        <b>${esc(r.sted)}</b>
+        <div class="small muted" style="margin-top:3px">${Number(r.minutter)} min før timen</div>
+      </div>
+      <button onclick="slettBiltilsynReisetid('${r.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:18px;padding:0">✕</button>
+    </div>`).join('');
+}
+
 function beregnDrivstoffHTML(df, innhold=false) {
   if (!df) return '';
   const literpris = parseFloat(df.literpris)||0;

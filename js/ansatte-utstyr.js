@@ -1110,13 +1110,14 @@ function saveInnstillinger() {
   // stille overskrive en ANNEN admins nylig lagrede/slettede kontakt. beskjeder/
   // kontaktpersoner har nå sine egne atomiske funksjoner (se lagreBeskjed/slettBeskjed/
   // lagreKontaktperson/slettKontaktperson og migrasjonen 20261022170000) - denne
-  // funksjonen brukes nå kun til dagens_pin/utstyr_maler/drivstoff_satser.
+  // funksjonen brukes nå kun til dagens_pin/utstyr_maler/drivstoff_satser/biltilsyn_reisetider.
   // (HMS flyttet 2026-10-30 fra et jsonb-felt her til egne hms_*-tabeller, se js/hms.js.)
   db.from('innstillinger').upsert({
     id: 1,
     dagens_pin: S.dagensPIN,
     utstyr_maler: S.utstyrMaler||[],
     drivstoff_satser: S.drivstoffSatser||[],
+    biltilsyn_reisetider: S.biltilsynReisetider||[],
     standardtider: S.standardtider||{}
   }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
 }

@@ -1,3 +1,10 @@
+// v58 - to av tre "trenger konkret svar"-punkter (Henrik 11.11, svarte på avklaringsspørsmål):
+// (1) flåte-vekter: den automatisk utregnede "Endring" (vegvesenBeregnOgSettEndring) synker nå
+// ut til resten av flåten via synkroniserFraPrimaer() - før ble bare primærbilen oppdatert;
+// (2) ny "Reisetid pr. kontrollstasjon" under Mer (admin) - "Time på biltilsynet"-varselet kan
+// nå bruke en egen reisetid per stasjonsnavn i stedet for alltid faste 30 min (edge-funksjonen
+// send-push leser innstillinger.biltilsyn_reisetider). Det tredje punktet (rabatt på ekstra
+// utstyr) er en reell fakturerings-/penger-sak som venter på Henriks avklaring - ikke bygget.
 // v56 - tre småfiks (Henrik valgte "alle under liten jobb" fra backloggen 11.11): (1) "Tilbake"
 // fra en ordre åpnet på OVERSIKT går nå dit (ikke til Ordre-lista) - ny openedFraOversikt-flagg,
 // Ordre-lista sine egne kort er UENDRET (de går fortsatt tilbake til Ordre-lista); (2) varsler
@@ -76,7 +83,7 @@
 // v54 - skanning av ordre-lapper inne i appen (📷 Skann på Ordre-siden): iPhone åpner kamera-QR i Safari, ikke i appen på hjemskjermen
 // v55 - «🖨 Lapp» i ordredetaljen (bare der Leitz-stasjonen er slått på): lapp til eldre ordrer og ny lapp ved behov
 // v57 - del-lapp 50 mm (merke + modell og chassis, stor skrift) som valg per PC ved siden av ordre-lappen 25 mm
-const CACHE = 'salmakern-v57';
+const CACHE = 'salmakern-v58';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

@@ -291,7 +291,22 @@ Deno.serve(async (req) => {
       const naa = osloNaa()
       const meldinger: { title: string, body: string, deltakerIder?: number[], ordreId?: string }[] = []
 
-      // --- Time på biltilsynet, sendes når det er 30 minutter eller mindre igjen ---
+      // --- Time på biltilsynet, sendes når det er N minutter eller mindre igjen ---
+      // N er 30 som standard, men kan overstyres per stasjonsnavn (tid_biltilsynet_sted) via
+      // innstillinger.biltilsyn_reisetider (Henrik 11.11: fyller inn reisetid per stasjon
+      // selv - se Mer → Reisetid pr. kontrollstasjon i appen). Ukjent/ikke-registrert sted
+      // bruker fortsatt 30 min, uendret oppførsel for alle som ikke har registrert noe.
+      const { data: innst, error: innstErr } = await supabase
+        .from('innstillinger')
+        .select('biltilsyn_reisetider')
+        .eq('id', 1)
+        .maybeSingle()
+      if (innstErr) console.error('Henting av reisetider feilet:', innstErr.message)
+      const reisetider = new Map<string, number>()
+      for (const r of (innst?.biltilsyn_reisetider ?? []) as { sted?: string, minutter?: number }[]) {
+        if (r?.sted && Number(r.minutter) > 0) reisetider.set(String(r.sted).trim().toLowerCase(), Number(r.minutter))
+      }
+
       const { data: ordre, error: ordreErr } = await supabase
         .from('ordrer')
         .select('id, chassis, regnr, kunde, tid_biltilsynet, tid_biltilsynet_tid, tid_biltilsynet_sted')
@@ -306,7 +321,8 @@ Deno.serve(async (req) => {
         const [t, m] = o.tid_biltilsynet_tid.split(':').map(Number)
         if (Number.isNaN(t) || Number.isNaN(m)) continue
         const diff = (t * 60 + m) - naa.minutter
-        if (diff >= 0 && diff <= 30) {
+        const grense = reisetider.get(String(o.tid_biltilsynet_sted || '').trim().toLowerCase()) ?? 30
+        if (diff >= 0 && diff <= grense) {
           const bil = o.chassis || o.regnr || o.kunde || 'Bil'
           const stedTekst = o.tid_biltilsynet_sted ? ` (${o.tid_biltilsynet_sted})` : ''
           meldinger.push({ title: 'Time på biltilsynet snart', body: `${bil} skal på biltilsynet kl. ${o.tid_biltilsynet_tid}${stedTekst}`, ordreId: o.id })
