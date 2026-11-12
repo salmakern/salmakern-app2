@@ -1752,6 +1752,12 @@ function sf(id, field, val) {
       alert(`Chassis-nr må være nøyaktig 17 tegn (er nå ${val.length}).`);
       return false;
     }
+    // s08-058 (Henrik, "ja synk automatisk"): retter noen en tastefeil i chassis.nr på en
+    // ordre som kom fra Forhandlerportalen, skal portal-bestillingens lagrede chassis
+    // (ident) følge rettelsen - ellers kan en senere bestilling fra portalen med riktig
+    // chassis ikke lenger matche denne bestillingen. Fire-and-forget: blokkerer aldri selve
+    // lagringen, og gjør ingenting (0 rader) hvis ordren uansett ikke kom fra portalen.
+    if (val && val !== o.chassis) synkroniserPortalBestillingIdent(id, val);
   }
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
@@ -1766,6 +1772,17 @@ function sf(id, field, val) {
     synkroniserOmbyggingFikenLinjer(o);
   }
   return true;
+}
+// s08-058: synker portal_bestillinger.ident til et rettet chassis.nr (RPC, SECURITY DEFINER
+// - portal_bestillinger kan ikke skrives direkte av en vanlig innlogget ansatt). Oppdaterer
+// ALLE bestillinger knyttet til ordren, uansett om den ble opprettet som ny ordre
+// (ordrer.portal_bestilling_id satt) eller koblet til en allerede eksisterende ordre (da er
+// det bare portal_bestillinger.ordre_id som peker hit) - samme to veier som
+// portal_avvis_ordre() allerede dekker. Ren beste-innsats: feiler kallet, logges det bare.
+async function synkroniserPortalBestillingIdent(ordreId, nyttChassis) {
+  if (!db) return;
+  const { error } = await db.rpc('portal_oppdater_bestilling_chassis', { p_ordre_id: ordreId, p_nytt_chassis: nyttChassis });
+  if (error) console.warn('Kunne ikke synkronisere portal-bestillingens chassis:', error.message);
 }
 // Skriver nå det/de spesifikke vekt-delfeltet(ene) atomisk via oppdater_ordre_vekter_felt()
 // (radlås i databasen, se migrasjonen 20261022190000) i stedet for den generelle save()
