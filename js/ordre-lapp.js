@@ -66,14 +66,21 @@ function byggOrdreLappDokument(ordrer) {
 const DEL_LAPP_LENGDE_MM = 180;
 // Lengde etter modell (Henrik 2026-11-13: «noen er lengre enn andre»): 180 mm for korte navn, 230 mm for lange. Edge med «skriv ut uten dialog» velger IKKE papir
 // ut fra siden (målt 2026-11-12), så denne PC-en må vise utskriftsvinduet og man velger papiret der. Kortere enn 180 gir ikke mening: chassis.nr er alltid 17 tegn.
-const DEL_LAPP_LANG_MM = 230;
-const DEL_LAPP_MIN_SKRIFT_KORT = 11; // mm: blir merke + modell mindre enn dette på 180 mm, brukes 230 mm
+// Henrik 2026-11-13 (etter første lapp på 230 mm: «ikke helt fornøyd med merke og modell», «kan den ikke velge automatisk ved lengre på navnet?»):
+// flere lengder, og den korteste som gir merke + modell minst DEL_LAPP_MAAL_SKRIFT mm velges (nær chassis.nr, som får 17-18 mm). Hver lengde er et
+// Windows-papir «Del-lapp 50 x L mm» på del-lapp-PC-en (installasjonsfila for Lappskriver-hjelperen legger dem inn).
+const DEL_LAPP_LENGDER = [180, 200, 230, 260, 290, 320];
+const DEL_LAPP_MAAL_SKRIFT = 15;
 function delLappLengdeEtterModell() { return ordreLappLes(ORDRE_LAPP_DEL_LENGDE_NOKKEL) === 'modell'; }
 function delLappLengde(o) { return delLappLengdeEtterModell() ? delLappLengdeEtterNavn(o) : DEL_LAPP_LENGDE_MM; }
-function delLappLengdeEtterNavn(o) {
+// Plass til tekst er L - 11 mm (2 x 5,5 mm marg); skriften linja får = plassen / bredden i em. Korteste lengde (av de som finnes) som gir målskriften,
+// ellers den lengste. Lengden er aldri under 180: chassis.nr er alltid 17 tegn.
+function delLappLengdeEtterNavn(o, lengder = DEL_LAPP_LENGDER) {
   const linje = delLappLinjer(o)[0] || '';
-  // Plass til tekst på 180 mm er 169 mm (180 minus 2 x 5,5 mm marg). Skriften linja får = 169 / bredden i em.
-  return (DEL_LAPP_LENGDE_MM - 11) / Math.max(0.5, delLappBreddeEm(linje)) >= DEL_LAPP_MIN_SKRIFT_KORT ? DEL_LAPP_LENGDE_MM : DEL_LAPP_LANG_MM;
+  const trengs = Math.max(0.5, delLappBreddeEm(linje)) * DEL_LAPP_MAAL_SKRIFT + 11;
+  const liste = [...lengder].map(Number).filter(L => L >= DEL_LAPP_LENGDE_MM).sort((a, b) => a - b);
+  if (!liste.length) return DEL_LAPP_LENGDE_MM;
+  return liste.find(L => L >= trengs) || liste[liste.length - 1];
 }
 // Bokstavbredder i Times fet (Adobe Times-Bold, i em), så valget stemmer med det skriptet i utskriften faktisk får plass til
 // (kontrollert: Land Cruiser 250 gir 12,1 mm og Geländewagen 9,4 mm på 180 mm, målt i nettleser 12 og 9,5). Ukjente tegn regnes som en bred bokstav.
@@ -140,9 +147,9 @@ async function lappHjelperStatus() {
 }
 function lappHjelperLengde(o, status) {
   const papir = Array.isArray(status && status.papir) ? status.papir : [];
-  const onsket = delLappLengdeEtterNavn(o);
-  if (papir.includes(delLappPapir(onsket))) return onsket;
-  return papir.includes(delLappPapir(DEL_LAPP_LENGDE_MM)) ? DEL_LAPP_LENGDE_MM : onsket; // hjelperen svarer med en tydelig feil om papiret mangler
+  const finnes = DEL_LAPP_LENGDER.filter(L => papir.includes(delLappPapir(L)));
+  // Ingen kjente papir: be om 180, så svarer hjelperen med en tydelig feil og lappen går til vanlig utskrift.
+  return finnes.length ? delLappLengdeEtterNavn(o, finnes) : DEL_LAPP_LENGDE_MM;
 }
 async function lappHjelperSkriv(o, L) {
   const r = await fetch(LAPP_HJELPER_URL + '/del-lapp', {
@@ -285,8 +292,8 @@ function renderOrdreLappKort() {
     ${del ? `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="small muted" style="flex:none">Lengde:</span>
       <select onchange="settDelLappLengde(this.value)" style="flex:1 1 0;min-width:0;max-width:100%;padding:5px 8px;font-size:12px">
         <option value="fast" ${etterModell ? '' : 'selected'}>Alltid 180 mm (skrives rett ut)</option>
-        <option value="modell" ${etterModell ? 'selected' : ''}>Etter modell: 180 eller 230 mm (velg papir)</option>
+        <option value="modell" ${etterModell ? 'selected' : ''}>Etter modell: 180-320 mm (velg papir)</option>
       </select></div>` : ''}
-    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? (etterModell ? 'Korte navn får 180 mm, lange (f.eks. Geländewagen) 230 mm. Utskriftsvinduet kommer frem: velg papiret appen sier («Del-lapp 50 x 180 mm» eller «Del-lapp 50 x 230 mm»). Krever at Lappskriver på denne PC-en starter MED utskriftsvindu (oppsettfila spør om det).' : 'Lapp 50 x 180 mm (papir «Del-lapp 50 x 180 mm»).') : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
+    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? (etterModell ? 'Lappen blir 180 til 320 mm, så lang som navnet trenger. Utskriftsvinduet kommer frem: velg papiret appen sier (f.eks. «Del-lapp 50 x 230 mm»). Krever at Lappskriver på denne PC-en starter MED utskriftsvindu (oppsettfila spør om det).' : 'Lapp 50 x 180 mm (papir «Del-lapp 50 x 180 mm»).') : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
     <button class="btn sm" onclick="skrivUtTestOrdreLapp()">🖨 Skriv ut testlapp</button>`;
 }

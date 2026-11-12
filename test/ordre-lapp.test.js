@@ -300,27 +300,31 @@ describe('del-lapp: lengde etter modell', () => {
     sandbox.settOrdreLappType('del');
     expect(sandbox.delLappLengde(bil('Mercedes-Benz', 'Geländewagen'))).toBe(180);
   });
-  it('etter modell: korte navn 180, lange 230 (de ekte modellene i appen)', () => {
+  it('etter modell: korteste lengde som gir merke + modell minst 15 mm (de ekte modellene i appen)', () => {
     sandbox.settOrdreLappType('del'); sandbox.settDelLappLengde('modell');
     const L = (m, mo) => sandbox.delLappLengde(bil(m, mo));
     expect(L('KIA', 'EV9')).toBe(180);
     expect(L('Mercedes-Benz', 'GLS')).toBe(180);
-    expect(L('Toyota', 'Land Cruiser 250')).toBe(180);
+    expect(L('Toyota', 'Land Cruiser 250')).toBe(230);
     expect(L('Dodge', 'Durango')).toBe(180);
-    expect(L('Land Rover', 'Discovery 5')).toBe(180);
-    expect(L('Mercedes-Benz', 'Geländewagen')).toBe(230);
-    expect(L('Land Rover', 'Defender 110 OCTA')).toBe(230);
-    expect(L('Mercedes-Benz', 'V-Klasse')).toBe(180); // 12,1 mm, like stor som Land Cruiser 250
+    expect(L('Land Rover', 'Discovery 5')).toBe(230);
+    expect(L('Mercedes-Benz', 'Geländewagen')).toBe(290);
+    expect(L('Land Rover', 'Defender 110 OCTA')).toBe(290);
+    expect(L('Mercedes-Benz', 'V-Klasse')).toBe(230);
+    expect(L('Volkswagen', 'ID BUZZ')).toBe(200);
+    // Bare de lengdene som finnes brukes; trengs mer enn den lengste, blir det den lengste
+    expect(sandbox.delLappLengdeEtterNavn(bil('Mercedes-Benz', 'Geländewagen'), [180, 230])).toBe(230);
+    expect(sandbox.delLappLengdeEtterNavn(bil('KIA', 'EV9'), [230, 180])).toBe(180);
   });
   it('én utskriftsjobb per lengde, med riktig sidestørrelse og papirnavn i tittelen', async () => {
     sandbox.settOrdreLappStasjon(true); sandbox.settOrdreLappType('del'); sandbox.settDelLappLengde('modell');
-    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9'), bil('Mercedes-Benz', 'Geländewagen'), bil('Toyota', 'Land Cruiser 250')]);
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9'), bil('Mercedes-Benz', 'Geländewagen'), bil('Dodge', 'Durango')]);
     expect(utskrifter).toHaveLength(2);
     expect(utskrifter[0]).toContain('@page{size:50mm 180mm;margin:0}');
     expect(utskrifter[0]).toContain('Del-lapp - papir Del-lapp 50 x 180 mm');
     expect((utskrifter[0].match(/class="side"/g) || []).length).toBe(2);
-    expect(utskrifter[1]).toContain('@page{size:50mm 230mm;margin:0}');
-    expect(utskrifter[1]).toContain('translateY(230mm) rotate(-90deg)');
+    expect(utskrifter[1]).toContain('@page{size:50mm 290mm;margin:0}');
+    expect(utskrifter[1]).toContain('translateY(290mm) rotate(-90deg)');
     expect(utskrifter[1]).toContain('GELÄNDEWAGEN');
   });
   it('tilbake til fast gir 180 mm for alle i én jobb', async () => {
