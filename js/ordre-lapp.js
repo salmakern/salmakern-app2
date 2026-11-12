@@ -182,7 +182,11 @@ function skrivUtOrdreLappFor(id) {
   ordreLappMerk([o.id]);
   skrivUtOrdreLapper([o]);
 }
+// Lappskriver-navnet (Henrik 2026-11-12): stasjonsvinduet skriver ut ALT rett til Leitz-en uten dialog, så det skal ikke forveksles med den vanlige appen.
+// Vindustittelen (og dermed navnet på oppgavelinjen) sier «Lappskriver» på en enhet der stasjonen er slått på. Ikonet settes av Leitz-oppsettfila.
+function ordreLappTittel() { try { document.title = ordreLappStasjonFra() ? "Lappskriver – Salmaker'n" : "Salmaker'n"; } catch (e) { /* ingen document i test */ } }
 function renderOrdreLappKort() {
+  ordreLappTittel();
   const el = document.getElementById('ordreLappKortInnhold');
   if (!el) return;
   const fra = ordreLappStasjonFra();

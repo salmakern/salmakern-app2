@@ -240,3 +240,14 @@ describe('del-lapp 50 mm (annen PC, merke deler til bilen)', () => {
     expect(sandbox.ordreLappType()).toBe('ordre');
   });
 });
+
+describe('Lappskriver-navn i vindustittelen', () => {
+  it('sier «Lappskriver» bare når stasjonen er slått på', () => {
+    sandbox.renderOrdreLappKort();
+    expect(sandbox.document.title).toBe("Salmaker'n");
+    sandbox.settOrdreLappStasjon(true);
+    expect(sandbox.document.title).toBe("Lappskriver – Salmaker'n");
+    sandbox.settOrdreLappStasjon(false);
+    expect(sandbox.document.title).toBe("Salmaker'n");
+  });
+});
