@@ -312,7 +312,7 @@ const FOTO_SIDER = {
 };
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], biltilsynReisetider:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], biltilsynReisetider:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null, timesatsKr:null};
 let me = null;
 // Timeren som håndhever ansatte.okt_maks_minutter klient-side (ren UX - selve håndhevingen
 // skjer server-side i current_ansatt()/hent_innlogget_ansatt() uansett). Satt/fornyet i
@@ -396,6 +396,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.beskjeder        = S.beskjeder        || [];
     S.kontakter        = S.kontakter        || [];
     S.standardtider    = S.standardtider    || {};
+    S.timesatsKr       = S.timesatsKr       ?? null;
     S.hmsAvvik             = S.hmsAvvik             || [];
     S.hmsRisikovurderinger = S.hmsRisikovurderinger || [];
     S.hmsStoffkartotek     = S.hmsStoffkartotek     || [];
@@ -568,6 +569,7 @@ async function loadFromSupabase() {
     S.beskjeder      = sR.data?.beskjeder       || [];
     S.kontakter      = sR.data?.kontakter       || [];
     S.standardtider  = sR.data?.standardtider   || {};
+    S.timesatsKr     = sR.data?.timesats_kr     ?? null;
   }
   // Sett nextId til høyere enn alle eksisterende ID-er
   const alleIds = [
@@ -780,7 +782,11 @@ function dbToOrdre(r) {
     portalLinjer:r.portal_linjer||null,
     // Leveranse (ordre uten bil, 2026-11-03): ordretype/leveranse skrives av ordreToDb BARE for leveranser (så en bil-ordre kan lagres også mot en database uten kolonnene), frakt_bestilt_* aldri.
     ordretype:r.ordretype==='leveranse'?'leveranse':'bil', leveranse:normaliserLeveranse(r.leveranse),
-    fraktBestiltAt:r.frakt_bestilt_at||null, fraktBestiltAv:r.frakt_bestilt_av||'', fraktBestiltTil:r.frakt_bestilt_til||''
+    fraktBestiltAt:r.frakt_bestilt_at||null, fraktBestiltAv:r.frakt_bestilt_av||'', fraktBestiltTil:r.frakt_bestilt_til||'',
+    // Frossen effektiv tid (s09-020, bedt om av Henrik 2026-11-04): satt KUN av endreStatus()
+    // (js/oversikt-kalender.js) når ordren settes til "Hentet" - LESES bare her, skrives ALDRI
+    // av ordreToDb/save(), samme mønster som portal_bestilling_id m.fl. over.
+    effektivTidFrossen:r.effektiv_tid_frossen||null
   };
 }
 // Supabase Realtime utelater STORE, UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en
@@ -1226,6 +1232,7 @@ function subscribeRealtime() {
       if ('beskjeder' in row) S.beskjeder = row.beskjeder || [];
       if ('kontakter' in row) S.kontakter = row.kontakter || [];
       if ('standardtider' in row) S.standardtider = row.standardtider || {};
+      if ('timesats_kr' in row) S.timesatsKr = row.timesats_kr ?? null;
       if (me) renderMer();
     })
     .subscribe(async (status, err) => {
@@ -1360,6 +1367,7 @@ function defaultData() {
     nextId: 10,
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
+    timesatsKr: null,
     beskjeder: [], kontakter: [], hms: [], utstyrMaler: [], drivstoffSatser: [], biltilsynReisetider: []
   };
 }

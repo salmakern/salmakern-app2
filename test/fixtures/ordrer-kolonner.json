@@ -1,5 +1,5 @@
 {
- "hentet": "2026-11-03",
+ "hentet": "2026-11-12",
  "kilde": "information_schema.columns for public.ordrer (read-only)",
  "kolonner": [
   {
@@ -524,6 +524,48 @@
    "kolonne": "frakt_bestilt_til",
    "type": "text",
    "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "fiken_faktura_status",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "fiken_kladd_uuid",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "fiken_faktura_referanse",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "fiken_faktura_id",
+   "type": "bigint",
+   "udt": "int8",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "fiken_faktura_status_sjekket_at",
+   "type": "timestamp with time zone",
+   "udt": "timestamptz",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "effektiv_tid_frossen",
+   "type": "jsonb",
+   "udt": "jsonb",
    "default": null,
    "nullable": true
   }

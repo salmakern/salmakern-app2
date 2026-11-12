@@ -273,6 +273,15 @@ offline-køen får en siste sjanse før utlogging, og en vanlig utlogging spør 
 er utstedt gjelder ut sin levetid (maks 1 time) etter utlogging. `CACHE` i `sw.js` ble bumpet til v13 i
 samme commit, så åpne PWA-er henter den nye koden.
 
+## Timesats og frosset effektiv ordretid (2026-11-12, s09-020)
+
+Henrik («ja legg det til», 2026-11-04): «Bil-effektivitet»-badgen (ordredetaljen, admin-only) skal fryses når bilen er Hentet, og brukt tid skal kunne vises som en kostnad.
+
+- **Timesats** (`innstillinger.timesats_kr`, singleton-rad, samme mønster som `gps_lat`/`dagens_pin`): settes under Mer → Standardtider (eget kort over selve standardtidene). Egen målrettet `saveTimesatsKr()` (speiler `saveGPS()`), aldri via `saveInnstillinger()`. Tomt felt = ingen kostnad vises.
+- **Frossen effektiv tid** (`ordrer.effektiv_tid_frossen` jsonb, `{totalMs, perAnsatt, frossetVed}`): satt av `endreStatus()` (js/oversikt-kalender.js) i SAMME skriving som selve statusendringen når en ordre settes til "Hentet" (bruker `effektivOrdreTidPerAnsattMs()`, samme tall som badgen alltid har vist). Nullstilles igjen hvis ordren flyttes bort fra Hentet. **Leses bare i `dbToOrdre()`, skrives ALDRI av `ordreToDb()`/`save()`** - samme mønster og begrunnelse som `portal_bestilling_id` m.fl.: en ansatt som lagrer et annet felt på ordren skal aldri kunne overskrive/nullstille det frosne tallet med en gammel lokal kopi.
+- `renderBilEffektivitetBadge()` (js/ordre-diverse.js) bruker den frosne verdien direkte (ingen DB-spørring) når den finnes, og viser «Kostnad: X kr (Y kr/t)» når timesats er satt. Uten frysing beregnes tallet live som før.
+- Database kjørt 2026-11-12 (migrasjon `20261112180000_timesats_og_frossen_effektiv_tid.sql`, ren `add column if not exists`, verifisert i rullet-tilbake transaksjon FØR den ekte kjøringen). `sw.js` CACHE v70. Vakt: `test/effektiv-tid-frossen.test.js` (fryse/nullstille/rulle-tilbake i `endreStatus()`) og egen describe i `test/bil-effektivitet.test.js` (frosset verdi + kostnad i selve badgen).
+
 ## PDF-eksport
 
 `genPDF()` i `eksport-varsler.js` bygger en rik HTML/CSS-mal (logo, tabeller, bildegallerier,

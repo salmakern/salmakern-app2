@@ -1149,6 +1149,8 @@ function saveDagensPin() {
 // ansatt (se effektivOrdreTidMs()/beregnBilEffektivitetPerAnsatt() i ordre-diverse.js og
 // samtalen 2026-10-23 for full begrunnelse på hvorfor tiden regnes ut som den gjør).
 async function renderStandardtider() {
+  const timesatsEl = document.getElementById('timesatsKr');
+  if (timesatsEl) timesatsEl.value = S.timesatsKr ?? '';
   const el = document.getElementById('standardtiderListe'); if (!el) return;
   const modeller = alleKjenteModeller();
   if (!modeller.length) { el.innerHTML = '<div class="muted small">Ingen modeller funnet ennå (legges til via Lager/Utstyr-maler)</div>'; return; }
@@ -1180,6 +1182,26 @@ function settStandardtid(modell, felt, val) {
   S.standardtider = S.standardtider || {};
   S.standardtider[modell] = { ...(S.standardtider[modell]||{}), [felt]: minutter };
   saveInnstillinger();
+}
+
+// Timesats (kr/time), brukt til å vise "Bil-effektivitet"-badgens brukte tid som en kostnad
+// (s09-020). Tomt felt = ingen timesats satt, kostnad vises da ikke i det hele tatt.
+function settTimesats(val) {
+  const trimmet = String(val||'').trim().replace(',', '.');
+  S.timesatsKr = trimmet === '' ? null : Math.max(0, Number(trimmet)||0);
+  saveTimesatsKr();
+}
+// Lagrer KUN timesats-feltet (målrettet update, samme mønster og begrunnelse som saveGPS()/
+// saveDagensPin() over) - aldri via den generelle saveInnstillinger(), slik at en annen
+// admins nylig lagrede timesats aldri kan overskrives av en utdatert lokal kopi.
+function saveTimesatsKr() {
+  planleggLocalSpeiling();
+  if (!db) return;
+  ignorerRealtimeInnstillinger = true;
+  clearTimeout(ignorerRealtimeInnstillingerTimer);
+  ignorerRealtimeInnstillingerTimer = setTimeout(()=>{ignorerRealtimeInnstillinger=false;}, 10000);
+  db.from('innstillinger').update({ timesats_kr: S.timesatsKr }).eq('id', 1)
+    .then(r=>{ if(r.error) console.error('Timesats-lagring feil:',r.error.message); });
 }
 
 // Lagrer KUN GPS-feltene (målrettet update, ikke hele innstillinger-raden via

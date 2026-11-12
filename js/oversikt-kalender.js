@@ -613,6 +613,7 @@ async function endreStatus(id, nyStatus) {
   const forrigeArkivStatus = o.status;
   const forrigeDatoKlarHenting = o.datoKlarHenting;
   const forrigeAnkomstdato = o.ankomstdato;
+  const forrigeEffektivTidFrossen = o.effektivTidFrossen;
   // Ingen skal kunne begynne å jobbe på en bil uten at det er registrert HVEM som gjør
   // det - blokkerer derfor akkurat denne overgangen med mindre minst én ansatt allerede
   // er meldt på. Andre statusoverganger er upåvirket.
@@ -665,6 +666,19 @@ async function endreStatus(id, nyStatus) {
   if (nyStatus === 'paa_vei') o.ankomstdato = '';
   else if (nyStatus === 'ikke_paabegynt' && forrigeStatus === 'paa_vei') o.ankomstdato = new Date().toISOString().split('T')[0];
   else if (nyStatus === 'ikke_paabegynt' && !o.ankomstdato) o.ankomstdato = new Date().toISOString().split('T')[0];
+  // Fryser "Bil-effektivitet"-tallet (brukt tid) når bilen er ferdig, slik at det ikke
+  // fortsetter å endre seg i ettertid (f.eks. ved en senere rettet timeføring) og kan vises
+  // som en kostnad (timesats × tid) uten en ny DB-spørring hver gang ordren åpnes (s09-020,
+  // Henrik "ja legg det til" 2026-11-04). Flyttes bilen bort fra Hentet igjen, nullstilles
+  // frysingen - den er da ikke lenger "ferdig", og badgen skal vise levende tall igjen.
+  if (nyStatus === 'hentet') {
+    try {
+      const { totalMs, perAnsatt } = await effektivOrdreTidPerAnsattMs(o);
+      o.effektivTidFrossen = { totalMs, perAnsatt, frossetVed: new Date().toISOString() };
+    } catch (e) { console.warn('Kunne ikke fryse effektiv tid:', e); }
+  } else if (forrigeStatus === 'hentet') {
+    o.effektivTidFrossen = null;
+  }
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   planleggLocalSpeiling();
@@ -681,7 +695,7 @@ async function endreStatus(id, nyStatus) {
     // ikke herfra - ellers sendes varselet dobbelt. "endringer" sendes ikke lenger her -
     // logChange() over persisterer logglinjen atomisk selv (fjernet 2026-10-22, samme
     // rotårsak som dokumenter-kappløpet).
-    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, dato_klar_henting:o.datoKlarHenting||null, ankomstdato:o.ankomstdato||null}).eq('id', id);
+    const { error } = await db.from('ordrer').update({ordre_status:o.ordreStatus, status:o.status, dato_klar_henting:o.datoKlarHenting||null, ankomstdato:o.ankomstdato||null, effektiv_tid_frossen:o.effektivTidFrossen||null}).eq('id', id);
     if (error) feil = error.message;
   }
   if (feil) {
@@ -689,6 +703,7 @@ async function endreStatus(id, nyStatus) {
     o.status = forrigeArkivStatus;
     o.datoKlarHenting = forrigeDatoKlarHenting;
     o.ankomstdato = forrigeAnkomstdato;
+    o.effektivTidFrossen = forrigeEffektivTidFrossen;
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }

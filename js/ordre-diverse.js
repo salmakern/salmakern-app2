@@ -676,23 +676,31 @@ async function beregnBilEffektivitetPerAnsatt(fraDato, tilDato) {
 // Fyller "Brukt tid: Xt Ym (standard: Zt Wm)"-kortet på ordre-siden (admin-only) - asynkron
 // fordi effektiv tid krever et DB-oppslag (se effektivOrdreTidMs()), kalles fra
 // buildOrdreDetail() i ordre-detalj.js.
+// Er ordren Hentet, er tallet FROSSET (o.effektivTidFrossen, satt av endreStatus() i
+// oversikt-kalender.js) - da brukes det lagrede tallet direkte i stedet for en ny
+// DB-spørring, og det endrer seg ikke lenger selv om en timeføring rettes i ettertid (s09-020).
 async function renderBilEffektivitetBadge(o) {
   const el = document.getElementById('bilEffektivitetBadge_'+o.id); if (!el) return;
   const standardMs = ordreStandardMs(o);
   if (standardMs == null) { el.innerHTML = `<div class="small muted">Ingen standardtid satt for "${esc(o.modell||'ukjent modell')}" (sett under Mer → Standardtider)</div>`; return; }
-  const { totalMs: bruktMs, perAnsatt } = await effektivOrdreTidPerAnsattMs(o);
+  const frossen = o.effektivTidFrossen;
+  const { totalMs: bruktMs, perAnsatt } = frossen ? frossen : await effektivOrdreTidPerAnsattMs(o);
   const elNa = document.getElementById('bilEffektivitetBadge_'+o.id); if (!elNa) return; // kan ha forsvunnet mens vi ventet (byttet ordre)
   const vurdering = bilEffektivitetVurdering(bruktMs/standardMs);
   const nedbrytning = perAnsatt.length > 1 ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
       ${perAnsatt.map(r => `<div class="small" style="display:flex;justify-content:space-between"><span class="muted">${esc(r.navn)}</span><span>${fmtTime(r.ms)}</span></div>`).join('')}
     </div>` : '';
+  const kostnadHTML = (S.timesatsKr != null && S.timesatsKr > 0)
+    ? `<div class="small" style="margin-top:4px">Kostnad: ${Math.round((bruktMs/3600000)*S.timesatsKr).toLocaleString('nb-NO')} kr <span class="muted">(${S.timesatsKr} kr/t)</span></div>`
+    : '';
   elNa.innerHTML = `<div class="h">Bil-effektivitet</div>
     <div style="font-size:22px;font-weight:800;margin-top:4px;color:${vurdering.farge}">
       Brukt tid ${fmtTime(bruktMs)} <span style="font-size:15px;font-weight:600;color:#a1a1aa">(standard ${fmtTime(standardMs)})</span>
     </div>
     <div class="small" style="color:${vurdering.farge};margin-top:2px">${vurdering.label}</div>
     ${nedbrytning}
-    <div class="small muted" style="margin-top:4px">Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka</div>`;
+    ${kostnadHTML}
+    <div class="small muted" style="margin-top:4px">${frossen ? 'Tiden er frosset (bilen er hentet) og endrer seg ikke lenger' : 'Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka'}</div>`;
 }
 // Historisk snitt per modell (alle ferdigstilte biler, ikke bare denne måneden) - til hjelp
 // når admin skal avgjøre/justere standardtiden for en modell under Mer → Standardtider

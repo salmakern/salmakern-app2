@@ -1062,6 +1062,13 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div id="merStandardtiderView" style="display:none">
         <button class="btn sm" style="margin-bottom:10px" onclick="tilbakeFraMerDetalj()">← Tilbake</button>
         <div class="card">
+          <div class="h">Timesats</div>
+          <div class="muted small" style="margin-bottom:8px">Brukes til å vise brukt tid på en ferdig (Hentet) bil som en kostnad i kroner på Bil-effektivitet-kortet. Stå tomt viser ingen kostnad.</div>
+          <label class="small muted">Kr/time
+            <input type="number" min="0" step="0.01" id="timesatsKr" style="width:140px;display:block" onchange="settTimesats(this.value)">
+          </label>
+        </div>
+        <div class="card" style="margin-top:10px">
           <div class="h">Standardtider (bil-effektivitet)</div>
           <div class="muted small" style="margin-bottom:8px">Forventet Ombygging-tid per modell (Klargjøring telles ikke med, siden det er en ren manuell klokke) - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
           <div id="standardtiderListe" style="margin-top:10px"></div>

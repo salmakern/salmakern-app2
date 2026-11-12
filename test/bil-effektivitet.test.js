@@ -222,6 +222,61 @@ describe('hentArbeidsintervaller() - mot en falsk database', () => {
     expect(r[1][0].vekt).toBeCloseTo(570 / 600, 3);
     expect(r[9]).toBeUndefined();
   });
+});
+
+// ── Frosset effektiv tid + kostnad (s09-020, Henrik "ja legg det til" 2026-11-04) ──────────
+// renderBilEffektivitetBadge() bruker o.effektivTidFrossen DIREKTE (ingen DB-kall) når den
+// finnes - satt av endreStatus() (se effektiv-tid-frossen.test.js for selve fryse-/
+// nullstille-/rulle-tilbake-logikken, som bor i oversikt-kalender.js og testes der).
+describe('renderBilEffektivitetBadge() - frosset verdi og kostnad', () => {
+  function miljo(timesatsKr = null) {
+    const el = { innerHTML: '' };
+    const env = loadScript('ordre-diverse.js', {
+      S: { standardtider: { 'KIA EV9': { ombygging: 60 } }, timesatsKr },
+      document: { addEventListener() {}, getElementById: (id) => (id === 'bilEffektivitetBadge_ord_1' ? el : null) },
+      esc: (s) => s || ''
+    });
+    return { env, el };
+  }
+
+  it('bruker den frosne verdien direkte (ingen DB-oppslag) og sier fra at tiden er frosset', async () => {
+    const { env, el } = miljo();
+    await env.renderBilEffektivitetBadge({ id: 'ord_1', modell: 'KIA EV9', effektivTidFrossen: { totalMs: 30 * 60000, perAnsatt: [] } });
+    expect(el.innerHTML).toContain('frosset');
+    expect(el.innerHTML).not.toContain('Kostnad');   // ingen timesats satt ennå
+  });
+
+  it('viser kostnad (brukt tid i timer × timesats) når timesats er satt', async () => {
+    const { env, el } = miljo(650);
+    await env.renderBilEffektivitetBadge({ id: 'ord_1', modell: 'KIA EV9', effektivTidFrossen: { totalMs: 2 * 3600000, perAnsatt: [] } });
+    const forventetKr = Math.round(2 * 650).toLocaleString('nb-NO');
+    expect(el.innerHTML).toContain(`Kostnad: ${forventetKr} kr`);
+    expect(el.innerHTML).toContain('650 kr/t');
+  });
+
+  it('viser ingen kostnad når timesats er 0 eller ikke satt', async () => {
+    const { env, el } = miljo(0);
+    await env.renderBilEffektivitetBadge({ id: 'ord_1', modell: 'KIA EV9', effektivTidFrossen: { totalMs: 3600000, perAnsatt: [] } });
+    expect(el.innerHTML).not.toContain('Kostnad');
+  });
+
+  it('ikke frosset ordre (fortsatt aktiv) viser IKKE "frosset"-teksten', async () => {
+    const { env, el } = miljo();
+    await env.renderBilEffektivitetBadge({ id: 'ord_1', modell: 'KIA EV9', effektivTidFrossen: null, ordreTimerSessions: [] });
+    expect(el.innerHTML).not.toContain('frosset');
+    expect(el.innerHTML).toContain('Brukt tid er faktisk tid stemplet inn');
+  });
+});
+
+describe('hentArbeidsintervaller() - mot en falsk database, del 2', () => {
+  function dbMedRader(rader, feil = null) {
+    const q = { filtre: [] };
+    const b = new Proxy({}, { get(_, k) { if (k === 'then') return (res) => Promise.resolve({ data: feil ? null : rader, error: feil }).then(res); return (...a) => { q.filtre.push([k, ...a]); return b; }; } });
+    return { db: { from: (t) => { q.tabell = t; return b; } }, q };
+  }
+  const lag = (db, ansatte = []) => loadScript('ordre-diverse.js', { S: { standardtider: {}, ansatte }, db, document: { addEventListener() {} },
+    beregnNettoMinutter: (m) => ({ pause: m >= 480 ? 30 : 0, netto: Math.max(0, m - (m >= 480 ? 30 : 0)) }) });
+
   it('ugyldig innstemplingstidspunkt eller et i fremtiden gir ikke noe tidsrom (aldri kast)', async () => {
     const { db } = dbMedRader([]);
     const r = await lag(db, [{ id: 1, stempletInnSiden: 'ikke-en-dato' }, { id: 2, stempletInnSiden: new Date(Date.now() + 3600000).toISOString() }]).hentArbeidsintervaller([1, 2], '2026-11-04', '2026-11-04');
