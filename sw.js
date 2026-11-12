@@ -83,7 +83,7 @@
 // v54 - skanning av ordre-lapper inne i appen (📷 Skann på Ordre-siden): iPhone åpner kamera-QR i Safari, ikke i appen på hjemskjermen
 // v55 - «🖨 Lapp» i ordredetaljen (bare der Leitz-stasjonen er slått på): lapp til eldre ordrer og ny lapp ved behov
 // v57 - del-lapp 50 mm (merke + modell og chassis, stor skrift) som valg per PC ved siden av ordre-lappen 25 mm
-const CACHE = 'salmakern-v65';
+const CACHE = 'salmakern-v66';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
@@ -124,6 +124,8 @@ self.addEventListener('fetch', e => {
   }
 
   if (url.includes('supabase.co')) return;
+  // Lappskriver-hjelperen på del-lapp-PC-en (http://localhost:47811): aldri via cachen, ellers kunne et gammelt «ok» fra /status bli svart uten at hjelperen kjører.
+  if (url.startsWith('http://localhost:') || url.startsWith('http://127.0.0.1:')) return;
   if (url.endsWith('.html') || url.includes('salmakern.html') || url.includes('/js/')) {
     // no-store: GitHub Pages sender Cache-Control: max-age=600 på både HTML-
     // filen og js/-filene, så en vanlig fetch() kan bli servert fra nettleserens

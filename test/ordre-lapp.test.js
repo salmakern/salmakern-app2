@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -328,5 +328,65 @@ describe('del-lapp: lengde etter modell', () => {
     await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9'), bil('Mercedes-Benz', 'Geländewagen')]);
     expect(utskrifter).toHaveLength(1);
     expect(utskrifter[0]).toContain('@page{size:50mm 180mm;margin:0}');
+  });
+});
+
+// Lappskriver-hjelperen (Henrik 2026-11-13): et lite program på del-lapp-PC-en velger papiret selv. Her en falsk hjelper i stedet for ekte nett.
+describe('del-lapp via Lappskriver-hjelperen', () => {
+  let kall, svarStatus, svarSkriv;
+  const bil = (merke, modell) => ordre(Date.now(), { merke, modell, chassis: 'TESTWXYZ000000031' });
+  beforeEach(() => {
+    kall = []; svarStatus = { ok: true, papir: ['Del-lapp 50 x 180 mm', 'Del-lapp 50 x 230 mm'] }; svarSkriv = () => ({ ok: true });
+    sandbox.AbortSignal = AbortSignal;
+    sandbox.fetch = async (url, init = {}) => {
+      kall.push({ url, metode: init.method || 'GET', kropp: init.body ? JSON.parse(init.body) : null });
+      if (url.endsWith('/status')) { if (!svarStatus) throw new Error('ECONNREFUSED'); return { ok: true, json: async () => svarStatus }; }
+      const j = svarSkriv(JSON.parse(init.body)); return { ok: !!j.ok, status: j.ok ? 200 : 500, json: async () => j };
+    };
+    sandbox.settOrdreLappStasjon(true); sandbox.settOrdreLappType('del');
+  });
+  afterEach(() => { delete sandbox.fetch; });
+
+  it('sender lappene til hjelperen med lengde etter navnet, uten vanlig utskrift (også når innstillingen er «Alltid 180»)', async () => {
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9'), bil('Mercedes-Benz', 'Geländewagen')]);
+    expect(utskrifter).toHaveLength(0);
+    const skriv = kall.filter((k) => k.metode === 'POST');
+    expect(skriv.map((k) => k.kropp)).toEqual([
+      { linjer: ['KIA EV9', 'TESTWXYZ000000031'], lengde: 180 },
+      { linjer: ['MERCEDES-BENZ GELÄNDEWAGEN', 'TESTWXYZ000000031'], lengde: 230 },
+    ]);
+    expect(skriv[0].url).toBe('http://localhost:47811/del-lapp');
+  });
+
+  it('mangler 230-papiret på skriveren, brukes 180', async () => {
+    svarStatus = { ok: true, papir: ['Del-lapp 50 x 180 mm'] };
+    await sandbox.skrivUtOrdreLapper([bil('Mercedes-Benz', 'Geländewagen')]);
+    expect(kall.find((k) => k.metode === 'POST').kropp.lengde).toBe(180);
+  });
+
+  it('kjører ikke hjelperen, brukes vanlig utskrift som før', async () => {
+    svarStatus = null;
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
+    expect(kall.filter((k) => k.metode === 'POST')).toHaveLength(0);
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('@page{size:50mm 180mm;margin:0}');
+  });
+
+  it('feiler hjelperen på én lapp, skrives akkurat den ut på vanlig måte', async () => {
+    svarSkriv = (k) => (k.linjer[0] === 'KIA EV9' ? { ok: false, feil: 'Skriveren har ikke papiret' } : { ok: true });
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9'), bil('Toyota', 'Land Cruiser 250')]);
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('KIA EV9');
+    expect(utskrifter[0]).not.toContain('LAND CRUISER');
+  });
+
+  it('ordre-lapp (25 mm) bruker aldri hjelperen', async () => {
+    sandbox.settOrdreLappType('ordre');
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
+    expect(kall).toHaveLength(0);
+  });
+
+  it('service workeren lar kall til localhost gå rett til nettet', () => {
+    expect(les('sw.js')).toContain("if (url.startsWith('http://localhost:') || url.startsWith('http://127.0.0.1:')) return;");
   });
 });

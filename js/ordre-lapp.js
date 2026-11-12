@@ -69,8 +69,8 @@ const DEL_LAPP_LENGDE_MM = 180;
 const DEL_LAPP_LANG_MM = 230;
 const DEL_LAPP_MIN_SKRIFT_KORT = 11; // mm: blir merke + modell mindre enn dette på 180 mm, brukes 230 mm
 function delLappLengdeEtterModell() { return ordreLappLes(ORDRE_LAPP_DEL_LENGDE_NOKKEL) === 'modell'; }
-function delLappLengde(o) {
-  if (!delLappLengdeEtterModell()) return DEL_LAPP_LENGDE_MM;
+function delLappLengde(o) { return delLappLengdeEtterModell() ? delLappLengdeEtterNavn(o) : DEL_LAPP_LENGDE_MM; }
+function delLappLengdeEtterNavn(o) {
   const linje = delLappLinjer(o)[0] || '';
   // Plass til tekst på 180 mm er 169 mm (180 minus 2 x 5,5 mm marg). Skriften linja får = 169 / bredden i em.
   return (DEL_LAPP_LENGDE_MM - 11) / Math.max(0.5, delLappBreddeEm(linje)) >= DEL_LAPP_MIN_SKRIFT_KORT ? DEL_LAPP_LENGDE_MM : DEL_LAPP_LANG_MM;
@@ -126,9 +126,49 @@ function ordreLappMerk(ider) {
 }
 
 // ─── Utskrift ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+// ─── Lappskriver-hjelper (Henrik 2026-11-13: lengden skal følge modellen uten at man velger papir) ──────────────────────
+// Et lite program på PC-en med del-lapp-skriveren lytter på localhost og skriver ut med riktig papir (180 eller 230 mm). Svarer det ikke på 1,5 s,
+// brukes vanlig utskrift. Med hjelperen følger lengden ALLTID navnet (det koster ingenting), så lenge papiret finnes på skriveren.
+const LAPP_HJELPER_URL = 'http://localhost:47811';
+async function lappHjelperStatus() {
+  try {
+    const r = await fetch(LAPP_HJELPER_URL + '/status', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && j.ok ? j : null;
+  } catch (e) { return null; }
+}
+function lappHjelperLengde(o, status) {
+  const papir = Array.isArray(status && status.papir) ? status.papir : [];
+  const onsket = delLappLengdeEtterNavn(o);
+  if (papir.includes(delLappPapir(onsket))) return onsket;
+  return papir.includes(delLappPapir(DEL_LAPP_LENGDE_MM)) ? DEL_LAPP_LENGDE_MM : onsket; // hjelperen svarer med en tydelig feil om papiret mangler
+}
+async function lappHjelperSkriv(o, L) {
+  const r = await fetch(LAPP_HJELPER_URL + '/del-lapp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+    body: JSON.stringify({ linjer: delLappLinjer(o), lengde: L }), signal: AbortSignal.timeout(20000),
+  });
+  let j = {}; try { j = await r.json(); } catch (e) { /* tomt svar */ }
+  if (!r.ok || !j.ok) throw new Error(j.feil || ('HTTP ' + r.status));
+  return j;
+}
 async function skrivUtOrdreLapper(ordrer) {
   if (!ordrer.length) return false;
   if (ordreLappType() === 'del') {
+    // Lappskriver-hjelperen på denne PC-en (Leitz-oppsettlappskriver-hjelper.ps1) velger papiret selv og skriver ut uten vindu. Lappene den ikke
+    // tok (ikke installert, avslått, mangler papir) går videre til vanlig utskrift under, så man står aldri uten lapp.
+    const hjelper = await lappHjelperStatus();
+    if (hjelper) {
+      const rest = [];
+      for (const o of ordrer) {
+        const L = lappHjelperLengde(o, hjelper);
+        try { await lappHjelperSkriv(o, L); visToast(`Del-lapp skrevet ut (${L} mm)`, 'ok'); }
+        catch (e) { console.warn('Lappskriver-hjelper:', e); rest.push(o); visToast('Lappskriver-hjelperen feilet (' + e.message + '). Bruker vanlig utskrift.'); }
+      }
+      if (!rest.length) return true;
+      ordrer = rest;
+    }
     // Én utskriftsjobb per lengde (ett papir per jobb). Med lengde etter modell kommer utskriftsvinduet, og man må velge riktig papir der.
     const grupper = new Map();
     ordrer.forEach(o => { const L = delLappLengde(o); if (!grupper.has(L)) grupper.set(L, []); grupper.get(L).push(o); });
