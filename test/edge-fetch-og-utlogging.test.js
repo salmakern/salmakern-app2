@@ -49,6 +49,10 @@ function lagFalskDb(opts = {}) {
       kall.push('rpc:' + navn);
       if (navn === 'logg_ut' && opts.loggUtFeiler) return { data: null, error: { message: 'finnes ikke' } };
       if (navn === 'logg_inn_med_pin') return { data: [], error: null };
+      if (navn === 'hent_innlogget_ansatt') {
+        if (opts.hentInnloggetAnsattFeiler) return { data: null, error: { message: 'nettverksfeil' } };
+        return { data: opts.hentInnloggetAnsattSvar ?? [], error: null };
+      }
       return { data: null, error: null };
     }),
     removeChannel: vi.fn((ch) => { kall.push('removeChannel'); return ch; }),
@@ -427,5 +431,56 @@ describe('innlogging etter utlogging (tryLogin)', () => {
     await Promise.all([utlogging, innlogging]);
     const rekkefolge = kall.filter(k => ['signOut:local', 'signInAnonymously', 'rpc:logg_inn_med_pin'].includes(k));
     expect(rekkefolge).toEqual(['signOut:local', 'signInAnonymously', 'rpc:logg_inn_med_pin']);
+  });
+});
+
+// gjenopprettOktFraEksisterendeSesjon() (2026-11-12, "vi blir logget ut hele tiden"): leser
+// INGEN PIN - kun hent_innlogget_ansatt()-RPC-en, som gjenspeiler current_ansatt() sin
+// server-side sjekk. Testene dekker alle fire utfall: ingen db, RPC-feil, tom rad (ingen
+// gjenopprettbar sesjon - loginScreen som før) og en ekte rad (appen vises uten PIN).
+describe('gjenopprettOktFraEksisterendeSesjon', () => {
+  let env;
+  beforeEach(() => { env = nyEnvironment(); });
+
+  it('gjør ingenting (ingen db ennå)', async () => {
+    env.sandbox._setDb(null);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe()).toBeNull();
+  });
+
+  it('RPC-en feiler: viser PIN-skjermen som før, ingen krasj', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattFeiler: true });
+    env.sandbox._setDb(db);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe()).toBeNull();
+    expect(env.elementer.appScreen).toBeUndefined(); // aktiverInnloggetApp() ble aldri kalt
+
+  });
+
+  it('tom rad (fersk sesjon, utlogget, deaktivert, eller session_token ugyldiggjort et annet sted): PIN-skjermen som før', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [] });
+    env.sandbox._setDb(db);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe()).toBeNull();
+    expect(env.elementer.appScreen).toBeUndefined();
+  });
+
+  it('en gyldig rad: setter me, skjuler loginScreen og viser appScreen - UTEN noen PIN', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 17, navn: 'Henrik', rolle: 'admin', aktiv: true, kan_fore_lonn: true }] });
+    env.sandbox._setDb(db);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe()).toMatchObject({ id: 17, navn: 'Henrik', rolle: 'admin', kanForeLonn: true });
+    expect(env.elementer.loginScreen.style.display).toBe('none');
+    expect(env.elementer.appScreen.style.display).toBe('block');
+    expect(env.elementer.headerUser.textContent).toBe('Henrik · Admin');
+    expect(db.rpc).toHaveBeenCalledWith('hent_innlogget_ansatt');
+  });
+
+  it('kan_fore_lonn: false gir kanForeLonn false og skjuler Timer-fanen', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 5, navn: 'Ismail', rolle: 'ansatt', aktiv: true, kan_fore_lonn: false }] });
+    env.sandbox._setDb(db);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe().kanForeLonn).toBe(false);
+    expect(env.elementer.timerTab.style.display).toBe('none');
   });
 });

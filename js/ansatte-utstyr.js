@@ -1110,16 +1110,35 @@ function saveInnstillinger() {
   // stille overskrive en ANNEN admins nylig lagrede/slettede kontakt. beskjeder/
   // kontaktpersoner har nå sine egne atomiske funksjoner (se lagreBeskjed/slettBeskjed/
   // lagreKontaktperson/slettKontaktperson og migrasjonen 20261022170000) - denne
-  // funksjonen brukes nå kun til dagens_pin/utstyr_maler/drivstoff_satser/biltilsyn_reisetider.
+  // funksjonen brukes nå kun til utstyr_maler/drivstoff_satser/biltilsyn_reisetider/standardtider.
   // (HMS flyttet 2026-10-30 fra et jsonb-felt her til egne hms_*-tabeller, se js/hms.js.)
+  // dagens_pin er AV SAMME GRUNN fjernet herfra 2026-11-12 (funnet under undersøkelse av
+  // "vi blir logget ut hele tiden"): denne kolonnen roterer automatisk hvert døgn kl. 00:00
+  // (migrasjon 20260916200000), og core.js logger ut ALLE innloggede ansatte øyeblikkelig
+  // hvis dagens_pin "endrer seg" (se linje ~1197 der). En fane som sto åpen og synlig gjennom
+  // midnatt hadde en utdatert S.dagensPIN i minnet - og NESTE urelaterte lagring herfra (f.eks.
+  // en drivstoffsats eller en standardtid) skrev den gamle PIN-en tilbake, som tvangslogget hele
+  // bedriften med meldingen "Dagens PIN er byttet". dagens_pin skrives nå KUN via saveDagensPin(),
+  // kalt fra genPIN() - det eneste stedet som faktisk skal endre den.
   db.from('innstillinger').upsert({
     id: 1,
-    dagens_pin: S.dagensPIN,
     utstyr_maler: S.utstyrMaler||[],
     drivstoff_satser: S.drivstoffSatser||[],
     biltilsyn_reisetider: S.biltilsynReisetider||[],
     standardtider: S.standardtider||{}
   }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
+}
+
+// Lagrer KUN dagens_pin (målrettet update) - se forklaringen i saveInnstillinger() over for
+// hvorfor denne IKKE kan være med i "lagre alt"-upserten der.
+function saveDagensPin() {
+  planleggLocalSpeiling();
+  if (!db) return;
+  ignorerRealtimeInnstillinger = true;
+  clearTimeout(ignorerRealtimeInnstillingerTimer);
+  ignorerRealtimeInnstillingerTimer = setTimeout(()=>{ignorerRealtimeInnstillinger=false;}, 10000);
+  db.from('innstillinger').update({ dagens_pin: S.dagensPIN }).eq('id', 1)
+    .then(r=>{ if(r.error) console.error('Dagens PIN-lagring feil:',r.error.message); });
 }
 
 // ════════════════════════════════════════════════════
@@ -1439,7 +1458,7 @@ function toggleUtstyrPunkt(ordreId, idx) {
 
 function genPIN() {
   S.dagensPIN=String(Math.floor(1000+Math.random()*9000));
-  saveInnstillinger();
+  saveDagensPin();
   renderMer();
 }
 

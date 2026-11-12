@@ -398,15 +398,14 @@ function genPDF(id) {
 // ════════════════════════════════════════════════════
 // OPPDATERINGSVARSEL (ny appversjon tilgjengelig)
 // ════════════════════════════════════════════════════
+// Reloader ALDRI av seg selv (verken stille umiddelbart, eller "uansett" etter 10 sek) -
+// rettet 2026-11-12 under undersøkelse av "vi blir logget ut hele tiden". Siden appen
+// alltid viser PIN-skjermen på nytt etter en reload (ingen gjenoppretting av innlogget
+// ansatt fra en fortsatt gyldig sesjon), og sw.js i denne perioden rulles ut svært ofte
+// (se sw.js sin CACHE-historikk), ga den gamle, stille auto-reloaden gjentatte,
+// uforutsette utlogginger midt i vanlig bruk. Nå venter oppdateringen alltid på et
+// bevisst klikk på "Oppdater nå".
 function visOppdateringsToast() {
-  // Auto-reload hvis ingen modal er åpen og ingen input er aktiv
-  const modalApen = document.querySelector('.modal.show');
-  const inputAktiv = document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
-  if (!modalApen && !inputAktiv) {
-    window.location.reload();
-    return;
-  }
-  // Ellers vis toast slik at brukeren kan velge tidspunkt
   if (document.getElementById('updateToast')) return;
   const toast = document.createElement('div');
   toast.id = 'updateToast';
@@ -415,7 +414,5 @@ function visOppdateringsToast() {
     <span>🔄 Ny versjon klar!</span>
     <button onclick="window.location.reload()">Oppdater nå</button>`;
   document.body.appendChild(toast);
-  // Auto-reload etter 10 sek uansett
-  setTimeout(()=>window.location.reload(), 10000);
 }
 

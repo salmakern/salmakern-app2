@@ -363,8 +363,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     // riktig PIN i tryLogin() - uten en PIN er denne sesjonen ikke koblet
     // til noen ansatt og RLS slipper den ikke til noe som helst.
     await sikreAnonymSesjon();
-    // Data kan ikke leses uten en innlogget ansatt lenger - hentes i
-    // tryLogin() i stedet for her.
+    // Har denne sesjonen FRA FØR en gyldig PIN-innlogging (se funksjonen for hvorfor
+    // dette er trygt), gjenopprettes den stille her - uten dette viste appen
+    // PIN-skjermen på nytt ved ENHVER sideinnlasting, selv med en fortsatt gyldig
+    // sesjon (se "vi blir logget ut hele tiden" i CLAUDE.md, 2026-11-12). Returnerer
+    // uten å gjøre noe hvis det ikke finnes en gjenopprettbar sesjon - loginScreen
+    // vises da som før.
+    await gjenopprettOktFraEksisterendeSesjon();
   } catch(e) {
     console.warn('Supabase feil, bruker lokal data:', e.message);
     try { const c = localStorage.getItem(STORE); if(c) S = JSON.parse(c); else S = defaultData(); }
@@ -1541,6 +1546,85 @@ function refreshPinDots() {
     dot.style.background = i < pinBuf.length ? '#ef4444' : '#27272a';
   });
 }
+// Viser appen og laster data for en allerede satt `me` - delt av tryLogin() (etter en
+// vellykket PIN) og gjenopprettOktFraEksisterendeSesjon() (etter en gjenopprettet sesjon,
+// se der). Lagt til 2026-11-12 under rettelsen av "vi blir logget ut hele tiden": var
+// tidligere kun inlinet i tryLogin(), som gjorde at EVERY sideinnlasting - selv med en
+// fortsatt helt gyldig sesjon - krevde ny PIN (se kommentaren i DOMContentLoaded).
+async function aktiverInnloggetApp() {
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appScreen').style.display='block';
+  document.getElementById('headerUser').textContent = me.navn + ' · ' + rolleVis(me.rolle);
+  oppdaterLagreStatusBadge();
+  // Vis/skjul Timer-fanen basert på tilgang
+  const timerTab = document.getElementById('timerTab');
+  if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
+  const adminTab = document.getElementById('adminTab');
+  if (adminTab) adminTab.style.display = (me.rolle === 'admin') ? '' : 'none';
+  // En feil i Timer-oppsettet (f.eks. blokkert lagring) skal aldri hindre selve innloggingen.
+  try { initTimerPage(); } catch (e) { console.error('initTimerPage feilet, innloggingen fortsetter:', e); }
+  // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.
+  // Viser samme lasteskjerm som ved oppstart, så det korte gapet ikke
+  // ser ut som appen henger.
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  try {
+    await loadFromSupabase();
+    subscribeRealtime();
+    renderAll();
+    // Innstemplingen kom ikke frem forrige gang og ble reparert ved oppstart (før ordrene var lastet): gjenoppta Ombygging-klokkene på ordrene jeg er meldt på nå (js/timer.js). Feil her skal aldri hindre innloggingen.
+    if (typeof gjenopptaMineEtterInnlasting === 'function') gjenopptaMineEtterInnlasting().catch(e => console.warn('gjenopptaMineEtterInnlasting:', e && e.message));
+    prosesserOfflineKo(); // send inn evt. lagringer som ble liggende i køen forrige økt
+    // Åpnet via ?ordre=<id> i url-en (et push-varsel som måtte åpne et helt nytt
+    // vindu/fane, se notificationclick i sw.js) - hopp rett til den ordren, og
+    // fjern parameteret så en vanlig omlasting ikke havner der på nytt.
+    const varselOrdreId = new URLSearchParams(location.search).get('ordre');
+    if (varselOrdreId) {
+      pendingDeepLinkOrdreId = varselOrdreId;
+      history.replaceState(null, '', location.pathname);
+    }
+    apneOrdreFraVarselHvisKlar();
+    // Åpnet via ?h=<hyllekode> (QR-etiketten på en lagerhylle, js/lager-hylle.js): hopp rett til hylla.
+    if (typeof apneHylleFraUrlHvisKlar === 'function') {
+      const hylleKode = new URLSearchParams(location.search).get('h');
+      if (hylleKode) {
+        pendingHylleKode = hylleKode;
+        history.replaceState(null, '', location.pathname);
+      }
+      apneHylleFraUrlHvisKlar();
+    }
+  } catch(e) {
+    console.warn('Datahenting etter innlogging feilet:', e);
+    visToast('Klarte ikke å hente data. Trykk 🔄 øverst for å prøve igjen.');
+  }
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// Gjenoppretter en tidligere PIN-innlogging ved sideinnlasting, UTEN å be om PIN på nytt -
+// lagt til 2026-11-12 (se "vi blir logget ut hele tiden" i CLAUDE.md). Kalles fra
+// DOMContentLoaded rett etter sikreAnonymSesjon(). Leser INGEN PIN og lagrer ingen PIN noe
+// sted - den anonyme Auth-sesjonen (persistert av supabase-js i localStorage som før, helt
+// uendret) kan allerede, fra en TIDLIGERE vellykket PIN-innlogging, ha ansatt_id/rolle/
+// session_token-claims i JWT-en (satt av logg_inn_med_pin + custom_access_token_hook). RPC-en
+// hent_innlogget_ansatt() gjør NØYAKTIG samme server-side sjekk som current_ansatt() (samme
+// WHERE-betingelse: aktiv ansatt, matchende ansatt_id, og enten flere_enheter eller matchende
+// session_token) og returnerer da ansatt-dataene - ellers ingenting. Så lenge raden er tom
+// (fersk anonym sesjon uten noen PIN-historikk ennå, utlogget, deaktivert ansatt, ELLER
+// session_token er ugyldiggjort fordi noen har logget inn med samme PIN et annet sted siden)
+// skjer ingenting her, og loginScreen vises som før - ingen endring i sikkerhetsmodellen,
+// bare at et GYLDIG eksisterende innlogging ikke lenger kastes bort ved hver reload.
+async function gjenopprettOktFraEksisterendeSesjon() {
+  if (!db) return;
+  try {
+    const { data, error } = await db.rpc('hent_innlogget_ansatt');
+    if (error) { console.warn('Gjenoppretting av økt feilet, viser PIN-skjerm:', error.message); return; }
+    if (!data || !data.length) return;
+    me = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
+    await aktiverInnloggetApp();
+  } catch(e) {
+    console.warn('Gjenoppretting av økt feilet, viser PIN-skjerm:', e);
+  }
+}
+
 async function tryLogin() {
   // PIN-sjekken skjer i databasen (logg_inn_med_pin), ikke lokalt mot
   // S.ansatte - PIN-koder lastes ikke ned til nettleseren i det hele tatt.
@@ -1578,51 +1662,7 @@ async function tryLogin() {
     // Hent en ny JWT med ansatt_id/rolle-claims med en gang - uten dette
     // ville vi måtte vente til token-en fornyes naturlig av seg selv.
     try { await db.auth.refreshSession(); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
-    document.getElementById('loginScreen').style.display='none';
-    document.getElementById('appScreen').style.display='block';
-    document.getElementById('headerUser').textContent = me.navn + ' · ' + rolleVis(me.rolle);
-    oppdaterLagreStatusBadge();
-    // Vis/skjul Timer-fanen basert på tilgang
-    const timerTab = document.getElementById('timerTab');
-    if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
-    const adminTab = document.getElementById('adminTab');
-    if (adminTab) adminTab.style.display = (me.rolle === 'admin') ? '' : 'none';
-    // En feil i Timer-oppsettet (f.eks. blokkert lagring) skal aldri hindre selve innloggingen.
-    try { initTimerPage(); } catch (e) { console.error('initTimerPage feilet, innloggingen fortsetter:', e); }
-    // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.
-    // Viser samme lasteskjerm som ved oppstart, så det korte gapet ikke
-    // ser ut som appen henger.
-    document.getElementById('loadingOverlay').style.display = 'flex';
-    try {
-      await loadFromSupabase();
-      subscribeRealtime();
-      renderAll();
-      // Innstemplingen kom ikke frem forrige gang og ble reparert ved oppstart (før ordrene var lastet): gjenoppta Ombygging-klokkene på ordrene jeg er meldt på nå (js/timer.js). Feil her skal aldri hindre innloggingen.
-      if (typeof gjenopptaMineEtterInnlasting === 'function') gjenopptaMineEtterInnlasting().catch(e => console.warn('gjenopptaMineEtterInnlasting:', e && e.message));
-      prosesserOfflineKo(); // send inn evt. lagringer som ble liggende i køen forrige økt
-      // Åpnet via ?ordre=<id> i url-en (et push-varsel som måtte åpne et helt nytt
-      // vindu/fane, se notificationclick i sw.js) - hopp rett til den ordren, og
-      // fjern parameteret så en vanlig omlasting ikke havner der på nytt.
-      const varselOrdreId = new URLSearchParams(location.search).get('ordre');
-      if (varselOrdreId) {
-        pendingDeepLinkOrdreId = varselOrdreId;
-        history.replaceState(null, '', location.pathname);
-      }
-      apneOrdreFraVarselHvisKlar();
-      // Åpnet via ?h=<hyllekode> (QR-etiketten på en lagerhylle, js/lager-hylle.js): hopp rett til hylla.
-      if (typeof apneHylleFraUrlHvisKlar === 'function') {
-        const hylleKode = new URLSearchParams(location.search).get('h');
-        if (hylleKode) {
-          pendingHylleKode = hylleKode;
-          history.replaceState(null, '', location.pathname);
-        }
-        apneHylleFraUrlHvisKlar();
-      }
-    } catch(e) {
-      console.warn('Datahenting etter innlogging feilet:', e);
-      visToast('Klarte ikke å hente data. Trykk 🔄 øverst for å prøve igjen.');
-    }
-    document.getElementById('loadingOverlay').style.display = 'none';
+    await aktiverInnloggetApp();
   } else {
     document.getElementById('pinErr').textContent = forMangeForsok
       ? 'For mange feilforsøk – vent noen minutter og prøv igjen'
