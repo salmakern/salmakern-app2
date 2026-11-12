@@ -396,8 +396,18 @@ function lagreTelling(vareId) {
 // ─── Skanning med kamera ───────────────────────────────────────────────────────────────────────────────────────────────
 let _skann = null;
 let _skannNr = 0; // økes hver gang skann-vinduet åpnes eller lukkes, så en forsinket kameratillatelse etter lukking ikke starter kameraet
+// iPhone/iPad: en app på hjemskjermen får ALDRI huske kameratillatelsen, så direkte kamera i appen (getUserMedia) spurte om tilgang hver gang
+// (Henrik 2026-11-12: «jeg vil at den ikke skal spørre om tillatelse hver gang»). Der tas det i stedet et bilde med iPhonens eget kamera
+// (samme <input capture> som bildene på ordren, som aldri spør), og QR-koden leses fra bildet med jsQR. Andre enheter husker tillatelsen og beholder direkte skanning.
+function skannMedBilde() {
+  try {
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  } catch (e) { return false; }
+}
 function apneSkannModal() {
   stoppSkann(); _skannNr++;
+  if (skannMedBilde()) { apneSkannBildeModal(); return; }
   lagerModal('lagerSkannModal', `<div class="row"><div class="h">Skann QR-kode</div><button class="btn sm" onclick="lukkSkannModal()">Lukk</button></div>
     <div style="margin-top:10px;position:relative;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:1/1;max-height:60vh"><video id="skannVideo" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
     <div id="skannStatus" class="small muted" style="margin-top:8px">Starter kameraet...</div>
@@ -405,6 +415,51 @@ function apneSkannModal() {
       <div style="display:flex;gap:8px"><input id="skannKode" maxlength="20" autocomplete="off" placeholder="A1" onkeydown="if(event.key==='Enter')apneHylleFraSkannfelt()"><button class="btn red" onclick="apneHylleFraSkannfelt()">Åpne</button></div></div>`);
   openModal('lagerSkannModal');
   startSkann();
+}
+function apneSkannBildeModal() {
+  lagerModal('lagerSkannModal', `<div class="row"><div class="h">Skann QR-kode</div><button class="btn sm" onclick="lukkSkannModal()">Lukk</button></div>
+    <input type="file" id="skannBildeInput" accept="image/*" capture="environment" style="display:none" onchange="lesSkannBilde(event)">
+    <button class="btn red" style="margin-top:12px;width:100%;padding:14px" onclick="document.getElementById('skannBildeInput').click()">📷 Ta bilde av QR-koden</button>
+    <div id="skannStatus" class="small muted" style="margin-top:8px">Ta bildet rett forfra, så nær at QR-koden fyller en god del av bildet.</div>
+    <div style="margin-top:10px"><label>Eller skriv hyllekoden</label>
+      <div style="display:flex;gap:8px"><input id="skannKode" maxlength="20" autocomplete="off" placeholder="A1" onkeydown="if(event.key==='Enter')apneHylleFraSkannfelt()"><button class="btn red" onclick="apneHylleFraSkannfelt()">Åpne</button></div></div>`);
+  openModal('lagerSkannModal');
+  // Åpne kameraet med en gang (samme trykk som «Skann», så iPhone tillater det). Knappen over er for et nytt forsøk.
+  try { document.getElementById('skannBildeInput').click(); } catch (e) { /* brukeren trykker knappen */ }
+}
+async function lesSkannBilde(ev) {
+  const inp = ev && ev.target; const fil = inp && inp.files && inp.files[0];
+  const status = document.getElementById('skannStatus');
+  if (!fil) return;
+  const mitt = _skannNr;
+  if (status) status.textContent = 'Leser QR-koden...';
+  try {
+    await lastSkript('js/vendor/jsQR.js');
+    const tekst = await lesQrFraBilde(fil);
+    if (mitt !== _skannNr) return; // vinduet er lukket i mellomtiden
+    if (!tekst) { if (status) status.textContent = 'Fant ingen QR-kode i bildet. Ta et nytt bilde litt nærmere, rett forfra.'; return; }
+    behandleSkannet(tekst);
+  } catch (e) {
+    if (status && mitt === _skannNr) status.textContent = 'Kunne ikke lese bildet. Prøv igjen, eller skriv hyllekoden under.';
+  } finally { try { inp.value = ''; } catch (e) { /* samme bilde kan velges igjen */ } }
+}
+// Et mobilfoto er 12 MP: jsQR prøves på en nedskalert kopi først (rask), så større om den ikke fant noe (små QR-koder langt unna). Lappene er mørk kode på lys bunn, så jsQR slipper å prøve invertert (halv tid).
+async function lesQrFraBilde(fil) {
+  const url = URL.createObjectURL(fil);
+  try {
+    const img = await new Promise((ok, feil) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => feil(new Error('bilde')); i.src = url; });
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+    for (const maks of [1000, 2000]) {
+      const k = Math.min(1, maks / Math.max(w0, h0));
+      const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
+      const lerret = document.createElement('canvas'); lerret.width = w; lerret.height = h;
+      const ctx = lerret.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0, w, h);
+      const d = ctx.getImageData(0, 0, w, h); const r = jsQR(d.data, w, h, { inversionAttempts: 'dontInvert' });
+      if (r && r.data) return r.data;
+      if (k === 1) break;
+    }
+    return '';
+  } finally { URL.revokeObjectURL(url); }
 }
 function lukkSkannModal() { _skannNr++; stoppSkann(); closeModal('lagerSkannModal'); }
 function apneHylleFraSkannfelt() {
