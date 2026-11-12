@@ -16,6 +16,7 @@
 const ORDRE_LAPP_STASJON_NOKKEL = 'ordreLappStasjon';      // ms-tidspunkt stasjonen ble slått på (tom = av)
 const ORDRE_LAPP_UTSKREVET_NOKKEL = 'ordreLappUtskrevet';  // JSON-liste med ordre-id-er som er skrevet ut på denne enheten
 const ORDRE_LAPP_TYPE_NOKKEL = 'ordreLappType';
+const ORDRE_LAPP_DEL_LENGDE_NOKKEL = 'ordreLappDelLengde'; // 'modell' = 180 eller 230 mm etter navnet (utskriftsvindu); ellers fast 180 mm
 const ORDRE_LAPP_AUTO_NOKKEL = 'ordreLappAuto';           // 'manuell' = bare med knappen på ordren (standard: automatisk for hver ny ordre)           // 'ordre' (25 mm, standard) eller 'del' (50 mm)
 const ORDRE_LAPP_MAKS_HUSKET = 300;
 const ORDRE_LAPP_TA_IGJEN_MS = 24 * 3600 * 1000;
@@ -63,22 +64,36 @@ function byggOrdreLappDokument(ordrer) {
 // som starter hver linje på 18 mm, måler med den ekte skrifttypen og krymper til ingen linje er bredere enn lappen (anslaget er forsiktig, så uten dette ble chassis.nr bare 13 mm på 180 mm) (i malen hans var chassis.nr kuttet i enden).
 // 180 mm (Henrik 2026-11-12, valg B: «sånn at de ikke blir unødvendig lange»): 230 mm ga mye tom lapp på KIA. Lange navn (Geländewagen) krympes til ca. 9,5 mm, chassis.nr ca. 16-17 mm.
 const DEL_LAPP_LENGDE_MM = 180;
-const DEL_LAPP_TEKSTBREDDE_MM = DEL_LAPP_LENGDE_MM - 12; // ramme, marg og luft i begge ender
+// Lengde etter modell (Henrik 2026-11-13: «noen er lengre enn andre»): 180 mm for korte navn, 230 mm for lange. Edge med «skriv ut uten dialog» velger IKKE papir
+// ut fra siden (målt 2026-11-12), så denne PC-en må vise utskriftsvinduet og man velger papiret der. Kortere enn 180 gir ikke mening: chassis.nr er alltid 17 tegn.
+const DEL_LAPP_LANG_MM = 230;
+const DEL_LAPP_MIN_SKRIFT_KORT = 11; // mm: blir merke + modell mindre enn dette på 180 mm, brukes 230 mm
+function delLappLengdeEtterModell() { return ordreLappLes(ORDRE_LAPP_DEL_LENGDE_NOKKEL) === 'modell'; }
+function delLappLengde(o) {
+  if (!delLappLengdeEtterModell()) return DEL_LAPP_LENGDE_MM;
+  const linje = delLappLinjer(o)[0] || '';
+  // Plass til tekst på 180 mm er 169 mm (180 minus 2 x 5,5 mm marg). Skriften linja får = 169 / bredden i em.
+  return (DEL_LAPP_LENGDE_MM - 11) / Math.max(0.5, delLappBreddeEm(linje)) >= DEL_LAPP_MIN_SKRIFT_KORT ? DEL_LAPP_LENGDE_MM : DEL_LAPP_LANG_MM;
+}
+// Bokstavbredder i Times fet (Adobe Times-Bold, i em), så valget stemmer med det skriptet i utskriften faktisk får plass til
+// (kontrollert: Land Cruiser 250 gir 12,1 mm og Geländewagen 9,4 mm på 180 mm, målt i nettleser 12 og 9,5). Ukjente tegn regnes som en bred bokstav.
+const DEL_LAPP_EM = { A: .722, B: .667, C: .722, D: .722, E: .667, F: .611, G: .778, H: .778, I: .389, J: .5, K: .778, L: .667, M: .944, N: .722, O: .778, P: .611, Q: .778, R: .722, S: .556, T: .667, U: .722, V: .722, W: 1, X: .722, Y: .722, Z: .667, 'Æ': 1, 'Ø': .778, 'Å': .722, 'Ä': .722, 'Ö': .778, 'Ü': .722, 'É': .667, ' ': .25, '-': .333, '.': .25, '/': .278, '(': .333, ')': .333 };
+function delLappBreddeEm(linje) { let em = 0; for (const t of String(linje)) em += /[0-9]/.test(t) ? .5 : (DEL_LAPP_EM[t] || .78); return em; }
+function delLappPapir(L) { return `Del-lapp 50 x ${L} mm`; }
 function delLappLinjer(o) {
   const bil = [o.merke, o.modell].map(x => String(x || '').trim()).filter(Boolean).join(' ');
   const id = o.chassis || o.regnr || '';
   return [bil || (o.chassis ? o.regnr : '') || '', id].map(x => String(x).toUpperCase()).filter(Boolean);
 }
 // Hver linje får sin egen størrelse, så et langt modellnavn ikke gjør chassis.nr lite.
-function delLappSkriftMm(linje) {
-  return Math.floor(Math.min(18, DEL_LAPP_TEKSTBREDDE_MM / (Math.max(1, String(linje).length) * 0.75)) * 10) / 10;
+function delLappSkriftMm(linje, L = DEL_LAPP_LENGDE_MM) {
+  return Math.floor(Math.min(18, (L - 12) / (Math.max(1, String(linje).length) * 0.75)) * 10) / 10; // 12 mm: ramme, marg og luft i begge ender
 }
-function delLappHTML(o) {
-  return `<div class="side"><div class="lapp">${delLappLinjer(o).map(l => `<div class="linje" style="font-size:${delLappSkriftMm(l)}mm">${esc(l)}</div>`).join('')}</div></div>`;
+function delLappHTML(o, L = DEL_LAPP_LENGDE_MM) {
+  return `<div class="side"><div class="lapp">${delLappLinjer(o).map(l => `<div class="linje" style="font-size:${delLappSkriftMm(l, L)}mm">${esc(l)}</div>`).join('')}</div></div>`;
 }
-function byggDelLappDokument(ordrer) {
-  const L = DEL_LAPP_LENGDE_MM;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Del-lapp</title><style>
+function byggDelLappDokument(ordrer, L = DEL_LAPP_LENGDE_MM) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Del-lapp - papir ${delLappPapir(L)}</title><style>
     *{box-sizing:border-box}html,body{margin:0;color:#000;background:#fff}
     @page{size:50mm ${L}mm;margin:0}
     .side{width:50mm;height:${L}mm;position:relative;overflow:hidden;page-break-after:always;break-after:page}
@@ -88,7 +103,7 @@ function byggDelLappDokument(ordrer) {
     .lapp::before{content:'';position:absolute;inset:2mm;border:0.8mm solid #000}
     .lapp{display:flex;flex-direction:column;justify-content:center;gap:1mm;padding:3mm 5.5mm}
     .linje{font-family:'Times New Roman',Times,serif;font-weight:700;white-space:nowrap;line-height:1;overflow:hidden}
-  </style></head><body>${ordrer.map(delLappHTML).join('')}
+  </style></head><body>${ordrer.map(o => delLappHTML(o, L)).join('')}
   <script>document.querySelectorAll('.lapp').forEach(function(l){var el=l.querySelectorAll('.linje');
     for(var i=0;i<el.length;i++){var f=18;el[i].style.fontSize=f+'mm';while(el[i].scrollWidth>el[i].clientWidth+0.5&&f>4){f-=0.5;el[i].style.fontSize=f+'mm';}}
     var n=0;while(l.scrollHeight>l.clientHeight+0.5&&n++<40){for(var j=0;j<el.length;j++){el[j].style.fontSize=(parseFloat(el[j].style.fontSize)*0.95)+'mm';}}});</script></body></html>`;
@@ -113,7 +128,14 @@ function ordreLappMerk(ider) {
 // ─── Utskrift ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 async function skrivUtOrdreLapper(ordrer) {
   if (!ordrer.length) return false;
-  if (ordreLappType() === 'del') { skrivUtHtml(byggDelLappDokument(ordrer)); return true; }
+  if (ordreLappType() === 'del') {
+    // Én utskriftsjobb per lengde (ett papir per jobb). Med lengde etter modell kommer utskriftsvinduet, og man må velge riktig papir der.
+    const grupper = new Map();
+    ordrer.forEach(o => { const L = delLappLengde(o); if (!grupper.has(L)) grupper.set(L, []); grupper.get(L).push(o); });
+    if (delLappLengdeEtterModell()) visToast('Velg papir ' + [...grupper.keys()].map(L => '«' + delLappPapir(L) + '»').join(' og deretter ') + ' i utskriftsvinduet', 'ok');
+    grupper.forEach((liste, L) => skrivUtHtml(byggDelLappDokument(liste, L)));
+    return true;
+  }
   try { await sikreQrBibliotek(); } catch (e) { visToast('Kunne ikke laste QR-biblioteket: ' + e.message); return false; }
   skrivUtHtml(byggOrdreLappDokument(ordrer));
   return true;
@@ -176,6 +198,10 @@ function settOrdreLappAuto(auto) {
   if (!ordreLappSkriv(ORDRE_LAPP_AUTO_NOKKEL, auto ? null : 'manuell')) visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)');
   renderOrdreLappKort();
 }
+function settDelLappLengde(verdi) {
+  if (!ordreLappSkriv(ORDRE_LAPP_DEL_LENGDE_NOKKEL, verdi === 'modell' ? 'modell' : null)) visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)');
+  renderOrdreLappKort();
+}
 function settOrdreLappType(type) {
   if (!ordreLappSkriv(ORDRE_LAPP_TYPE_NOKKEL, type === 'del' ? 'del' : 'ordre')) visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)');
   renderOrdreLappKort();
@@ -202,6 +228,7 @@ function renderOrdreLappKort() {
   const fra = ordreLappStasjonFra();
   const del = ordreLappType() === 'del';
   const auto = ordreLappAuto();
+  const etterModell = delLappLengdeEtterModell();
   el.innerHTML = `<label style="display:flex;gap:10px;align-items:center;margin:10px 0 6px;cursor:pointer;font-size:13.5px;color:inherit">
       <input type="checkbox" ${fra ? 'checked' : ''} onchange="settOrdreLappStasjon(this.checked)" style="width:18px;height:18px;flex:none;margin:0;padding:0">
       <span>Denne PC-en har lappskriver (Leitz Icon)</span></label>
@@ -215,6 +242,11 @@ function renderOrdreLappKort() {
         <option value="auto" ${auto ? 'selected' : ''}>Automatisk ved ny ordre</option>
         <option value="manuell" ${auto ? '' : 'selected'}>Bare med knappen på ordren</option>
       </select></div>
-    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? 'Lapp 50 x 180 mm (papir «Del-lapp 50 x 180 mm»).' : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
+    ${del ? `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="small muted" style="flex:none">Lengde:</span>
+      <select onchange="settDelLappLengde(this.value)" style="flex:1 1 0;min-width:0;max-width:100%;padding:5px 8px;font-size:12px">
+        <option value="fast" ${etterModell ? '' : 'selected'}>Alltid 180 mm (skrives rett ut)</option>
+        <option value="modell" ${etterModell ? 'selected' : ''}>Etter modell: 180 eller 230 mm (velg papir)</option>
+      </select></div>` : ''}
+    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? (etterModell ? 'Korte navn får 180 mm, lange (f.eks. Geländewagen) 230 mm. Utskriftsvinduet kommer frem: velg papiret appen sier («Del-lapp 50 x 180 mm» eller «Del-lapp 50 x 230 mm»). Krever at Lappskriver på denne PC-en starter MED utskriftsvindu (oppsettfila spør om det).' : 'Lapp 50 x 180 mm (papir «Del-lapp 50 x 180 mm»).') : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
     <button class="btn sm" onclick="skrivUtTestOrdreLapp()">🖨 Skriv ut testlapp</button>`;
 }
