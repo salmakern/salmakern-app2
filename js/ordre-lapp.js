@@ -6,7 +6,7 @@
 //   for ordrer som kom mens PC-en sov eller var uten nett (bare ordrer opprettet ETTER at stasjonen ble slått på, og høyst 24 t gamle).
 // - Hver ordre skrives ut ÉN gang per enhet (liste over utskrevne id-er i localStorage, delt mellom faner). Flere nye ordrer tett etter hverandre blir én utskriftsjobb.
 // - Uten dialog: et eget Edge-vindu med egen profil (--user-data-dir) og --kiosk-printing, som skriver til siste skriver/papir valgt i den profilen. Papiret må være
-//   Windows-skjemaet «Ordre-lapp 25 x 60 mm» (med driverens «Continuous - 1"» mater Leitz Icon ut 17,5 cm, testet 2026-11-11), eller «Del-lapp 50 x 230 mm» for del-lappen.
+//   Windows-skjemaet «Ordre-lapp 25 x 60 mm» (med driverens «Continuous - 1"» mater Leitz Icon ut 17,5 cm, testet 2026-11-11), eller «Del-lapp 50 x 180 mm» for del-lappen (230 mm til 2026-11-12).
 // - DEL-LAPP (Henrik 2026-11-11, etter hans egen mal fra Leitz-programmet): en annen PC med 50 mm rull skriver ut en lapp til å merke delene til bilen, også automatisk
 //   for hver ny ordre: ramme og to linjer i stor fet skrift langs lappen, merke + modell og hele chassis.nr. Hver PC velger lapptype selv (ORDRE_LAPP_TYPE_NOKKEL), så to
 //   stasjoner gir én ordre-lapp og én del-lapp per ordre (utskrevet-lista er per enhet).
@@ -57,11 +57,12 @@ function byggOrdreLappDokument(ordrer) {
   </style></head><body>${ordrer.map(ordreLappHTML).join('')}</body></html>`;
 }
 
-// ─── Del-lapp, 50 x 230 mm ─────────────────────────────────────────────────────────────────────────────────────────────
-// Samme grunn som over: siden er stående (50 mm på tvers av rullen, 230 mm langs), og lappen (230 x 50) roteres -90 grader, så teksten leses nedenfra og opp med
+// ─── Del-lapp, 50 x 180 mm ─────────────────────────────────────────────────────────────────────────────────────────────
+// Samme grunn som over: siden er stående (50 mm på tvers av rullen, 180 mm langs), og lappen (180 x 50) roteres -90 grader, så teksten leses nedenfra og opp med
 // første linje til venstre, som i Henriks mal. Skriften er stor (opptil 18 mm) og krympes til den rommes: et anslag her, og et lite skript i utskriftsdokumentet
-// som måler med den ekte skrifttypen og krymper til ingen linje er bredere enn lappen (i malen hans var chassis.nr kuttet i enden).
-const DEL_LAPP_LENGDE_MM = 230;
+// som starter hver linje på 18 mm, måler med den ekte skrifttypen og krymper til ingen linje er bredere enn lappen (anslaget er forsiktig, så uten dette ble chassis.nr bare 13 mm på 180 mm) (i malen hans var chassis.nr kuttet i enden).
+// 180 mm (Henrik 2026-11-12, valg B: «sånn at de ikke blir unødvendig lange»): 230 mm ga mye tom lapp på KIA. Lange navn (Geländewagen) krympes til ca. 9,5 mm, chassis.nr ca. 16-17 mm.
+const DEL_LAPP_LENGDE_MM = 180;
 const DEL_LAPP_TEKSTBREDDE_MM = DEL_LAPP_LENGDE_MM - 12; // ramme, marg og luft i begge ender
 function delLappLinjer(o) {
   const bil = [o.merke, o.modell].map(x => String(x || '').trim()).filter(Boolean).join(' ');
@@ -85,11 +86,11 @@ function byggDelLappDokument(ordrer) {
     .lapp{position:absolute;left:0;top:0;width:${L}mm;height:50mm;transform-origin:0 0;transform:translateY(${L}mm) rotate(-90deg);padding:2mm}
     .lapp>*{position:relative}
     .lapp::before{content:'';position:absolute;inset:2mm;border:0.8mm solid #000}
-    .lapp{display:flex;flex-direction:column;justify-content:center;gap:1mm;padding:3mm 4mm}
+    .lapp{display:flex;flex-direction:column;justify-content:center;gap:1mm;padding:3mm 5.5mm}
     .linje{font-family:'Times New Roman',Times,serif;font-weight:700;white-space:nowrap;line-height:1;overflow:hidden}
   </style></head><body>${ordrer.map(delLappHTML).join('')}
   <script>document.querySelectorAll('.lapp').forEach(function(l){var el=l.querySelectorAll('.linje');
-    for(var i=0;i<el.length;i++){var f=parseFloat(el[i].style.fontSize)||18;while(el[i].scrollWidth>el[i].clientWidth+0.5&&f>4){f-=0.5;el[i].style.fontSize=f+'mm';}}
+    for(var i=0;i<el.length;i++){var f=18;el[i].style.fontSize=f+'mm';while(el[i].scrollWidth>el[i].clientWidth+0.5&&f>4){f-=0.5;el[i].style.fontSize=f+'mm';}}
     var n=0;while(l.scrollHeight>l.clientHeight+0.5&&n++<40){for(var j=0;j<el.length;j++){el[j].style.fontSize=(parseFloat(el[j].style.fontSize)*0.95)+'mm';}}});</script></body></html>`;
 }
 function ordreLappType() { return ordreLappLes(ORDRE_LAPP_TYPE_NOKKEL) === 'del' ? 'del' : 'ordre'; }
@@ -214,6 +215,6 @@ function renderOrdreLappKort() {
         <option value="auto" ${auto ? 'selected' : ''}>Automatisk ved ny ordre</option>
         <option value="manuell" ${auto ? '' : 'selected'}>Bare med knappen på ordren</option>
       </select></div>
-    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? 'Lapp 50 x 230 mm (papir «Del-lapp 50 x 230 mm»).' : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
+    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? 'Lapp 50 x 180 mm (papir «Del-lapp 50 x 180 mm»).' : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
     <button class="btn sm" onclick="skrivUtTestOrdreLapp()">🖨 Skriv ut testlapp</button>`;
 }

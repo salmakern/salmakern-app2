@@ -250,9 +250,9 @@ describe('del-lapp 50 mm (annen PC, merke deler til bilen)', () => {
     expect(sandbox.delLappLinjer(ordre(1, { merke: '', modell: '', chassis: '', regnr: 'US15133' }))).toEqual(['US15133']);
     expect(sandbox.delLappLinjer(ordre(1, { merke: '', modell: '', chassis: 'KNAAE8158V6088145', regnr: 'EL12345' }))).toEqual(['EL12345', 'KNAAE8158V6088145']);
   });
-  it('dokumentet er stående 50 x 230 mm, uten QR, og fritekst escapes', () => {
+  it('dokumentet er stående 50 x 180 mm, uten QR, og fritekst escapes', () => {
     const html = sandbox.byggDelLappDokument([ordre(1, { merke: '<b>x</b>', modell: 'EV9' })]);
-    expect(html).toContain('@page{size:50mm 230mm;margin:0}');
+    expect(html).toContain('@page{size:50mm 180mm;margin:0}');
     expect(html).toContain('rotate(-90deg)');
     expect(html).not.toContain('<svg');
     expect(html).not.toContain('<b>x</b>');
@@ -263,7 +263,7 @@ describe('del-lapp 50 mm (annen PC, merke deler til bilen)', () => {
     const html = sandbox.delLappHTML(ordre(1, { merke: 'Mercedes-Benz', modell: 'Sprinter 519 CDI', chassis: 'WDB12345678901234' }));
     const str = [...html.matchAll(/font-size:([\d.]+)mm/g)].map((m) => Number(m[1]));
     expect(str[1]).toBeGreaterThan(str[0]);
-    expect(17 * 0.75 * str[1]).toBeLessThanOrEqual(218.01);
+    expect(17 * 0.75 * str[1]).toBeLessThanOrEqual(168.01);
   });
   it('lapptypen velges per PC: del-lapp skrives ut uten QR, ordre-lapp er standard', async () => {
     sandbox.settOrdreLappStasjon(true);
