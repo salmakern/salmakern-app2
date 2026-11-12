@@ -15,7 +15,8 @@
 
 const ORDRE_LAPP_STASJON_NOKKEL = 'ordreLappStasjon';      // ms-tidspunkt stasjonen ble slått på (tom = av)
 const ORDRE_LAPP_UTSKREVET_NOKKEL = 'ordreLappUtskrevet';  // JSON-liste med ordre-id-er som er skrevet ut på denne enheten
-const ORDRE_LAPP_TYPE_NOKKEL = 'ordreLappType';           // 'ordre' (25 mm, standard) eller 'del' (50 mm)
+const ORDRE_LAPP_TYPE_NOKKEL = 'ordreLappType';
+const ORDRE_LAPP_AUTO_NOKKEL = 'ordreLappAuto';           // 'manuell' = bare med knappen på ordren (standard: automatisk for hver ny ordre)           // 'ordre' (25 mm, standard) eller 'del' (50 mm)
 const ORDRE_LAPP_MAKS_HUSKET = 300;
 const ORDRE_LAPP_TA_IGJEN_MS = 24 * 3600 * 1000;
 const ORDRE_LAPP_MAKS_TA_IGJEN = 20;
@@ -92,6 +93,8 @@ function byggDelLappDokument(ordrer) {
     var n=0;while(l.scrollHeight>l.clientHeight+0.5&&n++<40){for(var j=0;j<el.length;j++){el[j].style.fontSize=(parseFloat(el[j].style.fontSize)*0.95)+'mm';}}});</script></body></html>`;
 }
 function ordreLappType() { return ordreLappLes(ORDRE_LAPP_TYPE_NOKKEL) === 'del' ? 'del' : 'ordre'; }
+// Henrik 2026-11-12 (del-lappen): «bare trykker på en knapp i ordren i stedet for at det skjer automatisk». Valget gjelder per PC.
+function ordreLappAuto() { return ordreLappLes(ORDRE_LAPP_AUTO_NOKKEL) !== 'manuell'; }
 
 // ─── Lagring på enheten (tåler blokkert localStorage, se feilsøkingsnotatet i CLAUDE.md) ───────────────────────────────────
 function ordreLappLes(nokkel) { try { return localStorage.getItem(nokkel); } catch (e) { return null; } }
@@ -119,7 +122,7 @@ let _ordreLappTimer = null;
 // Kalles for hver ny ordre (Realtime) og fra «ta igjen». Samler en kort byge til én utskriftsjobb.
 function ordreLappNyOrdre(o) {
   const fra = ordreLappStasjonFra();
-  if (!fra || !ordreLappSkalHa(o)) return;
+  if (!fra || !ordreLappAuto() || !ordreLappSkalHa(o)) return;
   const ms = ordreLappIdMs(o.id);
   if (ms != null && ms < fra) return; // eldre enn stasjonen (f.eks. en ordre som ble gjenopprettet)
   if (ordreLappUtskrevne().includes(o.id) || _ordreLappKo.some(x => x.id === o.id)) return;
@@ -138,7 +141,7 @@ function ordreLappTomKo() {
 // Ordrer som kom mens stasjonen ikke fikk Realtime (sov, uten nett): opprettet etter at stasjonen ble slått på, høyst 24 t gamle, ikke skrevet ut.
 function ordreLappTaIgjen() {
   const fra = ordreLappStasjonFra();
-  if (!fra || !me) return;
+  if (!fra || !me || !ordreLappAuto()) return;
   const naa = Date.now();
   const utskrevne = ordreLappUtskrevne();
   const mangler = (S.ordrer || []).filter(o => {
@@ -154,7 +157,7 @@ function settOrdreLappStasjon(paa) {
     // Merk eksisterende ordrer som «sett», så ingenting gammelt skrives ut når stasjonen slås på.
     ordreLappMerk((S.ordrer || []).map(o => o.id));
     if (!ordreLappSkriv(ORDRE_LAPP_STASJON_NOKKEL, String(Date.now()))) { visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)'); renderOrdreLappKort(); return; }
-    visToast('Denne PC-en skriver nå ut en lapp for hver nye ordre', 'ok');
+    visToast(ordreLappAuto() ? 'Denne PC-en skriver nå ut en lapp for hver nye ordre' : 'Denne PC-en har nå «🖨 Lapp»-knappen på ordrene', 'ok');
   } else {
     ordreLappSkriv(ORDRE_LAPP_STASJON_NOKKEL, null);
     visToast('Automatisk utskrift av ordre-lapper er slått av på denne PC-en', 'ok');
@@ -166,6 +169,12 @@ function skrivUtTestOrdreLapp() {
   const del = ordreLappType() === 'del';
   skrivUtOrdreLapper([{ id: 'ord_' + Date.now(), chassis: 'TESTWXYZ000000001', regnr: '', kunde: 'TEST - prøveutskrift', merke: del ? 'TEST' : 'Leitz', modell: del ? 'DEL-LAPP' : 'Icon 25 mm', status: 'aktiv' }]);
 }
+function settOrdreLappAuto(auto) {
+  // Fra «bare knapp» til automatisk: ordrer som kom i mellomtiden skal ikke plutselig skrives ut i en klump.
+  if (auto) ordreLappMerk((S.ordrer || []).map(o => o.id));
+  if (!ordreLappSkriv(ORDRE_LAPP_AUTO_NOKKEL, auto ? null : 'manuell')) visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)');
+  renderOrdreLappKort();
+}
 function settOrdreLappType(type) {
   if (!ordreLappSkriv(ORDRE_LAPP_TYPE_NOKKEL, type === 'del' ? 'del' : 'ordre')) visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)');
   renderOrdreLappKort();
@@ -174,7 +183,7 @@ function settOrdreLappType(type) {
 // er slått på (PC-en med skriveren), og bare for bil-ordrer. Merker ordren som utskrevet, så den automatiske utskriften ikke tar den en gang til.
 function ordreLappKnappHTML(o) {
   if (!ordreLappStasjonFra() || !o || erLeveranse(o)) return '';
-  return `<button class="btn sm" onclick="skrivUtOrdreLappFor('${esc(o.id).replace(/'/g, "\\'")}')" title="Skriv ut ordre-lapp på Leitz Icon" style="border-radius:10px;padding:5px 9px;font-size:11px">🖨 Lapp</button>`;
+  return `<button class="btn sm" onclick="skrivUtOrdreLappFor('${esc(o.id).replace(/'/g, "\\'")}')" title="Skriv ut lapp på Leitz Icon" style="border-radius:10px;padding:5px 9px;font-size:11px">🖨 ${ordreLappType() === 'del' ? 'Del-lapp' : 'Lapp'}</button>`;
 }
 function skrivUtOrdreLappFor(id) {
   const o = (S.ordrer || []).find(x => x.id === id);
@@ -191,14 +200,20 @@ function renderOrdreLappKort() {
   if (!el) return;
   const fra = ordreLappStasjonFra();
   const del = ordreLappType() === 'del';
+  const auto = ordreLappAuto();
   el.innerHTML = `<label style="display:flex;gap:10px;align-items:center;margin:10px 0 6px;cursor:pointer;font-size:13.5px;color:inherit">
       <input type="checkbox" ${fra ? 'checked' : ''} onchange="settOrdreLappStasjon(this.checked)" style="width:18px;height:18px;flex:none;margin:0;padding:0">
-      <span>Denne PC-en skriver ut en lapp for hver ny ordre</span></label>
+      <span>Denne PC-en har lappskriver (Leitz Icon)</span></label>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="small muted" style="flex:none">Lapp:</span>
-      <select onchange="settOrdreLappType(this.value)" style="width:auto;padding:5px 8px;font-size:12px">
+      <select onchange="settOrdreLappType(this.value)" style="flex:1 1 0;min-width:0;max-width:100%;padding:5px 8px;font-size:12px">
         <option value="ordre" ${del ? '' : 'selected'}>Ordre-lapp 25 mm (QR, chassis, kunde)</option>
         <option value="del" ${del ? 'selected' : ''}>Del-lapp 50 mm (merke, modell, chassis)</option>
       </select></div>
-    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Leitz-stasjonsvinduet på PC-en med skriveren. ${del ? 'Lapp 50 x 230 mm (papir «Del-lapp 50 x 230 mm»).' : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="small muted" style="flex:none">Når:</span>
+      <select onchange="settOrdreLappAuto(this.value === 'auto')" style="flex:1 1 0;min-width:0;max-width:100%;padding:5px 8px;font-size:12px">
+        <option value="auto" ${auto ? 'selected' : ''}>Automatisk ved ny ordre</option>
+        <option value="manuell" ${auto ? '' : 'selected'}>Bare med knappen på ordren</option>
+      </select></div>
+    <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? 'Lapp 50 x 230 mm (papir «Del-lapp 50 x 230 mm»).' : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
     <button class="btn sm" onclick="skrivUtTestOrdreLapp()">🖨 Skriv ut testlapp</button>`;
 }

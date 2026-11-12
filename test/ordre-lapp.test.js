@@ -203,6 +203,47 @@ describe('ordre-lapp: «🖨 Lapp» på ordren (eldre ordrer og ny lapp)', () =>
   });
 });
 
+// Henrik 2026-11-12: del-lappen skal skrives ut med en knapp på ordren, ikke automatisk. Valget gjelder per PC.
+describe('ordre-lapp: «bare med knappen» i stedet for automatisk', () => {
+  it('standard er automatisk; «bare knapp» stopper både Realtime og «ta igjen», men knappen virker', async () => {
+    sandbox.settOrdreLappStasjon(true);
+    expect(sandbox.ordreLappAuto()).toBe(true);
+    sandbox.settOrdreLappAuto(false);
+    expect(sandbox.ordreLappAuto()).toBe(false);
+    const ny = ordre(Date.now() + 50, { chassis: 'TESTWXYZ000000011' });
+    S.ordrer = [ny];
+    sandbox.ordreLappNyOrdre(ny); sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(0);
+    expect(sandbox.ordreLappKnappHTML(ny)).toContain('skrivUtOrdreLappFor');
+    sandbox.skrivUtOrdreLappFor(ny.id); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('TESTWXYZ000000011');
+  });
+  it('tilbake til automatisk skriver ikke ut ordrene som kom i mellomtiden, bare nye etterpå', async () => {
+    sandbox.settOrdreLappStasjon(true);
+    sandbox.settOrdreLappAuto(false);
+    const mellom = ordre(Date.now() + 60, { chassis: 'TESTWXYZ000000012' });
+    S.ordrer = [mellom];
+    sandbox.settOrdreLappAuto(true);
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(0);
+    const etter = ordre(Date.now() + 70, { chassis: 'TESTWXYZ000000013' });
+    S.ordrer.push(etter);
+    sandbox.ordreLappNyOrdre(etter); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('TESTWXYZ000000013');
+  });
+  it('knappen heter «🖨 Del-lapp» på en del-lapp-PC, og kortet i Mer viser valget', () => {
+    sandbox.settOrdreLappStasjon(true);
+    sandbox.settOrdreLappType('del');
+    expect(sandbox.ordreLappKnappHTML(ordre(1762851234567))).toContain('🖨 Del-lapp');
+    const kort = sandbox.document.getElementById('ordreLappKortInnhold');
+    if (kort) { sandbox.renderOrdreLappKort(); expect(kort.innerHTML).toContain('settOrdreLappAuto'); expect(kort.innerHTML).toContain('Bare med knappen på ordren'); }
+    sandbox.settOrdreLappType('ordre');
+    expect(sandbox.ordreLappKnappHTML(ordre(1762851234567))).toContain('🖨 Lapp');
+  });
+});
+
 describe('del-lapp 50 mm (annen PC, merke deler til bilen)', () => {
   it('linjene er merke + modell og hele chassis.nr, med store bokstaver; reg.nr når chassis mangler', () => {
     expect(sandbox.delLappLinjer(ordre(1, { merke: 'Kia', modell: 'EV9', chassis: 'knaae8158v6088145' }))).toEqual(['KIA EV9', 'KNAAE8158V6088145']);
