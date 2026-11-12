@@ -396,26 +396,21 @@ function lagreTelling(vareId) {
 // ─── Skanning med kamera ───────────────────────────────────────────────────────────────────────────────────────────────
 let _skann = null;
 let _skannNr = 0; // økes hver gang skann-vinduet åpnes eller lukkes, så en forsinket kameratillatelse etter lukking ikke starter kameraet
-// iPhone/iPad: en app på hjemskjermen får ALDRI huske kameratillatelsen, så direkte kamera i appen (getUserMedia) spurte om tilgang hver gang
-// (Henrik 2026-11-12: «jeg vil at den ikke skal spørre om tillatelse hver gang»). Der tas det i stedet et bilde med iPhonens eget kamera
-// (samme <input capture> som bildene på ordren, som aldri spør), og QR-koden leses fra bildet med jsQR. Andre enheter husker tillatelsen og beholder direkte skanning.
-function skannMedBilde() {
-  try {
-    const ua = navigator.userAgent || '';
-    return /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  } catch (e) { return false; }
-}
+// Direkte skanning med kamerabilde i appen er standard på alle enheter (Henrik 2026-11-12: bildeveien alene «var ikke det jeg så for meg»).
+// iPhone kan spørre om kameratilgang hver gang i en app på hjemskjermen; «📷 Ta bilde i stedet» tar et bilde med iPhonens eget kamera
+// (samme <input capture> som bildene på ordren, som aldri spør) og leser QR-koden fra bildet.
 function apneSkannModal() {
   stoppSkann(); _skannNr++;
-  if (skannMedBilde()) { apneSkannBildeModal(); return; }
   lagerModal('lagerSkannModal', `<div class="row"><div class="h">Skann QR-kode</div><button class="btn sm" onclick="lukkSkannModal()">Lukk</button></div>
     <div style="margin-top:10px;position:relative;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:1/1;max-height:60vh"><video id="skannVideo" playsinline muted style="width:100%;height:100%;object-fit:cover"></video></div>
     <div id="skannStatus" class="small muted" style="margin-top:8px">Starter kameraet...</div>
+    <button class="btn sm" style="margin-top:8px" onclick="byttTilSkannBilde()">📷 Ta bilde i stedet</button>
     <div style="margin-top:10px"><label>Eller skriv hyllekoden</label>
       <div style="display:flex;gap:8px"><input id="skannKode" maxlength="20" autocomplete="off" placeholder="A1" onkeydown="if(event.key==='Enter')apneHylleFraSkannfelt()"><button class="btn red" onclick="apneHylleFraSkannfelt()">Åpne</button></div></div>`);
   openModal('lagerSkannModal');
   startSkann();
 }
+function byttTilSkannBilde() { _skannNr++; stoppSkann(); apneSkannBildeModal(); }
 function apneSkannBildeModal() {
   lagerModal('lagerSkannModal', `<div class="row"><div class="h">Skann QR-kode</div><button class="btn sm" onclick="lukkSkannModal()">Lukk</button></div>
     <input type="file" id="skannBildeInput" accept="image/*" capture="environment" style="display:none" onchange="lesSkannBilde(event)">
@@ -424,7 +419,7 @@ function apneSkannBildeModal() {
     <div style="margin-top:10px"><label>Eller skriv hyllekoden</label>
       <div style="display:flex;gap:8px"><input id="skannKode" maxlength="20" autocomplete="off" placeholder="A1" onkeydown="if(event.key==='Enter')apneHylleFraSkannfelt()"><button class="btn red" onclick="apneHylleFraSkannfelt()">Åpne</button></div></div>`);
   openModal('lagerSkannModal');
-  // Åpne kameraet med en gang (samme trykk som «Skann», så iPhone tillater det). Knappen over er for et nytt forsøk.
+  // Åpne kameraet med en gang (i samme trykk, så iPhone tillater det). Knappen over er for et nytt forsøk.
   try { document.getElementById('skannBildeInput').click(); } catch (e) { /* brukeren trykker knappen */ }
 }
 async function lesSkannBilde(ev) {

@@ -360,65 +360,75 @@ describe('kamera: aldri la det stå på etter at vinduet er lukket', () => {
   });
 });
 
-// iPhone (Henrik 2026-11-12): en hjemskjerm-app får aldri huske kameratillatelsen, så der tas et bilde med iPhonens kamera og QR-en leses fra bildet.
-describe('skanning med bilde på iPhone: spør aldri om kameratilgang', () => {
-  let ua, plattform, kalt, apnet, lesQr, lastSkr;
+// Henrik 2026-11-12: direkte skanning er standard (også på iPhone); «📷 Ta bilde i stedet» bruker iPhonens kamera, som aldri spør om tilgang.
+describe('skann: direkte kamera som standard, «Ta bilde i stedet» som valg', () => {
+  let ua, kalt, apnet, lesQr, lastSkr, strom;
   beforeEach(() => {
-    ua = sandbox.navigator.userAgent; plattform = sandbox.navigator.platform;
+    ua = sandbox.navigator.userAgent;
     sandbox.navigator.userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15';
-    kalt = 0; sandbox.navigator.mediaDevices = { getUserMedia: () => { kalt++; return new Promise(() => {}); } };
+    kalt = 0; strom = { spor: { stoppet: false, stop() { this.stoppet = true; } } }; strom.getTracks = () => [strom.spor];
+    sandbox.navigator.mediaDevices = { getUserMedia: () => { kalt++; return Promise.resolve(strom); } };
     lesQr = sandbox.lesQrFraBilde; lastSkr = sandbox.lastSkript;
     sandbox.lastSkript = () => Promise.resolve();
     apnet = []; sandbox.openOrdre = (id, arkiv) => apnet.push([id, arkiv]);
   });
   afterEach(() => {
-    sandbox.navigator.userAgent = ua; sandbox.navigator.platform = plattform; delete sandbox.navigator.mediaDevices;
-    sandbox.lesQrFraBilde = lesQr; sandbox.lastSkript = lastSkr;
     sandbox.lukkSkannModal();
+    sandbox.navigator.userAgent = ua; delete sandbox.navigator.mediaDevices;
+    sandbox.lesQrFraBilde = lesQr; sandbox.lastSkript = lastSkr;
   });
   const velgBilde = async (tekst) => {
     sandbox.lesQrFraBilde = () => Promise.resolve(tekst);
     await sandbox.lesSkannBilde({ target: { files: [{ name: 'foto.jpg' }], value: 'x' } });
   };
 
-  it('iPhone og iPad (også iPad som later som den er en Mac) bruker bilde; PC og Android gjør det ikke', () => {
-    expect(sandbox.skannMedBilde()).toBe(true);
-    sandbox.navigator.userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'; sandbox.navigator.platform = 'MacIntel'; sandbox.navigator.maxTouchPoints = 5;
-    expect(sandbox.skannMedBilde()).toBe(true);
-    sandbox.navigator.maxTouchPoints = 0;
-    expect(sandbox.skannMedBilde()).toBe(false);
-    sandbox.navigator.userAgent = 'Mozilla/5.0 (Linux; Android 14) Chrome/130'; sandbox.navigator.platform = 'Linux armv8l';
-    expect(sandbox.skannMedBilde()).toBe(false);
-    delete sandbox.navigator.maxTouchPoints;
-  });
-
-  it('åpner bildevinduet uten å be om kameraet', async () => {
+  it('Skann på iPhone starter direkte kamera, med knappen «Ta bilde i stedet»', async () => {
     sandbox.apneSkannModal();
     await new Promise((r) => setTimeout(r, 20));
-    expect(kalt).toBe(0);
+    expect(kalt).toBe(1);
+    const html = el('lagerSkannModal').innerHTML;
+    expect(html).toContain('skannVideo');
+    expect(html).toContain('onclick="byttTilSkannBilde()"');
+  });
+
+  it('«Ta bilde i stedet» stopper kameraet og viser bildevalget med iPhonens kamera', async () => {
+    sandbox.apneSkannModal();
+    await new Promise((r) => setTimeout(r, 20));
+    sandbox.byttTilSkannBilde();
+    expect(strom.spor.stoppet).toBe(true);
+    expect(app.kjor('_skann')).toBe(null);
     const html = el('lagerSkannModal').innerHTML;
     expect(html).toContain('id="skannBildeInput"');
     expect(html).toContain('capture="environment"');
     expect(html).not.toContain('skannVideo');
-    expect(app.kjor('_skann')).toBe(null);
+    expect(kalt).toBe(1);
+  });
+
+  it('kommer kameratillatelsen etter at man byttet til bilde, slås kameraet av igjen', async () => {
+    let gi; sandbox.navigator.mediaDevices = { getUserMedia: () => new Promise((ok) => { gi = ok; }) };
+    sandbox.apneSkannModal();
+    sandbox.byttTilSkannBilde();
+    gi(strom);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(strom.spor.stoppet).toBe(true);
   });
 
   it('en ordre-lapp i bildet åpner ordren', async () => {
     S.ordrer = [{ id: 'ord_1793088915905', status: 'aktiv', ordretype: 'bil' }];
-    sandbox.apneSkannModal();
+    sandbox.byttTilSkannBilde();
     await velgBilde('https://salmaker.as/salmakern.html?ordre=ord_1793088915905');
     expect(apnet).toEqual([['ord_1793088915905', false]]);
   });
 
   it('ingen QR i bildet gir en beskjed, og vinduet står åpent for et nytt forsøk', async () => {
-    sandbox.apneSkannModal();
+    sandbox.byttTilSkannBilde();
     await velgBilde('');
     expect(el('skannStatus').textContent).toMatch(/Fant ingen QR-kode i bildet/);
     expect(apnet).toEqual([]);
   });
 
   it('et bilde som ikke lar seg lese gir en beskjed i stedet for å kaste', async () => {
-    sandbox.apneSkannModal();
+    sandbox.byttTilSkannBilde();
     sandbox.lesQrFraBilde = () => Promise.reject(new Error('bilde'));
     await sandbox.lesSkannBilde({ target: { files: [{}], value: 'x' } });
     expect(el('skannStatus').textContent).toMatch(/Kunne ikke lese bildet/);
