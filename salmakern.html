@@ -384,6 +384,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <span class="pin-dot" data-i="1" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
     <span class="pin-dot" data-i="2" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
     <span class="pin-dot" data-i="3" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
+    <span class="pin-dot" data-i="4" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
+    <span class="pin-dot" data-i="5" style="width:13px;height:13px;border-radius:999px;background:#27272a"></span>
   </div>
   <div class="pin-grid">
     <button class="pin-btn" onclick="pinPress(1)">1</button>
@@ -399,7 +401,24 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <button class="pin-btn" onclick="pinPress(0)">0</button>
     <button class="pin-btn pin-btn-mute" onclick="pinBack()" style="font-size:18px">⌫</button>
   </div>
+  <!-- Overgangsperiode (gamle 4-sifrede PIN-er virker fortsatt): vises så snart minst 4 siffer
+       er tastet, slik at noen med en kort PIN ikke må vente på to sifre som aldri kommer.
+       Nye 6-sifrede PIN-er logger fortsatt inn automatisk når sjette sifferet tastes
+       (pinPress i core.js) - denne knappen er bare et alternativ, ikke en erstatning. -->
+  <button id="pinLoggInnBtn" class="btn sm" style="display:none" onclick="tryLogin()">Logg inn</button>
   <div id="pinErr" class="err-text small" style="min-height:18px;text-align:center"></div>
+</div>
+
+<!-- ═══════════════ PLIKTIG PIN-BYTTE (6 sifre, fra og med PIN6_KREVES_FRA i core.js) ═══════════════ -->
+<div id="pinByttSkjerm" style="display:none;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;padding:16px;text-align:center">
+  <img src="logoer/logo-transparent.png" alt="Salmaker'n" style="height:60px;object-fit:contain">
+  <div style="max-width:320px">
+    <div style="font-weight:700;font-size:17px;margin-bottom:6px">PIN-koden må oppdateres</div>
+    <div class="muted small">Av sikkerhetshensyn bruker vi nå 6-sifrede PIN-koder i stedet for 4. Sett en ny PIN for å fortsette - du bruker den neste gang du logger inn.</div>
+  </div>
+  <input id="pinByttNy" type="password" inputmode="numeric" maxlength="6" placeholder="Ny PIN (6 siffer)" style="width:160px;text-align:center;letter-spacing:4px;font-size:18px">
+  <button class="btn red" onclick="lagreTvungetPinBytte()">Lagre og fortsett</button>
+  <div id="pinByttErr" class="err-text small" style="min-height:18px"></div>
 </div>
 
 <!-- ═══════════════ APP ═══════════════ -->
@@ -857,7 +876,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <button class="btn sm" id="mpEndrePinBtn" onclick="apneEndreEgenPin()">Endre PIN</button>
           </div>
           <div id="mpPinForm" style="display:none;margin-top:10px;gap:6px;align-items:center">
-            <input id="mpNyPin" type="password" inputmode="numeric" maxlength="4" placeholder="Ny PIN (4 siffer)" style="width:140px">
+            <input id="mpNyPin" type="password" inputmode="numeric" maxlength="6" placeholder="Ny PIN (6 siffer)" style="width:140px">
             <button class="btn sm red" onclick="lagreEgenPin()">Lagre</button>
             <button class="btn sm" onclick="document.getElementById('mpPinForm').style.display='none'">Avbryt</button>
           </div>
@@ -1560,7 +1579,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
   <div class="modal-box">
     <div class="h">Godkjenn og lukk ordre</div>
     <div class="muted small" style="margin:8px 0">Kun godkjenner/admin kan lukke. Tast PIN.</div>
-    <input type="password" inputmode="numeric" maxlength="4" id="godkjPIN" placeholder="PIN" style="letter-spacing:8px;text-align:center;font-size:22px;max-width:200px">
+    <input type="password" inputmode="numeric" maxlength="6" id="godkjPIN" placeholder="PIN" style="letter-spacing:8px;text-align:center;font-size:22px;max-width:200px">
     <div id="godkjErr" class="err-text small" style="margin-top:6px;min-height:18px"></div>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="bekreftGodkjenn()">Godkjenn og lukk</button>
@@ -1599,7 +1618,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="h">Ny ansatt</div>
     <div style="margin-top:12px">
       <label>Navn *</label><input id="na_navn">
-      <label>PIN (4 sifre) *</label><input type="password" inputmode="numeric" maxlength="4" id="na_pin">
+      <label>PIN (6 sifre) *</label><input type="password" inputmode="numeric" maxlength="6" id="na_pin">
       <label>Rolle</label>
       <select id="na_rolle">
         <option value="ansatt">Ansatt</option>

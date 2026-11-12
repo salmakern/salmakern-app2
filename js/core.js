@@ -4,6 +4,17 @@
 const SUPA_URL     = 'https://qoqpenbfdxeduylxirwk.supabase.co';
 const SUPA_KEY     = 'sb_publishable_46JAdcBUbQYS8NbDwP-MXg_zKWA8Ojz';
 const STORE        = 'salmakern_v2';
+// Krever 6-sifret PIN for innlogging FRA denne datoen (Henrik 12.11: gamle 4-sifrede PIN-er
+// fortsetter å VIRKE for innlogging for alltid - denne datoen styrer bare når den sperrende
+// "bytt PIN til 6 sifre"-skjermen (pinByttSkjerm) begynner å vises for dem som ikke har
+// byttet ennå, se fortsettEtterInnlogging()). Flytt denne datoen (og push på nytt) hvis
+// Henrik vil utsette det.
+const PIN6_KREVES_FRA = new Date('2026-11-13T00:00:00+01:00').getTime();
+// Overlever en vanlig sideoppdatering av SAMME fane (gjenopprettOktFraEksisterendeSesjon kan da
+// gjenopprette økta), men tømmes når fanen/appen faktisk LUKKES - til forskjell fra localStorage.
+// Gjelder kun personlige kontoer (er_delt_stasjon = false); en delt verksted-stasjon har ingen
+// slik sperre, kun den server-håndhevede 2-timersgrensen (okt_maks_minutter).
+const OKT_FORTSETTER_NOKKEL = 'salmakern_okt_fortsetter';
 const VAPID_PUBLIC = 'BP9J3aYGhu16WMGy_LflngbHxGzxip5VrnDyYnwS4a429Cc5XPBGYjC-mqyAfXkQUbeLhPzKiv6y6CpfmTeYJDc';
 
 // Feilovervåking (Sentry) - av så lenge denne er tom. For å skru på: opprett gratis konto
@@ -303,6 +314,10 @@ const FOTO_SIDER = {
 let db = null;
 let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], biltilsynReisetider:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null};
 let me = null;
+// Timeren som håndhever ansatte.okt_maks_minutter klient-side (ren UX - selve håndhevingen
+// skjer server-side i current_ansatt()/hent_innlogget_ansatt() uansett). Satt/fornyet i
+// aktiverInnloggetApp(), nullstilt i nullstillLokalOkt().
+let _oktUtlopTimer = null;
 // Satt av et klikk på et push-varsel om en bestemt ordre (postMessage fra sw.js) - kan
 // komme inn før innlogging/datahenting er ferdig, derfor mellomlagres den her og
 // hentes ut av apneOrdreFraVarselHvisKlar() når S.ordrer faktisk er klar.
@@ -1534,10 +1549,10 @@ function sendLagring(ordreId, st) {
 let pinBuf = '';
 
 function pinPress(d) {
-  if (pinBuf.length >= 4) return;
+  if (pinBuf.length >= 6) return;
   pinBuf += d;
   refreshPinDots();
-  if (pinBuf.length === 4) setTimeout(tryLogin, 120);
+  if (pinBuf.length === 6) setTimeout(tryLogin, 120);
 }
 function pinBack() { pinBuf = pinBuf.slice(0,-1); refreshPinDots(); }
 function pinClear() { pinBuf = ''; refreshPinDots(); document.getElementById('pinErr').textContent=''; }
@@ -1545,14 +1560,79 @@ function refreshPinDots() {
   document.querySelectorAll('.pin-dot').forEach((dot,i) => {
     dot.style.background = i < pinBuf.length ? '#ef4444' : '#27272a';
   });
+  // Overgangsperiode (4- og 6-sifrede PIN-er virker begge for innlogging): auto-innlogging
+  // skjer først ved 6 siffer, så noen med en gammel, kortere PIN må kunne sende den manuelt
+  // i stedet for å vente på siffer som aldri kommer.
+  const btn = document.getElementById('pinLoggInnBtn');
+  if (btn) btn.style.display = (pinBuf.length >= 4 && pinBuf.length < 6) ? 'block' : 'none';
 }
 // Viser appen og laster data for en allerede satt `me` - delt av tryLogin() (etter en
 // vellykket PIN) og gjenopprettOktFraEksisterendeSesjon() (etter en gjenopprettet sesjon,
 // se der). Lagt til 2026-11-12 under rettelsen av "vi blir logget ut hele tiden": var
 // tidligere kun inlinet i tryLogin(), som gjorde at EVERY sideinnlasting - selv med en
 // fortsatt helt gyldig sesjon - krevde ny PIN (se kommentaren i DOMContentLoaded).
+// Etter en vellykket PIN-innlogging ELLER en gjenopprettet sesjon: viser enten appen direkte,
+// eller - for en ansatt med en gammel 4-sifret PIN, FRA OG MED PIN6_KREVES_FRA - en sperreskjerm
+// som krever en ny 6-sifret PIN før appen vises i det hele tatt. Selve innloggingen har ALLEREDE
+// lyktes når dette kalles (den gamle PIN-en virket) - ingen låses ute, de kan alltid bytte selv
+// herfra (se lagreTvungetPinBytte()).
+async function fortsettEtterInnlogging() {
+  if (me && me.pin_kort && Date.now() >= PIN6_KREVES_FRA) {
+    visPinByttSkjerm();
+    return;
+  }
+  await aktiverInnloggetApp();
+}
+function visPinByttSkjerm() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loadingOverlay').style.display = 'none';
+  document.getElementById('pinByttSkjerm').style.display = 'flex';
+  const felt = document.getElementById('pinByttNy');
+  if (felt) { felt.value = ''; felt.focus(); }
+}
+async function lagreTvungetPinBytte() {
+  const felt = document.getElementById('pinByttNy');
+  const feilEl = document.getElementById('pinByttErr');
+  const pin = (felt?.value || '').trim();
+  if (!/^[0-9]{6}$/.test(pin)) { feilEl.textContent = 'PIN må være nøyaktig 6 siffer'; return; }
+  if (!db) return;
+  const { data, error } = await db.rpc('endre_egen_pin', { p_ny_pin: pin });
+  if (error) {
+    feilEl.textContent = error.message?.includes('FOR_MANGE_FORSOK')
+      ? 'For mange forsøk på kort tid - vent noen minutter og prøv igjen'
+      : 'Feil ved lagring: ' + error.message;
+    return;
+  }
+  if (data === 'PIN_I_BRUK') { feilEl.textContent = 'Denne PIN-en er allerede i bruk av en annen ansatt'; return; }
+  feilEl.textContent = '';
+  me.pin_kort = false;
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  await aktiverInnloggetApp();
+}
 async function aktiverInnloggetApp() {
+  // Personlige kontoer: husk at økten skal fortsette gjennom en vanlig sideoppdatering (se
+  // gjenopprettOktFraEksisterendeSesjon) - men IKKE etter at fanen/appen faktisk lukkes
+  // (sessionStorage, ulikt localStorage, tømmes da). Delte stasjoner (er_delt_stasjon) trenger
+  // ikke dette - de har ingen lukk-sperre, kun den server-håndhevede 2-timersgrensen under.
+  if (!me.er_delt_stasjon) { try { sessionStorage.setItem(OKT_FORTSETTER_NOKKEL, '1'); } catch(e) {} }
+  // Automatisk utlogging etter ansatte.okt_maks_minutter. Håndheves UANSETT server-side
+  // (current_ansatt()/hent_innlogget_ansatt() nekter tilgang etter fristen selv om denne
+  // timeren av en eller annen grunn ikke skulle kjøre) - denne timeren gir bare en ryddig
+  // opplevelse (tydelig varsel + retur til PIN-skjermen) i stedet for at neste handling bare
+  // stille feiler. logget_inn_at er øktens FAKTISKE starttidspunkt fra serveren (ikke "nå"),
+  // så en gjenopprettet sesjon etter en reload teller fra riktig start, ikke fra null igjen.
+  if (me.logget_inn_at && me.okt_maks_minutter) {
+    clearTimeout(_oktUtlopTimer);
+    const msIgjen = new Date(me.logget_inn_at).getTime() + me.okt_maks_minutter * 60000 - Date.now();
+    _oktUtlopTimer = setTimeout(() => {
+      if (!me) return;
+      visToast('Økten er utløpt - logg inn på nytt');
+      doLogout();
+    }, Math.max(0, msIgjen));
+  }
   document.getElementById('loginScreen').style.display='none';
+  document.getElementById('pinByttSkjerm').style.display='none';
   document.getElementById('appScreen').style.display='block';
   document.getElementById('headerUser').textContent = me.navn + ' · ' + rolleVis(me.rolle);
   oppdaterLagreStatusBadge();
@@ -1618,8 +1698,17 @@ async function gjenopprettOktFraEksisterendeSesjon() {
     const { data, error } = await db.rpc('hent_innlogget_ansatt');
     if (error) { console.warn('Gjenoppretting av økt feilet, viser PIN-skjerm:', error.message); return; }
     if (!data || !data.length) return;
-    me = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
-    await aktiverInnloggetApp();
+    const rad = data[0];
+    // Personlige kontoer (ikke delte stasjoner) skal IKKE gjenopprettes etter at appen/fanen
+    // faktisk er LUKKET og åpnet igjen (bare etter en vanlig sideoppdatering av SAMME fane) -
+    // se OKT_FORTSETTER_NOKKEL-kommentaren øverst i filen.
+    if (!rad.er_delt_stasjon) {
+      let fortsetter = null;
+      try { fortsetter = sessionStorage.getItem(OKT_FORTSETTER_NOKKEL); } catch(e) {}
+      if (fortsetter !== '1') return; // fersk åpning - vis PIN-skjermen som vanlig
+    }
+    me = { ...rad, kanForeLonn: rad.kan_fore_lonn !== false };
+    await fortsettEtterInnlogging();
   } catch(e) {
     console.warn('Gjenoppretting av økt feilet, viser PIN-skjerm:', e);
   }
@@ -1662,7 +1751,7 @@ async function tryLogin() {
     // Hent en ny JWT med ansatt_id/rolle-claims med en gang - uten dette
     // ville vi måtte vente til token-en fornyes naturlig av seg selv.
     try { await db.auth.refreshSession(); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
-    await aktiverInnloggetApp();
+    await fortsettEtterInnlogging();
   } else {
     document.getElementById('pinErr').textContent = forMangeForsok
       ? 'For mange feilforsøk – vent noen minutter og prøv igjen'
@@ -1730,8 +1819,11 @@ async function avsluttSesjon() {
 function nullstillLokalOkt() {
   if (timerTick) clearInterval(timerTick);
   timerTick = null; timerStart = null;
+  clearTimeout(_oktUtlopTimer); _oktUtlopTimer = null;
+  try { sessionStorage.removeItem(OKT_FORTSETTER_NOKKEL); } catch(e) {}
   me = null;
   document.getElementById('appScreen').style.display='none';
+  document.getElementById('pinByttSkjerm').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   // Stopp sanntid: kanalen er knyttet til den innloggede ansatte og skal ikke bli stående
   // (en ny innlogging starter den på nytt, se tryLogin()).

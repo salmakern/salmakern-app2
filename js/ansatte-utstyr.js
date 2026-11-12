@@ -1497,9 +1497,9 @@ function endreAnsattNavn(id, navn) {
 // noen RLS-policyer i det hele tatt - kun SECURITY DEFINER-funksjoner kan skrive dit.
 function adminSettNyPin(id) {
   const a=S.ansatte.find(x=>x.id===id||String(x.id)===String(id)); if(!a) return;
-  const pin = prompt(`Sett ny PIN for ${a.navn} (4 siffer):`);
+  const pin = prompt(`Sett ny PIN for ${a.navn} (6 siffer):`);
   if (pin === null) return;
-  if (!/^[0-9]{4}$/.test(pin.trim())) { alert('PIN må være nøyaktig 4 siffer'); return; }
+  if (!/^[0-9]{6}$/.test(pin.trim())) { alert('PIN må være nøyaktig 6 siffer'); return; }
   if (!db) return;
   db.rpc('admin_sett_pin', {p_ansatt_id:id, p_ny_pin:pin.trim()}).then(r=>{
     if (r.error) {
@@ -1544,7 +1544,7 @@ function apneEndreEgenPin() {
 // noen ANNEN sin PIN uansett hva som sendes inn herfra.
 function lagreEgenPin() {
   const pin = (document.getElementById('mpNyPin')?.value||'').trim();
-  if (!/^[0-9]{4}$/.test(pin)) { alert('PIN må være nøyaktig 4 siffer'); return; }
+  if (!/^[0-9]{6}$/.test(pin)) { alert('PIN må være nøyaktig 6 siffer'); return; }
   if (!db) return;
   db.rpc('endre_egen_pin', {p_ny_pin:pin}).then(r=>{
     if (r.error) {
@@ -1637,7 +1637,7 @@ function toggleAnsatt(id) {
 function opprettAnsatt() {
   const navn=document.getElementById('na_navn').value.trim();
   const pin=document.getElementById('na_pin').value.trim();
-  if(!navn||pin.length!==4||isNaN(Number(pin))){alert('Fyll ut navn og 4-sifret PIN');return;}
+  if(!navn||pin.length!==6||isNaN(Number(pin))){alert('Fyll ut navn og 6-sifret PIN');return;}
   const nyA={id:++S.nextId, navn, rolle:document.getElementById('na_rolle').value, aktiv:true};
   S.ansatte.push(nyA);
   planleggLocalSpeiling();

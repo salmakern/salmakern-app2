@@ -53,6 +53,10 @@ function lagFalskDb(opts = {}) {
         if (opts.hentInnloggetAnsattFeiler) return { data: null, error: { message: 'nettverksfeil' } };
         return { data: opts.hentInnloggetAnsattSvar ?? [], error: null };
       }
+      if (navn === 'endre_egen_pin') {
+        if (opts.endreEgenPinFeiler) return { data: null, error: { message: 'nettverksfeil' } };
+        return { data: opts.endreEgenPinSvar ?? 'ok', error: null };
+      }
       return { data: null, error: null };
     }),
     removeChannel: vi.fn((ch) => { kall.push('removeChannel'); return ch; }),
@@ -66,7 +70,7 @@ function lagFalskDb(opts = {}) {
 function nyEnvironment() {
   const lagerData = {};
   const elementer = {};
-  const getElementById = (id) => (elementer[id] ??= { style: {}, textContent: '', value: '' });
+  const getElementById = (id) => (elementer[id] ??= { style: {}, textContent: '', value: '', focus() {} });
   const unref = (f, ms) => { const t = setTimeout(f, ms); t.unref?.(); return t; };
   const sandbox = {
     console: { ...console, warn() {}, error() {} },
@@ -76,6 +80,14 @@ function nyEnvironment() {
       setItem: (k, v) => { lagerData[k] = String(v); },
       removeItem: k => { delete lagerData[k]; }
     },
+    sessionStorage: (() => {
+      const data = {};
+      return {
+        getItem: k => (k in data ? data[k] : null),
+        setItem: (k, v) => { data[k] = String(v); },
+        removeItem: k => { delete data[k]; }
+      };
+    })(),
     window: { addEventListener() {}, location: { hostname: 'localhost' } },
     document: {
       addEventListener() {},
@@ -465,9 +477,18 @@ describe('gjenopprettOktFraEksisterendeSesjon', () => {
     expect(env.elementer.appScreen).toBeUndefined();
   });
 
-  it('en gyldig rad: setter me, skjuler loginScreen og viser appScreen - UTEN noen PIN', async () => {
-    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 17, navn: 'Henrik', rolle: 'admin', aktiv: true, kan_fore_lonn: true }] });
+  it('en gyldig rad for en PERSONLIG konto UTEN flagget (fersk åpning av appen/fanen): PIN-skjermen som før', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 17, navn: 'Henrik', rolle: 'admin', aktiv: true, kan_fore_lonn: true, er_delt_stasjon: false }] });
     env.sandbox._setDb(db);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe()).toBeNull();
+    expect(env.elementer.appScreen).toBeUndefined();
+  });
+
+  it('en gyldig rad for en PERSONLIG konto MED flagget (vanlig sideoppdatering av samme fane): setter me, skjuler loginScreen og viser appScreen - UTEN noen PIN', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 17, navn: 'Henrik', rolle: 'admin', aktiv: true, kan_fore_lonn: true, er_delt_stasjon: false }] });
+    env.sandbox._setDb(db);
+    env.sandbox.sessionStorage.setItem('salmakern_okt_fortsetter', '1');
     await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
     expect(env.sandbox._getMe()).toMatchObject({ id: 17, navn: 'Henrik', rolle: 'admin', kanForeLonn: true });
     expect(env.elementer.loginScreen.style.display).toBe('none');
@@ -476,11 +497,127 @@ describe('gjenopprettOktFraEksisterendeSesjon', () => {
     expect(db.rpc).toHaveBeenCalledWith('hent_innlogget_ansatt');
   });
 
+  it('en delt stasjon (er_delt_stasjon) gjenopprettes UTEN flagget - ingen lukk-sperre for en fast stasjon-PC', async () => {
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 114, navn: 'Booking Salmaker', rolle: 'ansatt', aktiv: true, kan_fore_lonn: false, er_delt_stasjon: true }] });
+    env.sandbox._setDb(db);
+    await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
+    expect(env.sandbox._getMe()).toMatchObject({ id: 114, er_delt_stasjon: true });
+    expect(env.elementer.appScreen.style.display).toBe('block');
+  });
+
   it('kan_fore_lonn: false gir kanForeLonn false og skjuler Timer-fanen', async () => {
-    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 5, navn: 'Ismail', rolle: 'ansatt', aktiv: true, kan_fore_lonn: false }] });
+    const { db } = lagFalskDb({ hentInnloggetAnsattSvar: [{ id: 5, navn: 'Ismail', rolle: 'ansatt', aktiv: true, kan_fore_lonn: false, er_delt_stasjon: true }] });
     env.sandbox._setDb(db);
     await env.sandbox.gjenopprettOktFraEksisterendeSesjon();
     expect(env.sandbox._getMe().kanForeLonn).toBe(false);
     expect(env.elementer.timerTab.style.display).toBe('none');
+  });
+});
+
+// fortsettEtterInnlogging() (2026-11-12, lengre PIN): avgjør om appen vises direkte, eller om
+// den sperrende "bytt til 6-sifret PIN"-skjermen vises først for en ansatt med en kort
+// (4-sifret) PIN - men KUN fra og med PIN6_KREVES_FRA (en fast dato i core.js). Innloggingen
+// har alltid ALLEREDE lyktes når dette kalles - ingen låses ute.
+describe('fortsettEtterInnlogging', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  // VIKTIG: Date (og setTimeout) kopieres inn i vm-sandboxen i det øyeblikket nyEnvironment()
+  // kjører. vi.useFakeTimers()/vi.setSystemTime() MÅ derfor kalles FØR nyEnvironment() - ellers
+  // bruker koden inni sandboxen fortsatt den EKTE klokka, uansett hva testen later som.
+  function miljoMedFalskTid(isoTid) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(isoTid));
+    return nyEnvironment();
+  }
+
+  it('pin_kort = false: viser appen direkte, uansett dato', async () => {
+    const env = nyEnvironment();
+    env.sandbox._setMe({ id: 1, navn: 'Test', rolle: 'ansatt', pin_kort: false });
+    await env.sandbox.fortsettEtterInnlogging();
+    expect(env.elementer.appScreen.style.display).toBe('block');
+    expect(env.elementer.pinByttSkjerm?.style.display).not.toBe('flex');
+  });
+
+  it('pin_kort = true, FØR cutover-datoen: viser appen direkte (gammel PIN virker helt normalt i overgangsperioden)', async () => {
+    const env = miljoMedFalskTid('2026-11-12T10:00:00+01:00');
+    env.sandbox._setMe({ id: 1, navn: 'Test', rolle: 'ansatt', pin_kort: true });
+    await env.sandbox.fortsettEtterInnlogging();
+    expect(env.elementer.appScreen.style.display).toBe('block');
+  });
+
+  it('pin_kort = true, ETTER cutover-datoen: viser sperreskjermen i stedet for appen', async () => {
+    const env = miljoMedFalskTid('2026-11-14T10:00:00+01:00');
+    env.sandbox._setMe({ id: 1, navn: 'Test', rolle: 'ansatt', pin_kort: true });
+    await env.sandbox.fortsettEtterInnlogging();
+    expect(env.elementer.pinByttSkjerm.style.display).toBe('flex');
+    expect(env.elementer.appScreen.style.display).not.toBe('block');
+  });
+
+  it('lagreTvungetPinBytte(): PIN_I_BRUK viser feilmelding, appen vises IKKE', async () => {
+    const env = miljoMedFalskTid('2026-11-14T10:00:00+01:00');
+    const { db } = lagFalskDb({ endreEgenPinSvar: 'PIN_I_BRUK' });
+    env.sandbox._setDb(db);
+    env.sandbox._setMe({ id: 1, navn: 'Test', rolle: 'ansatt', pin_kort: true });
+    await env.sandbox.fortsettEtterInnlogging();
+    env.elementer.pinByttNy.value = '123456';
+    await env.sandbox.lagreTvungetPinBytte();
+    expect(env.elementer.pinByttErr.textContent).toMatch(/allerede i bruk/);
+    expect(env.elementer.appScreen.style.display).not.toBe('block');
+  });
+
+  it('lagreTvungetPinBytte(): vellykket bytte viser appen etterpå', async () => {
+    const env = miljoMedFalskTid('2026-11-14T10:00:00+01:00');
+    const { db } = lagFalskDb({ endreEgenPinSvar: 'ok' });
+    env.sandbox._setDb(db);
+    env.sandbox._setMe({ id: 1, navn: 'Test', rolle: 'ansatt', pin_kort: true });
+    await env.sandbox.fortsettEtterInnlogging();
+    env.elementer.pinByttNy.value = '123456';
+    await env.sandbox.lagreTvungetPinBytte();
+    expect(env.elementer.appScreen.style.display).toBe('block');
+    expect(db.rpc).toHaveBeenCalledWith('endre_egen_pin', { p_ny_pin: '123456' });
+  });
+});
+
+// Automatisk utlogging etter ansatte.okt_maks_minutter (2026-11-12, "lettere" alternativ til
+// full 2-trinns pålogging). Håndheves server-side uansett (current_ansatt()/
+// hent_innlogget_ansatt() nekter etter fristen) - denne klient-timeren er en ryddig UX-detalj.
+describe('øktgrense (okt_maks_minutter)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('logger ut automatisk når okt_maks_minutter er nådd, regnet fra logget_inn_at (IKKE fra "nå")', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-12T10:00:00Z'));
+    const env = nyEnvironment();
+    const { db } = lagFalskDb();
+    env.sandbox._setDb(db);
+    // Simulerer en GJENOPPRETTET sesjon som egentlig startet 3 timer tidligere (okt_maks_minutter 240 = 4t) -
+    // skal da bare ha 1 time igjen, ikke en ny full firetimersperiode.
+    env.sandbox._setMe({
+      id: 1, navn: 'Test', rolle: 'ansatt', er_delt_stasjon: false,
+      logget_inn_at: new Date('2026-11-12T07:00:00Z').toISOString(), okt_maks_minutter: 240
+    });
+    await env.sandbox.aktiverInnloggetApp();
+    expect(env.sandbox._getMe()).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000); // 59 min igjen av den ene timen - ikke utløpt ennå
+    expect(env.sandbox._getMe()).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000); // passerer 1t-merket (3t brukt + 1t til = 4t)
+    expect(env.sandbox._getMe()).toBeNull(); // doLogout() kjørt
+  });
+
+  it('en delt stasjon (okt_maks_minutter 120) logges ut etter 2 timer fra faktisk innlogging', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-12T10:00:00Z'));
+    const env = nyEnvironment();
+    const { db } = lagFalskDb();
+    env.sandbox._setDb(db);
+    env.sandbox._setMe({
+      id: 114, navn: 'Booking Salmaker', rolle: 'ansatt', er_delt_stasjon: true,
+      logget_inn_at: new Date('2026-11-12T10:00:00Z').toISOString(), okt_maks_minutter: 120
+    });
+    await env.sandbox.aktiverInnloggetApp();
+    await vi.advanceTimersByTimeAsync(119 * 60 * 1000);
+    expect(env.sandbox._getMe()).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(2 * 60 * 1000);
+    expect(env.sandbox._getMe()).toBeNull();
   });
 });

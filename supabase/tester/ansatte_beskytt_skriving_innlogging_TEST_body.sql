@@ -60,20 +60,57 @@ begin
 end;
 $f$;
 
+-- PIN-innlogging som over, men returnerer OGSÅ pin_kort/okt_maks_minutter/er_delt_stasjon
+-- (20261112150000_pin_seks_sifre_okt_grense_delt_stasjon.sql).
+create function pg_temp._innlogg_detaljer(p_claims jsonb, p_pin text) returns text
+language plpgsql as $f$
+declare v_id int; v_kort boolean; v_okt int; v_delt boolean; v_ut text;
+begin
+  perform set_config('request.jwt.claims', coalesce(p_claims::text, ''), true);
+  execute 'set local role authenticated';
+  begin
+    select l.id, l.pin_kort, l.okt_maks_minutter, l.er_delt_stasjon
+      into v_id, v_kort, v_okt, v_delt
+      from public.logg_inn_med_pin(p_pin) l limit 1;
+    v_ut := case when v_id is null then 'ingen rad'
+      else 'ok:' || v_id || ' kort=' || v_kort::text || ' okt=' || v_okt::text || ' delt=' || v_delt::text end;
+  exception when others then
+    v_ut := sqlerrm;
+  end;
+  execute 'reset role';
+  return v_ut;
+end;
+$f$;
+
+-- hent_innlogget_ansatt() (sesjonsgjenoppretting) - samme øktgrense-betingelse som current_ansatt().
+create function pg_temp._hent(p_claims jsonb) returns text
+language plpgsql as $f$
+declare v text;
+begin
+  perform set_config('request.jwt.claims', coalesce(p_claims::text, ''), true);
+  execute 'set local role authenticated';
+  select coalesce(string_agg(id::text || ':' || pin_kort::text, ','), 'ingen') into v from public.hent_innlogget_ansatt();
+  execute 'reset role';
+  return v;
+end;
+$f$;
+
 do $test$
 declare
-  v_anon uuid; v_admin_claims text; v_pin_a text; v_pin_b text; v_pin_feil text; v text; v_tok text; v_meta text; v_rolle text; v_flagg text; i int;
-  c_fersk jsonb; c_b jsonb;
+  v_anon uuid; v_admin_claims text; v_pin_a text; v_pin_b text; v_pin_feil text; v_pin_gammel text;
+  v text; v_tok text; v_meta text; v_rolle text; v_flagg text; i int;
+  c_fersk jsonb; c_b jsonb; c_gyldig jsonb; c_utlopt jsonb; c_uten_claim jsonb;
 begin
   select id into v_anon from auth.users where is_anonymous order by created_at desc limit 1;
   if v_anon is null then raise exception 'fant ingen anonym Auth-bruker å bruke som innloggingssesjon - avbryter'; end if;
   if exists (select 1 from public.ansatte where id in (990011, 990012)) then raise exception 'TEST-id 990011/990012 er i bruk - avbryter'; end if;
 
-  -- Tre PIN-er som ikke er i bruk (A, B og en som aldri finnes)
+  -- Tre PIN-er som ikke er i bruk (A, B og en som aldri finnes). 6 sifre siden
+  -- opprett_ansatt() nå krever det (20261112150000_pin_seks_sifre_okt_grense_delt_stasjon.sql).
   for i in 1..200 loop
-    v_pin_a := lpad((1000 + floor(random() * 9000))::int::text, 4, '0');
-    v_pin_b := lpad((1000 + floor(random() * 9000))::int::text, 4, '0');
-    v_pin_feil := lpad((1000 + floor(random() * 9000))::int::text, 4, '0');
+    v_pin_a := lpad((100000 + floor(random() * 900000))::int::text, 6, '0');
+    v_pin_b := lpad((100000 + floor(random() * 900000))::int::text, 6, '0');
+    v_pin_feil := lpad((100000 + floor(random() * 900000))::int::text, 6, '0');
     exit when v_pin_a <> v_pin_b and v_pin_feil not in (v_pin_a, v_pin_b)
       and not exists (select 1 from public.ansatte_pin where pin in (v_pin_a, v_pin_b, v_pin_feil));
   end loop;
@@ -134,6 +171,49 @@ begin
   insert into _res(navn, ok, info) values ('T5c B har fortsatt rolle ansatt etter forsøkene', v_rolle = 'ansatt', v_rolle);
   v_flagg := coalesce(current_setting('app.pin_innlogging', true), '');
   insert into _res(navn, ok, info) values ('T5d markeringen er nullet etter hvert kall', v_flagg = '', '''' || v_flagg || '''');
+
+  -- ===== Lengre PIN (6 sifre) og øktgrense (okt_maks_minutter/logget_inn_at) =====
+  v := pg_temp._innlogg_detaljer(c_fersk, v_pin_a);
+  insert into _res(navn, ok, info) values ('T7 logg_inn_med_pin: 6-sifret PIN gir pin_kort=false, standard okt_maks_minutter=240, er_delt_stasjon=false',
+    v = 'ok:990011 kort=false okt=240 delt=false', v);
+
+  -- Legacy-ansatt med en gammel 4-sifret PIN, satt inn DIREKTE (opprett_ansatt krever nå 6 sifre,
+  -- og ansatte_pin har ingen RLS-policyer i det hele tatt - kun SECURITY DEFINER-funksjoner kan
+  -- skrive dit via vanlig PostgREST-rolle, men denne test-transaksjonen kjører uten rollebytte
+  -- til nå og kan derfor sette den direkte, akkurat som allerede-eksisterende 4-sifrede PIN-er i
+  -- produksjon kom til å ligge der fra før denne migreringen).
+  for i in 1..200 loop
+    v_pin_gammel := lpad((1000 + floor(random() * 9000))::int::text, 4, '0');
+    exit when not exists (select 1 from public.ansatte_pin where pin = v_pin_gammel);
+  end loop;
+  perform set_config('request.jwt.claims', v_admin_claims, true);
+  execute 'set local role authenticated';
+  insert into public.ansatte (id, navn, rolle, aktiv, kan_fore_lonn) values (990013, 'TEST - gammel 4-sifret PIN', 'ansatt', true, true);
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.ansatte_pin (ansatt_id, pin) values (990013, v_pin_gammel);
+
+  v := pg_temp._innlogg_detaljer(c_fersk, v_pin_gammel);
+  insert into _res(navn, ok, info) values ('T8 logg_inn_med_pin: gammel 4-sifret PIN virker FORTSATT for innlogging (pin_kort=true, men IKKE avvist)',
+    v = 'ok:990013 kort=true okt=240 delt=false', v);
+
+  -- current_ansatt()/hent_innlogget_ansatt(): samme øktgrense-betingelse begge steder.
+  select session_token into v_tok from public.ansatte where id = 990011;
+  c_gyldig := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok,'logget_inn_at',(now() - interval '1 minute')::text);
+  c_utlopt := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok,'logget_inn_at',(now() - interval '5 hours')::text);
+  c_uten_claim := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok);
+
+  insert into _res(navn, ok, info) values ('T9 current_ansatt(): en fersk (1 min) sesjon, godt innenfor 240 min-grensen, slipper gjennom',
+    pg_temp._ca(c_gyldig) = '990011:ansatt', pg_temp._ca(c_gyldig));
+  insert into _res(navn, ok, info) values ('T10 current_ansatt(): en 5 timer gammel sesjon (over 240 min-grensen) avvises HELT (ikke bare sesjonsgjenoppretting)',
+    pg_temp._ca(c_utlopt) = 'ingen', pg_temp._ca(c_utlopt));
+  insert into _res(navn, ok, info) values ('T11 current_ansatt(): sesjon UTEN logget_inn_at-claim (fra FØR denne migreringen) slipper likevel gjennom - unngår å kaste ut alle eksisterende innlogginger med én gang',
+    pg_temp._ca(c_uten_claim) = '990011:ansatt', pg_temp._ca(c_uten_claim));
+
+  insert into _res(navn, ok, info) values ('T12 hent_innlogget_ansatt(): samme øktgrense - en gyldig sesjon gjenopprettes (med pin_kort=false siden A har en 6-sifret PIN)',
+    pg_temp._hent(c_gyldig) = '990011:false', pg_temp._hent(c_gyldig));
+  insert into _res(navn, ok, info) values ('T13 hent_innlogget_ansatt(): en utløpt sesjon gjenopprettes IKKE',
+    pg_temp._hent(c_utlopt) = 'ingen', pg_temp._hent(c_utlopt));
 
   -- ===== Admin kan fortsatt alt (positiv kontroll) =====
   perform set_config('request.jwt.claims', v_admin_claims, true);
