@@ -31,11 +31,14 @@ function ordreLappSkalHa(o) { return !!o && !erLeveranse(o) && (o.status || 'akt
 function ordreLappSkriftMm(tekst) { return Math.round(Math.min(3.4, 34 / (Math.max(1, String(tekst).length) * 0.68)) * 100) / 100; }
 function ordreLappDato(ms) { const d = new Date(ms); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; }
 
-function ordreLappHTML(o) {
+function ordreLappTekster(o) {
   const hoved = o.chassis || o.regnr || '(uten chassis)';
   const bil = [o.merke, o.modell].filter(Boolean).join(' ');
   const ms = ordreLappIdMs(o.id);
-  const linje3 = [bil, o.chassis && o.regnr ? o.regnr : '', ms ? ordreLappDato(ms) : ''].filter(Boolean).join(' · ');
+  return { hoved, kunde: o.kunde || '', info: [bil, o.chassis && o.regnr ? o.regnr : '', ms ? ordreLappDato(ms) : ''].filter(Boolean).join(' · ') };
+}
+function ordreLappHTML(o) {
+  const { hoved, info: linje3 } = ordreLappTekster(o);
   return `<div class="side"><div class="lapp"><div class="qr">${qrSvg(ordreLappUrl(o.id))}</div><div class="tekst">`
     + `<div class="hoved" style="font-size:${ordreLappSkriftMm(hoved)}mm">${esc(hoved)}</div>`
     + `<div class="kunde">${esc(o.kunde || '')}</div>`
@@ -160,13 +163,33 @@ async function lappHjelperSkriv(o, L) {
   if (!r.ok || !j.ok) throw new Error(j.feil || ('HTTP ' + r.status));
   return j;
 }
+// Ordre-lappen via hjelperen (Henrik 2026-11-13: «sånn at jeg slipper å ha to faner oppe»): appen sender QR-mønsteret (samme qrMatrise som i dag) og tekstene,
+// hjelperen tegner 25 x 60 mm og skriver ut på sin ordre-skriver. Da trengs ikke Lappskriver-vinduet med «skriv ut uten dialog».
+function lappHjelperTarDel(s) { return !!(s && s.skriver && Array.isArray(s.papir) && s.papir.length); }
+function lappHjelperTarOrdre(s) { return !!(s && s.ordre && s.ordre.skriver && s.ordre.papir); }
+function ordreLappHjelperData(o) {
+  const m = qrMatrise(ordreLappUrl(o.id));
+  const qr = [];
+  for (let r = 0; r < m.n; r++) { let rad = ''; for (let c = 0; c < m.n; c++) rad += m.mork(r, c) ? '1' : '0'; qr.push(rad); }
+  const t = ordreLappTekster(o);
+  return { qr, hoved: t.hoved, hovedMm: ordreLappSkriftMm(t.hoved), kunde: t.kunde, info: t.info };
+}
+async function lappHjelperSkrivOrdre(o) {
+  const r = await fetch(LAPP_HJELPER_URL + '/ordre-lapp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+    body: JSON.stringify(ordreLappHjelperData(o)), signal: AbortSignal.timeout(20000),
+  });
+  let j = {}; try { j = await r.json(); } catch (e) { /* tomt svar */ }
+  if (!r.ok || !j.ok) throw new Error(j.feil || ('HTTP ' + r.status));
+  return j;
+}
 async function skrivUtOrdreLapper(ordrer) {
   if (!ordrer.length) return false;
   if (ordreLappType() === 'del') {
-    // Lappskriver-hjelperen på denne PC-en (Leitz-oppsettlappskriver-hjelper.ps1) velger papiret selv og skriver ut uten vindu. Lappene den ikke
+    // Lappskriver-hjelperen på denne PC-en (Leitz-oppsett\lappskriver-hjelper.ps1) velger papiret selv og skriver ut uten vindu. Lappene den ikke
     // tok (ikke installert, avslått, mangler papir) går videre til vanlig utskrift under, så man står aldri uten lapp.
     const hjelper = await lappHjelperStatus();
-    if (hjelper) {
+    if (lappHjelperTarDel(hjelper)) {
       const rest = [];
       for (const o of ordrer) {
         const L = lappHjelperLengde(o, hjelper);
@@ -184,6 +207,17 @@ async function skrivUtOrdreLapper(ordrer) {
     return true;
   }
   try { await sikreQrBibliotek(); } catch (e) { visToast('Kunne ikke laste QR-biblioteket: ' + e.message); return false; }
+  const hjelper = await lappHjelperStatus();
+  if (lappHjelperTarOrdre(hjelper)) {
+    const rest = [];
+    for (const o of ordrer) {
+      try { await lappHjelperSkrivOrdre(o); }
+      catch (e) { console.warn('Lappskriver-hjelper:', e); rest.push(o); visToast('Lappskriver-hjelperen feilet (' + e.message + '). Bruker vanlig utskrift.'); }
+    }
+    if (rest.length < ordrer.length) visToast(`${ordrer.length - rest.length} ordre-lapp${ordrer.length - rest.length === 1 ? '' : 'er'} skrevet ut`, 'ok');
+    if (!rest.length) return true;
+    ordrer = rest;
+  }
   skrivUtHtml(byggOrdreLappDokument(ordrer));
   return true;
 }
@@ -268,6 +302,19 @@ function skrivUtOrdreLappFor(id) {
 // Lappskriver-navnet (Henrik 2026-11-12): stasjonsvinduet skriver ut ALT rett til Leitz-en uten dialog, så det skal ikke forveksles med den vanlige appen.
 // Vindustittelen (og dermed navnet på oppgavelinjen) sier «Lappskriver» på en enhet der stasjonen er slått på. Ikonet settes av Leitz-oppsettfila.
 function ordreLappTittel() { try { document.title = ordreLappStasjonFra() ? "Lappskriver – Salmaker'n" : "Salmaker'n"; } catch (e) { /* ingen document i test */ } }
+// Viser i Mer om Lappskriver-hjelperen på denne PC-en tar lappene, og tar bort «Lappskriver» fra tittelen når den gjør det (da er dette et vanlig vindu).
+async function ordreLappVisHjelper() {
+  const el = document.getElementById('ordreLappHjelperInfo');
+  if (!ordreLappStasjonFra()) { if (el) el.textContent = ''; return; }
+  const s = await lappHjelperStatus();
+  const tar = ordreLappType() === 'del' ? lappHjelperTarDel(s) : lappHjelperTarOrdre(s);
+  if (tar) { try { document.title = "Salmaker'n"; } catch (e) { /* test */ } }
+  const el2 = document.getElementById('ordreLappHjelperInfo');
+  if (!el2) return;
+  el2.textContent = tar
+    ? `Lappskriver-hjelperen kjører: lappene går rett til «${ordreLappType() === 'del' ? s.skriver : s.ordre.skriver}» uten utskriftsvindu. Vanlige dokumenter skrives ut som vanlig.`
+    : 'Lappskriver-hjelperen svarer ikke på denne PC-en: lappene skrives ut via nettleseren.';
+}
 function renderOrdreLappKort() {
   ordreLappTittel();
   const el = document.getElementById('ordreLappKortInnhold');
@@ -295,5 +342,7 @@ function renderOrdreLappKort() {
         <option value="modell" ${etterModell ? 'selected' : ''}>Etter modell: 180-320 mm (velg papir)</option>
       </select></div>` : ''}
     <div class="small muted" style="margin-bottom:10px">${fra ? 'Slått på ' + esc(ordreLappDato(fra)) + '. ' : ''}Slå bare på i Lappskriver-vinduet på PC-en med skriveren. ${del ? (etterModell ? 'Lappen blir 180 til 320 mm, så lang som navnet trenger. Utskriftsvinduet kommer frem: velg papiret appen sier (f.eks. «Del-lapp 50 x 230 mm»). Krever at Lappskriver på denne PC-en starter MED utskriftsvindu (oppsettfila spør om det).' : 'Lapp 50 x 180 mm (papir «Del-lapp 50 x 180 mm»).') : 'Lapp 25 x 60 mm med QR-kode til ordren (papir «Ordre-lapp 25 x 60 mm»).'}</div>
+    <div id="ordreLappHjelperInfo" class="small muted" style="margin-bottom:10px"></div>
     <button class="btn sm" onclick="skrivUtTestOrdreLapp()">🖨 Skriv ut testlapp</button>`;
+  ordreLappVisHjelper();
 }

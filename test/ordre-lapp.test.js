@@ -340,7 +340,7 @@ describe('del-lapp via Lappskriver-hjelperen', () => {
   let kall, svarStatus, svarSkriv;
   const bil = (merke, modell) => ordre(Date.now(), { merke, modell, chassis: 'TESTWXYZ000000031' });
   beforeEach(() => {
-    kall = []; svarStatus = { ok: true, papir: ['Del-lapp 50 x 180 mm', 'Del-lapp 50 x 230 mm'] }; svarSkriv = () => ({ ok: true });
+    kall = []; svarStatus = { ok: true, skriver: 'Leitz Icon', papir: ['Del-lapp 50 x 180 mm', 'Del-lapp 50 x 230 mm'], ordre: { skriver: '', papir: false } }; svarSkriv = () => ({ ok: true });
     sandbox.AbortSignal = AbortSignal;
     sandbox.fetch = async (url, init = {}) => {
       kall.push({ url, metode: init.method || 'GET', kropp: init.body ? JSON.parse(init.body) : null });
@@ -363,7 +363,7 @@ describe('del-lapp via Lappskriver-hjelperen', () => {
   });
 
   it('mangler 230-papiret på skriveren, brukes 180', async () => {
-    svarStatus = { ok: true, papir: ['Del-lapp 50 x 180 mm'] };
+    svarStatus = { ok: true, skriver: 'Leitz Icon', papir: ['Del-lapp 50 x 180 mm'] };
     await sandbox.skrivUtOrdreLapper([bil('Mercedes-Benz', 'Geländewagen')]);
     expect(kall.find((k) => k.metode === 'POST').kropp.lengde).toBe(180);
   });
@@ -384,10 +384,39 @@ describe('del-lapp via Lappskriver-hjelperen', () => {
     expect(utskrifter[0]).not.toContain('LAND CRUISER');
   });
 
-  it('ordre-lapp (25 mm) bruker aldri hjelperen', async () => {
+  it('ordre-lapp går ikke til en hjelper som bare tar del-lapper', async () => {
     sandbox.settOrdreLappType('ordre');
     await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
-    expect(kall).toHaveLength(0);
+    expect(kall.filter((k) => k.metode === 'POST')).toHaveLength(0);
+    expect(utskrifter).toHaveLength(1);
+  });
+  it('ordre-lapp via hjelperen: QR-mønster som leses tilbake til ordre-lenken, tekstene som i appen, ingen vanlig utskrift', async () => {
+    svarStatus = { ok: true, skriver: '', papir: [], ordre: { skriver: 'Leitz Icon (Kopier 2)', papir: true } };
+    sandbox.settOrdreLappType('ordre');
+    const o = ordre(1793088915905, { chassis: 'KNAAA8153V6087985', kunde: 'TEST - Kunde AS', merke: 'KIA', modell: 'EV9', regnr: 'EL12345' });
+    await sandbox.skrivUtOrdreLapper([o]);
+    expect(utskrifter).toHaveLength(0);
+    const post = kall.find((k) => k.metode === 'POST');
+    expect(post.url).toBe('http://localhost:47811/ordre-lapp');
+    expect(post.kropp.hoved).toBe('KNAAA8153V6087985');
+    expect(post.kropp.kunde).toBe('TEST - Kunde AS');
+    expect(post.kropp.info).toBe('KIA EV9 · EL12345 · ' + sandbox.ordreLappDato(1793088915905));
+    expect(post.kropp.hovedMm).toBe(sandbox.ordreLappSkriftMm('KNAAA8153V6087985'));
+    const n = post.kropp.qr.length;
+    expect(post.kropp.qr.every((r) => r.length === n && /^[01]+$/.test(r))).toBe(true);
+    // Tegn mønsteret (4 px per modul, 4 moduler stille sone) og les det med jsQR, som appen selv skanner med
+    const px = 4, sone = 4, side = (n + 2 * sone) * px;
+    const data = new Uint8ClampedArray(side * side * 4).fill(255);
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (post.kropp.qr[r][c] === '1') for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) { const i = (((r + sone) * px + y) * side + (c + sone) * px + x) * 4; data[i] = data[i + 1] = data[i + 2] = 0; }
+    expect(sandbox.jsQR(data, side, side).data).toBe('https://salmaker.as/salmakern.html?ordre=ord_1793088915905');
+  });
+  it('feiler hjelperen på ordre-lappen, skrives den ut på vanlig måte', async () => {
+    svarStatus = { ok: true, ordre: { skriver: 'Leitz Icon (Kopier 2)', papir: true } };
+    svarSkriv = () => ({ ok: false, feil: 'Skriveren svarer ikke' });
+    sandbox.settOrdreLappType('ordre');
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('@page{size:25mm 60mm;margin:0}');
   });
 
   it('service workeren lar kall til localhost gå rett til nettet', () => {
