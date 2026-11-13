@@ -283,11 +283,12 @@ async function adminArkKallFraktEpost(payload) {
 // driver kantlinje-merket på ordrekortet i Oversikt/Ordre-lista (se bestiltFraktBadgeHTML()/
 // sorterOrdre() i core.js), UAVHENGIG av admin_ark-raden sin egen bestiltFrakt-kolonne som
 // fortsatt oppdateres via adminArkLagreFelter() som før (bedt om av Henrik 2026-09-30).
-async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato) {
+async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato, ikkeVarsleKontakt) {
   const o = S.ordrer.find(x => !erLeveranse(x) && samsvarerChassis(x.chassis, chassisNr)); if (!o) return;
   o.bestiltFrakt = true;
   o.henteKlarDato = dato || '';
-  logChange(o, dato ? `Bestilt frakt, henteklar ${fmtDatoKort(dato)}` : 'Bestilt frakt');
+  const tekst = (dato ? `Bestilt frakt, henteklar ${fmtDatoKort(dato)}` : 'Bestilt frakt') + (ikkeVarsleKontakt ? ' (ikke varslet kontaktperson)' : '');
+  logChange(o, tekst);
   // Uten denne kan et forsinket Realtime-ekko av DENNE skrivingen stille fjerne
   // "klar for henting"-merket igjen lokalt, selv om frakt faktisk er bestilt i databasen
   // (funnet 2026-10-14, samme mønster som de andre målrettede ordre-oppdateringene).
@@ -316,8 +317,12 @@ async function adminArkFraktBestill(chassisNr) {
     visToast('Salmakern leverer selv - ingen bestilling nødvendig. Trykk "✔ Hentet" når bilen kjøres av gårde.');
     return;
   }
+  // Henrik 2026-11-13: «må være mulig å velge» å ikke varsle kontaktpersonen på e-post -
+  // kontaktEpost er derfor ikke lenger PÅKREVD for å åpne dialogen (det var den tidligere,
+  // noe som blokkerte hele fraktbestillingen hvis kontaktpersonen manglet e-post i Kontakter).
+  // Mangler den, kan man fortsatt sende/merke - bare med avkrysningen «ikke send kopi» i
+  // praksis tvunget på (håndheves i adminArkSendFraktBestilling under).
   const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
-  if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
   const erHenterSelv = rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
   let fraktEpost = '';
   if (!erHenterSelv) {
@@ -327,6 +332,10 @@ async function adminArkFraktBestill(chassisNr) {
   adminArkFraktBestillKontekst = { erHenterSelv, fraktEpost, kontaktEpost, forhandler: rad.forhandler, kontaktperson: rad.kontaktperson, fraktselskap: rad.fraktselskap, chassisNr: rad.chassisNr };
   document.getElementById('kfh_chassis').value = rad.chassisNr;
   document.getElementById('kfh_dato').value = erHenterSelv ? new Date().toISOString().split('T')[0] : '';
+  document.getElementById('kfh_ikkeVarsleKontakt').checked = false;
+  document.getElementById('kfh_ikkeVarsleKontaktLabel').textContent = erHenterSelv
+    ? 'Ikke send e-post - bare merk klar for henting'
+    : 'Ikke send kopi til kontaktperson - bare merk det';
   document.getElementById('klarForHentingTittel').textContent = erHenterSelv ? 'Bilen er klar for henting' : 'Bestill frakt hos ' + rad.fraktselskap;
   document.getElementById('kfh_datoLabel').textContent = erHenterSelv ? 'Klar for henting fra dato' : 'Henteklar dato (valgfritt)';
   document.getElementById('klarForHentingBeskrivelse').textContent = erHenterSelv
@@ -348,22 +357,36 @@ async function adminArkSendFraktBestilling() {
   const ctx = adminArkFraktBestillKontekst; if (!ctx) return;
   const chassisNr = document.getElementById('kfh_chassis').value;
   const dato = document.getElementById('kfh_dato').value;
+  // Henrik 2026-11-13: «må være mulig å velge» å ikke varsle kontaktpersonen på e-post, i
+  // stedet for det tidligere ufravikelige kravet om en registrert kontakt-e-post. Avkrysset
+  // (standard av, dvs. uendret oppførsel): for et EKTE fraktselskap droppes bare kopien til
+  // kontaktpersonen - selve bestillingen går fortsatt til fraktselskapet. For «Hente selv»
+  // finnes ingen annen mottaker i det hele tatt, så da sendes INGEN e-post - bare merkes.
+  const ikkeVarsleKontakt = document.getElementById('kfh_ikkeVarsleKontakt').checked;
   if (ctx.erHenterSelv && !dato) { visToast('Velg en dato'); return; }
+  if (!ikkeVarsleKontakt && !ctx.kontaktEpost) {
+    visToast(`Fant ingen e-post for "${ctx.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter, eller kryss av for å ikke varsle kontaktpersonen`);
+    return;
+  }
   try {
     if (ctx.erHenterSelv) {
-      await adminArkKallFraktEpost({ type:'klar_for_henting', kontaktpersonEpost:ctx.kontaktEpost, chassisNr, dato, avsenderNavn: me?.navn });
-      visToast('Varsel om henting sendt til ' + ctx.kontaktperson, 'ok');
+      if (ikkeVarsleKontakt) {
+        visToast('Merket klar for henting (ingen e-post sendt)', 'ok');
+      } else {
+        await adminArkKallFraktEpost({ type:'klar_for_henting', kontaktpersonEpost:ctx.kontaktEpost, chassisNr, dato, avsenderNavn: me?.navn });
+        visToast('Varsel om henting sendt til ' + ctx.kontaktperson, 'ok');
+      }
     } else {
-      await adminArkKallFraktEpost({ type:'bestilling', fraktselskapEpost:ctx.fraktEpost, kontaktpersonEpost:ctx.kontaktEpost||undefined,
+      await adminArkKallFraktEpost({ type:'bestilling', fraktselskapEpost:ctx.fraktEpost, kontaktpersonEpost: ikkeVarsleKontakt ? undefined : (ctx.kontaktEpost||undefined),
         forhandler: ctx.forhandler, kontaktperson: ctx.kontaktperson, chassisNr, dato: dato || undefined, avsenderNavn: me?.navn });
-      visToast('Fraktbestilling sendt til ' + ctx.fraktselskap, 'ok');
+      visToast('Fraktbestilling sendt til ' + ctx.fraktselskap + (ikkeVarsleKontakt ? ' (uten kopi til kontaktperson)' : ''), 'ok');
     }
     closeModal('klarForHenting');
     const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
     const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&samsvarerChassis(x.chassis,chassisNr)) };
     await adminArkLagreFelter(radData, { bestiltFrakt: true });
     if (tabRad) tabRad.update({ bestiltFrakt: true });
-    await adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato);
+    await adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato, ikkeVarsleKontakt);
   } catch (e) {
     visToast('Kunne ikke sende: ' + e.message);
   }

@@ -1575,6 +1575,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <input type="date" id="kfh_dato">
     </div>
     <div class="muted small" style="margin-top:8px" id="klarForHentingBeskrivelse">Sender e-post til kontaktpersonen med denne datoen.</div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+      <input type="checkbox" id="kfh_ikkeVarsleKontakt" style="width:15px;height:15px;accent-color:#22c55e">
+      <span class="small" id="kfh_ikkeVarsleKontaktLabel">Ikke send kopi til kontaktperson - bare merk det</span>
+    </label>
     <div style="margin-top:14px;display:flex;gap:8px">
       <button class="btn red" onclick="adminArkSendFraktBestilling()">Send</button>
       <button class="btn" onclick="closeModal('klarForHenting')">Avbryt</button>

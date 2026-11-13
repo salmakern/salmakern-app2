@@ -138,6 +138,17 @@ og `send-frakt-epost/index.ts` formaterer den med `datoVisning()` (bare nøyakti
 qoqpenbfdxeduylxirwk --use-api` (klienten uten funksjonen er ufarlig: ukjent felt ignoreres). Test ALDRI med en ekte mottaker:
 `test/frakt-epost.test.js` kjører hele funksjonen mot falsk Deno og falsk Resend.
 
+**«Ikke send kopi til kontaktperson» i «Bestill frakt» (2026-11-13, Henrik: «må være mulig å velge»)**: dialogen har nå en
+avkrysning (`#kfh_ikkeVarsleKontakt`, standard AV = uendret oppførsel). For et EKTE fraktselskap sendes bestillingen fortsatt
+til fraktselskapet som før, bare uten kontaktpersonen på kopi (`kontaktpersonEpost` sendes rett og slett ikke med -
+`send-frakt-epost` støttet dette allerede, ingen endring der). For «Hente selv» finnes ingen annen mottaker i det hele tatt,
+så avkrysningen betyr der «ingen e-post, bare merk klar for henting» - ingen kall til `send-frakt-epost` i det hele tatt.
+**Samtidig rettet en reell blokkering**: `adminArkFraktBestill()` krevde FØR en registrert kontakt-e-post bare for å ÅPNE
+dialogen, også for et ekte fraktselskap der kontaktpersonen bare er på kopi - manglet den, kunne man ikke bestille frakt i
+det hele tatt, uansett avkrysning. Kravet er nå flyttet til selve sendingen (`adminArkSendFraktBestilling()`) og gjelder bare
+når man faktisk skal varsle kontaktpersonen. Logglinjen på ordren får et tillegg «(ikke varslet kontaktperson)» når
+avkrysningen er brukt. `sw.js` CACHE v75. Vakt: `test/admin-ark-frakt-uten-varsel.test.js` (11 tester, full app-harness).
+
 **Ordre.vekter kan komme tom fra databasen (2026-11-02, tom Ordre-side for alle)**: `ordrer.vekter` har kolonne-default `'{}'`, og `save()` skriver ikke vekter (s09-005: vekter eies av RPC-ene
 `oppdater_ordre_vekter_felt` m.fl.). Da den første NYE ordren siden 30.10 ble opprettet, kom den inn med `vekter = {}`, `dbToOrdre` beholdt det tomme objektet, `tvangsflyt()` leste `o.vekter.totalvekt.a` og
 kastet, og `renderOrdreList` stoppet midt i lista: «67 ordrer», men ingen kort, for alle brukere. Rettet i to lag: (1) `normaliserVekter()` i `core.js` fyller alltid inn totalvekt/vogntog/foraksel/bakaksel med a/e/v

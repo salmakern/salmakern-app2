@@ -87,7 +87,7 @@
 // v71 - chassis-tastefeil rettet på en ordre fra Forhandlerportalen synker nå automatisk portal_bestillinger.ident (s08-058)
 // v72 - forhandler_kontakt_id skiller forhandler-avdelinger som deler org.nr fra hverandre (s08-004)
 // v73 - grønn pulserende glød på ordrekort (Ordre-lista og Oversikt) og "Ansatte på ordren"-kortet når noen er meldt på
-const CACHE = 'salmakern-v74';
+const CACHE = 'salmakern-v75';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
