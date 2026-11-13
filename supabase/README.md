@@ -385,6 +385,47 @@ ennå (kommer i senere steg).
    `kladd_borte`/en lenge usendt kladd, og en måte å løse de 30 historiske «ukjent»-ordrene
    manuelt (Henrik må bekrefte identitet - ingen automatisk gjetning).
 
+## Fakturering henter rabatt fra Forhandlerportalen (rabatt-prosjekt, s90-20261104-5/s08-063)
+
+Henrik (5.11): «Ja det er bare å starte» - portalen skal være FASIT for forhandler-
+rabattsatser i stedet for den hånd-vedlikeholdte `fiken_kunde_rabatt` (historisk mange rader
+med NULL i minst én kolonne - stopper fakturering helt i stedet for å gjette 0%, se eget
+avsnitt i `supabase/functions/fiken-fakturer/index.ts`).
+
+1. **Fase 1 (5.11, live)**: `hent-rabatter-fra-portalen` (admin-knapp i dag, ikke cron ennå)
+   henter `GET https://forhandler.salmaker.as/api/salmakern/rabatter` (hemmelighet
+   `SALMAKERN_HENT_SECRET`, delt med `hent-selgere-fra-portalen` - samme vurdering som der: en
+   egen hemmelighet per datadomene gir liten reell isolasjon siden alle edge-funksjoner i
+   samme prosjekt uansett kan lese alle secrets) og upserter inn i `portal_kunde_rabatt`
+   (migrasjon `20261105130000`, RPC `portal_rabatter_synk`) - nøkkel `kontakt_id` (samme
+   id-rom som `innstillinger.kontakter`), kolonnene `rabatt_standard`/`rabatt_ekstrautstyr`/
+   `rabatt_modulsystem` (prosent 0-100, kan være NULL = ikke avtalt). Avviser HELE svaret
+   (502) hvis en sats verken er null eller et gyldig tall 0-100, eller hvis portalens oppgitte
+   antall ikke stemmer med listens faktiske lengde - en feil skal aldri kunne tolkes som
+   "ingen rabatt". Rører ALDRI selve faktureringen.
+2. **Fase 2 (13.11, Henrik: «fiken må fakturere via portalen slik at den henter ...
+   rabatt»)**: `fiken-fakturer` bruker nå `portal_kunde_rabatt` (slått opp på ordrens
+   `forhandler_kontakt_id`, s08-004 - løser nettopp det fase 1 bevisst utsatte: å finne RIKTIG
+   rad når `kontakt_id` deles av flere portal-avdelinger) som FØRSTE kilde for ombygging-/
+   ekstra utstyr-rabatt. `rabatt_standard` → ombygging-sats, `rabatt_ekstrautstyr` → ekstra
+   utstyr-sats, og disse ERSTATTER `fiken_kunde_rabatt` for den fakturaen når forhandleren
+   finnes i `portal_kunde_rabatt`. Mangler `forhandler_kontakt_id`, eller finnes forhandleren
+   ikke der, faller funksjonen tilbake til `fiken_kunde_rabatt` helt uendret - samme
+   NULL-stopp-regel som før, bare med feilmeldingen justert til å nevne riktig kilde.
+3. **`rabatt_modulsystem` brukes bevisst IKKE**: Henrik avklarte 13.11 at kategorien finnes
+   fordi noen produkter bevisst ikke skal ha rabatt, men de er «ikke fordelt i Fiken» ennå -
+   ingen produktnummer identifisert. Legges til senere, samme mønster som
+   `fiken_priser.kategori`.
+4. **Live-verifisert 13.11 (lesende, ingen faktura endret)**: av 5 reelle ordre med
+   `forhandler_kontakt_id` satt, hadde 4 `NULL` i `fiken_kunde_rabatt.rabatt_ekstra_utstyr`
+   (to også i `rabatt_ombygging`) - disse ville blitt blokkert av den gamle NULL-sjekken ved
+   en ekstra utstyr-linje, men har gyldige satser (20/10) i `portal_kunde_rabatt`. Løser
+   dermed en reell, ikke bare teoretisk, pengefelle for minst 4 ordre.
+5. **Ikke bygget**: produktnummer fra portalen (krever et nytt endepunkt på portal-siden, eget
+   repo) og en cron-variant av `hent-rabatter-fra-portalen` (i dag admin-knapp).
+
+Vakt: `test/fiken-fakturer-rabatt.test.js` (describe-blokken «rabatt fra Forhandlerportalen»).
+
 ## Backup-status (sjekket 2026-08-24)
 
 Daglige fysiske backups er aktivert (`walg_enabled: true`) - prosjektet har
