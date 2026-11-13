@@ -625,6 +625,116 @@ describe('fiken-fakturer: fakturalinjene leses fra ordrer.fiken_linjer i databas
   });
 });
 
+// Portalen er FASIT for rabatt når ordren har en kjent forhandler-kontakt (ordrer.forhandler_
+// kontakt_id, s08-004) OG den kontakten finnes i portal_kunde_rabatt (hent-rabatter-fra-
+// portalen, 5.11) - fase A av rabatt-prosjektet (13.11, Henrik: "fiken må fakturere via
+// portalen slik at den henter ... rabatt"). standard->ombygging, ekstrautstyr->ekstra_utstyr.
+// rabatt_modulsystem brukes bevisst ikke ennå (ingen Fiken-produkter tagget med den
+// kategorien). Alle disse testene bruker _manuellOrdre for å kunne sette forhandler_kontakt_id
+// på ordre-mocken (kall() sin auto-synk fra body.linjer setter den aldri).
+describe('fiken-fakturer: rabatt fra Forhandlerportalen (portal_kunde_rabatt) overstyrer fiken_kunde_rabatt (fase A, 13.11)', () => {
+  function svarMedOrdre({ forhandlerKontaktId, linjer, ekstra = {} }) {
+    return {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: { data: { fiken_kladd_url: null, fiken_linjer: linjer, forhandler_kontakt_id: forhandlerKontaktId ?? null }, error: null },
+      ...ekstra,
+    };
+  }
+
+  it('ordre med forhandler_kontakt_id + treff i portal_kunde_rabatt: bruker portalens rabatt_standard/rabatt_ekstrautstyr, IKKE fiken_kunde_rabatt', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18',
+      linjer: [linje('100'), linje('200')],
+      ekstra: {
+        portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15 }, error: null },
+        fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null }, // bevisst ANNET enn portalen, for å bevise at portalen vinner
+      },
+    });
+    const api = await last({ svar });
+    const res = await api.kall(standardBody([linje('100'), linje('200')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201);
+    expect(api.draftKall[0].lines[0].discount).toBe(30); // ombygging
+    expect(api.draftKall[0].lines[1].discount).toBe(15); // ekstra utstyr
+    expect(api.eqKall).toContainEqual({ tabell: 'portal_kunde_rabatt', kolonne: 'kontakt_id', verdi: 'k18' });
+  });
+
+  it('forhandler_kontakt_id satt, men INGEN rad i portal_kunde_rabatt: faller tilbake til fiken_kunde_rabatt som før', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_ukjent',
+      linjer: [linje('100')],
+      ekstra: {
+        portal_kunde_rabatt: { data: null, error: null },
+        fiken_kunde_rabatt: { data: { rabatt_ombygging: 22, rabatt_ekstra_utstyr: 7 }, error: null },
+      },
+    });
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')]));
+    expect(l.discount).toBe(22);
+  });
+
+  it('ordre UTEN forhandler_kontakt_id: helt uendret - leser fiken_kunde_rabatt direkte, spør aldri portal_kunde_rabatt', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: null,
+      linjer: [linje('100')],
+      ekstra: { fiken_kunde_rabatt: { data: { rabatt_ombygging: 18, rabatt_ekstra_utstyr: 9 }, error: null } },
+    });
+    const api = await last({ svar });
+    const res = await api.kall(standardBody([linje('100')]));
+    await res.json();
+    expect(api.draftKall[0].lines[0].discount).toBe(18);
+    expect(api.eqKall.some((k) => k.tabell === 'portal_kunde_rabatt')).toBe(false);
+  });
+
+  it('brukRabatt:false nuller ut rabatten også med et portal-treff', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18',
+      linjer: [linje('100')],
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15 }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')], { brukRabatt: false }));
+    expect(l).not.toHaveProperty('discount');
+  });
+
+  it('en linje med sin EGEN frosne rabatt (portal-bestillingens l.rabatt) er uendret - vinner fortsatt over portalens kunde-sats', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18',
+      linjer: [linje('100', { rabatt: 12 })],
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15 }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100', { rabatt: 12 })]));
+    expect(l.discount).toBe(12);
+  });
+
+  it('portal-raden finnes, men rabatt_standard er NULL (ikke avtalt): 400 med melding om Forhandlerportalen, ikke Fiken-rabatt', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18',
+      linjer: [linje('100')],
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: null, rabatt_ekstrautstyr: 15 }, error: null } },
+    });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/ikke satt i Forhandlerportalen/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('rabatt_modulsystem fra portalen leses bevisst ikke og påvirker ingenting (ingen Fiken-produkt er kategorisert som "modulsystem" ennå)', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18',
+      linjer: [linje('100'), linje('200')],
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null }, error: null } },
+    });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100'), linje('200')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201); // modulsystem=null stopper IKKE faktureringen - feltet brukes ikke
+    expect(draftKall[0].lines[0].discount).toBe(30);
+    expect(draftKall[0].lines[1].discount).toBe(15);
+  });
+});
+
 // fiken_priser.kategori (migrasjon 20261111200000, Henrik 11.11): en eksplisitt,
 // forhåndsbekreftet kategori per produktnummer skal overstyre navnegjetting
 // (erOmbyggingslinje) i BEGGE retninger - produktnavnet alene bestemmer ingenting når en

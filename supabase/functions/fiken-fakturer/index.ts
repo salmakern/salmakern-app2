@@ -244,7 +244,7 @@ Deno.serve(async (req) => {
 
     const { data: eksisterendeOrdre, error: ordreFeil } = await supabase
       .from('ordrer')
-      .select('fiken_kladd_url, fiken_linjer')
+      .select('fiken_kladd_url, fiken_linjer, forhandler_kontakt_id')
       .eq('id', ordreId)
       .maybeSingle()
     if (ordreFeil) return jsonSvar({ error: 'Kunne ikke sjekke ordren: ' + ordreFeil.message }, 500)
@@ -320,18 +320,43 @@ Deno.serve(async (req) => {
       return jsonSvar({ error: `Produkt uten konto satt opp i Fiken: ${utenKonto.map((x: any) => x.produktnummer).join(', ')} - sett en inntektskonto på produktet i Fiken før fakturering.` }, 400)
     }
 
-    // Avtalt rabatt per kunde - kun forhåndsutfylt der historikken var konsekvent (se
-    // fiken_kunde_rabatt-migrasjonen). Mangler HELE raden: aldri avtalt noe for denne kunden,
-    // trygt å anta 0%. Finnes raden, men ÉN av de to kolonnene er NULL: noen har satt opp den
-    // ENE satsen (f.eks. ombygging) men aldri tatt stilling til den andre (ekstra utstyr) -
-    // IKKE det samme som "avtalt 0%", og skal ALDRI stille anta 0% (rettet 5.11, uavhengig
-    // sikkerhetsgjennomgang: 68 av 100 rader i fiken_kunde_rabatt har NULL i minst én kolonne).
-    // Stopper fakturering HELT i stedet for å gjette - se sjekken rett under.
-    const { data: rabattRad } = await supabase
-      .from('fiken_kunde_rabatt')
-      .select('rabatt_ombygging, rabatt_ekstra_utstyr')
-      .eq('fiken_contact_id', contactId)
-      .maybeSingle()
+    // Avtalt rabatt per kunde. Portalen er FASIT (Henrik, s90-20261104-5/s08-063 fase 2) når
+    // ordren er koblet til en forhandler-kontakt (ordrer.forhandler_kontakt_id, s08-004) OG den
+    // kontakten finnes i portal_kunde_rabatt (synket inn av hent-rabatter-fra-portalen, 5.11) -
+    // bruker da rabatt_standard/rabatt_ekstrautstyr i stedet for den hånd-vedlikeholdte
+    // fiken_kunde_rabatt, så satsene aldri driver fra hverandre. Mangler ordren en
+    // forhandler-kontakt, eller finnes den forhandleren ikke (ennå) i portal_kunde_rabatt,
+    // faller vi tilbake til fiken_kunde_rabatt som før - helt uendret for alt det gjelder.
+    // rabatt_modulsystem leses bevisst IKKE her: ingen Fiken-produkter er tagget med den
+    // kategorien ennå (avklart med Henrik 13.11 - produktene er «ikke fordelt i Fiken»), så den
+    // har ingenting å brukes på foreløpig. Samme NULL-sjekk som før gjelder uansett kilde: kun
+    // forhåndsutfylt der historikken/portalen var konsekvent. Mangler HELE raden: aldri avtalt
+    // noe for denne kunden, trygt å anta 0%. Finnes raden, men ÉN av de to kolonnene er NULL:
+    // noen har satt opp den ENE satsen (f.eks. ombygging) men aldri tatt stilling til den andre
+    // (ekstra utstyr) - IKKE det samme som "avtalt 0%", og skal ALDRI stille anta 0% (rettet
+    // 5.11, uavhengig sikkerhetsgjennomgang: 68 av 100 rader i fiken_kunde_rabatt hadde NULL i
+    // minst én kolonne). Stopper fakturering HELT i stedet for å gjette - se sjekken rett under.
+    let rabattRad: { rabatt_ombygging: number | null; rabatt_ekstra_utstyr: number | null } | null = null
+    let rabattKilde: 'portal' | 'lokal' = 'lokal'
+    if (eksisterendeOrdre.forhandler_kontakt_id) {
+      const { data: portalRad } = await supabase
+        .from('portal_kunde_rabatt')
+        .select('rabatt_standard, rabatt_ekstrautstyr')
+        .eq('kontakt_id', eksisterendeOrdre.forhandler_kontakt_id)
+        .maybeSingle()
+      if (portalRad) {
+        rabattRad = { rabatt_ombygging: portalRad.rabatt_standard, rabatt_ekstra_utstyr: portalRad.rabatt_ekstrautstyr }
+        rabattKilde = 'portal'
+      }
+    }
+    if (!rabattRad) {
+      const { data: lokalRad } = await supabase
+        .from('fiken_kunde_rabatt')
+        .select('rabatt_ombygging, rabatt_ekstra_utstyr')
+        .eq('fiken_contact_id', contactId)
+        .maybeSingle()
+      rabattRad = lokalRad ?? null
+    }
     // Fiken sitt discount-felt på en fakturalinje forventes 0-100 (prosent), samme skala
     // som verdiene er lagret i her - ingen omregning nødvendig. brukRabatt===false betyr
     // admin har bevisst huket av "Bruk kundens avtalte rabatt" på DENNE fakturaen - null
@@ -351,11 +376,12 @@ Deno.serve(async (req) => {
         const produkt = produktMap.get(String(l.produktnummer))
         return !!produkt && linjeKategori(produkt, kategoriMap, String(l.produktnummer)) === kategori
       })
+      const settStedet = rabattKilde === 'portal' ? 'i Forhandlerportalen for denne forhandleren' : 'i Fiken-rabatt'
       if (rabattRad.rabatt_ombygging === null && trengerSats('ombygging')) {
-        return jsonSvar({ error: 'Kundens ombygging-rabatt er ikke satt i Fiken-rabatt (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».' }, 400)
+        return jsonSvar({ error: `Kundens ombygging-rabatt er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
       }
       if (rabattRad.rabatt_ekstra_utstyr === null && trengerSats('ekstra')) {
-        return jsonSvar({ error: 'Kundens rabatt for ekstra utstyr er ikke satt i Fiken-rabatt (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».' }, 400)
+        return jsonSvar({ error: `Kundens rabatt for ekstra utstyr er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
       }
     }
 
