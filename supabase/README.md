@@ -247,6 +247,47 @@ Forhandlerportalen sender en bestilling (chassis.nr, serienummer eller forhandle
    portal-ordren), faller den tilbake til å lage en VANLIG, ikke-koblet ordre - i sjeldne tilfeller kan det da finnes to ordre for samme bil (én portal-koblet, én ikke). Vurdert mot alternativet (ingen
    ordre i det hele tatt ved enhver usikker feil, som rammer alle vanlige rader) og bevisst latt være endret.
 
+## Importerte biler til portalen (aktive biler i selgernes «Mine bestillinger», etappe 1, skrevet 2026-11-10, IKKE kjørt og IKKE utrullet)
+
+Henriks ønske: de aktive bilene i appen skal stå i selgernes «Mine bestillinger» hos Forhandlerportalen, med status. **Portalen eier alt som lages** (matching mot forhandler, oppretting, skjuling, godkjenning per kunde); appen gir bare et
+SKRIVEBESKYTTET øyeblikksbilde, og skriver aldri til portalen. Portalen skriver heller aldri hit, så en lekket hemmelighet kan aldri skape rader hos forhandlerne (den kan bare lese). Hele opplegget er bygget HVILENDE (modus AV i portalen).
+Appsiden er kun SQL og en edge-funksjon: **ingen `js/*.js`, ingen `sw.js`-bump, ingen forsinkelse å vente på for klientene** (bruk `git diff --stat -- js sw.js salmakern.html`: skal være tomt).
+
+**Filer:** `migrations/20261110200000_portal_import_fakta.sql` (funksjonen), `functions/portal-import-fakta/index.ts` (døra inn) og `logikk.ts` (ren validering, ingen Deno-API-er), `tester/portal_import_fakta_TEST_body.sql`,
+`rollback-referanser/portal_import_fakta_ROLLBACK.sql`, Vitest `test/portal-import-fakta.test.js` med gullfila `test/fixtures/portal-import-fakta-svar.json` (byte-lik portalens kopi i portal-testmappen).
+
+**Postgres-funksjonen `portal_import_fakta(p_ider text[] default null) returns jsonb`:** `stable` + `security invoker` (Postgres avviser en skriving i en stable-funksjon, og den får ingen utvidede rettigheter), og BARE `service_role` kan kalle den (revoke fra
+public/anon/authenticated). Den leser `ordrer`, `innstillinger` (rad `id = 1`, `kontakter`) og `portal_bestillinger`. Svaret er `{versjon: 1, generert, aktive, utvalgte}`:
+- `aktive`: ALLE bil-ordrer (`ordretype = 'bil'`) som ikke er arkivert, sortert på `ordre_id`, høyst 500 (ellers `FOR_MANGE_AKTIVE`). «Arkivert» er `coalesce(nullif(btrim(status), ''), 'aktiv') = 'arkivert'` (som appens UI), ikke `status = 'aktiv'` strengt slik `portal_koble_bestilling` har det (ingen forskjell i dagens data).
+- `utvalgte`: én oppføring per id i `p_ider` (dedupet, sortert): hele raden pluss `finnes: true` (uansett ordretype og status), eller bare `{ordre_id, finnes: false}`. Portalen ber om id-ene til importradene den har, for å få positivt bevis før den skjuler en.
+- Hver rad har ALLTID 15 felt: `ordre_id, ordretype, kunde, chassis, eier, merke, modell, ordre_status, status, opprettet, kontakt_treff, kontakt_id, kontakt_navn, kontakt_orgnr, portal_bestilling_ider` (null er eksplisitt). `ordre_status` er `coalesce(nullif(btrim(..), ''), 'ikke_paabegynt')`: portalen regner «hentet» av den, aldri med `<>` (utelater NULL).
+- **Normalisering skjer BARE her:** `kunde`, `eier`, `merke`, `modell` og kontaktnavn renses likt (de 92 tegnene i `c_skjult` fjernes: styrekoder unntatt tab/linjeskift/CR, DEL og C1, myk bindestrek, nullbredde- og retningstegn, U+2060-U+206F, U+FEFF, U+FFF9-U+FFFB; hvitt mellomrom blir ett mellomrom; trimmet; kappet til 200 tegn og trimmet på nytt), `chassis` er store bokstaver uten mellomrom og bindestrek (kappet til 40),
+  org.nr er bare siffer (høyst 20). Kontakter med tom id eller id over 120 tegn utelates. Appens SQL kapper selv, slik at en lang tekst tastet av en ansatt aldri gir ugyldig svar for hele importen. **Tegnklassen er skrevet med u-escapes, ikke rå tegn** (rå usynlige tegn forsvinner ved kopiering, og et rått U+2028 i et regex er en syntaksfeil): kontroller etter enhver redigering at filen ikke inneholder noen tegn i U+200B-U+200F, U+202A-U+202E, U+2060-U+206F eller U+FEFF (et lite skript som leser filen som UTF-8 holder; Write/Edit-verktøyene kan gjøre u-escapes om til rå tegn, og det er nettopp det som skal fanges).
+  **Mellomrom-klassen er utvidet utover `\s`** (`c_mellomrom`/`c_chassis_ut`: `\s` pluss uttrykkelig nbsp og de andre Unicode-mellomrommene): hva `\s` regner som mellomrom avhenger av databasens `lc_ctype` (målt lokalt i PGlite: `\s` matcher ikke nbsp, selv om spesifikasjonens måling mot portal-databasen sa det motsatte), og resultatet skal ikke avhenge av det.
+- `kontakt_treff` = antall Forhandler-kontakter med samme rensede navn som kunden (uavhengig av store/små bokstaver); `kontakt_id/-navn/-orgnr` settes bare ved nøyaktig ett treff. `kontakter` som ikke er en JSON-liste gir 0 treff, aldri feil.
+- `portal_bestilling_ider` = portalens `Bestilling.id`-er appen kjenner for ordren: `ordrer.portal_bestilling_id`, `portal_bestillinger.ordre_id`, og `portal_bestillinger` med `ident_type = 'CHASSIS'` og `ident` = ordrens chassis (de to siste med `status <> 'avvist'`: en slettet ordres gravstein teller ikke).
+- `p_ider` valideres (høyst 500, hver `^[A-Za-z0-9_.-]{1,64}$`): én rar id avviser HELE kallet (`UGYLDIG_INPUT: ider`), og portalen sender aldri en slik id. Ordrens egen id valideres ikke (en eldre id utenfor mønsteret står i `aktive`; portalen håndterer den).
+
+**Edge-funksjonen `portal-import-fakta` (bare svarer):** `POST` med `{versjon: 1, ider?: string[]}` (høyst 500 id-er, body høyst 65 536 byte). Rekkefølgen er bevisst: metode (alt annet enn POST gir 405, ingen CORS) → hemmelighet → størrelse → JSON og `parseForesporsel` → `rpc` → `mapFakta`. Utrullet med standard `verify_jwt` (som `portal-bestilling`):
+portalen sender anon-nøkkelen som `Authorization` og `apikey`, og i tillegg headeren `x-salmakern-hent-secret` = `SALMAKERN_HENT_SECRET` (Henriks valg 9: samme hemmelighet som selgerlisten, nå brukt i MOTSATT retning, portal til app), minst 32 tegn, sammenlignet i konstant tid via SHA-256, og både miljøvariabelen og headeren trimmes (en hemmelighet limt inn med linjeskift skal ikke gi evig 401).
+Feilsvar er bare `{kode, felt?}`, aldri databasetekst: 400 `ugyldig_input` (versjon/ider/body), 401 `uautorisert`, 405 `metode_ikke_tillatt`, 413 `ugyldig_input` (body), 422 `for_mange_aktive`, 500 `ikke_konfigurert` (hemmelighet eller Supabase-nøkkel mangler), 502 `intern_feil` (databasefeil, tidsavbrudd etter 25 s, uventet svarform). Suksess er `200 {ok: true, versjon, generert, aktive, utvalgte}` med `Cache-Control: no-store`; `mapFakta` avgrenser svaret til nøyaktig kontraktens felt (ekstra felt kastes, ukjent form gir 502).
+Én logglinje per kall, bare tall og faste koder (`{portal_import_fakta: 1, fn, utfall, http, ms, antall_aktive, antall_utvalgte, antall_ider}`; ved databasefeil også `sqlstate`, som skiller f.eks. 57014 tidsavbrudd og PGRST202 «funksjonen er ikke kjørt inn ennå»), aldri id-er, navn, chassis eller hemmeligheter.
+**Funksjonen har INGEN skrivende kall og ingen utgående nettverkskall:** det eneste databasekallet er `rpc('portal_import_fakta')`, ingen push, ingen e-post, ingen import fra søsken-funksjoner (kildetekst-test V6). Kontrakten er versjon 1; grensene (500 id-er, 500 aktive, 65 536 byte, 15 s klienttidsavbrudd hos portalen, 25 s her) må endres sammen i begge ender.
+
+**Rekkevidden til `SALMAKERN_HENT_SECRET` har økt (A6):** hemmeligheten ga før bare lesetilgang til selgerlisten og rabattsatsene den beskyttet. Nå gir den også lesetilgang til kundenavn, kontaktpersoner (eier-tekst) og chassis.nr for ALLE aktive ordrer (opptil 500 rader). Den som kan lese Vercel-miljøet (eller Supabase-hemmelighetene) kan dermed hente det.
+Det er en bevisst følge av valg 9; en egen `SALMAKERN_IMPORT_SECRET` er billig å innføre senere (ett navn i portalens `lib/import/konfig.ts` og i funksjonen, og et nytt hemmelighetspar). Verdien skal aldri leses opp eller limes inn i chat; `npx supabase secrets list --project-ref qoqpenbfdxeduylxirwk` viser bare navn og digest. At hemmeligheten er satt og lik i Vercel Production og som Supabase-hemmelighet er IKKE verifisert.
+
+**Utrulling (hvert steg krever Henriks eget ja; portalen legges ut FØRST, se portalens CLAUDE.md):**
+1. SQL-testen i en rullet-tilbake transaksjon (ikke mellom 00:00 og 03:00 norsk tid; den lager en midlertidig funksjon og rader):
+   `( echo "begin;"; cat supabase/migrations/20261110200000_portal_import_fakta.sql; cat supabase/tester/portal_import_fakta_TEST_body.sql; echo "rollback;" ) > "$TEMP/t.sql"` og
+   `npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --yes --file "$TEMP/t.sql"`. Alle rader skal være OK; etterpå skal `to_regprocedure('public.portal_import_fakta(text[])')` fortsatt være null.
+2. Migrasjonen: `npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --file supabase/migrations/20261110200000_portal_import_fakta.sql`. Kontroller: funksjonen finnes, `service_role` har `execute`, og `anon`/`authenticated` har det ikke.
+3. Edge-funksjonen: `npx supabase functions deploy portal-import-fakta --project-ref qoqpenbfdxeduylxirwk --use-api` (begge filene lastes opp). Kontroller UTEN hemmeligheten: POST gir 401 `{"kode":"uautorisert"}`, GET gir 405.
+- **Rollback:** (1) sett importen til modus AV i portalen (`/admin/import-bestillinger`) FØRST, så portalen slutter å kalle funksjonen; (2) `npx supabase functions delete portal-import-fakta --project-ref qoqpenbfdxeduylxirwk`; (3) `supabase/rollback-referanser/portal_import_fakta_ROLLBACK.sql` (`drop function`; migrasjonen endrer ingen data). Feil rekkefølge er ufarlig (502 hos portalen, og et feilet faktakall gir ingen endring av synlighet der).
+
+**Testet (2026-11-10, lokalt):** Vitest `test/portal-import-fakta.test.js` (50 tester: `parseForesporsel`, `mapFakta` mot gullfila, `mapFeil`, hele håndtereren mot falsk Deno og en falsk klient som bare har `rpc`, kildetekst-vakt, hemmelighetssammenligning). Mutasjonskjøring av edge-funksjonen mot testen (42 mutanter: hemmelighetssjekken, lengdekravet, trim, `===`, rekkefølgen på sjekkene, grenser, validering, `fetch(`/`.from(`/`send-push`, databasefeilteksten i svar og logg, `mapFakta`-strengheten osv.): alle drept bortsett fra to ekvivalente (en ekstra lesing av body uten virkning på svaret, og regex-sjekken av tidspunktformatet, som er overflødig ved siden av `toISOString()`-sammenligningen).
+SQL-testen (`tester/portal_import_fakta_TEST_body.sql`, sjekkene S1-S15, 65 rader) er kjørt mot **PGlite (Postgres 17 i WASM) lokalt**: 65 av 65 OK, og 39 av 40 mutasjoner av funksjonen (fjernet `status <> 'avvist'`, `coalesce`, `ordretype`, tegnklassen, kappingen, `grant ... to authenticated`, `volatile` osv.) ble drept av en sjekk; den siste (bare `ordretype = 'bil'` i `where`) er ekvivalent fordi `er_aktiv` har samme vilkår, og fjernes vilkåret fra `er_aktiv` (alene eller sammen med `where`) dreper S6 den. **SQL-testen er IKKE kjørt mot den ekte databasen** (det er et skrivende steg som krever Henriks ja). PGlite har en annen `lc_ctype` enn appens database (`en_US.UTF-8`), så `lower()` for Æ/Ø/Å og mellomrom-klassen er de stedene en forskjell kunne dukke opp der: det er første sjekk å se på hvis en rad feiler.
+
 ## Lager: hyller og bestillinger (2026-11-03)
 
 Migrasjon `20261103200000_lager_hyller_og_bestillinger.sql` (kjørt 2026-11-03 etter Henriks ja; testet først i en rullet tilbake transaksjon, 28 av 28 kontroller; `supabase/tester/lager_hyller_og_bestillinger_TEST_body.sql`).
@@ -298,6 +339,51 @@ Live-verifisert i en rollback-transaksjon (7 scenarier mot `fiken_priser`-oppsla
 flette-fiksen) og med 276 ekte produkter synket inn fra Fiken (spotsjekket mot kjente priser).
 Samme synk svarte også det siste ubesvarte spørsmålet i s08-012: alle 276 Fiken-produkter med
 fast pris har mva-type `high`, ingen unntak.
+
+## Fiken gir fakturastatus tilbake (s90-20261104-5, Henriks valgte steg 1 i automatiseringsplanen 4.11, deployet 2026-11-13)
+
+«Fakturert» i appen betydde tidligere bare at en KLADD var laget i Fiken (`fiken-fakturer`
+lagrer `fiken_kladd_url`+`fakturert=true` samtidig) - appen fikk aldri vite om kladden faktisk
+ble sendt, betalt eller slettet i Fiken (Henriks vurdering: «største pengerisiko»). Dette er
+FØRSTE, minste steg: kun lesing (GET-only mot Fiken) og lagring av statusen - ingen varsler/UI
+ennå (kommer i senere steg).
+
+1. **Nye kolonner på `ordrer`** (migrasjon `20261104220000`, kjørt 4.11): `fiken_faktura_status`
+   (`kladd`/`sendt`/`betalt`/`kladd_borte`/`ukjent`, NULL = ikke sjekket), `fiken_kladd_uuid`,
+   `fiken_faktura_referanse` (øyeblikksbilde av `orderReference`-teksten satt av `fiken-fakturer`
+   DA kladden ble opprettet - ALDRI regnet ut på nytt fra ordrens nåværende chassis/regnr, se
+   punkt 2), `fiken_faktura_id`, `fiken_faktura_status_sjekket_at`.
+2. **`fiken-faktura-status-synk`**: egen edge-funksjon (egen hemmelighet
+   `FIKEN_FAKTURA_STATUS_SYNK_SECRET`, samme mønster som `FIKEN_PRISER_SYNK_SECRET` - skriver
+   til databasen, aldri delt med `FIKEN_SYNC_SECRET`) som henter alle ufakturerte-ikke-betalte
+   bil-ordre med en kladd (maks 50 per kjøring) og for hver: GET kladden (200 = fortsatt kladd,
+   uuid lagres for senere presist oppslag), 404 = borte - slå opp via `invoiceDraftUuid` (presist,
+   krever lagret uuid) eller fall-back på det FROSNE `fiken_faktura_referanse` (aldri et
+   nyutregnet regnr/chassis, siden regnr ofte legges inn ETTER fakturering); nøyaktig ett treff
+   gir `sendt`/`betalt` (fra fakturaens `sale.settled`), null treff gir `kladd_borte`, flere treff
+   er for usikkert å gjette = `ukjent`. Sekvensielle GET-kall (ALDRI `Promise.all`) - Fiken
+   tillater kun én samtidig forespørsel. `kladd_borte`/`ukjent` er bevisst IKKE endelige og
+   sjekkes på nytt hver kjøring (kun `betalt` er reelt endelig). Hver ordre i egen try/catch - én
+   feilet rad velter aldri resten. Kalt av en planlagt `pg_cron`-jobb
+   (`fiken-faktura-status-synk-cron`, migrasjon `20261113100000`) hver 6. time, 20 min forskjøvet
+   fra `fiken-priser-synk-cron`. Hemmeligheten ligger også i Supabase Vault
+   (`fiken_faktura_status_synk_secret`, satt via en engangskommando som ALDRI ble committet)
+   slik at cron-jobben kan sende den i `x-sync-secret`-headeren.
+3. **Allerede bygget av en tidligere økt** (edge-funksjon + 14 grønne tester
+   `test/fiken-faktura-status-synk.test.js` + DB-migrasjon kjørt), men aldri utrullet - denne
+   runden fullførte bare utrullingen (hemmelighet satt, Vault speilet, funksjon deployet,
+   cron-jobb opprettet) og den faktiske live-verifiseringen.
+4. **Live-verifisert 2026-11-13** med et ekte kall mot den utrullede funksjonen: 33 kandidat-
+   ordre, `{kladd:1, sendt:2, betalt:0, kladd_borte:0, ukjent:30, feilet:0}`. De 30 «ukjent» er
+   FORVENTET, ikke en feil: det er ordre fakturert FØR denne kolonnen/funksjonen fantes, uten
+   lagret uuid eller referanse å slå opp på (`fiken_faktura_referanse` ble aldri bakfylt for
+   eksisterende rader - bevisst, se punkt 1 om hvorfor et nyutregnet oppslag er utrygt). Nye
+   fakturaer fra og med 4.11 (da kolonnen kom) får `fiken_faktura_referanse` satt direkte av
+   `fiken-fakturer` ved opprettelse, og fanges som `kladd` (med uuid lagret) allerede neste
+   kjøring mens kladden fortsatt finnes - de blir derfor sporbare presist fremover.
+5. **Senere steg (ikke bygget)**: vise statusen i ordredetaljens Fakturering-kort, varsel ved
+   `kladd_borte`/en lenge usendt kladd, og en måte å løse de 30 historiske «ukjent»-ordrene
+   manuelt (Henrik må bekrefte identitet - ingen automatisk gjetning).
 
 ## Backup-status (sjekket 2026-08-24)
 
