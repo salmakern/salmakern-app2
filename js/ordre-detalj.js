@@ -1765,6 +1765,8 @@ function sf(id, field, val) {
   // se synkroniserForhandlerKontaktId().
   if (field === 'forhandlerOrgnr' && val !== o.forhandlerOrgnr) synkroniserForhandlerKontaktId(id, val, o.kunde);
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
+  // Ordre-lapp (js/ordre-lapp.js): skrives ut automatisk når bilen er kommet og forhandleren er skrevet inn - også når det skjer på stasjons-PC-en selv.
+  if ((field === 'kunde' || field === 'ankomstdato') && typeof ordreLappTaIgjen === 'function') { try { ordreLappTaIgjen(); } catch (e) { console.warn('ordre-lapp:', e && e.message); } }
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
   // Merke/Modell styrer BÅDE "Ombygging valgt"-advarselen (manglende Fiken-produktlinje,
   // se ombyggingBoksHTML()) og selve ombyggingslinjen i fakturagrunnlaget - uten dette ble

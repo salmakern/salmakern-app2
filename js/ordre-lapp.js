@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // ORDRE-LAPP PÅ LEITZ ICON (Henrik 2026-11-11): en lapp på 25 mm bred rull for hver ny bil-ordre.
 // - Lappen er 60 x 25 mm: QR-kode til venstre (åpner ordren i appen: salmakern.html?ordre=<id>), hele chassis.nr (ellers reg.nr), kunde og merke/modell + dato til høyre.
-// - UTSKRIFTSSTASJON: én PC med skriveren slår på «Skriv ut ordre-lapper» i Mer (lagres bare på den enheten, localStorage). Den skriver da ut en lapp for hver ny bil-ordre,
-//   uansett hvem som registrerer den og hvor (mobil, Admin-ark, Forhandlerportalen): Realtime-INSERT på ordrer, og i tillegg en «ta igjen» etter hver innlasting
-//   for ordrer som kom mens PC-en sov eller var uten nett (bare ordrer opprettet ETTER at stasjonen ble slått på, og høyst 24 t gamle).
+// - UTSKRIFTSSTASJON: én PC med skriveren slår på «Skriv ut ordre-lapper» i Mer (lagres bare på den enheten, localStorage). Den skriver da ut en lapp når en bil-ordre
+//   er KOMMET (Ikke påbegynt eller lenger) og forhandleren er skrevet inn (Henrik 2026-11-13; før det: ved opprettelsen), uansett hvem som gjør det og hvor. Sjekken
+//   kjøres etter hver rendering (også etter Realtime fra andre) og når kunde/ankomstdato endres på PC-en selv; ankomstdatoen må være høyst 7 dager gammel.
+//   Datoen på lappen er ankomstdatoen.
 // - Hver ordre skrives ut ÉN gang per enhet (liste over utskrevne id-er i localStorage, delt mellom faner). Flere nye ordrer tett etter hverandre blir én utskriftsjobb.
 // - Uten dialog: et eget Edge-vindu med egen profil (--user-data-dir) og --kiosk-printing, som skriver til siste skriver/papir valgt i den profilen. Papiret må være
 //   Windows-skjemaet «Ordre-lapp 25 x 60 mm» (med driverens «Continuous - 1"» mater Leitz Icon ut 17,5 cm, testet 2026-11-11), eller «Del-lapp 50 x 180 mm» for del-lappen (230 mm til 2026-11-12).
@@ -19,7 +20,6 @@ const ORDRE_LAPP_TYPE_NOKKEL = 'ordreLappType';
 const ORDRE_LAPP_DEL_LENGDE_NOKKEL = 'ordreLappDelLengde'; // 'modell' = 180 eller 230 mm etter navnet (utskriftsvindu); ellers fast 180 mm
 const ORDRE_LAPP_AUTO_NOKKEL = 'ordreLappAuto';           // 'manuell' = bare med knappen på ordren (standard: automatisk for hver ny ordre)           // 'ordre' (25 mm, standard) eller 'del' (50 mm)
 const ORDRE_LAPP_MAKS_HUSKET = 300;
-const ORDRE_LAPP_TA_IGJEN_MS = 24 * 3600 * 1000;
 const ORDRE_LAPP_MAKS_TA_IGJEN = 20;
 
 // ─── Rene hjelpere ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -27,6 +27,16 @@ function ordreLappUrl(id) { return HYLLE_BASE_URL + '?ordre=' + encodeURICompone
 // Opprettelsestidspunktet ligger i id-en (ord_<ms> fra appen, ord_<ms>_<hash> fra portalen). null hvis id-en har en annen form.
 function ordreLappIdMs(id) { const m = /^ord_(\d{12,14})(?:_|$)/.exec(String(id || '')); return m ? Number(m[1]) : null; }
 function ordreLappSkalHa(o) { return !!o && !erLeveranse(o) && (o.status || 'aktiv') === 'aktiv'; }
+// Automatisk utskrift (Henrik 2026-11-13): når bilen er KOMMET (Ikke påbegynt eller lenger, ikke «På vei») OG forhandleren (kunde) er skrevet inn.
+// Ankomstdatoen må finnes og være høyst ORDRE_LAPP_ANKOMST_DAGER gammel (settes automatisk når statusen blir Ikke påbegynt), så gamle biler aldri skrives ut i en klump.
+// Ikke krav om akkurat «Ikke påbegynt»: hopper en bil rett videre før stasjonen ser den (PC-en av), får den likevel lapp når appen åpnes.
+const ORDRE_LAPP_ANKOMST_DAGER = 7;
+function ordreLappAnkomstMs(o) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String((o && o.ankomstdato) || '')); return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null; }
+function ordreLappKlarForAuto(o, naa = Date.now()) {
+  if (!ordreLappSkalHa(o) || (o.ordreStatus || 'ikke_paabegynt') === 'paa_vei' || !String(o.kunde || '').trim()) return false;
+  const ms = ordreLappAnkomstMs(o);
+  return ms != null && naa - ms <= ORDRE_LAPP_ANKOMST_DAGER * 24 * 3600 * 1000;
+}
 // Skriftstørrelse (mm) for hovedlinjen: plass til 17 tegn chassis i fet skrift på ca. 34 mm (ca. 0,68 mm per tegn per mm skrift).
 function ordreLappSkriftMm(tekst) { return Math.round(Math.min(3.4, 34 / (Math.max(1, String(tekst).length) * 0.68)) * 100) / 100; }
 function ordreLappDato(ms) { const d = new Date(ms); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; }
@@ -34,7 +44,8 @@ function ordreLappDato(ms) { const d = new Date(ms); return `${String(d.getDate(
 function ordreLappTekster(o) {
   const hoved = o.chassis || o.regnr || '(uten chassis)';
   const bil = [o.merke, o.modell].filter(Boolean).join(' ');
-  const ms = ordreLappIdMs(o.id);
+  // Datoen er ankomstdatoen (Henrik 2026-11-13). Ingen ankomstdato (f.eks. «På vei» skrevet ut med knappen) = ingen dato.
+  const ms = ordreLappAnkomstMs(o);
   return { hoved, kunde: o.kunde || '', info: [bil, o.chassis && o.regnr ? o.regnr : '', ms ? ordreLappDato(ms) : ''].filter(Boolean).join(' · ') };
 }
 function ordreLappHTML(o) {
@@ -223,12 +234,9 @@ async function skrivUtOrdreLapper(ordrer) {
 }
 let _ordreLappKo = [];
 let _ordreLappTimer = null;
-// Kalles for hver ny ordre (Realtime) og fra «ta igjen». Samler en kort byge til én utskriftsjobb.
+// Kalles for hver ny ordre (Realtime) og fra «ta igjen» (etter hver rendering, og når kunde/ankomstdato endres her). Samler en kort byge til én utskriftsjobb.
 function ordreLappNyOrdre(o) {
-  const fra = ordreLappStasjonFra();
-  if (!fra || !ordreLappAuto() || !ordreLappSkalHa(o)) return;
-  const ms = ordreLappIdMs(o.id);
-  if (ms != null && ms < fra) return; // eldre enn stasjonen (f.eks. en ordre som ble gjenopprettet)
+  if (!ordreLappStasjonFra() || !ordreLappAuto() || !ordreLappKlarForAuto(o)) return;
   if (ordreLappUtskrevne().includes(o.id) || _ordreLappKo.some(x => x.id === o.id)) return;
   _ordreLappKo.push(o);
   clearTimeout(_ordreLappTimer);
@@ -237,22 +245,20 @@ function ordreLappNyOrdre(o) {
 function ordreLappTomKo() {
   const ko = _ordreLappKo; _ordreLappKo = [];
   // Bruk siste lokale utgave (kunde/merke kan ha kommet i en UPDATE rett etter opprettelsen).
-  const ferske = ko.map(o => (S.ordrer || []).find(x => x.id === o.id) || o).filter(ordreLappSkalHa);
+  const ferske = ko.map(o => (S.ordrer || []).find(x => x.id === o.id) || o).filter(o => ordreLappKlarForAuto(o));
   const nyeIder = ordreLappMerk(ferske.map(o => o.id));
   const utskrift = ferske.filter(o => nyeIder.includes(o.id));
   if (utskrift.length) skrivUtOrdreLapper(utskrift);
 }
-// Ordrer som kom mens stasjonen ikke fikk Realtime (sov, uten nett): opprettet etter at stasjonen ble slått på, høyst 24 t gamle, ikke skrevet ut.
+// Går gjennom alle ordrer: kalles etter hver rendering (også etter Realtime-oppdateringer fra andre, f.eks. statusbytte til Ikke påbegynt)
+// og fanger opp det stasjonen gikk glipp av mens den sov. Bare ordrer som ikke er skrevet ut (eller merket som sett) fra før, maks 20 om gangen.
 function ordreLappTaIgjen() {
-  const fra = ordreLappStasjonFra();
-  if (!fra || !me || !ordreLappAuto()) return;
+  if (!ordreLappStasjonFra() || !me || !ordreLappAuto()) return;
   const naa = Date.now();
   const utskrevne = ordreLappUtskrevne();
-  const mangler = (S.ordrer || []).filter(o => {
-    const ms = ordreLappIdMs(o.id);
-    return ms != null && ms >= fra && naa - ms <= ORDRE_LAPP_TA_IGJEN_MS && ordreLappSkalHa(o) && !utskrevne.includes(o.id);
-  }).sort((a, b) => ordreLappIdMs(a.id) - ordreLappIdMs(b.id)).slice(0, ORDRE_LAPP_MAKS_TA_IGJEN);
-  mangler.forEach(ordreLappNyOrdre);
+  const mangler = (S.ordrer || []).filter(o => ordreLappKlarForAuto(o, naa) && !utskrevne.includes(o.id))
+    .sort((a, b) => ordreLappAnkomstMs(a) - ordreLappAnkomstMs(b)).slice(0, ORDRE_LAPP_MAKS_TA_IGJEN);
+  mangler.forEach(o => ordreLappNyOrdre(o));
 }
 
 // ─── Innstilling i Mer ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -271,7 +277,7 @@ function settOrdreLappStasjon(paa) {
 // Testlapp med tydelig TEST-innhold (ingen ekte kunde), og en åpen ordre om man står i en.
 function skrivUtTestOrdreLapp() {
   const del = ordreLappType() === 'del';
-  skrivUtOrdreLapper([{ id: 'ord_' + Date.now(), chassis: 'TESTWXYZ000000001', regnr: '', kunde: 'TEST - prøveutskrift', merke: del ? 'TEST' : 'Leitz', modell: del ? 'DEL-LAPP' : 'Icon 25 mm', status: 'aktiv' }]);
+  skrivUtOrdreLapper([{ id: 'ord_' + Date.now(), chassis: 'TESTWXYZ000000001', regnr: '', kunde: 'TEST - prøveutskrift', merke: del ? 'TEST' : 'Leitz', modell: del ? 'DEL-LAPP' : 'Icon 25 mm', status: 'aktiv', ankomstdato: new Date().toLocaleDateString('sv-SE') }]);
 }
 function settOrdreLappAuto(auto) {
   // Fra «bare knapp» til automatisk: ordrer som kom i mellomtiden skal ikke plutselig skrives ut i en klump.

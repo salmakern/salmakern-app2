@@ -18,7 +18,9 @@ vm.runInContext(les('js/vendor/jsQR.js'), sandbox, { filename: 'jsQR.js' });
 let lager;
 let utskrifter;
 const vent = () => new Promise((r) => setImmediate(r));
-const ordre = (ms, ekstra = {}) => ({ id: 'ord_' + ms, chassis: 'WDB12345678901234', regnr: '', kunde: 'Kunde AS', merke: 'Mercedes', modell: 'Vito', status: 'aktiv', ordretype: 'bil', ...ekstra });
+const iDag = () => new Date().toLocaleDateString('sv-SE');
+// Standard: bilen er kommet i dag (Ikke påbegynt, ankomstdato i dag) og forhandleren er skrevet inn, altså klar for automatisk lapp.
+const ordre = (ms, ekstra = {}) => ({ id: 'ord_' + ms, chassis: 'WDB12345678901234', regnr: '', kunde: 'Kunde AS', merke: 'Mercedes', modell: 'Vito', status: 'aktiv', ordretype: 'bil', ordreStatus: 'ikke_paabegynt', ankomstdato: iDag(), ...ekstra });
 
 beforeEach(() => {
   lager = new Map();
@@ -107,14 +109,45 @@ describe('ordre-lapp: utskriftsstasjon', () => {
     expect(utskrifter).toHaveLength(1);
     expect(utskrifter[0].match(/class="lapp"/g)).toHaveLength(2);
   });
-  it('leveranser, arkiverte ordrer og ordrer fra før stasjonen ble slått på får ingen lapp', async () => {
+  it('leveranser, arkiverte, «På vei», uten forhandler, uten ankomstdato og ankomst for over 7 dager siden får ingen automatisk lapp', async () => {
     sandbox.settOrdreLappStasjon(true);
     const fra = Date.now();
+    const for8 = new Date(fra - 8 * 24 * 3600 * 1000).toLocaleDateString('sv-SE');
     sandbox.ordreLappNyOrdre(ordre(fra + 10, { ordretype: 'leveranse' }));
     sandbox.ordreLappNyOrdre(ordre(fra + 11, { status: 'arkivert' }));
-    sandbox.ordreLappNyOrdre(ordre(fra - 60000));
+    sandbox.ordreLappNyOrdre(ordre(fra + 12, { ordreStatus: 'paa_vei', ankomstdato: '' }));
+    sandbox.ordreLappNyOrdre(ordre(fra + 13, { kunde: '   ' }));
+    sandbox.ordreLappNyOrdre(ordre(fra + 14, { ankomstdato: '' }));
+    sandbox.ordreLappNyOrdre(ordre(fra + 15, { ankomstdato: for8 }));
     sandbox.ordreLappTomKo(); await vent();
     expect(utskrifter).toHaveLength(0);
+  });
+  // Henrik 2026-11-13: lappen skal komme når ordren får status Ikke påbegynt OG forhandleren er skrevet inn, og datoen skal være ankomstdatoen.
+  it('En «På vei»-ordre får lapp først når den blir Ikke påbegynt og forhandleren er fylt inn, med ankomstdatoen på lappen', async () => {
+    sandbox.settOrdreLappStasjon(true);
+    const o = ordre(Date.now() + 100, { chassis: 'TESTWXYZ000000020', ordreStatus: 'paa_vei', ankomstdato: '', kunde: '' });
+    S.ordrer = [o];
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(0);
+    o.ordreStatus = 'ikke_paabegynt'; o.ankomstdato = '2026-11-13'; // som endreStatus gjør
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(0); // forhandleren mangler ennå
+    o.kunde = 'TEST - Forhandler AS';
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('TESTWXYZ000000020');
+    expect(utskrifter[0]).toContain('13.11.2026');
+    o.ordreStatus = 'under_arbeid';
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1); // aldri to ganger
+  });
+  it('datoen på lappen er ankomstdatoen, ikke opprettelsen; ingen ankomstdato gir ingen dato', () => {
+    expect(sandbox.ordreLappTekster(ordre(1762851234567, { ankomstdato: '2026-11-20' })).info).toBe('Mercedes Vito · 20.11.2026');
+    expect(sandbox.ordreLappTekster(ordre(1762851234567, { ankomstdato: '' })).info).toBe('Mercedes Vito');
+  });
+  it('kunde eller ankomstdato skrevet inn på stasjons-PC-en selv sjekker lappen med en gang (eget Realtime-ekko ignoreres)', () => {
+    expect(les('js/ordre-detalj.js')).toContain("o[field]=val; logChange(o,field+' oppdatert'); save(id);\n  // Ordre-lapp");
+    expect(les('js/ordre-detalj.js')).toContain("if ((field === 'kunde' || field === 'ankomstdato') && typeof ordreLappTaIgjen === 'function')");
   });
   it('ta igjen: en ordre som kom mens PC-en sov skrives ut etter innlasting (bare innlogget)', async () => {
     sandbox.settOrdreLappStasjon(true);
@@ -129,7 +162,7 @@ describe('ordre-lapp: utskriftsstasjon', () => {
   });
   it('bruker den ferskeste lokale utgaven av ordren (kunde kan komme i en oppdatering rett etter)', async () => {
     sandbox.settOrdreLappStasjon(true);
-    const ny = ordre(Date.now() + 40, { kunde: '' });
+    const ny = ordre(Date.now() + 40, { kunde: 'Gammel Kunde AS' });
     sandbox.ordreLappNyOrdre(ny);
     S.ordrer.push({ ...ny, kunde: 'Oppdatert Kunde AS' });
     sandbox.ordreLappTomKo(); await vent();
@@ -400,7 +433,7 @@ describe('del-lapp via Lappskriver-hjelperen', () => {
     expect(post.url).toBe('http://localhost:47811/ordre-lapp');
     expect(post.kropp.hoved).toBe('KNAAA8153V6087985');
     expect(post.kropp.kunde).toBe('TEST - Kunde AS');
-    expect(post.kropp.info).toBe('KIA EV9 · EL12345 · ' + sandbox.ordreLappDato(1793088915905));
+    expect(post.kropp.info).toBe('KIA EV9 · EL12345 · ' + sandbox.ordreLappDato(sandbox.ordreLappAnkomstMs(o)));
     expect(post.kropp.hovedMm).toBe(sandbox.ordreLappSkriftMm('KNAAA8153V6087985'));
     const n = post.kropp.qr.length;
     expect(post.kropp.qr.every((r) => r.length === n && /^[01]+$/.test(r))).toBe(true);
