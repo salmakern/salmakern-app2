@@ -313,7 +313,7 @@ function buildOrdreDetail() {
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" style="${o.ansatteSignert.length?'animation:pulseGlow 3s ease-in-out infinite':''}">
         <div class="h">Ansatte på ordren</div>
         <div style="margin-top:6px" id="ansOrdre">${renderAnsOrdre(o)}</div>
         ${!o.ansatteSignert.find(a=>a.id===me.id)
