@@ -1759,6 +1759,11 @@ function sf(id, field, val) {
     // lagringen, og gjør ingenting (0 rader) hvis ordren uansett ikke kom fra portalen.
     if (val && val !== o.chassis) synkroniserPortalBestillingIdent(id, val);
   }
+  // s08-004 (Henrik, "lag noe som skiller de fra hverandre" 2026-11-13): org.nr alene skiller
+  // ikke forhandler-AVDELINGER som deler org.nr (f.eks. Bertel O. Steen Innlandet AS har flere).
+  // Hold forhandler_kontakt_id ved like hver gang org.nr settes/endres - ALDRI en gjetning:
+  // se synkroniserForhandlerKontaktId().
+  if (field === 'forhandlerOrgnr' && val !== o.forhandlerOrgnr) synkroniserForhandlerKontaktId(id, val, o.kunde);
   o[field]=val; logChange(o,field+' oppdatert'); save(id);
   if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
   // Merke/Modell styrer BÅDE "Ombygging valgt"-advarselen (manglende Fiken-produktlinje,
@@ -1783,6 +1788,30 @@ async function synkroniserPortalBestillingIdent(ordreId, nyttChassis) {
   if (!db) return;
   const { error } = await db.rpc('portal_oppdater_bestilling_chassis', { p_ordre_id: ordreId, p_nytt_chassis: nyttChassis });
   if (error) console.warn('Kunne ikke synkronisere portal-bestillingens chassis:', error.message);
+}
+// s08-004: finner hvilken SPESIFIKKE Kontakter-rad (avdeling) et org.nr+kunde-tekst faktisk
+// hører til, og skriver den til ordrer.forhandler_kontakt_id (målrettet update - ALDRI via
+// den generelle save(), samme begrunnelse som portal_bestilling_id m.fl.). To entydige regler,
+// ALDRI en gjetning - finner ingen av dem, gjøres ingenting (feltet blir stående som det var):
+//  1) org.nr matcher nøyaktig ÉN forhandler-kontakt.
+//  2) org.nr matcher FLERE (deler org.nr, f.eks. Bertel O. Steen Innlandet AS) - da kreves et
+//     EKSAKT (trimmet, case-uavhengig) treff mellom kunde-teksten og navnet på én av dem.
+// Samme to regler som backfillen i migrasjonen 20261113090000 (portal-ordre sin egen
+// forhandler_kontakt_id, satt av portal_koble_bestilling, er bevisst IKKE en regel her -
+// det er portal-koblingens egen jobb, ikke noe denne funksjonen skal overstyre).
+async function synkroniserForhandlerKontaktId(ordreId, orgnr, kundeTekst) {
+  if (!db || !orgnr) return;
+  const o = String(orgnr).replace(/\s/g, '');
+  const kandidater = (S.kontakter||[]).filter(k => k.type === 'Forhandler' && String(k.orgnr||'').replace(/\s/g, '') === o);
+  let kontaktId = null;
+  if (kandidater.length === 1) kontaktId = kandidater[0].id;
+  else if (kandidater.length > 1) {
+    const treff = kandidater.find(k => (k.navn||'').trim().toLowerCase() === (kundeTekst||'').trim().toLowerCase());
+    if (treff) kontaktId = treff.id;
+  }
+  if (!kontaktId) return;
+  const { error } = await db.from('ordrer').update({ forhandler_kontakt_id: kontaktId }).eq('id', ordreId);
+  if (error) console.warn('Kunne ikke sette forhandler_kontakt_id:', error.message);
 }
 // Skriver nå det/de spesifikke vekt-delfeltet(ene) atomisk via oppdater_ordre_vekter_felt()
 // (radlås i databasen, se migrasjonen 20261022190000) i stedet for den generelle save()

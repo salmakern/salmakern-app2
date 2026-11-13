@@ -786,7 +786,12 @@ function dbToOrdre(r) {
     // Frossen effektiv tid (s09-020, bedt om av Henrik 2026-11-04): satt KUN av endreStatus()
     // (js/oversikt-kalender.js) når ordren settes til "Hentet" - LESES bare her, skrives ALDRI
     // av ordreToDb/save(), samme mønster som portal_bestilling_id m.fl. over.
-    effektivTidFrossen:r.effektiv_tid_frossen||null
+    effektivTidFrossen:r.effektiv_tid_frossen||null,
+    // Hvilken SPESIFIKKE Kontakter-rad (avdeling) ordren hører til (s08-004, 2026-11-13) - org.nr
+    // alene skiller ikke avdelinger som deler org.nr (f.eks. Bertel O. Steen Innlandet AS har
+    // flere). Satt av synkroniserForhandlerKontaktId() (js/ordre-detalj.js) - LESES bare her,
+    // skrives ALDRI av ordreToDb/save(), samme mønster som over.
+    forhandlerKontaktId:r.forhandler_kontakt_id||null
   };
 }
 // Supabase Realtime utelater STORE, UENDREDE, eksternt lagrede (TOAST) kolonner fra `new` i en

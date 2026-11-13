@@ -85,7 +85,8 @@
 // v57 - del-lapp 50 mm (merke + modell og chassis, stor skrift) som valg per PC ved siden av ordre-lappen 25 mm
 // v70 - timesats (kr/time) og frosset effektiv ordretid ved status Hentet, med kostnad på Bil-effektivitet-badgen (s09-020)
 // v71 - chassis-tastefeil rettet på en ordre fra Forhandlerportalen synker nå automatisk portal_bestillinger.ident (s08-058)
-const CACHE = 'salmakern-v71';
+// v72 - forhandler_kontakt_id skiller forhandler-avdelinger som deler org.nr fra hverandre (s08-004)
+const CACHE = 'salmakern-v72';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
