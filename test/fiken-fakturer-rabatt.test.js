@@ -72,9 +72,75 @@ function fakeSupabaseKlient(svar) {
   // .eq()-kall som (tabell, kolonne, verdi), slik en test kan bevise at riktig id faktisk
   // ble brukt i spørringen - ikke bare at "en" kanonisk rad kom tilbake uansett.
   const eqKall = [];
+  let ordrerSelectKall = 0; // deles på tvers av ALLE from('ordrer')-kall i én forespørsel -
+  // koden kaller from('ordrer') på nytt for hvert ledd (idempotens-sjekk, reservasjon,
+  // eventuell frisk lesing, endelig skriving), så telleren må IKKE nullstilles per from()-kall.
   return {
     eqKall,
     from(tabell) {
+      // 'ordrer' har egen, stateful håndtering (under) - dekker den atomiske reservasjonen
+      // (s90-20261104-6, "BØR RETTES": claim mot to samtidige kall) som nå ligger rundt selve
+      // Fiken-kallet i index.ts. Alle andre tabeller bruker den generiske, statiske mocken.
+      if (tabell === 'ordrer') {
+        return {
+          select() {
+            return {
+              eq(kolonne, verdi) {
+                eqKall.push({ tabell, kolonne, verdi });
+                ordrerSelectKall++;
+                // Første select() er idempotens-sjekken øverst i index.ts. Et EVENTUELT andre
+                // select() skjer bare når reservasjonen lenger ned tapes - svar._ordreEtterTaptKlaim
+                // lar en test simulere at en ANNEN, nesten samtidig forespørsel rakk å endre raden
+                // mellom disse to lesningene (uten dette ville begge sett nøyaktig samme statiske
+                // verdi, og "tapt reservasjon"-grenen kunne aldri testes realistisk).
+                if (ordrerSelectKall >= 2 && svar._ordreEtterTaptKlaim !== undefined) {
+                  return { maybeSingle: async () => ({ data: svar._ordreEtterTaptKlaim, error: null }) };
+                }
+                return { maybeSingle: async () => (svar.ordrer ?? { data: null, error: null }) };
+              },
+            };
+          },
+          update(payload) {
+            return {
+              eq() {
+                // Alltid 'id' i praksis - selve verdien trengs ikke her siden denne falske
+                // "databasen" bare har ÉN ordre-rad i det hele tatt (svar.ordrer.data).
+                const videre = {
+                  is() {
+                    // .is('fiken_kladd_url', null) - selve reservasjonsforsøket. Speiler ekte
+                    // Postgres WHERE-semantikk: treffer 0 rader hvis kolonnen allerede har EN
+                    // ELLER ANNEN verdi (sentinel eller en ekte URL fra før), ikke bare når
+                    // svar._klaimTapes er satt eksplisitt - _klaimTapes dekker i tillegg ren
+                    // samtidighet (en ANNEN forespørsel vinner et løp mot akkurat dette kallet,
+                    // uten at raden hadde noen synlig forhåndstilstand å teste mot).
+                    eqKall.push({ tabell, kolonne: 'fiken_kladd_url', verdi: null, type: 'claim' });
+                    const alleredeSatt = svar.ordrer?.data && svar.ordrer.data.fiken_kladd_url !== null;
+                    if (svar._klaimTapes || alleredeSatt) return { select: async () => ({ data: [], error: null }) };
+                    if (svar.ordrer?.data) Object.assign(svar.ordrer.data, payload);
+                    return { select: async () => ({ data: [{ id: 'x' }], error: null }) };
+                  },
+                  eq(kolonne2, verdi2) {
+                    // Frigjøring: .eq('fiken_kladd_url', KLADD_RESERVERT) - skal KUN ha effekt hvis
+                    // raden faktisk fortsatt står med akkurat den sentinel-verdien.
+                    eqKall.push({ tabell, kolonne: kolonne2, verdi: verdi2, type: 'release' });
+                    if (svar.ordrer?.data && svar.ordrer.data.fiken_kladd_url === verdi2) {
+                      Object.assign(svar.ordrer.data, payload);
+                    }
+                    return Promise.resolve({ error: svar._ordrerSkrivefeil ?? null });
+                  },
+                  then(resolve, reject) {
+                    // Den ENDELIGE, ubetingede skrivingen (bare ÉN .eq('id', ...), ingen andre
+                    // ledd) - vinnerens siste steg, lagrer den ekte kladd-URL-en.
+                    if (svar.ordrer?.data) Object.assign(svar.ordrer.data, payload);
+                    return Promise.resolve({ error: svar._ordrerSkrivefeil ?? null }).then(resolve, reject);
+                  },
+                };
+                return videre;
+              },
+            };
+          },
+        };
+      }
       return {
         select() {
           return {
@@ -107,7 +173,10 @@ afterEach(() => { while (tmpFiler.length) { try { unlinkSync(tmpFiler.pop()); } 
 
 // svar: fiken_kunde_alias / fiken_kunde_rabatt-innhold til den falske Supabase-klienten.
 // produkter: falsk Fiken-produktliste. draftOk: simuler at Fiken avviser kladden.
-async function last({ svar = {}, produkter = ALLE_PRODUKTER, draftOk = true } = {}) {
+// draftTomLocation: Fiken svarer 201 OK, men uten en Location-header (uventet svarform).
+// draftKaster: simulerer en nettverksfeil/exception fra selve fetch-kallet (ikke et HTTP-svar
+// i det hele tatt) - dekker try/catch-grenen rundt reservasjonen i index.ts.
+async function last({ svar = {}, produkter = ALLE_PRODUKTER, draftOk = true, draftTomLocation = false, draftKaster = false } = {}) {
   const draftKall = [];
   globalThis.Deno = {
     env: {
@@ -134,7 +203,14 @@ async function last({ svar = {}, produkter = ALLE_PRODUKTER, draftOk = true } = 
     if (u === `https://api.fiken.no/api/v2/companies/${SLUG}/invoices/drafts` && method === 'POST') {
       const kropp = JSON.parse(init.body);
       draftKall.push(kropp);
+      if (draftKaster) throw new Error('TEST: nettverksfeil mot Fiken');
+      // Simulerer at NOE ANNET endret raden midt i Fiken-rundturen (urealistisk i praksis siden
+      // reservasjonen eies alene fra claim til release, men beviser at selve SQL-betingelsen på
+      // frigjøringen - .eq('fiken_kladd_url', sentinel) - faktisk beskytter mot å overskrive en
+      // rad som ikke lenger har sentinel-verdien stående).
+      if (svar.ordrer?.data && svar._endreUnderFikenKallTil !== undefined) svar.ordrer.data.fiken_kladd_url = svar._endreUnderFikenKallTil;
       if (!draftOk) return json({ message: 'Fiken avviste' }, 502);
+      if (draftTomLocation) return json({ ok: true }, 201); // ingen Location-header
       return json({ ok: true }, 201, {
         Location: `https://api.fiken.no/api/v2/companies/${SLUG}/invoices/drafts/999`,
       });
@@ -779,5 +855,95 @@ describe('fiken-fakturer: fiken_priser.kategori overstyrer navnegjetting (migras
     };
     const [l] = await hentLinjer({ svar }, standardBody([linje('200', { rabatt: 5 })]));
     expect(l.discount).toBe(5);
+  });
+});
+
+// Atomisk reservasjon mot to (nesten) samtidige fakturerings-kall (s90-20261104-6, "BØR
+// RETTES"-funn 5.11: "sjekk+skriving i fiken-fakturer har ingen claim mot to samtidige kall").
+// Den GAMLE idempotens-sjekken (SELECT fiken_kladd_url, så senere UPDATE) lukker IKKE et ekte
+// race: to kall kan begge se null og begge opprette en EKTE kladd i Fiken. Reservasjonen under
+// (en betinget UPDATE ... WHERE fiken_kladd_url IS NULL rett FØR selve Fiken-kallet) sikrer at
+// bare ÉN vinner - taperen oppretter aldri noen kladd i det hele tatt.
+describe('fiken-fakturer: atomisk reservasjon hindrer dobbel kladd ved to (nesten) samtidige kall', () => {
+  function svarMedOrdre(over = {}) {
+    return {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [linje('100')] }, error: null },
+      ...over,
+    };
+  }
+
+  it('normalt kall (ingen konkurranse): reserverer FØR Fiken-kallet, og den endelige skrivingen inneholder den ekte kladd-URL-en', async () => {
+    const svar = svarMedOrdre();
+    const api = await last({ svar });
+    const res = await api.kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201);
+    const klaimKall = api.eqKall.filter((k) => k.type === 'claim');
+    expect(klaimKall).toHaveLength(1); // reservert nøyaktig én gang
+    expect(svar.ordrer.data.fiken_kladd_url).toBe('https://api.fiken.no/api/v2/companies/telemark-salmakerverksted/invoices/drafts/999');
+  });
+
+  it('reservasjonen tapes, og vinneren har ALT fullført: returnerer vinnerens ekte kladd-URL, oppretter ALDRI en egen kladd', async () => {
+    const svar = svarMedOrdre({ _klaimTapes: true, _ordreEtterTaptKlaim: { fiken_kladd_url: 'https://api.fiken.no/api/v2/companies/x/invoices/drafts/777' } });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, alleredeOpprettet: true, draftUrl: 'https://api.fiken.no/api/v2/companies/x/invoices/drafts/777' });
+    expect(draftKall).toHaveLength(0); // ALDRI noe Fiken-kall for taperen
+  });
+
+  it('reservasjonen tapes, og vinneren er fortsatt MIDT I sitt eget Fiken-kall (sentinel-verdien): 409, ikke en dobbel kladd', async () => {
+    const svar = svarMedOrdre({ _klaimTapes: true, _ordreEtterTaptKlaim: { fiken_kladd_url: '_opprettes_' } });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(409);
+    expect(body.error).toMatch(/fakturerer allerede/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('Fiken avviser kladden: reservasjonen frigis igjen (ordren er fri for et nytt forsøk), ikke stående fast med sentinel-verdien', async () => {
+    const svar = svarMedOrdre();
+    const { kall } = await last({ svar, draftOk: false });
+    const res = await kall(standardBody([linje('100')]));
+    expect(res.status).toBe(502);
+    expect(svar.ordrer.data.fiken_kladd_url).toBeNull(); // frigitt, ikke "_opprettes_"
+  });
+
+  it('Fiken svarer OK men uten Location-header: reservasjonen frigis igjen', async () => {
+    const svar = svarMedOrdre();
+    const { kall } = await last({ svar, draftTomLocation: true });
+    const res = await kall(standardBody([linje('100')]));
+    expect(res.status).toBe(502);
+    expect(svar.ordrer.data.fiken_kladd_url).toBeNull();
+  });
+
+  it('en nettverksfeil/exception midt i Fiken-kallet: reservasjonen frigis likevel (try/catch-grenen), ordren låses ikke fast for alltid', async () => {
+    const svar = svarMedOrdre();
+    const { kall } = await last({ svar, draftKaster: true });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(500);
+    expect(svar.ordrer.data.fiken_kladd_url).toBeNull();
+  });
+
+  it('en frigjøring treffer KUN raden hvis den fortsatt faktisk har sentinel-verdien (beskytter mot å frigi en rad som ikke lenger har sentinel-verdien stående)', async () => {
+    const svar = svarMedOrdre({ _endreUnderFikenKallTil: 'https://fiken.no/en-annen-ekte-kladd' });
+    const { kall } = await last({ svar, draftOk: false });
+    await kall(standardBody([linje('100')]));
+    expect(svar.ordrer.data.fiken_kladd_url).toBe('https://fiken.no/en-annen-ekte-kladd'); // urørt, IKKE nullstilt
+  });
+
+  it('ordren står allerede med sentinel-verdien FØR kallet starter (en tidligere reservasjon sto fast): den øverste idempotens-sjekken returnerer den ALDRI som en ekte URL, og klaimforsøket gir 409 i stedet', async () => {
+    const svar = svarMedOrdre({ ordrer: { data: { fiken_kladd_url: '_opprettes_', fiken_linjer: [linje('100')] }, error: null } });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(409);
+    expect(body.error).toMatch(/fakturerer allerede/);
+    expect(draftKall).toHaveLength(0); // aldri en kladd mot en allerede fastlåst sentinel
   });
 });

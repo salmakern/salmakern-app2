@@ -138,7 +138,21 @@ function fakeSupabaseKlientFiken(o) {
           };
         },
         upsert: async () => ({ error: null }),
-        update() { return { eq: async () => ({ error: null }) }; },
+        update() {
+          // Støtter den atomiske reservasjonen i fiken-fakturer (s90-20261104-6): claimen
+          // (.eq('id',x).is('fiken_kladd_url',null).select('id')) vinner alltid her - denne
+          // testen simulerer ikke samtidighet, bare den vanlige suksess-løypa - så en frigjøring
+          // (.eq(kolonne2,verdi2) etter .eq('id',x)) trengs aldri, men chainen må finnes.
+          return {
+            eq() {
+              return {
+                is: () => ({ select: async () => ({ data: [{ id: 'x' }], error: null }) }),
+                eq: async () => ({ error: null }),
+                then: (resolve, reject) => Promise.resolve({ error: null }).then(resolve, reject),
+              };
+            },
+          };
+        },
       };
     },
   };

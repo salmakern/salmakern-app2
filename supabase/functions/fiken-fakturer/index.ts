@@ -241,6 +241,11 @@ Deno.serve(async (req) => {
     if (!ordreId) return jsonSvar({ error: 'Mangler ordreId' }, 400)
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    // Sentinel for den atomiske reservasjonen lenger ned (s90-20261104-6) - deklarert her, FØR
+    // idempotens-sjekken under, fordi en reservasjon som står fast (prosessen døde mellom claim
+    // og frigjøring, se try/catch lenger ned) ellers ville blitt lest som en EKTE kladd-URL og
+    // sendt til klienten som om faktureringen var ferdig.
+    const KLADD_RESERVERT = '_opprettes_'
 
     const { data: eksisterendeOrdre, error: ordreFeil } = await supabase
       .from('ordrer')
@@ -251,10 +256,13 @@ Deno.serve(async (req) => {
     if (!eksisterendeOrdre) return jsonSvar({ error: 'Fant ikke ordren' }, 404)
     // Idempotens (s09-006): hvis denne ordren allerede har en lagret kladd-adresse, har en
     // tidligere (kanskje en annen administrators) kall allerede opprettet kladden i Fiken -
-    // opprett ALDRI en ny, bare returner den eksisterende. Lukker race-vinduet der to
-    // administratorer trykker fakturer nesten samtidig fra hver sin enhet, før Realtime har
-    // rukket å vise den andres "fakturert"-endring.
-    if (eksisterendeOrdre.fiken_kladd_url) {
+    // opprett ALDRI en ny, bare returner den eksisterende. Denne SELECT-sjekken alene lukker
+    // IKKE race-vinduet mellom to nesten samtidige kall (begge kan passere den mens begge ser
+    // null) - det gjør den atomiske reservasjonen lenger ned i funksjonen (BØR RETTES-funn 5.11,
+    // rettet 14.11); denne sjekken er bare en rask snarvei for det VANLIGE tilfellet (et nytt
+    // kall lenge etter at en tidligere kladd ble ferdig). Sentinel-verdien er bevisst UNNTATT
+    // her - den betyr "opprettes akkurat nå (eller sto fast)", ikke "ferdig".
+    if (eksisterendeOrdre.fiken_kladd_url && eksisterendeOrdre.fiken_kladd_url !== KLADD_RESERVERT) {
       return jsonSvar({ ok: true, draftUrl: eksisterendeOrdre.fiken_kladd_url, alleredeOpprettet: true }, 200)
     }
     const linjer = sorterServerFikenLinjer(eksisterendeOrdre.fiken_linjer)
@@ -465,22 +473,63 @@ Deno.serve(async (req) => {
       lines: linjerMedIndeks,
     }
 
-    const draftRes = await fikenFetch(`/companies/${slug}/invoices/drafts`, {
-      method: 'POST',
-      body: JSON.stringify(draftBody),
-    })
-    if (!draftRes.ok) {
-      const feiltekst = await draftRes.text()
-      return jsonSvar({ error: `Fiken avviste kladden (${draftRes.status}): ${feiltekst}` }, 502)
+    // Atomisk reservasjon RETT FØR selve Fiken-kallet (BØR RETTES-funn 5.11, s90-20261104-6:
+    // "sjekk+skriving i fiken-fakturer har ingen claim mot to samtidige kall"). To nesten
+    // samtidige kall (to administratorer, eller ett dobbeltklikk som når frem to ganger) kan
+    // begge passere SELECT-sjekken lenger opp mens begge ser fiken_kladd_url som null, og begge
+    // opprette en EKTE, egen kladd i Fiken - bare den ene blir husket av appen, den andre blir
+    // en usynlig foreldreløs kladd. Samme mønster som send-frakt-epost sin leveranseBestilling
+    // (claim FØR ekstern side-effekt, frigi ved feil), bare med en sentinel-verdi (KLADD_RESERVERT,
+    // deklarert øverst i funksjonen) i stedet for et eget tidsstempel-felt.
+    const { data: klaimet, error: klaimFeil } = await supabase
+      .from('ordrer')
+      .update({ fiken_kladd_url: KLADD_RESERVERT })
+      .eq('id', ordreId)
+      .is('fiken_kladd_url', null)
+      .select('id')
+    if (klaimFeil) return jsonSvar({ error: 'Kunne ikke reservere ordren for fakturering: ' + klaimFeil.message }, 500)
+    if (!klaimet || !klaimet.length) {
+      // Tapte reservasjonen - et annet, nesten samtidig kall vant. Les ferske tilstanden i
+      // stedet for å gjette: er kladden alt opprettet (vinneren rakk å fullføre), returner den
+      // som idempotens-sjekken over ville gjort; er den fortsatt midt i et Fiken-kall hos
+      // vinneren (sentinel-verdien), si fra i stedet for å opprette en dobbel kladd.
+      const { data: friskOrdre } = await supabase.from('ordrer').select('fiken_kladd_url').eq('id', ordreId).maybeSingle()
+      if (friskOrdre?.fiken_kladd_url && friskOrdre.fiken_kladd_url !== KLADD_RESERVERT) {
+        return jsonSvar({ ok: true, draftUrl: friskOrdre.fiken_kladd_url, alleredeOpprettet: true }, 200)
+      }
+      return jsonSvar({ error: 'Et annet kall fakturerer allerede denne ordren akkurat nå - vent et par sekunder og prøv igjen' }, 409)
     }
 
-    const draftUrl = draftRes.headers.get('Location') || ''
-    // Lagres her, server-side, i SAMME kall som kladden faktisk ble opprettet i Fiken - ikke
-    // avhengig av at klientens nettleser fortsatt er tilkoblet og rekker sitt eget save()-kall
-    // etterpå (se s09-006: "kladd-adressen kastes" var nettopp symptomet på at den eneste
-    // lagringen var klient-initiert). fakturert settes også her av samme grunn; klientens egen
-    // save() rett etter gjør det samme, men er nå en ufarlig duplikat, ikke den eneste lagringen.
-    if (ordreId && draftUrl) {
+    // Fra her av er ordren RESERVERT (sentinel-verdien) - ALLE utganger herfra og ned, inkludert
+    // en uventet exception (f.eks. nettverksfeil mot Fiken), MÅ enten fullføre med en ekte
+    // kladd-URL eller eksplisitt frigi reservasjonen igjen. Uten denne garantien ville en
+    // forbigående feil (som FØR denne rettelsen bare lot ordren stå uendret, fritt å prøve på
+    // nytt) i stedet låse ordren fast for alltid med en sentinel-verdi ingen rydder opp i.
+    try {
+      const draftRes = await fikenFetch(`/companies/${slug}/invoices/drafts`, {
+        method: 'POST',
+        body: JSON.stringify(draftBody),
+      })
+      if (!draftRes.ok) {
+        const feiltekst = await draftRes.text()
+        await supabase.from('ordrer').update({ fiken_kladd_url: null }).eq('id', ordreId).eq('fiken_kladd_url', KLADD_RESERVERT)
+        return jsonSvar({ error: `Fiken avviste kladden (${draftRes.status}): ${feiltekst}` }, 502)
+      }
+
+      const draftUrl = draftRes.headers.get('Location') || ''
+      if (!draftUrl) {
+        // Uventet: Fiken svarte OK, men uten en Location-header å hente kladd-adressen fra. En
+        // reell kladd KAN ha blitt opprettet i Fiken likevel, så dette logges for oppfølging -
+        // frigi reservasjonen i stedet for å la ordren stå fast med sentinel-verdien for alltid.
+        console.error(`fiken-fakturer: Fiken svarte ${draftRes.status} uten Location-header for ordre ${ordreId}`)
+        await supabase.from('ordrer').update({ fiken_kladd_url: null }).eq('id', ordreId).eq('fiken_kladd_url', KLADD_RESERVERT)
+        return jsonSvar({ error: 'Fiken opprettet kladden, men ga ingen adresse tilbake - sjekk i Fiken om den faktisk ble laget før du prøver igjen' }, 502)
+      }
+      // Lagres her, server-side, i SAMME kall som kladden faktisk ble opprettet i Fiken - ikke
+      // avhengig av at klientens nettleser fortsatt er tilkoblet og rekker sitt eget save()-kall
+      // etterpå (se s09-006: "kladd-adressen kastes" var nettopp symptomet på at den eneste
+      // lagringen var klient-initiert). fakturert settes også her av samme grunn; klientens egen
+      // save() rett etter gjør det samme, men er nå en ufarlig duplikat, ikke den eneste lagringen.
       // fiken_faktura_referanse (4.11, s90-20261104-5): ØYEBLIKKSBILDET av orderReference-teksten
       // slik den faktisk ble sendt til Fiken NÅ - ikke noe fiken-faktura-status-synk skal regne ut
       // på nytt senere fra ordrens DA VÆRENDE chassis/regnr, som kan endre seg (f.eks. et regnr
@@ -490,9 +539,17 @@ Deno.serve(async (req) => {
         .update({ fiken_kladd_url: draftUrl, fakturert: true, fiken_faktura_referanse: ordreReferanse ?? null })
         .eq('id', ordreId)
       if (lagreFeil) console.error('Kunne ikke lagre fiken_kladd_url på ordren:', lagreFeil.message)
-    }
 
-    return jsonSvar({ ok: true, draftUrl }, 201)
+      return jsonSvar({ ok: true, draftUrl }, 201)
+    } catch (e) {
+      // Kladden kan i prinsippet ha blitt opprettet i Fiken selv om NETTVERKSSVARET feilet
+      // (f.eks. tidsavbrudd rett før svaret kom tilbake) - frigjøringen her kan derfor i et
+      // svært sjeldent tilfelle la en reell, foreldreløs kladd stå i Fiken uten at appen vet om
+      // den. Dette er samme avveining som FØR denne rettelsen (en feilet fikenFetch ga alltid
+      // ubetinget retry), bare nå eksplisitt for reservasjonen også - ALDRI la ordren stå låst.
+      await supabase.from('ordrer').update({ fiken_kladd_url: null }).eq('id', ordreId).eq('fiken_kladd_url', KLADD_RESERVERT)
+      throw e
+    }
   } catch (e) {
     return jsonSvar({ error: String(e) }, 500)
   }
