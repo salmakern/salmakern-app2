@@ -286,6 +286,22 @@ function portalBadgeHTML(o, kort) {
   const tittel = ubekreftet ? 'Bestilt i Forhandlerportalen - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt i Forhandlerportalen' + (o.portalBekreftetAv ? ' - bekreftet av ' + esc(o.portalBekreftetAv) : '');
   return `<span title="${tittel}" style="display:inline-flex;align-items:center;${stil};border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">${ubekreftet && !kort ? 'PORTAL · IKKE BEKREFTET' : 'PORTAL'}</span>`;
 }
+// Viser hvem som er meldt på ordren direkte på kortet (Ordre-lista og begge Oversikt-listene) -
+// før dette måtte man åpne ordren for å se hvem, kortet bare lyste grønt (pulseGlow, se ansatte-
+// signert-sjekken rundt kortets egen style). Bedt om av Henrik 2026-11-14 ("forslag A" i samtalen):
+// navnet rett på kortet man uansett skroller forbi, i stedet for en egen side å åpne. Samme
+// "meldt på HH:MM" tekst som renderAnsOrdre() i ordre-detalj.js sin "Ansatte på ordren"-boks -
+// `a.tid` er bare et klokkeslett (HH:MM, satt av fmt() i ordre-detalj.js/ordre-diverse.js når
+// noen melder seg på), ikke en full dato, så det vises akkurat slik det står, ikke regnet om til
+// "hvor lenge siden".
+function ansatteSignertChipHTML(o) {
+  if (!o.ansatteSignert || !o.ansatteSignert.length) return '';
+  return `<div style="display:flex;flex-direction:column;gap:4px">${o.ansatteSignert.map(a => `
+    <div style="background:rgba(34,197,94,.12);border:1px solid #22c55e;border-radius:8px;padding:4px 9px;display:flex;align-items:center;gap:7px;min-width:0">
+      <span style="width:6px;height:6px;border-radius:999px;background:#22c55e;flex-shrink:0"></span>
+      <span class="small" style="color:#4ade80;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.navn)} · siden ${esc(a.tid)}</span>
+    </div>`).join('')}</div>`;
+}
 function sorterOrdre(a,b) {
   const pd = (b.prioritert?1:0) - (a.prioritert?1:0);
   if (pd !== 0) return pd;

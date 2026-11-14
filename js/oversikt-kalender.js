@@ -127,6 +127,7 @@ function renderOrdreList() {
         </div>
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:5px 10px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
       </div>
+      ${ansatteSignertChipHTML(o)}
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
         ${dokStatusKortHTML(o)}
@@ -180,6 +181,7 @@ function ordreKortFeilHTML(o, e) {
 // OVERSIKT
 // ════════════════════════════════════════════════════
 function renderOversikt(q) {
+  renderPaaJobbNa();
   renderMoterListe();
   renderStempletInnNa();
   renderLangeOrdreklokker();
@@ -217,6 +219,7 @@ function renderOversikt(q) {
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
+          ${ansatteSignertChipHTML(o)}
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
@@ -240,6 +243,7 @@ function renderOversikt(q) {
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
+          ${ansatteSignertChipHTML(o)}
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
@@ -255,6 +259,51 @@ function renderOversikt(q) {
   // Leveranser (ordre uten bil) har sitt eget kort nederst: grupper etter status. Se js/leveranse.js.
   if (typeof renderLeveranseOversikt === 'function') renderLeveranseOversikt(q);
   renderWeek();
+}
+
+// «På jobb nå» (forslag B, Henrik 2026-11-14: «se på det med ansatte melder seg på og hvilke
+// biler som blir kjørt inn og hva de holder på med» - «ta begge da» sammen med forslag A, se
+// ansatteSignertChipHTML() i core.js). ETT sted, sortert per ansatt: hvem, hvilken bil/leveranse
+// og hvilken fase - uten å måtte åpne hver ordre eller lete etter hvilke kort som lyser grønt.
+// Viser også ansatte som er stemplet inn (lønnsklokka) uten å ha meldt seg på noen ordre -
+// usynlig i dag utenfor det admin-only "Stemplet inn nå"-kortet, en enkel påminnelse om å melde
+// seg på. Synlig for ALLE roller (IKKE admin-only som "Stemplet inn nå"/"Ordreklokker som har
+// gått lenge" under - dette er ren arbeidsflyt-oversikt, ikke lønns-/sikkerhetsdata). Bygget
+// utelukkende på data appen allerede har (o.ansatteSignert, ansatte.stempletInnSiden) - ingen ny
+// tabell, ingen nye databasekall. Hver ordre hoppes over i try/catch (samme isolering som resten
+// av Oversikt) - én rar ordre skal aldri blanke hele lista.
+function renderPaaJobbNa() {
+  const kort = document.getElementById('paaJobbNaKort');
+  const liste = document.getElementById('paaJobbNaListe');
+  if (!kort || !liste) return;
+  const paaOrdre = new Map();
+  (S.ordrer||[]).forEach(o => {
+    try {
+      if (o.status !== 'aktiv') return;
+      (Array.isArray(o.ansatteSignert) ? o.ansatteSignert : []).forEach(a => {
+        if (a && a.id != null) paaOrdre.set(a.id, { navn: a.navn, tid: a.tid, ordre: o });
+      });
+    } catch (e) { console.error('renderPaaJobbNa: ordre hoppet over:', e && e.message); }
+  });
+  const stempletUtenOrdre = (S.ansatte||[]).filter(a => a.aktiv && a.stempletInnSiden && !paaOrdre.has(a.id));
+  if (!paaOrdre.size && !stempletUtenOrdre.length) { kort.style.display = 'none'; liste.innerHTML = ''; return; }
+  kort.style.display = 'block';
+  const paOrdreRader = [...paaOrdre.values()].sort((a,b)=>(a.navn||'').localeCompare(b.navn||'','no')).map(p => {
+    let navn = '—';
+    try { navn = statusInfo(p.ordre.ordreStatus).lbl; } catch (e) { /* ukjent status - vis bare bilen */ }
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #1f1f23;font-size:12.5px;cursor:pointer" onclick="openOrdre('${p.ordre.id}')">
+      <span style="width:7px;height:7px;border-radius:999px;background:#22c55e;flex-shrink:0"></span>
+      <b style="min-width:92px;flex-shrink:0">${esc(p.navn||'?')}</b>
+      <span style="color:#a1a1aa;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(ordreLabel(p.ordre))} · ${esc(navn)} · siden ${esc(p.tid||'')}</span>
+    </div>`;
+  });
+  const stempletRader = stempletUtenOrdre.sort((a,b)=>(a.navn||'').localeCompare(b.navn||'','no')).map(a => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #1f1f23;font-size:12.5px;opacity:.65">
+      <span style="width:7px;height:7px;border-radius:999px;background:#52525b;flex-shrink:0"></span>
+      <b style="min-width:92px;flex-shrink:0">${esc(a.navn||'?')}</b>
+      <span style="color:#71717a">Stemplet inn - ikke meldt på noen ordre</span>
+    </div>`);
+  liste.innerHTML = [...paOrdreRader, ...stempletRader].join('');
 }
 
 // Viser hvem av de ansatte som fortsatt er stemplet inn på sin daglige Timer akkurat nå
