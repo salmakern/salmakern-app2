@@ -4,7 +4,7 @@
 // størrelsen er lik uansett bilde. Det statiske bildet i HTML-en (hero-bil.jpg) vises først og er
 // fallback: svarer ikke API-et, finnes det under to bilder, eller ønsker besøkende redusert
 // bevegelse, er siden uendret og uten feil.
-// Originalbildene er opptil 4 MB, så de hentes via portalens bildeoptimalisering (/_next/image,
+// Originalbildene er opptil 4 MB, så de hentes via portalens egen bildeforminskning (/api/bilde,
 // 46-275 KB WebP). Bare neste bilde forhåndslastes, ikke alle på en gang.
 (function () {
   var API_BASE = "https://forhandler.salmaker.as";
@@ -29,7 +29,11 @@
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   function optimized(url, width) {
-    return API_BASE + "/_next/image?url=" + encodeURIComponent(url) + "&w=" + width + "&q=75";
+    // Portalens egen bildeforminskning (live siden 6.11) i stedet for Next.js sin egen
+    // /_next/image - unngår Vercel sin bildekvote helt. Nøyaktig denne formen/rekkefølgen
+    // (bredde må være en av 64/128/256/384/640/828/1200/1920, q nøyaktig 75, ingen andre
+    // parametre), ellers svarer portalen 400 - se supabase/README.md i forhandlerportal-app.
+    return API_BASE + "/api/bilde?url=" + encodeURIComponent(url) + "&w=" + width + "&q=75";
   }
   function pageFor(slug) {
     return KNOWN_PAGES[slug] ? slug + ".html" : "modell.html?slug=" + encodeURIComponent(slug);

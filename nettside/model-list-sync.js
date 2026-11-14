@@ -106,9 +106,12 @@
     return order;
   }
 
-  // Bildene (opptil 4 MB originalt) hentes via portalens bildeoptimalisering (se hero-rotasjon.js), ikke som original.
+  // Bildene (opptil 4 MB originalt) hentes via portalens egen bildeforminskning /api/bilde
+  // (se hero-rotasjon.js) i stedet for Next.js sin /_next/image - unngår Vercel sin bildekvote
+  // helt. Nøyaktig denne formen/rekkefølgen (bredde må være en av 64/128/256/384/640/828/
+  // 1200/1920, q nøyaktig 75, ingen andre parametre), ellers svarer portalen 400.
   function optimized(url, width) {
-    return API_BASE + "/_next/image?url=" + encodeURIComponent(url) + "&w=" + width + "&q=75";
+    return API_BASE + "/api/bilde?url=" + encodeURIComponent(url) + "&w=" + width + "&q=75";
   }
 
   function buildThumb(item) {
