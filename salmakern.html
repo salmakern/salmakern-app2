@@ -30,9 +30,12 @@ if ('serviceWorker' in navigator) {
       // siden. reg.update() tvinger frem den samme sjekken uten navigasjon - kjøres jevnlig
       // OG hver gang fanen blir synlig igjen (bytter tilbake fra en annen app/fane), som
       // er akkurat når man faktisk ville lagt merke til en manglende endring.
-      setInterval(() => reg.update(), 5*60*1000);
+      // .catch: en mislykket sjekk (dårlig nett, iOS som vekker appen, registreringen borte) er
+      // ufarlig - neste sjekk prøver igjen. Uten den ble hver feil en ufanget Promise-avvisning
+      // i Sentry (JAVASCRIPT-3, -1, -E, -F).
+      setInterval(() => reg.update().catch(() => {}), 5*60*1000);
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') reg.update();
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
       });
     }).catch(() => {});
   });

@@ -365,12 +365,15 @@ function renderMer() {
   // Ansatt: Beskjeder, Kontakter
   // Godkjenner: + Timer og overtid
   // Admin: alt
-  document.getElementById('merTimerBtn').style.display        = erGodkjenner ? '' : 'none';
-  document.getElementById('merOrdreRapportBtn').style.display  = erAdmin ? '' : 'none';
-  document.getElementById('merDrivstoffSatser').style.display = erAdmin ? '' : 'none';
-  document.getElementById('merUtstyrMaler').style.display     = erAdmin ? '' : 'none';
-  document.getElementById('merStandardtiderBtn').style.display = erAdmin ? '' : 'none';
-  document.getElementById('merBiltilsynReisetiderBtn').style.display = erAdmin ? '' : 'none';
+  // Hopper over en knapp som mangler (HTML eldre enn skriptene, JAVASCRIPT-G), i stedet for
+  // å stoppe hele Mer-siden midt i.
+  const merVis = (id, vis) => { const el = document.getElementById(id); if (el) el.style.display = vis ? '' : 'none'; };
+  merVis('merTimerBtn', erGodkjenner);
+  merVis('merOrdreRapportBtn', erAdmin);
+  merVis('merDrivstoffSatser', erAdmin);
+  merVis('merUtstyrMaler', erAdmin);
+  merVis('merStandardtiderBtn', erAdmin);
+  merVis('merBiltilsynReisetiderBtn', erAdmin);
 
   renderBeskjeder();
   renderKontakter();

@@ -1673,7 +1673,10 @@ async function aktiverInnloggetApp() {
     }, Math.max(0, msIgjen));
   }
   document.getElementById('loginScreen').style.display='none';
-  document.getElementById('pinByttSkjerm').style.display='none';
+  // pinByttSkjerm kan mangle i en side der HTML-en er eldre enn skriptene (JAVASCRIPT-H):
+  // da skal innloggingen likevel fullføres, ikke stoppe med en blank skjerm.
+  const _pinBytt = document.getElementById('pinByttSkjerm');
+  if (_pinBytt) _pinBytt.style.display='none';
   document.getElementById('appScreen').style.display='block';
   document.getElementById('headerUser').textContent = me.navn + ' · ' + rolleVis(me.rolle);
   oppdaterLagreStatusBadge();
@@ -1864,7 +1867,8 @@ function nullstillLokalOkt() {
   try { sessionStorage.removeItem(OKT_FORTSETTER_NOKKEL); } catch(e) {}
   me = null;
   document.getElementById('appScreen').style.display='none';
-  document.getElementById('pinByttSkjerm').style.display='none';
+  const _pinBytt = document.getElementById('pinByttSkjerm');
+  if (_pinBytt) _pinBytt.style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   // Stopp sanntid: kanalen er knyttet til den innloggede ansatte og skal ikke bli stående
   // (en ny innlogging starter den på nytt, se tryLogin()).
