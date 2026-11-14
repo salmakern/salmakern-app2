@@ -302,6 +302,18 @@ function ansatteSignertChipHTML(o) {
       <span class="small" style="color:#4ade80;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.navn)} · siden ${esc(a.tid)}</span>
     </div>`).join('')}</div>`;
 }
+// Meld seg på direkte fra kortet (Ordre-lista/Oversikt) uten å måtte åpne ordren først - bedt
+// om av Henrik 2026-11-14 ("ta A" av to viste forslag): det vanligste tilfellet er at man
+// uansett ser på lista. Gjenbruker meldPaa() (ordre-diverse.js) UENDRET - samme funksjon som
+// "+ Meld meg på" i ordredetaljens "Ansatte på ordren"-kort, så "kan bare stå på én bil om
+// gangen" (finnAndreApneOrdreForAnsatt, meldes automatisk av andre åpne ordre) og
+// klokke-oppstarten gjelder likt uansett hvor man trykker fra. Vises bare når jeg ikke allerede
+// er meldt på DENNE ordren - er jeg det, viser ansatteSignertChipHTML() mitt eget navn der;
+// avmelding gjøres fortsatt i ordredetaljen (uendret, ikke bedt om her).
+function meldPaaKnappHTML(o) {
+  if (!me || me.id == null || (o.ansatteSignert||[]).some(a=>a.id===me.id)) return '';
+  return `<button class="btn sm" style="background:rgba(34,197,94,.14);border-color:#22c55e;color:#4ade80;text-align:left;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`;
+}
 function sorterOrdre(a,b) {
   const pd = (b.prioritert?1:0) - (a.prioritert?1:0);
   if (pd !== 0) return pd;

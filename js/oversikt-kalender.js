@@ -128,6 +128,7 @@ function renderOrdreList() {
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:5px 10px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
       </div>
       ${ansatteSignertChipHTML(o)}
+      ${meldPaaKnappHTML(o)}
 
       <div class="box" style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
         ${dokStatusKortHTML(o)}
@@ -220,6 +221,7 @@ function renderOversikt(q) {
           </div>
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
           ${ansatteSignertChipHTML(o)}
+          ${meldPaaKnappHTML(o)}
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
@@ -244,6 +246,7 @@ function renderOversikt(q) {
           </div>
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
           ${ansatteSignertChipHTML(o)}
+          ${meldPaaKnappHTML(o)}
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}

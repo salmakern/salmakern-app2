@@ -1039,12 +1039,15 @@ async function bekreftAdminMeldPaa() {
 
 function tvangsflyt(o) {
   if (erLeveranse(o)) return []; // en leveranse har ingen tvangsflyt (ingen bil, biltilsyn eller godkjenning)
+  // "Ansatt meldt på" fjernet herfra 2026-11-14 (Henrik): sjekket CURRENT ansatteSignert.length,
+  // ikke historikk - en ordre der alle har meldt seg av igjen (f.eks. ved endt skift) ville
+  // aldri oppfylt kravet uten at noen ble stående "meldt på" kunstig, selv om bilen faktisk var
+  // jobbet på. Ga aldri reell verdi som gate for å godkjenne/lukke.
   const ombyggingValgt = o.ombygging && Object.values(o.ombygging).some(Boolean);
   return [
     {lbl:'Diagnose utført',   ok: !!o.diagnose},
     {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
     {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
-    {lbl:'Ansatt meldt på',   ok: o.ansatteSignert.length>0},
     {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
     {lbl:'Ombygging valgt',   ok: ombyggingValgt},
     {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)},

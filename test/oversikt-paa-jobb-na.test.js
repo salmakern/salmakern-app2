@@ -118,3 +118,31 @@ describe('ansatteSignertChipHTML (navn direkte på kortet, forslag A)', () => {
     expect(html).not.toContain('<script>');
   });
 });
+
+// «+ Meld meg på» direkte på kortet (Henrik 2026-11-14, "ta A" av to viste forslag: knapp på
+// kortet vs. QR-skann ved bilen). Gjenbruker meldPaa() uendret - "kun én ordre om gangen" (bedt
+// om samme dag) er derfor allerede sikret av finnAndreApneOrdreForAnsatt() i den funksjonen,
+// ikke noe denne knappen trenger å håndheve selv.
+describe('meldPaaKnappHTML', () => {
+  it('jeg er IKKE meldt på: viser knappen med riktig ordre-id i onclick', () => {
+    const html = sandbox.meldPaaKnappHTML({ id: 'ord_T1', ansatteSignert: [] });
+    expect(html).toContain('+ Meld meg på');
+    expect(html).toContain("meldPaa('ord_T1')");
+  });
+
+  it('jeg er ALLEREDE meldt på denne ordren: tom streng (ingen dupliserende knapp)', () => {
+    const html = sandbox.meldPaaKnappHTML({ id: 'ord_T1', ansatteSignert: [{ id: 1, navn: 'TEST Admin', tid: '09:12' }] });
+    expect(html).toBe('');
+  });
+
+  it('en ANNEN ansatt er meldt på, men ikke meg: knappen vises fortsatt (flere kan stå på samme ordre)', () => {
+    const html = sandbox.meldPaaKnappHTML({ id: 'ord_T1', ansatteSignert: [{ id: 2, navn: 'Kari Hansen', tid: '10:40' }] });
+    expect(html).toContain('+ Meld meg på');
+  });
+
+  it('ingen innlogget ansatt (me er null): tom streng, ikke en krasj', () => {
+    app.settMe(null);
+    const html = sandbox.meldPaaKnappHTML({ id: 'ord_T1', ansatteSignert: [] });
+    expect(html).toBe('');
+  });
+});
