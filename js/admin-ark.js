@@ -303,6 +303,22 @@ async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato, ikkeVarsleKont
   renderAll();
 }
 
+// Grønn trykkbar bryter i stedet for en vanlig avkrysningsboks (Henrik 2026-11-13: «må være
+// mulig å trykke på den sånn den lyser grønt» - en liten nativ checkbox ga for lite/for treg
+// visuell tilbakemelding på trykk). Tilstanden ligger i data-paa (ikke .checked), lest av
+// adminArkSendFraktBestilling() under - selve fargeendringen skjer synkront her, uavhengig av
+// nettleserens egen (noen ganger forsinkede) rendring av en checkbox.
+function kfhVeksleIkkeVarsle() {
+  const btn = document.getElementById('kfh_ikkeVarsleKontakt');
+  const prikk = document.getElementById('kfh_ikkeVarsleKontaktPrikk');
+  const paa = btn.dataset.paa !== 'true';
+  btn.dataset.paa = paa ? 'true' : 'false';
+  btn.style.background = paa ? 'rgba(34,197,94,.14)' : '#0f0f12';
+  btn.style.borderColor = paa ? '#22c55e' : '#27272a';
+  btn.style.color = paa ? '#4ade80' : '#a1a1aa';
+  prikk.style.background = paa ? '#22c55e' : '#3f3f46';
+}
+
 // Åpner dialogen for å (valgfritt, for Hente selv PÅKREVD) velge en henteklar-dato FØR
 // selve fraktbestillingen/-varselet sendes - bedt om av Henrik 2026-09-30: "det må være
 // mulig å bestemme dato når ordren er henteklar når man bestiller frakt via e-post
@@ -332,7 +348,11 @@ async function adminArkFraktBestill(chassisNr) {
   adminArkFraktBestillKontekst = { erHenterSelv, fraktEpost, kontaktEpost, forhandler: rad.forhandler, kontaktperson: rad.kontaktperson, fraktselskap: rad.fraktselskap, chassisNr: rad.chassisNr };
   document.getElementById('kfh_chassis').value = rad.chassisNr;
   document.getElementById('kfh_dato').value = erHenterSelv ? new Date().toISOString().split('T')[0] : '';
-  document.getElementById('kfh_ikkeVarsleKontakt').checked = false;
+  document.getElementById('kfh_ikkeVarsleKontakt').dataset.paa = 'false';
+  document.getElementById('kfh_ikkeVarsleKontakt').style.background = '#0f0f12';
+  document.getElementById('kfh_ikkeVarsleKontakt').style.borderColor = '#27272a';
+  document.getElementById('kfh_ikkeVarsleKontakt').style.color = '#a1a1aa';
+  document.getElementById('kfh_ikkeVarsleKontaktPrikk').style.background = '#3f3f46';
   document.getElementById('kfh_ikkeVarsleKontaktLabel').textContent = erHenterSelv
     ? 'Ikke send e-post - bare merk klar for henting'
     : 'Ikke send kopi til kontaktperson - bare merk det';
@@ -362,7 +382,7 @@ async function adminArkSendFraktBestilling() {
   // (standard av, dvs. uendret oppførsel): for et EKTE fraktselskap droppes bare kopien til
   // kontaktpersonen - selve bestillingen går fortsatt til fraktselskapet. For «Hente selv»
   // finnes ingen annen mottaker i det hele tatt, så da sendes INGEN e-post - bare merkes.
-  const ikkeVarsleKontakt = document.getElementById('kfh_ikkeVarsleKontakt').checked;
+  const ikkeVarsleKontakt = document.getElementById('kfh_ikkeVarsleKontakt').dataset.paa === 'true';
   if (ctx.erHenterSelv && !dato) { visToast('Velg en dato'); return; }
   if (!ikkeVarsleKontakt && !ctx.kontaktEpost) {
     visToast(`Fant ingen e-post for "${ctx.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter, eller kryss av for å ikke varsle kontaktpersonen`);

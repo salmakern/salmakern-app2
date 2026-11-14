@@ -147,7 +147,11 @@ så avkrysningen betyr der «ingen e-post, bare merk klar for henting» - ingen 
 dialogen, også for et ekte fraktselskap der kontaktpersonen bare er på kopi - manglet den, kunne man ikke bestille frakt i
 det hele tatt, uansett avkrysning. Kravet er nå flyttet til selve sendingen (`adminArkSendFraktBestilling()`) og gjelder bare
 når man faktisk skal varsle kontaktpersonen. Logglinjen på ordren får et tillegg «(ikke varslet kontaktperson)» når
-avkrysningen er brukt. `sw.js` CACHE v75. Vakt: `test/admin-ark-frakt-uten-varsel.test.js` (11 tester, full app-harness).
+avkrysningen er brukt. **Egen grønn trykk-bryter i stedet for en nativ checkbox (samme dag, Henrik: «må være mulig å trykke
+på den sånn den lyser grønt», og at fargeendringen «henger litt»)**: `#kfh_ikkeVarsleKontakt` er nå en `<button>` med tilstanden
+i `data-paa` (ikke `.checked`) - `kfhVeksleIkkeVarsle()` i `js/admin-ark.js` setter bakgrunn/kant/tekstfarge synkront ved
+klikk, uavhengig av nettleserens egen (potensielt forsinkede) rendring av en native checkbox. `sw.js` CACHE v76. Vakt:
+`test/admin-ark-frakt-uten-varsel.test.js` (11 tester, full app-harness; oppdatert til å lese `dataset.paa`).
 
 **Ordre.vekter kan komme tom fra databasen (2026-11-02, tom Ordre-side for alle)**: `ordrer.vekter` har kolonne-default `'{}'`, og `save()` skriver ikke vekter (s09-005: vekter eies av RPC-ene
 `oppdater_ordre_vekter_felt` m.fl.). Da den første NYE ordren siden 30.10 ble opprettet, kom den inn med `vekter = {}`, `dbToOrdre` beholdt det tomme objektet, `tvangsflyt()` leste `o.vekter.totalvekt.a` og

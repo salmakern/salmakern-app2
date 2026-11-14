@@ -71,7 +71,7 @@ beforeEach(() => {
 
 async function aapneOgSend(chassisNr, { ikkeVarsleKontakt = false, dato } = {}) {
   await sandbox.adminArkFraktBestill(chassisNr);
-  sandbox.document.getElementById('kfh_ikkeVarsleKontakt').checked = ikkeVarsleKontakt;
+  sandbox.document.getElementById('kfh_ikkeVarsleKontakt').dataset.paa = ikkeVarsleKontakt ? 'true' : 'false';
   if (dato !== undefined) sandbox.document.getElementById('kfh_dato').value = dato;
   await sandbox.adminArkSendFraktBestilling();
 }
