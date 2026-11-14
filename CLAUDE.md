@@ -288,6 +288,32 @@ offline-køen får en siste sjanse før utlogging, og en vanlig utlogging spør 
 er utstedt gjelder ut sin levetid (maks 1 time) etter utlogging. `CACHE` i `sw.js` ble bumpet til v13 i
 samme commit, så åpne PWA-er henter den nye koden.
 
+## EDGE_AUTH_ENFORCE: en hel verdi-erstatning kan stille slå av en annen funksjons håndheving (funnet og rettet 2026-11-14)
+
+`EDGE_AUTH_ENFORCE` er ÉN delt Supabase-hemmelighet, en kommaliste av funksjonsnavn (eller `*`), lest av HVER funksjon
+som sjekker sitt eget navn mot listen (`fiken-fakturer`, `send-frakt-epost`, `vegvesen-oppslag`, `send-push`,
+`fiken-produkter`, `hent-rabatter-fra-portalen`, `hent-selgere-fra-portalen`). Supabase-hemmeligheter kan ikke
+«legges til i» - `secrets set` er alltid en HEL verdi-erstatning.
+
+- **Hva skjedde**: `fiken-produkter` ble håndhevet alene fra 29.10 (`EDGE_AUTH_ENFORCE = "fiken-produkter"`, krever
+  `x-sync-secret`). Da `send-frakt-epost`/`fiken-fakturer` ble håndhevet 5.11 (s00-024), ble HELE verdien erstattet
+  med `"send-frakt-epost,fiken-fakturer"` - uten at noen besluttet det, falt `fiken-produkter` dermed UT av listen og
+  gikk stille tilbake til myk modus. Ingen testsuite fanget dette (ingen test leser den ekte produksjonshemmeligheten),
+  og booking-QA-ens egen sjekk (punkt 19b) hadde fortsatt den GAMLE forventede hashen - den sa aldri ifra, den bekreftet
+  bare at verdien matchet det den alltid hadde forventet.
+- **Funnet 14.11** (ved et tilfelle, mens en annen QA-sjekk ble rettet - ikke ved en målrettet gjennomgang): en direkte,
+  lesende probe (`GET` uten `Authorization`/`x-sync-secret`, bare den offentlige nøkkelen) mot den LIVE `fiken-produkter`
+  ga 200 OK med hele Fiken-produktlisten (priser, mva-koder, kontonumre - ingen kundedata, ingen skriving).
+- **Rettet samme dag** (Henriks eksplisitte ja i chat): `EDGE_AUTH_ENFORCE` satt til
+  `"fiken-produkter,send-frakt-epost,fiken-fakturer"` (gjenoppretter det som falt ut). Verifisert med samme type
+  lesende probe: `fiken-produkter` gir nå 401 igjen, de to andre uendret.
+- **Lærdom for enhver fremtidig endring av denne hemmeligheten**: les ALLTID gjeldende verdi (`npx supabase secrets
+  list`, sammenlign hashen mot et kjent klartekst-kandidat med `sha256sum` - selve verdien vises aldri) og SKRIV DEN
+  FULLE, oppdaterte listen tilbake, aldri bare de(n) funksjonen(e) denne endringen gjelder. En QA-sjekk på denne
+  hemmeligheten bør varsle spesielt hardt når et navn som sto i FORRIGE kjente verdi mangler i den nye - det er en
+  tilbaketrukket beskyttelse, ikke bare en endring. Vakt: punkt 19b i booking-QA-en (teksten der nevner alltid
+  nåværende forventet hash og hvilke funksjoner den dekker).
+
 ## Timesats og frosset effektiv ordretid (2026-11-12, s09-020)
 
 Henrik («ja legg det til», 2026-11-04): «Bil-effektivitet»-badgen (ordredetaljen, admin-only) skal fryses når bilen er Hentet, og brukt tid skal kunne vises som en kostnad.
