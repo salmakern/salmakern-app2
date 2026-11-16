@@ -158,6 +158,7 @@ describe('vegvesenSkrivUt - nyeste dokument per type', () => {
     const { sandbox } = nyttMiljo([o]);
     sandbox.window = { open: () => vindu };
     sandbox.fetch = async (url) => { hentet.push(url.replace(BASE, '')); return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) }; };
+    sandbox.filHent = (url) => sandbox.fetch(url); // core.js: henter via signert lenke (egen test i fil-signerte-lenker.test.js)
     sandbox.PDFLib = {
       PDFDocument: {
         create: async () => ({ copyPages: async () => [], addPage() {}, save: async () => new Uint8Array() }),

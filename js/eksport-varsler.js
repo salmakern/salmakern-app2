@@ -47,8 +47,19 @@ function eksportCSV() {
 // ════════════════════════════════════════════════════
 // PDF (enkel utskrift)
 // ════════════════════════════════════════════════════
+// Utskriftsvinduet MÅ åpnes synkront i klikket (ellers blokkeres det). Bildene trenger signerte
+// lenker (se «SIGNERTE FIL-LENKER» i core.js): mangler noen, åpnes vinduet først og fylles når
+// lenkene er klare. Er alle klare (vanlig når ordren er åpen), skjer alt med en gang som før.
 function genPDF(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const bildeUrler = [...Object.values(FOTO_SIDER).flatMap(s => o[s.felt] || []), ...(o.bilderManglendeDeler || [])].filter(u => u && filDel(u));
+  const mangler = bildeUrler.filter(u => !filSignertGyldig(u));
+  const printVindu = window.open('', '_blank');
+  if (!printVindu) { alert('Nettleseren blokkerte utskriftsvinduet - tillat sprettoppvinduer for denne siden og prøv igjen.'); return; }
+  if (!mangler.length) { genPDFSkriv(o, printVindu); return; }
+  filSigner(mangler).then(() => genPDFSkriv(o, printVindu));
+}
+function genPDFSkriv(o, printVindu) {
   const LOGO = 'logoer/logo-lys-bakgrunn.png';
   const dato = new Date().toLocaleDateString('nb-NO', {day:'numeric', month:'long', year:'numeric'});
   const tf = tvangsflyt(o);
@@ -85,7 +96,7 @@ function genPDF(id) {
       <div class="foto-grid">
         ${labler.map((lbl,i)=>`<div class="foto-celle">
           <div class="foto-ramme${bilder[i]?'':' foto-tom'}">
-            ${bilder[i]?`<img src="${bilder[i]}" alt="${esc(lbl)}">`:'<span class="foto-merke">Ikke tatt</span>'}
+            ${bilder[i]?`<img src="${filAttr(filUrlNaa(bilder[i]))}" alt="${esc(lbl)}">`:'<span class="foto-merke">Ikke tatt</span>'}
           </div>
           <div class="foto-lbl">${esc(lbl)}</div>
         </div>`).join('')}
@@ -103,7 +114,7 @@ function genPDF(id) {
       <div class="s-hode"><span class="s-tittel">Bilder — manglende deler</span></div>
       <div class="foto-grid">
         ${bilder.map((url,i)=>`<div class="foto-celle">
-          <div class="foto-ramme"><img src="${url}" alt="Manglende del ${i+1}"></div>
+          <div class="foto-ramme"><img src="${filAttr(filUrlNaa(url))}" alt="Manglende del ${i+1}"></div>
         </div>`).join('')}
       </div>
     </div>`;
@@ -376,8 +387,6 @@ function genPDF(id) {
   // Åpner rapporten i et eget vindu og trigger nettleserens utskriftsdialog, der
   // "Lagre som PDF" gir en ekte PDF-fil - en ren HTML-nedlasting kalt "PDF" var
   // misvisende hvis den ble sendt videre til noen som forventet en faktisk PDF.
-  const printVindu = window.open('', '_blank');
-  if (!printVindu) { alert('Nettleseren blokkerte utskriftsvinduet - tillat sprettoppvinduer for denne siden og prøv igjen.'); return; }
   printVindu.document.write(html);
   printVindu.document.close();
 

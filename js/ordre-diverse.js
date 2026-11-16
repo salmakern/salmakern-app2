@@ -1185,7 +1185,7 @@ function oppdaterFotoboks(o, side, idx) {
   const url = o[FOTO_SIDER[side].felt][idx];
   const imgId = `fo_${side}_${idx}_src`;
   if(url) {
-    boks.innerHTML = `<img id="${imgId}" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none';this.parentElement.querySelector('.fo-feil')?.style&&(this.parentElement.querySelector('.fo-feil').style.display='flex')">
+    boks.innerHTML = `<img id="${imgId}" ${filBildeAttr(url)} style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0" onerror="this.style.display='none';this.parentElement.querySelector('.fo-feil')?.style&&(this.parentElement.querySelector('.fo-feil').style.display='flex')">
       <div class="fo-feil" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;flex-direction:column;font-size:11px;color:#f87171;background:#3f0000;border-radius:8px 8px 0 0;padding:4px;text-align:center">⚠️ Bilde<br>ikke tilgjengelig</div>
       <div class="hover-del" onclick="event.stopPropagation()">
         <button data-viewonly onclick="openLightbox('${imgId}')" title="Vis">🔍</button>
@@ -1360,7 +1360,7 @@ function dokumenterListeHTML(o) {
   const kanSletteDok = me && me.rolle==='admin';
   return dok.map((d,i)=>`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #27272a30">
-      <a href="${d.url}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none;font-size:13px;word-break:break-word">${dokIkon(d.navn)} ${esc(d.navn)}</a>
+      <a ${filLenkeAttr(d.url)} style="color:#ef4444;font-weight:600;text-decoration:none;font-size:13px;word-break:break-word">${dokIkon(d.navn)} ${esc(d.navn)}</a>
       ${kanSletteDok?`<button onclick="slettDokument('${o.id}',${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:15px;padding:0;flex-shrink:0">✕</button>`:''}
     </div>`).join('');
 }

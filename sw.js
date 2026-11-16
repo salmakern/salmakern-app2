@@ -89,12 +89,21 @@
 // v73 - grønn pulserende glød på ordrekort (Ordre-lista og Oversikt) og "Ansatte på ordren"-kortet når noen er meldt på
 // v80 - Sentry-opprydding (startside-oppgave t1hi): reg.update() fanger egne feil, og pinByttSkjerm/Mer-knappene
 // tåler at elementet mangler (HTML eldre enn skriptene)
-const CACHE = 'salmakern-v81';
+// v82 - filer i Storage vises via kortlevde signerte lenker (forberedelse til private bøtter); bildecachen
+// bruker filens faste adresse som nøkkel og lagrer bare ekte 200-svar
+const CACHE = 'salmakern-v82';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
   '/icon-192.png'
 ];
+
+// Fast cache-nøkkel for en fil i Storage: samme fil har samme nøkkel enten den hentes med den
+// gamle offentlige adressen eller en signert lenke. null = ikke en fil som skal caches.
+function bildeCacheNokkel(url) {
+  const m = /^(https:\/\/[^/]+\/storage\/v1\/object\/)(?:public|sign)\/([^?#]+)/.exec(String(url || ''));
+  return m ? m[1] + 'public/' + m[2] : null;
+}
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
@@ -113,17 +122,24 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  if (url.includes('/storage/v1/object/')) {
+  // Filer i Storage (bilder, dokumenter). Fra v82 vises de via KORTLEVDE signerte lenker
+  // (.../object/sign/<bøtte>/<sti>?token=..., se «SIGNERTE FIL-LENKER» i js/core.js), og tokenet er
+  // nytt hver gang. Cache-nøkkelen er derfor filens faste adresse uten token (bildeCacheNokkel),
+  // ellers ville hver ny lenke gitt en ny nedlasting og en ny kopi i cachen. Filen hentes med
+  // CORS (Storage svarer med Access-Control-Allow-Origin: *) så statusen er lesbar: bare et ekte
+  // 200-svar lagres. Før ble «opaque»-svar lagret usett, og et feilsvar (utløpt lenke, privat
+  // bøtte) ville da blitt liggende i cachen som om det var bildet. Opplasting, sletting og
+  // nedlasting med innlogging (.../object/<bøtte>/..., /authenticated/) går rett forbi.
+  const filNokkel = e.request.method === 'GET' ? bildeCacheNokkel(url) : null;
+  if (filNokkel) {
     e.respondWith((async () => {
       const c = await caches.open(BILDE_CACHE);
-      const cached = await c.match(e.request);
+      const cached = await c.match(filNokkel);
       if (cached) return cached;
-      const res = await fetch(e.request);
-      // <img>-forespørsler til en annen origin (Storage) er som standard "no-cors",
-      // så svaret blir "opaque" - status er da alltid 0, aldri 200, selv om
-      // nedlastingen lyktes. Sjekken må derfor også godta opaque-svar, ellers
-      // blir INGENTING noensinne lagret i cachen og alt lastes ned på nytt hver gang.
-      if (res && (res.status === 200 || res.type === 'opaque')) e.waitUntil(c.put(e.request, res.clone()));
+      let res;
+      try { res = await fetch(url, { mode: 'cors', credentials: 'omit' }); }
+      catch (err) { return fetch(e.request); }
+      if (res && res.status === 200) e.waitUntil(c.put(filNokkel, res.clone()).catch(() => {}));
       return res;
     })());
     return;

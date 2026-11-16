@@ -457,7 +457,7 @@ function renderForhandlerDetalj() {
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid #27272a">
       <div class="small muted" style="margin-bottom:6px">Fullmakt</div>
       ${forhandler.fullmaktUrl ? `
-        <div class="small"><a href="${esc(forhandler.fullmaktUrl)}" target="_blank" rel="noopener" style="color:#ef4444;font-weight:600;text-decoration:none">📄 ${esc(forhandler.fullmaktNavn||'Fullmakt')}</a></div>
+        <div class="small"><a ${filLenkeAttr(forhandler.fullmaktUrl)} style="color:#ef4444;font-weight:600;text-decoration:none">📄 ${esc(forhandler.fullmaktNavn||'Fullmakt')}</a></div>
         ${forhandler.fullmaktDato?`<div class="small muted" style="margin-top:2px">Lastet opp ${new Date(forhandler.fullmaktDato).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}${forhandler.fullmaktLastetOppAv?' av '+esc(forhandler.fullmaktLastetOppAv):''}</div>`:''}
         ${erAdmin?`
           <label id="fdFullmaktDropzone" class="dok-dropzone small muted" style="margin-top:8px;display:block;padding:10px" title="Samme filnavn erstatter forrige versjon"

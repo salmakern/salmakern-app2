@@ -195,7 +195,7 @@ function renderHmsAvvikListe() {
           <div class="small" style="margin-top:4px">${esc(a.beskrivelse)}</div>
           ${a.sted ? `<div class="small muted" style="margin-top:2px">📍 ${esc(a.sted)}</div>` : ''}
           <div class="small muted" style="margin-top:4px">${esc(a.meldtAvNavn)} · ${new Date(a.createdAt).toLocaleDateString('no',{day:'numeric',month:'short',year:'numeric'})}</div>
-          ${(a.bilder||[]).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${a.bilder.map(u=>`<a href="${u}" target="_blank" rel="noopener"><img src="${u}" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #27272a"></a>`).join('')}</div>` : ''}
+          ${(a.bilder||[]).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${a.bilder.map(u=>`<a ${filLenkeAttr(u)}><img ${filBildeAttr(u)} style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #27272a"></a>`).join('')}</div>` : ''}
           ${admin ? `
             <div style="margin-top:8px">
               <label class="small muted">Tiltak</label>
@@ -385,7 +385,7 @@ function renderHmsStoffkartotekListe() {
           ${s.bruksomrade ? `<div class="small" style="margin-top:4px"><b>Bruksområde:</b> ${esc(s.bruksomrade)}</div>` : ''}
           ${s.verneutstyr ? `<div class="small" style="margin-top:2px"><b>Verneutstyr:</b> ${esc(s.verneutstyr)}</div>` : ''}
           ${s.oppbevaring ? `<div class="small" style="margin-top:2px"><b>Oppbevaring:</b> ${esc(s.oppbevaring)}</div>` : ''}
-          ${(s.sikkerhetsdatablad||[]).length ? `<div style="margin-top:6px">${s.sikkerhetsdatablad.map(d=>`<a href="${d.url}" target="_blank" rel="noopener" style="color:#ef4444;font-size:13px;display:block">📄 ${esc(d.navn)}</a>`).join('')}</div>` : '<div class="small muted" style="margin-top:6px">Ingen sikkerhetsdatablad lastet opp</div>'}
+          ${(s.sikkerhetsdatablad||[]).length ? `<div style="margin-top:6px">${s.sikkerhetsdatablad.map(d=>`<a ${filLenkeAttr(d.url)} style="color:#ef4444;font-size:13px;display:block">📄 ${esc(d.navn)}</a>`).join('')}</div>` : '<div class="small muted" style="margin-top:6px">Ingen sikkerhetsdatablad lastet opp</div>'}
         </div>
         ${admin ? `
           <div style="display:flex;flex-direction:column;gap:6px">

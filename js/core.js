@@ -224,6 +224,113 @@ function visTomDropToast() {
   visToast('Fant ingen fil i det du dro inn. Vanligste årsak: den nye Outlook-appen tillater ikke å dra vedlegg direkte fra en e-post til en nettside - lagre vedlegget på datamaskinen først, og dra/velg den lagrede filen i stedet.');
 }
 
+// ════════════════════════════════════════════════════
+// SIGNERTE FIL-LENKER (Storage, 2026-11-16)
+// ════════════════════════════════════════════════════
+// Bøttene bilder / ordre-dokumenter / hms-vedlegg var offentlige: den som hadde lenken til en fil
+// kunne åpne den for alltid uten innlogging (målt 16.11: HTTP 200 uten noen form for innlogging).
+// Databasen lagrer fortsatt den "offentlige" adressen (.../object/public/<bøtte>/<sti>) - den er
+// filens faste NAVN (brukt til sletting, storageFilBrukesAvAndre osv.) og skal ALDRI byttes ut med
+// en signert lenke. Alt som VISER eller ÅPNER en fil går derimot gjennom hjelperne under, som ber
+// Storage om en kortlevd signert lenke (krever innlogget ansatt via RLS-reglene på storage.objects).
+// Virker likt enten bøtta er offentlig eller privat, så klienten kan rulles ut FØR bøttene stenges.
+//   filBildeAttr(url)  -> src + data-fil til en <img> (plassholder til signeringen er ferdig)
+//   filLenkeAttr(url)  -> href + onclick til en <a> (åpner signert lenke i ny fane)
+//   filUrlNaa(url)     -> signert lenke hvis den alt finnes, ellers den lagrede (utskriftsvinduer)
+//   filSigner([url])   -> løfte som er ferdig når lenkene er signert (én forespørsel per bøtte)
+//   filHent(url)       -> fetch() av filen via signert lenke
+// Vakt: test/fil-signerte-lenker.test.js.
+const FIL_BOTTER = ['bilder', 'ordre-dokumenter', 'hms-vedlegg'];
+const FIL_SIGNERT_SEK = 2 * 60 * 60;        // lenken virker i 2 timer
+const FIL_GJENBRUK_MS = 90 * 60 * 1000;     // ... og gjenbrukes i 1,5 (alltid minst 30 min igjen når den deles ut)
+const FIL_VENTER_BILDE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+const _filSignert = new Map();              // lagret adresse -> { url, til }
+let _filKo = new Set();
+let _filKoLofte = null;
+
+function filDel(url) {
+  const m = /\/storage\/v1\/object\/(?:public|sign)\/([^/?#]+)\/([^?#]+)/.exec(String(url || ''));
+  if (!m || !FIL_BOTTER.includes(m[1])) return null;
+  let sti = m[2];
+  try { sti = decodeURI(sti); } catch (e) { /* behold som den står */ }
+  return { bucket: m[1], sti };
+}
+function filAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function filSignertGyldig(url) {
+  const s = _filSignert.get(url);
+  return s && s.til > Date.now() ? s.url : null;
+}
+function filUrlNaa(url) { return filSignertGyldig(url) || url; }
+
+async function filSignerNaa(urls) {
+  const perBotte = {};
+  urls.forEach(u => { const d = filDel(u); if (d) (perBotte[d.bucket] = perBotte[d.bucket] || []).push({ u, sti: d.sti }); });
+  await Promise.all(Object.keys(perBotte).map(async bucket => {
+    const rader = perBotte[bucket];
+    try {
+      if (!db) return;
+      const { data, error } = await db.storage.from(bucket).createSignedUrls(rader.map(r => r.sti), FIL_SIGNERT_SEK);
+      if (error || !Array.isArray(data)) { console.warn('Signering av fil-lenker feilet (' + bucket + '):', error && error.message); return; }
+      const til = Date.now() + FIL_GJENBRUK_MS;
+      data.forEach((rad, i) => { if (rad && rad.signedUrl && !rad.error && rader[i]) _filSignert.set(rader[i].u, { url: rad.signedUrl, til }); });
+    } catch (e) { console.warn('Signering av fil-lenker feilet (' + bucket + '):', e); }
+  }));
+}
+// Bytter plassholderen i alle <img data-fil> som venter på en av disse adressene. Lyktes ikke
+// signeringen (f.eks. uten nett), settes den lagrede adressen: service workeren kan ha filen.
+function filOppdaterDom(urls) {
+  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+  const sett = new Set(urls);
+  document.querySelectorAll('img[data-fil]').forEach(img => {
+    const u = img.getAttribute('data-fil');
+    if (!sett.has(u)) return;
+    const mal = filUrlNaa(u);
+    if (img.getAttribute('src') !== mal) img.setAttribute('src', mal);
+  });
+}
+// Samler alle adresser som trengs i samme rendering til ÉN forespørsel per bøtte.
+function filSigner(urls) {
+  (urls || []).forEach(u => { if (u && filDel(u) && !filSignertGyldig(u)) _filKo.add(u); });
+  if (!_filKo.size) return _filKoLofte || Promise.resolve();
+  if (!_filKoLofte) {
+    _filKoLofte = new Promise(ferdig => setTimeout(async () => {
+      const ko = [..._filKo]; _filKo = new Set(); _filKoLofte = null;
+      try { await filSignerNaa(ko); } catch (e) { console.warn('Signering av fil-lenker feilet:', e); }
+      try { filOppdaterDom(ko); } catch (e) { console.warn(e); }
+      ferdig();
+    }, 0));
+  }
+  return _filKoLofte;
+}
+function filBildeAttr(url) {
+  if (!filDel(url)) return `src="${url}"`;
+  const klar = filSignertGyldig(url);
+  if (!klar) filSigner([url]);
+  return `src="${filAttr(klar || FIL_VENTER_BILDE)}" data-fil="${filAttr(url)}"`;
+}
+function filLenkeAttr(url) {
+  const grunn = `href="${filAttr(url)}" target="_blank" rel="noopener"`;
+  if (!filDel(url)) return grunn;
+  filSigner([url]);   // forvarmer, så klikket som regel kan åpne lenken direkte
+  return `${grunn} data-fil-lenke="${filAttr(url)}" onclick="apneFil(event,this.getAttribute('data-fil-lenke'))"`;
+}
+// window.open() må kalles synkront i klikket (ellers blokkeres fanen), så finnes ikke en signert
+// lenke ennå, åpnes fanen tom først og sendes videre når lenken er klar (samme knep som vegvesenSkrivUt).
+function apneFil(ev, url) {
+  if (!filDel(url)) return;
+  if (ev && ev.preventDefault) ev.preventDefault();
+  const klar = filSignertGyldig(url);
+  if (klar) { window.open(klar, '_blank', 'noopener'); return; }
+  const vindu = window.open('', '_blank');
+  if (!vindu) { visToast('Kunne ikke åpne filen - tillat sprettoppvinduer for denne siden og prøv igjen'); return; }
+  try { vindu.opener = null; } catch (e) { /* ikke kritisk */ }
+  filSigner([url]).then(() => { vindu.location.href = filUrlNaa(url); });
+}
+async function filHent(url) {
+  if (filDel(url)) await filSigner([url]);
+  return fetch(filUrlNaa(url));
+}
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

@@ -1696,7 +1696,7 @@ async function vegvesenSkrivUt(ordreId) {
     const { PDFDocument } = PDFLib;
     const samlet = await PDFDocument.create();
     for (const d of relevante) {
-      const res = await fetch(d.url);
+      const res = await filHent(d.url);
       // Uten denne sjekken ga en død/slettet lagringslenke en kryptisk "No PDF header
       // found"-feil fra pdf-lib lenger ned (Supabase Storage sitt 404-svar - vanlig JSON/
       // tekst, ikke PDF-bytes - ble forsøkt tolket som en PDF-fil). Navngir nå hvilket

@@ -90,7 +90,7 @@ function fotoSeksjonHTML(o, side, tittel) {
     <div class="photo-grid">${labler.map((lbl,i)=>`
       <div class="photo-box" id="foboks_${side}_${i}" onclick="${bilder[i]?`openLightbox('fo_${side}_${i}_src')`:`document.getElementById('fo_${side}_${i}').click()`}">
         ${bilder[i]
-          ? `<img id="fo_${side}_${i}_src" src="${bilder[i]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+          ? `<img id="fo_${side}_${i}_src" ${filBildeAttr(bilder[i])} style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
              <div class="hover-del" onclick="event.stopPropagation()">
                <button data-viewonly onclick="openLightbox('fo_${side}_${i}_src')" title="Vis fullt bilde">🔍</button>
                <button onclick="document.getElementById('fo_${side}_${i}').click()" title="Bytt bilde">📷</button>
@@ -114,7 +114,7 @@ function manglendeDelerHTML(o) {
     <div class="h">Bilder – Manglende deler${bilder.length?` (${bilder.length})`:''}</div>
     <div class="photo-grid" id="manglendeDelerListe_${o.id}">${bilder.map((url,i)=>`
       <div class="photo-box" onclick="openLightbox('mdel_${i}_src')">
-        <img id="mdel_${i}_src" src="${url}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+        <img id="mdel_${i}_src" ${filBildeAttr(url)} style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
         <div class="hover-del" onclick="event.stopPropagation()">
           <button data-viewonly onclick="openLightbox('mdel_${i}_src')" title="Vis fullt bilde">🔍</button>
           <button onclick="slettBildeManglendeDel('${o.id}',${i})" title="Slett">🗑</button>
