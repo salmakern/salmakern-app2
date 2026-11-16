@@ -1,4 +1,4 @@
--- Ikke kjørt ennå (skrives 16.11, kjøres etter Henriks eget ja).
+-- KJØRT mot produksjon 2026-11-16 kl. ca. 15:32 (Henriks ja), etter SQL-testen i en rullet-tilbake transaksjon (76 av 76 OK). Edge-funksjonen portal-timer-fakta er deployet samme dag.
 --
 -- Gir Forhandlerportalen et SKRIVEBESKYTTET øyeblikksbilde av FAKTISKE timer per bil (ordreklokka: ordrer.ordre_timer_sessions = Ombygging og
 -- ordrer.klargjoring_timer_sessions = Klargjøring), til kalkylesiden i portalen (/admin/kalkyle) som sammenligner kalkulerte timer per modell med det som
