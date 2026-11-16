@@ -1171,6 +1171,11 @@ const FIKEN_OMBYGGING_MODELLER = [
   // Rexton") når "Lafinto"-boksen er huket av - det er to alternative Fiken-produkter for
   // samme jobb, ikke et tillegg oppå (bekreftet av Henrik 2026-09-24).
   { match: /rexton/i, ombygging: '2400', personbil: null, lafinto: '2401' },
+  // Land Cruiser 150 manglet her (funnet av avviksjekken mot portalens produktkatalog
+  // 2026-11-16, s09-026) - produktet fantes i Fiken hele tiden ("Varebilombygging av
+  // Toyota LC 150", 2900), bare aldri lagt inn i denne tabellen. Ingen personbil-kode
+  // funnet for LC 150 i Fiken (samme mønster som Vito/EQV/V-klasse).
+  { match: /land\s*cruiser\s*150|\blc\s*150\b/i, ombygging: '2900', personbil: null },
   { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: '2508' },
 ];
 function finnFikenOmbyggingModell(merke, modell) {
