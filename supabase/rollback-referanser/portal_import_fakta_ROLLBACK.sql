@@ -1,0 +1,11 @@
+-- Rollback for 20261110200000_portal_import_fakta.sql
+--
+-- Migrasjonen endrer INGEN data (den lager bare en skrivebeskyttet funksjon), så dette er alt som skal til i databasen.
+--
+-- REKKEFØLGE (portalen henter fakta herfra; se også portalens CLAUDE.md og supabase/README.md «Importerte biler til portalen»):
+-- 1) Sett importen til modus AV i portalen (adminsiden /admin/import-bestillinger) FØRST, så portalen slutter å kalle edge-funksjonen.
+-- 2) Slett edge-funksjonen:
+--      npx supabase functions delete portal-import-fakta --project-ref qoqpenbfdxeduylxirwk
+-- 3) Drop funksjonen (denne filen). Gjøres den i feil rekkefølge, svarer edge-funksjonen 502 intern_feil (PGRST202, funksjonen finnes ikke), og
+--    portalens kjøring gjør ingenting (feilet faktakall = ingen endring av synlighet).
+drop function if exists public.portal_import_fakta(text[]);

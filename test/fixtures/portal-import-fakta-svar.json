@@ -1,0 +1,28 @@
+{
+  "ok": true,
+  "versjon": 1,
+  "generert": "2026-11-10T04:00:00.123Z",
+  "aktive": [
+    {
+      "ordre_id": "ord_1790000000001", "ordretype": "bil", "kunde": "TEST Forhandler A", "chassis": "TESTWXYZ000000001",
+      "eier": "Test Selger", "merke": "Kia", "modell": "EV9", "ordre_status": "paabegynt", "status": "aktiv",
+      "opprettet": "2026-11-03T08:15:30.123Z", "kontakt_treff": 1, "kontakt_id": "k_test_a", "kontakt_navn": "TEST Forhandler A",
+      "kontakt_orgnr": "123456789", "portal_bestilling_ider": []
+    },
+    {
+      "ordre_id": "ord_1790000000002", "ordretype": "bil", "kunde": "Ukjent Firma", "chassis": "TESTWXYZ000000002",
+      "eier": "", "merke": "", "modell": "", "ordre_status": "ikke_paabegynt", "status": "aktiv",
+      "opprettet": null, "kontakt_treff": 0, "kontakt_id": null, "kontakt_navn": null,
+      "kontakt_orgnr": null, "portal_bestilling_ider": ["cm9testbestilling0001"]
+    }
+  ],
+  "utvalgte": [
+    { "ordre_id": "ord_1789999999999", "finnes": false },
+    {
+      "ordre_id": "ord_1790000000001", "finnes": true, "ordretype": "bil", "kunde": "TEST Forhandler A", "chassis": "TESTWXYZ000000001",
+      "eier": "Test Selger", "merke": "Kia", "modell": "EV9", "ordre_status": "paabegynt", "status": "aktiv",
+      "opprettet": "2026-11-03T08:15:30.123Z", "kontakt_treff": 1, "kontakt_id": "k_test_a", "kontakt_navn": "TEST Forhandler A",
+      "kontakt_orgnr": "123456789", "portal_bestilling_ider": []
+    }
+  ]
+}
