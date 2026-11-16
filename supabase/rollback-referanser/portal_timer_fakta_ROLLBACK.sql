@@ -1,0 +1,12 @@
+-- Rollback for 20261116120000_portal_timer_fakta.sql
+--
+-- Migrasjonen endrer INGEN data (den lager bare en skrivebeskyttet funksjon), så dette er alt som skal til i databasen.
+--
+-- REKKEFØLGE (portalen henter timene herfra; se også supabase/README.md «Faktiske timer til portalen»):
+-- 1) Slå av henting av faktiske timer i portalen (kalkylesiden) FØRST, så portalen slutter å kalle edge-funksjonen. (Forutsetter at kalkylesiden viser kalkylen uten faktatall
+--    når henting feiler eller er av: bekreftes av portalsiden, ikke av appen.)
+-- 2) Slett edge-funksjonen:
+--      npx supabase functions delete portal-timer-fakta --project-ref qoqpenbfdxeduylxirwk
+-- 3) Drop funksjonen (denne filen). Gjøres den i feil rekkefølge, svarer edge-funksjonen 502 intern_feil (PGRST202, funksjonen finnes ikke), og
+--    portalen viser kalkylen uten faktatall.
+drop function if exists public.portal_timer_fakta();

@@ -1,0 +1,11 @@
+{
+  "versjon": 1,
+  "generert": "2026-11-16T12:00:00.000Z",
+  "antall": 4,
+  "biler": [
+    { "merke": "KIA", "modell": "EV9", "ordre_status": "hentet", "arkivert": true, "hentet": true, "minutter_ombygging": 540, "okter_ombygging": 3, "okter_ombygging_glemt": 0, "minutter_klargjoring": 60, "pagaar": false, "frossen_effektiv_minutter": 480 },
+    { "merke": "KIA", "modell": "EV9", "ordre_status": "klar_henting", "arkivert": false, "hentet": false, "minutter_ombygging": 410, "okter_ombygging": 2, "okter_ombygging_glemt": 1, "minutter_klargjoring": 0, "pagaar": false, "frossen_effektiv_minutter": null },
+    { "merke": "Mercedes-Benz", "modell": "Geländewagen", "ordre_status": "paabegynt", "arkivert": false, "hentet": false, "minutter_ombygging": 95, "okter_ombygging": 1, "okter_ombygging_glemt": 0, "minutter_klargjoring": 0, "pagaar": true, "frossen_effektiv_minutter": null },
+    { "merke": "Toyota", "modell": "Land Cruiser 250", "ordre_status": "hentet", "arkivert": true, "hentet": true, "minutter_ombygging": 0, "okter_ombygging": 0, "okter_ombygging_glemt": 0, "minutter_klargjoring": 45, "pagaar": false, "frossen_effektiv_minutter": null }
+  ]
+}
