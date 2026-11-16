@@ -331,6 +331,14 @@ Sikkerhetsgjennomgang 16.11 (Henrik: «Ta filene først»): alle tre bøttene (`
 - **Trinn 2 (IKKE gjort, krever Henriks ja):** `update storage.buckets set public = false where id in ('bilder','ordre-dokumenter','hms-vedlegg')`. Lese-reglene på `storage.objects` krever allerede innlogget ansatt for alle tre bøttene, så signering virker uten nye regler. Gjøres først når (1) signering er sett virke i den innloggede, utrullede appen (bilder på en ordre, et dokument, Vegvesen «Skriv ut», PDF, HMS-bilde, fullmakt), og (2) klienten har vært ute lenge nok til at åpne faner har oppdatert seg: en fane med gammel kode får ødelagte bilder og dokumentlenker i det øyeblikket bøttene stenges (rettes ved å laste siden på nytt). Rollback: sett `public = true` igjen.
 - **Testet:** `test/fil-signerte-lenker.test.js` (15) og hele suiten; i ekte nettleser mot ekte Storage UTEN innlogging (signering avvist → lagret adresse → bildet lastet gjennom ny sw.js, lagret som `cors`/200 under fast nøkkel). **Ikke testet:** vellykket signering som innlogget ansatt mot ekte Storage (krever PIN-innlogging), og private bøtter.
 
+## Kort PIN kan ikke finnes, og bare admin kan slette ordrer (2026-11-16, kjørt)
+
+Samme sikkerhetsgjennomgang (Henrik: PIN-ene «er satt nå», og «det er kun admin som skal kunne slette ordrer»). Migrasjon `20261116200000_pin_seks_sifre_og_ordre_sletting_kun_admin.sql` (rollback øverst i filen):
+- **`ansatte_pin` har CHECK `ansatte_pin_seks_sifre`** (`pin ~ '^[0-9]{6}$'`). Alle ti PIN-er var 6 sifre da den ble lagt på. Innloggingsfunksjonene er IKKE rørt; en kort PIN kan bare ikke lagres lenger. Det som står lenger opp om at 4-sifrede PIN-er «virker for alltid» gjelder derfor ikke lenger, og sperreskjermen `#pinByttSkjerm` blir i praksis aldri vist.
+- **`ordrer`: regelen `krever_innlogget_ansatt` (FOR ALL) er delt** i `ordrer_lese`, `ordrer_opprette`, `ordrer_endre` (alle innloggede ansatte, som før) og `ordrer_slette_kun_admin`. Appen viste allerede «Slett ordre»/«Slett leveranse» bare for admin, så ingen flyt er endret; `portal_avvis_ordre` (admin + godkjenner) er SECURITY DEFINER og virker som før. NB: en DELETE som stoppes av RLS gir INGEN feil, bare 0 rader. Det som står under «Bekreft / Avvis (G6)» om at alle ansatte kan slette ordrer direkte, gjelder nå bare ENDRING.
+- **Fortsatt åpent (ikke rørt):** alle innloggede ansatte kan endre alle ordrer, og har full tilgang (også sletting) til `innstillinger`, `flater`, `moter`, `push_abonnement` og lagertabellene.
+- Test: `supabase/tester/pin_seks_sifre_og_ordre_sletting_kun_admin_TEST_body.sql` (11 kontroller i én DO-blokk som alltid ender med en exception, så alt rulles tilbake; kjørt før og etter migrasjonen).
+
 ## PDF-eksport
 
 `genPDF()` i `eksport-varsler.js` bygger en rik HTML/CSS-mal (logo, tabeller, bildegallerier,
