@@ -3,9 +3,9 @@
   "generert": "2026-11-16T12:00:00.000Z",
   "antall": 4,
   "biler": [
-    { "merke": "KIA", "modell": "EV9", "ordre_status": "hentet", "arkivert": true, "hentet": true, "minutter_ombygging": 540, "okter_ombygging": 3, "okter_ombygging_glemt": 0, "minutter_klargjoring": 60, "pagaar": false, "frossen_effektiv_minutter": 480 },
-    { "merke": "KIA", "modell": "EV9", "ordre_status": "klar_henting", "arkivert": false, "hentet": false, "minutter_ombygging": 410, "okter_ombygging": 2, "okter_ombygging_glemt": 1, "minutter_klargjoring": 0, "pagaar": false, "frossen_effektiv_minutter": null },
-    { "merke": "Mercedes-Benz", "modell": "Geländewagen", "ordre_status": "paabegynt", "arkivert": false, "hentet": false, "minutter_ombygging": 95, "okter_ombygging": 1, "okter_ombygging_glemt": 0, "minutter_klargjoring": 0, "pagaar": true, "frossen_effektiv_minutter": null },
-    { "merke": "Toyota", "modell": "Land Cruiser 250", "ordre_status": "hentet", "arkivert": true, "hentet": true, "minutter_ombygging": 0, "okter_ombygging": 0, "okter_ombygging_glemt": 0, "minutter_klargjoring": 45, "pagaar": false, "frossen_effektiv_minutter": null }
+    { "merke": "KIA", "modell": "EV9", "ordre_status": "hentet", "arkivert": true, "hentet": true, "ankomst_dato": "2026-10-27", "forste_okt": "2026-10-28", "hentet_dato": "2026-11-10", "minutter_ombygging": 540, "okter_ombygging": 3, "okter_ombygging_glemt": 0, "minutter_klargjoring": 60, "pagaar_ombygging": false, "pagaar_klargjoring": false, "frossen_effektiv_minutter": 480 },
+    { "merke": "KIA", "modell": "EV9", "ordre_status": "klar_henting", "arkivert": false, "hentet": false, "ankomst_dato": "2026-11-03", "forste_okt": "2026-11-04", "hentet_dato": null, "minutter_ombygging": 410, "okter_ombygging": 2, "okter_ombygging_glemt": 1, "minutter_klargjoring": 0, "pagaar_ombygging": false, "pagaar_klargjoring": false, "frossen_effektiv_minutter": null },
+    { "merke": "Mercedes-Benz", "modell": "Geländewagen", "ordre_status": "paabegynt", "arkivert": false, "hentet": false, "ankomst_dato": "2026-11-12", "forste_okt": "2026-11-13", "hentet_dato": null, "minutter_ombygging": 95, "okter_ombygging": 1, "okter_ombygging_glemt": 0, "minutter_klargjoring": 0, "pagaar_ombygging": true, "pagaar_klargjoring": false, "frossen_effektiv_minutter": null },
+    { "merke": "Toyota", "modell": "Land Cruiser 250", "ordre_status": "hentet", "arkivert": true, "hentet": true, "ankomst_dato": null, "forste_okt": null, "hentet_dato": "2026-11-12", "minutter_ombygging": 0, "okter_ombygging": 0, "okter_ombygging_glemt": 0, "minutter_klargjoring": 45, "pagaar_ombygging": false, "pagaar_klargjoring": false, "frossen_effektiv_minutter": null }
   ]
 }

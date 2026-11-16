@@ -7,7 +7,10 @@
 //
 // Prinsipper (samme som portal-import-fakta/logikk.ts):
 //  * Edge-funksjonen normaliserer ikke: all utregning og rensing av tekst skjer i Postgres-funksjonen portal_timer_fakta (migrasjon 20261116120000). Her avvises
-//    bare det som er åpenbart ugyldig, og svaret avgrenses til nøyaktig de navngitte feltene i kontrakten (versjon 1, supabase/README.md «Faktiske timer til portalen»).
+//    bare det som er åpenbart ugyldig, og svaret avgrenses til nøyaktig de 15 navngitte feltene i kontrakten (versjon 1, supabase/README.md «Faktiske timer til portalen»).
+//  * Portalen avviser HELE svaret ved første rad som bryter kontrakten (et halvgyldig svar ville gitt et snitt på feil grunnlag). Derfor validerer mapBil STRENGT det samme som kontraktens
+//    garantier: alle 15 felt, riktige typer, ordre_status NØYAKTIG én av de åtte kodene (en ny kode er en ny kontraktsversjon, aldri en stille utvidelse), hele tall >= 0, ekte datoer
+//    (YYYY-MM-DD) eller null, og hentet_dato null når bilen ikke er hentet. Et svar som bryter noe av dette gir 502 intern_feil i stedet for å nå portalen.
 //  * Svaret til portalen er enten kontraktens fakta eller bare {kode, felt?}. Aldri databasetekst, aldri verdier fra ordrene i en feilmelding.
 //  * I motsetning til portal-import-fakta har svaret INGEN `ok`-nøkkel: kontraktens gullfil (test/fixtures/portal-timer-fakta-svar.json) har bare versjon, generert, antall, biler.
 //  * Grensene (2000 biler, 1024 byte) må endres sammen i begge ender (portalens kopi av kontrakten).
@@ -38,10 +41,23 @@ export function parseForesporsel(raw: unknown): ParseForesporsel {
 // Svaret: det Postgres-funksjonen returnerer, avgrenset til kjente nøkler med kjent form.
 // ---------------------------------------------------------------------------------------------------------------------------------------------------
 
+// De åtte statuskodene i appen (js/core.js STATUSER). Postgres-funksjonen avbilder alt annet til ikke_paabegynt; kommer en annen verdi hit, er funksjonen i uorden, og svaret avvises.
+export const ORDRE_STATUSER = [
+  'paa_vei', 'ikke_paabegynt', 'paabegynt', 'ikke_veid', 'klar_visning', 'vist_biltilsyn', 'klar_henting', 'hentet',
+] as const
+export type OrdreStatus = (typeof ORDRE_STATUSER)[number]
+
+// De 15 feltene i hver rad, i kontraktens rekkefølge. Ingen samlet «pagaar»: pagaar_ombygging og pagaar_klargjoring er uavhengige (se migrasjonen).
+export const BIL_FELT = [
+  'merke', 'modell', 'ordre_status', 'arkivert', 'hentet', 'ankomst_dato', 'forste_okt', 'hentet_dato',
+  'minutter_ombygging', 'okter_ombygging', 'okter_ombygging_glemt', 'minutter_klargjoring', 'pagaar_ombygging', 'pagaar_klargjoring', 'frossen_effektiv_minutter',
+] as const
+
 export type TimerBil = {
-  merke: string; modell: string; ordre_status: string; arkivert: boolean; hentet: boolean
+  merke: string; modell: string; ordre_status: OrdreStatus; arkivert: boolean; hentet: boolean
+  ankomst_dato: string | null; forste_okt: string | null; hentet_dato: string | null
   minutter_ombygging: number; okter_ombygging: number; okter_ombygging_glemt: number; minutter_klargjoring: number
-  pagaar: boolean; frossen_effektiv_minutter: number | null
+  pagaar_ombygging: boolean; pagaar_klargjoring: boolean; frossen_effektiv_minutter: number | null
 }
 export type TimerSvar = { versjon: 1; generert: string; antall: number; biler: TimerBil[] }
 
@@ -57,22 +73,44 @@ const ER_BOOLSK = (v: unknown): v is boolean => typeof v === 'boolean'
 // Hele, ikke-negative tall (minutter og antall). Tall utenfor trygt heltallsområde avvises.
 const ER_HELT = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
 const ER_TEKST_HOYST = (v: unknown): v is string => typeof v === 'string' && [...v].length <= TEKST_MAKS
+const ER_STATUS = (v: unknown): v is OrdreStatus => typeof v === 'string' && (ORDRE_STATUSER as readonly string[]).includes(v)
 
-// Én bil. Alle 11 felt må være til stede med riktig type (frossen_effektiv_minutter er null eller et helt tall); ekstra felt kastes ved at et nytt objekt bygges av de
-// navngitte feltene (i kontraktens rekkefølge). `hentet` må stemme med ordre_status (kontraktens definisjon: hentet = ordre_status er «hentet»). Gir null ved første brudd.
+// En EKTE kalenderdato som tekst YYYY-MM-DD (år 0001-9999, skuddår, månedslengde). Ren heltallsregning (aldri Date, som retter 31. februar til 3. mars og tolker år 0-99 som 19xx).
+// Samme regel som Postgres-funksjonen (som aldri gir noe annet enn en slik dato eller null).
+const DATO = /^(\d{4})-(\d{2})-(\d{2})$/
+function erDato(v: unknown): v is string {
+  if (typeof v !== 'string') return false
+  const m = DATO.exec(v)
+  if (!m) return false
+  const aar = Number(m[1]), mnd = Number(m[2]), dag = Number(m[3])
+  if (aar < 1 || mnd < 1 || mnd > 12 || dag < 1) return false
+  const skuddaar = (aar % 4 === 0 && aar % 100 !== 0) || aar % 400 === 0
+  const dagerIMnd = [31, skuddaar ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mnd - 1]
+  return dag <= dagerIMnd
+}
+const ER_DATO_ELLER_NULL = (v: unknown): v is string | null => v === null || erDato(v)
+
+// Én bil. Alle 15 felt må være til stede med riktig type (de eneste som kan være null er ankomst_dato, forste_okt, hentet_dato og frossen_effektiv_minutter); ekstra felt kastes ved at
+// et nytt objekt bygges av de navngitte feltene (i kontraktens rekkefølge), så en gammel utgave av Postgres-funksjonen med en samlet `pagaar` aldri slipper noe gjennom (den mangler
+// pagaar_ombygging og avvises). `hentet` må stemme med ordre_status (kontraktens definisjon: hentet = ordre_status er «hentet»), og hentet_dato må være null når bilen ikke er hentet.
+// Gir null ved første brudd.
 function mapBil(raa: unknown): TimerBil | null {
   if (!ER_OBJEKT(raa)) return null
   const r = raa
   if (!ER_TEKST_HOYST(r.merke) || !ER_TEKST_HOYST(r.modell)) return null
-  if (typeof r.ordre_status !== 'string' || r.ordre_status === '') return null
-  if (!ER_BOOLSK(r.arkivert) || !ER_BOOLSK(r.hentet) || !ER_BOOLSK(r.pagaar)) return null
+  if (!ER_STATUS(r.ordre_status)) return null
+  if (!ER_BOOLSK(r.arkivert) || !ER_BOOLSK(r.hentet) || !ER_BOOLSK(r.pagaar_ombygging) || !ER_BOOLSK(r.pagaar_klargjoring)) return null
   if (r.hentet !== (r.ordre_status === 'hentet')) return null
+  if (!ER_DATO_ELLER_NULL(r.ankomst_dato) || !ER_DATO_ELLER_NULL(r.forste_okt) || !ER_DATO_ELLER_NULL(r.hentet_dato)) return null
+  if (!r.hentet && r.hentet_dato !== null) return null
   if (!ER_HELT(r.minutter_ombygging) || !ER_HELT(r.okter_ombygging) || !ER_HELT(r.okter_ombygging_glemt) || !ER_HELT(r.minutter_klargjoring)) return null
   if (r.frossen_effektiv_minutter !== null && !ER_HELT(r.frossen_effektiv_minutter)) return null
   return {
     merke: r.merke, modell: r.modell, ordre_status: r.ordre_status, arkivert: r.arkivert, hentet: r.hentet,
+    ankomst_dato: r.ankomst_dato, forste_okt: r.forste_okt, hentet_dato: r.hentet_dato,
     minutter_ombygging: r.minutter_ombygging, okter_ombygging: r.okter_ombygging, okter_ombygging_glemt: r.okter_ombygging_glemt,
-    minutter_klargjoring: r.minutter_klargjoring, pagaar: r.pagaar, frossen_effektiv_minutter: r.frossen_effektiv_minutter,
+    minutter_klargjoring: r.minutter_klargjoring, pagaar_ombygging: r.pagaar_ombygging, pagaar_klargjoring: r.pagaar_klargjoring,
+    frossen_effektiv_minutter: r.frossen_effektiv_minutter,
   }
 }
 

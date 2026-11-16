@@ -9,18 +9,21 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
-import { parseForesporsel, mapTimer, mapFeil, VERSJON, MAKS_BODY_BYTES, BILER_MAKS, TEKST_MAKS } from '../supabase/functions/portal-timer-fakta/logikk.ts';
+import { parseForesporsel, mapTimer, mapFeil, VERSJON, MAKS_BODY_BYTES, BILER_MAKS, TEKST_MAKS, ORDRE_STATUSER, BIL_FELT } from '../supabase/functions/portal-timer-fakta/logikk.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FUNKSJON = path.resolve(__dirname, '../supabase/functions/portal-timer-fakta');
 const kilde = readFileSync(path.join(FUNKSJON, 'index.ts'), 'utf8').replace(/\r\n/g, '\n');
 const logikkKilde = readFileSync(path.join(FUNKSJON, 'logikk.ts'), 'utf8').replace(/\r\n/g, '\n');
-// Gullfila: HELE kontraktssvaret (versjon 1), byte-lik portalens kopi (eksempel-svar.json i kontraktmappen). Svaret har INGEN `ok`-nøkkel (i motsetning til portal-import-fakta).
+// Gullfila: HELE kontraktssvaret (versjon 1, 15 felt per bil), byte-lik portalens kopi (eksempel-svar.json i kontraktmappen). Svaret har INGEN `ok`-nøkkel (i motsetning til portal-import-fakta).
 const GULL_TEKST = readFileSync(path.join(__dirname, 'fixtures/portal-timer-fakta-svar.json'), 'utf8');
 const GULL = JSON.parse(GULL_TEKST);
 const kopi = (x) => JSON.parse(JSON.stringify(x));
 
-const FELT = ['merke', 'modell', 'ordre_status', 'arkivert', 'hentet', 'minutter_ombygging', 'okter_ombygging', 'okter_ombygging_glemt', 'minutter_klargjoring', 'pagaar', 'frossen_effektiv_minutter'];
+// De 15 feltene i kontraktens rekkefølge (skrevet ut her, uavhengig av BIL_FELT i logikk.ts, så en feil der ikke kan gjemme seg bak seg selv).
+const FELT = ['merke', 'modell', 'ordre_status', 'arkivert', 'hentet', 'ankomst_dato', 'forste_okt', 'hentet_dato', 'minutter_ombygging', 'okter_ombygging', 'okter_ombygging_glemt', 'minutter_klargjoring', 'pagaar_ombygging', 'pagaar_klargjoring', 'frossen_effektiv_minutter'];
+const STATUSKODER = ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'ikke_veid', 'klar_visning', 'vist_biltilsyn', 'klar_henting', 'hentet'];
+const DATOFELT = ['ankomst_dato', 'forste_okt', 'hentet_dato'];
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------
 // Gullfila (kontrollerer testens egen forutsetning)
@@ -33,19 +36,33 @@ describe('gullfila (forutsetninger for resten av testen)', () => {
     expect(GULL.antall).toBe(4);
   });
 
-  it('hver bil har de 11 feltene i kontraktens rekkefølge og ingen id, chassis, kunde, kontaktperson eller ansattfelt', () => {
+  it('hver bil har de 15 feltene i kontraktens rekkefølge, ingen samlet «pagaar», og ingen id, chassis, kunde, kontaktperson eller ansattfelt', () => {
+    expect(FELT).toHaveLength(15);
     for (const bil of GULL.biler) expect(Object.keys(bil)).toEqual(FELT);
+    expect(GULL_TEKST).not.toMatch(/"pagaar"/);
     expect(GULL_TEKST).not.toMatch(/chassis|kunde|eier|ansatt|ordre_id|"id"/i);
   });
 
   it('dekker de interessante tilfellene: glemt, pågår, frossen verdi og null, hentet og ikke hentet', () => {
     const b = GULL.biler;
     expect(b.some((x) => x.okter_ombygging_glemt > 0)).toBe(true);
-    expect(b.some((x) => x.pagaar)).toBe(true);
+    expect(b.some((x) => x.pagaar_ombygging)).toBe(true);
     expect(b.some((x) => x.frossen_effektiv_minutter === null)).toBe(true);
     expect(b.some((x) => typeof x.frossen_effektiv_minutter === 'number')).toBe(true);
     expect(b.some((x) => x.hentet)).toBe(true);
     expect(b.some((x) => !x.hentet)).toBe(true);
+  });
+
+  it('hver dato er null eller en ekte YYYY-MM-DD, hentet_dato er null for biler som ikke er hentet, og alle statuskoder er blant de åtte', () => {
+    for (const bil of GULL.biler) {
+      for (const felt of DATOFELT) expect(bil[felt] === null || /^\d{4}-\d{2}-\d{2}$/.test(bil[felt]), felt).toBe(true);
+      if (!bil.hentet) expect(bil.hentet_dato).toBeNull();
+      expect(STATUSKODER).toContain(bil.ordre_status);
+      expect(bil.hentet).toBe(bil.ordre_status === 'hentet');
+    }
+    expect(GULL.biler.some((x) => x.ankomst_dato === null)).toBe(true);
+    expect(GULL.biler.some((x) => x.forste_okt === null)).toBe(true);
+    expect(GULL.biler.some((x) => !x.hentet && x.hentet_dato === null)).toBe(true);
   });
 });
 
@@ -118,7 +135,7 @@ describe('mapTimer (V2)', () => {
     expect(inn).toEqual(fasit);
   });
 
-  it('hvert av de 11 feltene må være til stede, ellers null', () => {
+  it('hvert av de 15 feltene må være til stede, ellers null (også de som kan være null: datofeltene og frossen)', () => {
     for (const felt of FELT) {
       const inn = kopi(GULL);
       delete inn.biler[0][felt];
@@ -130,7 +147,8 @@ describe('mapTimer (V2)', () => {
     const feil = {
       merke: [5, null, {}, ['KIA']], modell: [5, null, {}], ordre_status: [5, null, '', {}], arkivert: ['true', 1, null, 0], hentet: ['true', 1, null, 0],
       minutter_ombygging: ['540', 1.5, -1, null, NaN, Infinity, true, 2 ** 53], okter_ombygging: ['3', 1.5, -1, null, true], okter_ombygging_glemt: ['0', 0.5, -1, null],
-      minutter_klargjoring: ['60', 1.5, -1, null, true], pagaar: ['false', 0, null], frossen_effektiv_minutter: ['480', 1.5, -1, NaN, true, {}, undefined],
+      minutter_klargjoring: ['60', 1.5, -1, null, true], pagaar_ombygging: ['false', 0, null, undefined], pagaar_klargjoring: ['false', 0, null, undefined], frossen_effektiv_minutter: ['480', 1.5, -1, NaN, true, {}, undefined],
+      ankomst_dato: [5, true, {}, [], undefined], forste_okt: [5, true, {}, [], undefined], hentet_dato: [5, true, {}, [], undefined],
     };
     for (const [felt, verdier] of Object.entries(feil)) {
       for (const v of verdier) {
@@ -157,13 +175,39 @@ describe('mapTimer (V2)', () => {
     expect(r.biler[1].frossen_effektiv_minutter).toBeNull();
   });
 
-  it('ordre_status er fri tekst (en ny statuskode fra appen avvises ikke), men merke og modell kan være tomme', () => {
+  it('ordre_status er NØYAKTIG én av de åtte kodene: alle åtte slippes gjennom, alt annet (ny kode, gammel verdi, tom, null, stor bokstav, polstret) gir null', () => {
+    for (const kode of STATUSKODER) {
+      const inn = kopi(GULL);
+      inn.biler[1].ordre_status = kode; inn.biler[1].hentet = kode === 'hentet';
+      if (kode === 'hentet') inn.biler[1].hentet_dato = null;
+      expect(mapTimer(inn)?.biler[1].ordre_status, kode).toBe(kode);
+    }
+    for (const kode of ['noe_nytt_fra_appen', 'bestilt_frakt', 'Hentet', 'HENTET', ' hentet', 'hentet ', 'klar_for_henting', 'ikke_paabegynt\n', '', ' ', null, undefined, 5, true, {}, ['hentet']]) {
+      for (const hentet of [true, false]) {
+        const inn = kopi(GULL);
+        inn.biler[1].ordre_status = kode; inn.biler[1].hentet = hentet;
+        expect(mapTimer(inn), JSON.stringify(kode) + ' hentet=' + hentet).toBeNull();
+      }
+    }
+  });
+
+  it('merke og modell kan være tomme', () => {
     const inn = kopi(GULL);
-    inn.biler[0].ordre_status = 'noe_nytt_fra_appen'; inn.biler[0].hentet = false;
     inn.biler[1].merke = ''; inn.biler[1].modell = '';
-    const r = mapTimer(inn);
-    expect(r.biler[0].ordre_status).toBe('noe_nytt_fra_appen');
-    expect(r.biler[1]).toMatchObject({ merke: '', modell: '' });
+    expect(mapTimer(inn).biler[1]).toMatchObject({ merke: '', modell: '' });
+  });
+
+  it('ORDRE_STATUSER, BIL_FELT og testens egne lister er de samme (ingen stille utvidelse)', () => {
+    expect([...ORDRE_STATUSER]).toEqual(STATUSKODER);
+    expect([...BIL_FELT]).toEqual(FELT);
+  });
+
+  it('ORDRE_STATUSER er nøyaktig STATUSER i appen (js/core.js): en ny status der er en ny kontraktsversjon, ikke noe som slipper gjennom stille', () => {
+    const core = readFileSync(path.resolve(__dirname, '../js/core.js'), 'utf8');
+    const blokk = /const STATUSER = \[([\s\S]*?)\n\];/.exec(core);
+    expect(blokk, 'fant ikke STATUSER i js/core.js').not.toBeNull();
+    const ider = [...blokk[1].matchAll(/\{id:'([a-z_]+)'/g)].map((m) => m[1]);
+    expect(ider).toEqual(STATUSKODER);
   });
 
   it('merke og modell: nøyaktig 100 tegn er greit, 101 gir null; tegn telles som kodepunkter (100 emoji = 100)', () => {
@@ -173,6 +217,60 @@ describe('mapTimer (V2)', () => {
     expect(mapTimer(med('m', 'x'.repeat(101)))).toBeNull();
     expect(mapTimer(med('\u{1F697}'.repeat(100), 'x'))).not.toBeNull();   // 100 kodepunkter, men lengde 200 i UTF-16
     expect(mapTimer(med('\u{1F697}'.repeat(101), 'x'))).toBeNull();
+  });
+
+  it('datofeltene (ankomst_dato, forste_okt, hentet_dato): ekte YYYY-MM-DD eller null; alt annet gir null (skuddår, månedslengde, år 0000, format, mellomrom, andre typer)', () => {
+    const gyldige = ['2026-11-10', '2028-02-29', '2000-02-29', '0001-01-01', '9999-12-31', '2026-12-31', '2026-01-01', '2026-04-30'];
+    const ugyldige = ['2026-02-29', '1900-02-29', '2026-02-30', '2026-04-31', '2026-11-31', '2026-13-01', '2026-00-10', '2026-11-00', '0000-01-01', '2026-1-10', '2026-11-1', '26-11-10',
+      ' 2026-11-10', '2026-11-10 ', '2026-11-10\n', '2026-11-10T10:00:00Z', '2026/11-10', '20261110', '10.11.2026', '', '\u2014', 'abc', '\u0662\u0660\u0662\u0666-11-10', '\uff12\uff10\uff12\uff16-11-10', '2026-11-100', '12026-11-10'];
+    const andreTyper = [5, 20261110, true, false, {}, [], ['2026-11-10'], undefined, NaN];
+    for (const felt of DATOFELT) {
+      for (const v of gyldige) {
+        const inn = kopi(GULL);
+        const bil = inn.biler[0]; // hentet = true, så hentet_dato kan ha verdi
+        bil[felt] = v;
+        expect(mapTimer(inn)?.biler[0][felt], `${felt} = ${v}`).toBe(v);
+      }
+      for (const v of [...ugyldige, ...andreTyper]) {
+        const inn = kopi(GULL);
+        inn.biler[0][felt] = v;
+        expect(mapTimer(inn), `${felt} = ${String(v)}`).toBeNull();
+      }
+      const inn = kopi(GULL); inn.biler[0][felt] = null;
+      expect(mapTimer(inn)?.biler[0][felt], `${felt} = null`).toBeNull();
+    }
+  });
+
+  it('hentet_dato må være null når bilen ikke er hentet (men kan være en dato eller null for hentede biler); de andre datoene er uavhengige av hentet', () => {
+    const ikkeHentet = kopi(GULL); ikkeHentet.biler[1].hentet_dato = '2026-11-10';
+    expect(mapTimer(ikkeHentet)).toBeNull();
+    const hentetMedDato = kopi(GULL); hentetMedDato.biler[0].hentet_dato = '2026-11-10';
+    expect(mapTimer(hentetMedDato).biler[0].hentet_dato).toBe('2026-11-10');
+    const hentetUtenDato = kopi(GULL); hentetUtenDato.biler[0].hentet_dato = null;
+    expect(mapTimer(hentetUtenDato).biler[0].hentet_dato).toBeNull();
+    const andreDatoer = kopi(GULL); andreDatoer.biler[1].ankomst_dato = '2026-11-01'; andreDatoer.biler[1].forste_okt = '2026-11-02';
+    expect(mapTimer(andreDatoer).biler[1]).toMatchObject({ ankomst_dato: '2026-11-01', forste_okt: '2026-11-02', hentet_dato: null });
+  });
+
+  it('pagaar_ombygging og pagaar_klargjoring er uavhengige: en hentet bil med åpen Klargjøring og lukket Ombygging slippes gjennom som den er', () => {
+    const inn = kopi(GULL);
+    Object.assign(inn.biler[0], { hentet: true, ordre_status: 'hentet', pagaar_klargjoring: true, pagaar_ombygging: false });
+    expect(mapTimer(inn).biler[0]).toMatchObject({ pagaar_klargjoring: true, pagaar_ombygging: false });
+    for (const [omb, klarg] of [[true, true], [true, false], [false, true], [false, false]]) {
+      const x = kopi(GULL); Object.assign(x.biler[0], { pagaar_ombygging: omb, pagaar_klargjoring: klarg });
+      expect(mapTimer(x).biler[0]).toMatchObject({ pagaar_ombygging: omb, pagaar_klargjoring: klarg });
+    }
+  });
+
+  it('en gammel utgave av funksjonen med samlet «pagaar» (uten pagaar_ombygging og pagaar_klargjoring, og uten datofeltene) avvises, og en samlet «pagaar» sendes aldri videre', () => {
+    const gammel = kopi(GULL);
+    for (const bil of gammel.biler) { bil.pagaar = bil.pagaar_ombygging || bil.pagaar_klargjoring; delete bil.pagaar_ombygging; delete bil.pagaar_klargjoring; for (const d of DATOFELT) delete bil[d]; }
+    expect(mapTimer(gammel)).toBeNull();
+    const medBegge = kopi(GULL);
+    medBegge.biler[0].pagaar = true;
+    const r = mapTimer(medBegge);
+    expect(r).toEqual(GULL);
+    expect(JSON.stringify(r)).not.toMatch(/"pagaar"/);
   });
 
   it('antall må være lik lengden på biler (mangler, tekst, for lavt, for høyt gir null)', () => {
@@ -533,13 +631,17 @@ describe('index.ts: oppførsel (håndtereren kjørt mot falsk Deno og en falsk k
     expect(t.logger.join('\n')).not.toContain('supabase.invalid');
   });
 
-  it('uventet svarform fra databasen (null, tomt objekt, ukjent versjon, bil med manglende felt, feil type, feil antall): 502 intern_feil', async () => {
+  it('uventet svarform fra databasen (null, tomt objekt, ukjent versjon, bil med manglende felt, feil type, feil antall, ukjent status, ugyldig dato, hentet_dato uten hentet, gammel «pagaar»): 502 intern_feil', async () => {
     const feilBil = kopi(GULL); delete feilBil.biler[0].minutter_ombygging;
     const feilVersjon = { ...kopi(GULL), versjon: 2 };
-    const feilType = kopi(GULL); feilType.biler[0].pagaar = 'nei';
+    const feilType = kopi(GULL); feilType.biler[0].pagaar_klargjoring = 'nei';
     const feilAntall = { ...kopi(GULL), antall: 5 };
     const feilHentet = kopi(GULL); feilHentet.biler[0].hentet = false;
-    for (const data of [null, {}, [], 'tekst', feilVersjon, feilBil, feilType, feilAntall, feilHentet, { ...kopi(GULL), biler: 'x' }]) {
+    const ukjentStatus = kopi(GULL); ukjentStatus.biler[1].ordre_status = 'bestilt_frakt';
+    const feilDato = kopi(GULL); feilDato.biler[0].forste_okt = '2026-02-30';
+    const datoUtenHentet = kopi(GULL); datoUtenHentet.biler[1].hentet_dato = '2026-11-10';
+    const gammelPagaar = kopi(GULL); gammelPagaar.biler[2].pagaar = true; delete gammelPagaar.biler[2].pagaar_ombygging;
+    for (const data of [null, {}, [], 'tekst', feilVersjon, feilBil, feilType, feilAntall, feilHentet, ukjentStatus, feilDato, datoUtenHentet, gammelPagaar, { ...kopi(GULL), biler: 'x' }]) {
       const t = await last({ rpc: { data, error: null } });
       const res = await t.kall({ headers: medNokkel, body: GYLDIG });
       expect(res.status, JSON.stringify(data)?.slice(0, 50)).toBe(502);
