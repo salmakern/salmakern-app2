@@ -889,6 +889,16 @@ function leveranseKolliSum(l) {
   return { antall, vekt: Math.round(vekt * 100) / 100, utenVekt };
 }
 function erLeveranse(o) { return !!o && o.ordretype === 'leveranse'; }
+// «Kun ekstrautstyr (ingen ombygging)» (2026-11-17, Henrik): en vanlig bil-ordre for en bil som bare skal ha montert litt ekstrautstyr (gummimatte, kasse),
+// ikke en ny ombygging. Ingen tvangsflyt, ingen automatisk utstyrsmal, «Varer fra lager» med bare «Ekstra utstyr», ikke i Admin-ark, og kalenderen skrives
+// målrettet som for en leveranse (rører aldri Admin-ark). Telles ikke i portalen (portal_import_fakta / portal_timer_fakta). Får ordre-lapp som vanlig.
+function erKunEkstrautstyr(o) { return !!o && !erLeveranse(o) && o.kunEkstrautstyr === true; }
+// Kalenderplasseringen skrives målrettet (leveranseSettKalender) og aldri via Admin-ark/Time på biltilsynet: leveranser og kun-ekstrautstyr-ordrer.
+function kalenderUtenAdminArk(o) { return erLeveranse(o) || erKunEkstrautstyr(o); }
+function kunEkstrautstyrBadgeHTML(o) {
+  if (!erKunEkstrautstyr(o)) return '';
+  return `<span title="Kun ekstrautstyr - ingen ombygging" style="display:inline-flex;align-items:center;background:#1e1b4b;border:1px solid #6366f1;color:#c7d2fe;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">KUN EKSTRAUTSTYR</span>`;
+}
 // Tittelen en leveranse vises med i lister og detalj: merkingen, ellers reg.nr, ellers chassis (minst ett av dem kreves ved opprettelse). Rå tekst: kall esc() ved visning.
 function leveranseTittel(o) {
   const l = (o && o.leveranse) || {};
@@ -952,6 +962,9 @@ function dbToOrdre(r) {
     produktRettelser:Array.isArray(r.produkt_rettelser) ? r.produkt_rettelser : [],
     // Leveranse (ordre uten bil, 2026-11-03): ordretype/leveranse skrives av ordreToDb BARE for leveranser (så en bil-ordre kan lagres også mot en database uten kolonnene), frakt_bestilt_* aldri.
     ordretype:r.ordretype==='leveranse'?'leveranse':'bil', leveranse:normaliserLeveranse(r.leveranse),
+    // «Kun ekstrautstyr» (2026-11-17): skrives ALDRI av ordreToDb/save() (bare ved opprettelsen og av settKunEkstrautstyr(), målrettet), så en
+    // bil-ordre kan lagres også mot en database uten kolonnen, og en gammel lokal kopi aldri skriver avkrysningen tilbake.
+    kunEkstrautstyr:!!r.kun_ekstrautstyr,
     fraktBestiltAt:r.frakt_bestilt_at||null, fraktBestiltAv:r.frakt_bestilt_av||'', fraktBestiltTil:r.frakt_bestilt_til||'',
     // Frossen effektiv tid (s09-020, bedt om av Henrik 2026-11-04): satt KUN av endreStatus()
     // (js/oversikt-kalender.js) når ordren settes til "Hentet" - LESES bare her, skrives ALDRI
@@ -1578,7 +1591,7 @@ function mkOrdre(id,regnr,kunde,eier,type,variant,ankomst,kDato,kTid,har,skalHa,
     notater:'', endringer:[],
     utstyrSjekkliste:[], utstyrMalNavn:'',
     visningsSjekkliste:[], visningsMalNavn:'', prioritert:false,
-    bestiltFrakt:false, henteKlarDato:''
+    bestiltFrakt:false, henteKlarDato:'', kunEkstrautstyr:false
   };
 }
 
@@ -1709,7 +1722,8 @@ function sendLagring(ordreId, st) {
   delete payload.fiken_kladd_url;
   // Kalenderplasseringen til en LEVERANSE skrives bare av leveranseSettKalender() (målrettet update, leveranse.js): en full-rad-lagring fra en gammel lokal kopi kunne ellers skrive en
   // gammel dato tilbake over en nyere flytting (også en kollegas). Opprettelsen bruker egen insert, så den har fortsatt kalenderen med.
-  if (erLeveranse(o)) { delete payload.kalender_dato; delete payload.kalender_tid; }
+  // Samme for en «kun ekstrautstyr»-ordre (kalenderen skrives målrettet som for en leveranse, se kalenderUtenAdminArk).
+  if (kalenderUtenAdminArk(o)) { delete payload.kalender_dato; delete payload.kalender_tid; }
   const lop = db.from('ordrer').upsert(payload)
     .then(r=>{
       if (r.error) {

@@ -1,6 +1,6 @@
 {
- "hentet": "2026-11-12",
- "kilde": "information_schema.columns for public.ordrer (read-only)",
+ "hentet": "2026-11-17",
+ "kilde": "information_schema.columns for public.ordrer (read-only) + kun_ekstrautstyr lagt til for hånd 2026-11-17 (migrasjon 20261118110000, ikke kjørt ennå)",
  "kolonner": [
   {
    "kolonne": "id",
@@ -493,13 +493,6 @@
    "nullable": true
   },
   {
-   "kolonne": "produkt_rettelser",
-   "type": "jsonb",
-   "udt": "jsonb",
-   "default": "'[]'::jsonb",
-   "nullable": false
-  },
-  {
    "kolonne": "ordretype",
    "type": "text",
    "udt": "text",
@@ -575,6 +568,27 @@
    "udt": "jsonb",
    "default": null,
    "nullable": true
+  },
+  {
+   "kolonne": "forhandler_kontakt_id",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "produkt_rettelser",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": false
+  },
+  {
+   "kolonne": "kun_ekstrautstyr",
+   "type": "boolean",
+   "udt": "bool",
+   "default": "false",
+   "nullable": false
   }
  ]
 }

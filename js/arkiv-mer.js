@@ -466,7 +466,7 @@ function finnUkobledeAdminArkRader() {
   // supabase/README.md-historikken/CLAUDE.md) er BEVISST uten tilknyttet ordre - de skal
   // ikke drukne ekte, ferske ukoblede rader i denne lista.
   return (S.adminArk||[])
-    .filter(r => !r.arkivert && r.chassisNr && !r.id.startsWith('ark_import2026_') && !S.ordrer.some(o => !erLeveranse(o) && samsvarerChassis(o.chassis, r.chassisNr)))
+    .filter(r => !r.arkivert && r.chassisNr && !r.id.startsWith('ark_import2026_') && !S.ordrer.some(o => !erLeveranse(o) && !erKunEkstrautstyr(o) && samsvarerChassis(o.chassis, r.chassisNr)))
     .sort((a,b) => b.aar - a.aar);
 }
 function apneUkobletAdminArkRad(aar) {

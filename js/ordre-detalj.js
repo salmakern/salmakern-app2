@@ -192,6 +192,7 @@ function buildOrdreDetail() {
           </label>` : ''}
         </div>
         ${portalBadgeHTML(o, true)}
+        ${kunEkstrautstyrBadgeHTML(o)}
       </div>
     </div>
   </div>
@@ -1039,6 +1040,7 @@ async function bekreftAdminMeldPaa() {
 
 function tvangsflyt(o) {
   if (erLeveranse(o)) return []; // en leveranse har ingen tvangsflyt (ingen bil, biltilsyn eller godkjenning)
+  if (o.kunEkstrautstyr) return []; // «kun ekstrautstyr» (ingen ombygging, Henrik 2026-11-17): ingen tvangsflyt
   // "Ansatt meldt på" fjernet herfra 2026-11-14 (Henrik): sjekket CURRENT ansatteSignert.length,
   // ikke historikk - en ordre der alle har meldt seg av igjen (f.eks. ved endt skift) ville
   // aldri oppfylt kravet uten at noen ble stående "meldt på" kunstig, selv om bilen faktisk var
@@ -1077,8 +1079,8 @@ function tvangsflytBoksHTML(o) {
   const erAdmin = me && me.rolle==='admin';
   const kanLukke = tvangsflytOk || erAdmin;
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
-  return `<div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
-    <div style="display:flex;gap:3px;margin-top:10px">
+  return `<div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.length ? `${tf.filter(t=>t.ok).length} av ${tf.length} krav` : 'Ingen krav'}</span></div>
+    ${tf.length ? `<div style="display:flex;gap:3px;margin-top:10px">
       ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:5px;border-radius:999px;background:${t.ok?'#4ade80':'rgba(239,68,68,.5)'}"></span>`).join('')}
     </div>
     <div class="box" style="margin-top:10px;padding:0;overflow:hidden">
@@ -1086,7 +1088,7 @@ function tvangsflytBoksHTML(o) {
         <span style="flex-shrink:0;width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:${t.ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.14)'};border:1px solid ${t.ok?'rgba(34,197,94,.35)':'rgba(239,68,68,.4)'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
         <span style="font-size:13.5px;color:${t.ok?'#a1a1aa':'#f4f4f5'}">${esc(t.lbl)}</span>
       </div>`).join('')}
-    </div>
+    </div>` : '<div class="small muted" style="margin-top:8px">Kun ekstrautstyr (ingen ombygging): ingen tvangsflyt.</div>'}
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
       ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
         ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:8px">${erAdmin?'Tvangsflyt ikke fullført - du kan overstyre som admin.':'Fullfør tvangsflyt først.'}</div>`:''}
@@ -1132,7 +1134,15 @@ function ombyggingBoksHTML(o) {
       </div>` : ''}${slugAvviker ? `<div style="margin-top:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fbbf24">
         ⚠ Merke/Modell («${esc(o.merke||'')} ${esc(o.modell||'')}») stemmer ikke med modellen fra portal-bestillingen («${esc(kan.merke||'')} ${esc(kan.modell||'')}»). Fakturering bruker modellen fra bestillingen.
       </div>` : ''}`;
-  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+  // «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17): egen avkrysning over boksene, skrives målrettet (settKunEkstrautstyr). Når den er på,
+  // skjules boksene (de kan ikke være huket av samtidig, se settKunEkstrautstyr).
+  const kun = o.kunEkstrautstyr === true; // inline (ikke erKunEkstrautstyr): funksjonen lastes alene i enkelte tester
+  const kunHTML = `<label style="display:flex;align-items:center;gap:10px;background:${kun?'rgba(99,102,241,.12)':'#0f0f12'};border:1px solid ${kun?'#6366f1':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;margin-top:10px">
+      <input type="checkbox" id="kunEkstrautstyr_${o.id}" ${kun?'checked':''} onchange="settKunEkstrautstyr('${o.id}',this.checked)" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
+      <span style="font-size:13.5px;font-weight:${kun?'700':'400'};color:${kun?'#f4f4f5':'#a1a1aa'}">Kun ekstrautstyr (ingen ombygging)</span>
+    </label>`;
+  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen. Velg utstyret under «Varer fra lager».</div>';
+  return kunHTML + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
       <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
         <input type="checkbox" ${o.ombygging?.[k]?'checked':''} onchange="sfOmbygging('${o.id}','${k}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0">
@@ -1300,6 +1310,42 @@ function sfOmbygging(id, felt, val) {
   // selve funksjonen rydder kun hvis INGEN av de to lenger er aktuelle, så dette er trygt
   // å kalle på et rent kategoribytte Nytt<->Brukt også).
   if ((felt === 'nyttKjoretoy' || felt === 'bruktKjoretoy') && !val) vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o);
+}
+
+// «Kun ekstrautstyr (ingen ombygging)» på/av i ordredetaljen (Henrik 2026-11-17). MÅLRETTET skriving av bare kun_ekstrautstyr (save()/ordreToDb skriver
+// den aldri, se dbToOrdre), med tilbakerulling ved feil og logglinje først etter vellykket skriving. Kan ikke slås på mens en Ombygging-boks er huket av:
+// da står ombyggingslinjen på fakturaen, og den skal fjernes bevisst (boksen) i stedet for å bli liggende skjult.
+const _kunEkstrautstyrPagar = new Set();
+async function settKunEkstrautstyr(id, val) {
+  const o = S.ordrer.find(x => x.id === id); if (!o || erLeveranse(o)) return;
+  const tegnPaaNytt = () => { if (activeOrdreId === id) buildOrdreDetail(); renderAll(); };
+  if (_kunEkstrautstyrPagar.has(id)) { visToast('Vent litt, forrige endring lagres fortsatt.'); tegnPaaNytt(); return; }
+  val = !!val;
+  if (val === !!o.kunEkstrautstyr) return;
+  if (val && o.ombygging && Object.values(o.ombygging).some(Boolean)) {
+    visToast('Fjern avkrysningen i Ombygging (Nytt/Brukt/Lafinto/Personbil) først.');
+    tegnPaaNytt();
+    return;
+  }
+  const forrige = !!o.kunEkstrautstyr;
+  o.kunEkstrautstyr = val;
+  _kunEkstrautstyrPagar.add(id);
+  ignorerRealtimeFor.add(id);
+  setTimeout(() => ignorerRealtimeFor.delete(id), 10000);
+  try {
+    if (db) {
+      const { error } = await db.from('ordrer').update({ kun_ekstrautstyr: val }).eq('id', id);
+      if (error) {
+        o.kunEkstrautstyr = forrige;
+        visToast('Kunne ikke lagre «Kun ekstrautstyr»: ' + error.message + ' - prøv igjen.');
+        tegnPaaNytt();
+        return;
+      }
+    }
+    logChange(o, val ? 'Merket som kun ekstrautstyr (ingen ombygging)' : 'Ikke lenger kun ekstrautstyr');
+  } finally { _kunEkstrautstyrPagar.delete(id); }
+  tegnPaaNytt();
+  if (!val) autoVelgUtstyrMal(id); // tilbake til vanlig ordre: samme automatiske utstyrsmal som en ny ordre får (gjør ingenting hvis en mal alt er valgt)
 }
 
 // ════════════════════════════════════════════════════

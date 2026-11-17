@@ -1383,6 +1383,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
       <div class="small muted" style="margin-top:8px">«På vei» betyr at bilen ikke er fysisk ankommet — ankomstdato settes automatisk når den går til «Ikke påbegynt».</div>
     </div>
 
+    <div class="box" style="margin-top:10px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0">
+        <input type="checkbox" id="n_kunEkstrautstyr" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
+        <span style="font-size:13.5px;font-weight:600">Kun ekstrautstyr (ingen ombygging)</span>
+      </label>
+      <div class="small muted" style="margin-top:6px">For en bil som bare skal ha montert ekstrautstyr (f.eks. gummimatte eller kasse). Ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen.</div>
+    </div>
+
     <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
       <button class="btn" onclick="closeModal('nyOrdre')">Avbryt</button>
       <button class="btn red" onclick="opprettOrdre()">Opprett ordre</button>

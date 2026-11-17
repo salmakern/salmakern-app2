@@ -20,6 +20,8 @@ const PRODUKTLISTE_FRA = '2026-11-17T17:20:53Z';
 
 function erNyProduktliste(o) {
   if (!o || !PRODUKTLISTE_FRA || (typeof erLeveranse === 'function' && erLeveranse(o))) return false;
+  // «Kun ekstrautstyr» (Henrik 2026-11-17): bruker «Varer fra lager» med bare «Ekstra utstyr» (renderOrdreLagerbruk i lager.js), ikke «Skal på bilen».
+  if (o.kunEkstrautstyr === true) return false;
   // En ordre som nettopp er laget i appen har ingen createdAt før den er lest fra databasen: da brukes tidspunktet i id-en (ord_<ms>).
   let t = Date.parse(o.createdAt || '');
   if (!Number.isFinite(t)) { const m = /^ord_(\d{12,14})/.exec(String(o.id || '')); t = m ? Number(m[1]) : NaN; }
