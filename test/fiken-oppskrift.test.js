@@ -74,6 +74,25 @@ describe('renderOrdreLagerbruk selv-synkroniserer oppskrift-baserte Fiken-linjer
     expect(o.fikenLinjer.some(l => l.produktnummer === '501')).toBe(false);
   });
 
+  it('flere numre i ett felt («500, 502») gir én linje per nummer, aldri en linje «500, 502»', () => {
+    env.S.lagerOppskrifter[0].fikenProduktnummer = '500, 502';
+    env.renderOrdreLagerbruk();
+    const nr = o.fikenLinjer.map(l => l.produktnummer);
+    expect(nr).toContain('500');
+    expect(nr).toContain('502');
+    expect(nr).not.toContain('500, 502');
+    env.S.lagerhistorikk = [];
+    env.renderOrdreLagerbruk();
+    expect(o.fikenLinjer.length).toBe(0);
+  });
+
+  it('oppskriftProduktnumre: skiller på komma, semikolon og mellomrom, fjerner dubletter', () => {
+    expect([...env.oppskriftProduktnumre({ fikenProduktnummer: '500, 502' })]).toEqual(['500', '502']);
+    expect([...env.oppskriftProduktnumre({ fikenProduktnummer: ' 501;501 503 ' })]).toEqual(['501', '503']);
+    expect([...env.oppskriftProduktnumre({ fikenProduktnummer: '' })]).toEqual([]);
+    expect([...env.oppskriftProduktnumre({})]).toEqual([]);
+  });
+
   it('rører ikke oppskrifter uten fikenProduktnummer satt', () => {
     env.S.lagerOppskrifter[0].fikenProduktnummer = null;
     expect(() => env.renderOrdreLagerbruk()).not.toThrow();

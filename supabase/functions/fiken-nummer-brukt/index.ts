@@ -95,8 +95,10 @@ Deno.serve(async (req) => {
 
     const oppskrifter = (await rest('lager_oppskrifter?select=navn,fiken_produktnummer&fiken_produktnummer=not.is.null')) as { navn: string; fiken_produktnummer: string }[]
     for (const o of oppskrifter) {
-      const nr = String(o.fiken_produktnummer ?? '').trim()
-      if (brukt[nr]) add(nr, `Lager-oppskrift «${o.navn || 'uten navn'}»`)
+      // Feltet kan ha flere numre («500, 502»), se oppskriftProduktnumre() i js/lager.js.
+      for (const nr of String(o.fiken_produktnummer ?? '').split(/[\s,;]+/).map((n) => n.trim()).filter(Boolean)) {
+        if (brukt[nr]) add(nr, `Lager-oppskrift «${o.navn || 'uten navn'}»`)
+      }
     }
 
     const ordrer = (await rest('ordrer?select=id,regnr,kunde,fiken_linjer&fakturert=eq.false')) as {

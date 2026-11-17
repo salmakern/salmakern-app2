@@ -1463,7 +1463,8 @@ function renderOrdreLagerbruk() {
   // (samme begrensning som toggleOppskriftPaaOrdre) - "ombygging"-oppskrifter fakturers
   // via de egne Ombygging-boksene (se sfOmbygging), ikke via lagerbruk-oppskrifter.
   (S.lagerOppskrifter||[]).filter(r => r.fikenProduktnummer && (r.type||'ombygging')==='ekstra_utstyr' && oppskriftMatcherOrdre(r, o)).forEach(r => {
-    oppdaterFikenLinjeForOppskrift(r.fikenProduktnummer, erOppskriftHuket(r));
+    const huket = erOppskriftHuket(r);
+    oppskriftProduktnumre(r).forEach(nr => oppdaterFikenLinjeForOppskrift(nr, huket));
   });
 
   const seksjonHTML = (type, tittel) => {
@@ -1580,7 +1581,7 @@ async function toggleOppskriftPaaOrdre(oppskriftId, huket) {
       ? (S.lagerhistorikk||[]).some(h=>h.ordreId===activeOrdreId && h.batchId && (h.oppskriftId ? h.oppskriftId===r.id : h.kommentar===r.navn))
       : huket;
     oppdaterSkalHaForOppskrift(r.navn, faktiskHuket);
-    if (r.fikenProduktnummer) oppdaterFikenLinjeForOppskrift(r.fikenProduktnummer, faktiskHuket);
+    oppskriftProduktnumre(r).forEach(nr => oppdaterFikenLinjeForOppskrift(nr, faktiskHuket));
   }
   renderOrdreLagerbruk();
 }
@@ -1605,6 +1606,14 @@ function oppdaterSkalHaForOppskrift(oppskriftNavn, skalStaa, ordreId = activeOrd
 // å gå via fritekstboksen og stole på at noen henter tallet derfra etterpå. Én linje per
 // oppskrift (antall 1) - trenger oppskriften flere enheter samtidig, juster antallet
 // manuelt i Fakturering-kortet etterpå.
+// En oppskrift kan ha FLERE Fiken-produktnumre (Henrik 17.11.2026: «Ombygging 180 graders
+// stoler» på EV9 bruker andre deler enn standard ombygging OG skal ha både 500 og 502 på
+// fakturaen; feltet står som «500, 502»). Skilles med komma, semikolon eller mellomrom.
+// Før dette ble «500, 502» brukt som ETT nummer (en fakturalinje som Fiken avviser).
+function oppskriftProduktnumre(r) {
+  return [...new Set(String(r?.fikenProduktnummer || '').split(/[\s,;]+/).map(n => n.trim()).filter(Boolean))];
+}
+
 async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa, ordreId = activeOrdreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   const eksisterende = (o.fikenLinjer||[]).find(l=>l.produktnummer===produktnummer);
