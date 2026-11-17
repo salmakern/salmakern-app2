@@ -600,7 +600,7 @@ async function hentAlleRader(lagSporring, sideStorrelse = 1000) {
 
 async function loadFromSupabase() {
   const lastStart = Date.now();
-  const [aR,oR,tR,sR,pmkR,fkaR,fkrR] = await Promise.all([
+  const [aR,oR,tR,sR,pmkR,fkaR,fkrR,ppR] = await Promise.all([
     db.from('ansatte').select('*').order('id'),
     hentAlleRader(() => db.from('ordrer').select('*').order('created_at').order('id')),
     hentAlleRader(() => db.from('timer_entries').select('*').order('created_at',{ascending:false}).order('id')),
@@ -610,7 +610,9 @@ async function loadFromSupabase() {
     // fakturering"/fakturaSjekk() (s90-20261104-5 steg 2) uansett bare er relevant for admin,
     // som er de eneste som kan fakturere (TILLATTE_ROLLER i fiken-fakturer).
     db.from('fiken_kunde_alias').select('alias, fiken_contact_id'),
-    db.from('fiken_kunde_rabatt').select('fiken_contact_id, rabatt_ombygging, rabatt_ekstra_utstyr')
+    db.from('fiken_kunde_rabatt').select('fiken_contact_id, rabatt_ombygging, rabatt_ekstra_utstyr'),
+    // Trinn 2 «Én produktliste»: ombyggingsnumrene per modell fra Forhandlerportalen (bare radene med en rolle, ca. 20).
+    db.from('portal_produkter').select('modell_slug, app_rolle, fiken_nummer, hentet_at').not('app_rolle', 'is', null)
   ]);
   // VIKTIG: må sjekkes for ALLE spørringer, ikke bare ansatte - hvis f.eks. ordre-
   // spørringen feiler forbigående (nettverksglipp, sesjonsfornyelse etter lang pause
@@ -627,6 +629,9 @@ async function loadFromSupabase() {
   // ikke kritisk nok til å kaste og blokkere hele innlastingen for det.
   if (pmkR.error) console.error('Henting av portal-modellkobling feilet:', pmkR.error.message);
   S.portalModellKobling = pmkR.data || [];
+  // Ikke-kritisk: feiler lesingen (gammel PWA uten tabellen, nettfeil), brukes den hardkodede lista i ordre-detalj.js som før.
+  if (ppR.error) console.error('Henting av produktlista fra portalen feilet:', ppR.error.message);
+  S.portalProduktRoller = ppR.data || [];
   // Ikke-kritisk (bare admin-tilgjengelig, RLS) - en feilende lesing (gammel PWA-cache uten
   // disse spørringene, forbigående nettfeil) skal bare gi en tom liste, ikke kaste og blokkere
   // hele innlastingen for det (samme prinsipp som portalModellKobling over).
@@ -1834,6 +1839,8 @@ async function aktiverInnloggetApp() {
     // Innstemplingen kom ikke frem forrige gang og ble reparert ved oppstart (før ordrene var lastet): gjenoppta Ombygging-klokkene på ordrene jeg er meldt på nå (js/timer.js). Feil her skal aldri hindre innloggingen.
     if (typeof gjenopptaMineEtterInnlasting === 'function') gjenopptaMineEtterInnlasting().catch(e => console.warn('gjenopptaMineEtterInnlasting:', e && e.message));
     prosesserOfflineKo(); // send inn evt. lagringer som ble liggende i køen forrige økt
+    // Trinn 2 «Én produktliste»: admin henter produktlista fra portalen i bakgrunnen når den er eldre enn 6 timer (js/ansatte-utstyr.js).
+    if (typeof hentProdukterHvisGamle === 'function') { try { hentProdukterHvisGamle(); } catch (e) { console.warn('hentProdukterHvisGamle:', e && e.message); } }
     // Åpnet via ?ordre=<id> i url-en (et push-varsel som måtte åpne et helt nytt
     // vindu/fane, se notificationclick i sw.js) - hopp rett til den ordren, og
     // fjern parameteret så en vanlig omlasting ikke havner der på nytt.

@@ -786,7 +786,7 @@ function fakturaSjekk(o) {
   const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
   if (erOmbyggingValgt) {
     const kan = kanoniskMerkeModell(o);
-    if (!finnFikenOmbyggingModell(kan.merke, kan.modell)) {
+    if (!finnFikenOmbyggingModell(kan.merke, kan.modell, o.portalModellSlug)) {
       leggTil('ukjent_modell', `Ingen kjent Fiken-produktlinje for «${kan.merke||''} ${kan.modell||''}»`.trim() + ' - ombyggingslinjen mangler', 'rod');
     }
   }
@@ -1112,7 +1112,10 @@ function ombyggingBoksHTML(o) {
   // ved avkryssing) ville vært glemt igjen neste gang noen åpner ordren dager senere.
   const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
   const kan = kanoniskMerkeModell(o);
-  const manglerFikenModell = erOmbyggingValgt && !finnFikenOmbyggingModell(kan.merke, kan.modell);
+  const fikenModell = finnFikenOmbyggingModell(kan.merke, kan.modell, o.portalModellSlug);
+  const manglerFikenModell = erOmbyggingValgt && !fikenModell;
+  // Trinn 2: portalen har fått et annet nummer enn det ordren allerede har på fakturaen (se ombyggingNummerFor).
+  const nummerAvvik = fikenModell ? OMBYGGING_ROLLER.map(r => ombyggingNummerFor(o, fikenModell, r).avvik).filter(Boolean) : [];
   // s09-012 steg 2: fritekst-feltene kan ha blitt rettet (eller feilskrevet) i etterkant av at
   // ordren kom fra portalen - selve Fiken-matchingen bruker alltid den kanoniske teksten over,
   // men en ansatt bør få vite at det som vises i Merke/Modell ikke er det som faktisk faktureres.
@@ -1121,7 +1124,10 @@ function ombyggingBoksHTML(o) {
     (kan.merke||'').trim().toLowerCase() !== (o.merke||'').trim().toLowerCase() ||
     (kan.modell||'').trim().toLowerCase() !== (o.modell||'').trim().toLowerCase()
   );
-  const varselHTML = `${manglerFikenModell ? `<div style="margin-top:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fca5a5">
+  const avvikHTML = nummerAvvik.map(a => `<div style="margin-top:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fbbf24">
+        ⚠ Forhandlerportalen bruker nå produktnummer ${esc(a.nytt)} (${esc(a.rolle)}), men ordren har ${esc(a.gammelt)} på fakturaen fra før. Ordren beholder ${esc(a.gammelt)}, så det blir ingen dobbel linje. Bytt linjen i Fakturering hvis ${esc(a.nytt)} skal brukes.
+      </div>`).join('');
+  const varselHTML = avvikHTML + `${manglerFikenModell ? `<div style="margin-top:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fca5a5">
         ⚠ Ingen kjent Fiken-produktlinje for "${esc(kan.merke||'')} ${esc(kan.modell||'')}" - ombyggingslinjen mangler i fakturagrunnlaget. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil.
       </div>` : ''}${slugAvviker ? `<div style="margin-top:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fbbf24">
         ⚠ Merke/Modell («${esc(o.merke||'')} ${esc(o.modell||'')}») stemmer ikke med modellen fra portal-bestillingen («${esc(kan.merke||'')} ${esc(kan.modell||'')}»). Fakturering bruker modellen fra bestillingen.
@@ -1151,43 +1157,76 @@ function ombyggingBoksHTML(o) {
 // at flere modeller delte tallområde, f.eks. KIA EV9 og KGM Rexton som tidligere lå i
 // samme 500-blokk). Se git-historikk for den fullstendige omnummereringsplanen.
 const FIKEN_OMBYGGING_MODELLER = [
-  { match: /\bev9\b/i, ombygging: '500', personbil: '524' },
-  { match: /discovery\s*5\b/i, ombygging: '200', personbil: '229' },
+  { match: /\bev9\b/i, slug: 'kia-ev9', ombygging: '500', personbil: '524' },
+  { match: /discovery\s*5\b/i, slug: 'land-rover-discovery-5', ombygging: '200', personbil: '229' },
   // Utstyrsmalen heter bare "Defender" (ikke "Defender 110") og "Geländewagen" (ikke
   // "...2018") - matcher derfor den korte teksten malene faktisk bruker, ikke et krav om
   // årsmodell/variant i selve merke/modell-feltet (bekreftet av Henrik 2026-09-16: kun
   // Defender 110 og Geländewagen 2018-> er i aktiv bruk, ikke 130 eller den eldre 166).
-  { match: /defender\b/i, ombygging: '1400', personbil: '1415' },
-  { match: /gel[aä]ndewagen/i, ombygging: '300', personbil: '318' },
-  { match: /\bgls\b/i, ombygging: '400', personbil: '417' },
-  { match: /\bvito\b/i, ombygging: '1500', personbil: null },
-  { match: /\beqv\b/i, ombygging: '1600', personbil: null },
-  { match: /v-?klasse/i, ombygging: '1700', personbil: null },
-  { match: /id\.?\s*buzz/i, ombygging: '1800', personbil: '1812' },
+  { match: /defender\b/i, slug: 'land-rover-defender-110', ombygging: '1400', personbil: '1415' },
+  { match: /gel[aä]ndewagen/i, slug: 'mercedes-g', ombygging: '300', personbil: '318' },
+  { match: /\bgls\b/i, slug: 'mercedes-gls', ombygging: '400', personbil: '417' },
+  { match: /\bvito\b/i, slug: 'mercedes-vito', ombygging: '1500', personbil: null },
+  { match: /\beqv\b/i, slug: 'mercedes-eqv', ombygging: '1600', personbil: null },
+  { match: /v-?klasse/i, slug: 'mercedes-vklasse', ombygging: '1700', personbil: null },
+  { match: /id\.?\s*buzz/i, slug: 'vw-id-buzz-kort', ombygging: '1800', personbil: '1812' },
   // Rexton har ingen egen personbil-kode i Fiken (aldri fakturert, aldri opprettet) -
   // matcher derfor mønsteret til Vito/EQV/V-klasse (null) i stedet for tidligere feilaktig
   // å dele EV9 sin kode "529". "lafinto": Lafinto-varianten (2401, "Varebilombyyging av
   // KGM Rexton - Lafinto") ERSTATTER standard ombygging (2400, "Varebilombygging av
   // Rexton") når "Lafinto"-boksen er huket av - det er to alternative Fiken-produkter for
   // samme jobb, ikke et tillegg oppå (bekreftet av Henrik 2026-09-24).
-  { match: /rexton/i, ombygging: '2400', personbil: null, lafinto: '2401' },
+  { match: /rexton/i, slug: 'kgm-rexton', ombygging: '2400', personbil: null, lafinto: '2401' },
   // Land Cruiser 150 manglet her (funnet av avviksjekken mot portalens produktkatalog
   // 2026-11-16, s09-026) - produktet fantes i Fiken hele tiden ("Varebilombygging av
   // Toyota LC 150", 2900), bare aldri lagt inn i denne tabellen. Ingen personbil-kode
   // funnet for LC 150 i Fiken (samme mønster som Vito/EQV/V-klasse).
-  { match: /land\s*cruiser\s*150|\blc\s*150\b/i, ombygging: '2900', personbil: null },
-  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: null },
+  { match: /land\s*cruiser\s*150|\blc\s*150\b/i, slug: 'toyota-lc-150', ombygging: '2900', personbil: null },
+  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, slug: 'toyota-lc-250', ombygging: '2500', personbil: null },
   // LC 250: personbil-koden 2508 er fjernet 17.11.2026 (Henrik: «fjern den»). Den fantes aldri i
   // Fiken, ingen ordre hadde brukt den, og LC 250 bygges ikke om til personbil.
   // Dodge Durango manglet her (trinn 0 «én produktliste», 17.11.2026): modellen er koblet i
   // portal_modell_kobling (dodge-durango) og bygges fortsatt (Henrik 17.11), men ga «ukjent
   // modell» ved fakturering. Fiken har «Varebilombygging av Dodge Durango.» (2000) og ingen
   // personbil-kode (samme mønster som Vito/EQV/V-klasse/LC 150).
-  { match: /durango/i, ombygging: '2000', personbil: null },
+  { match: /durango/i, slug: 'dodge-durango', ombygging: '2000', personbil: null },
 ];
-function finnFikenOmbyggingModell(merke, modell) {
+// Trinn 2 av «Én produktliste» (Henrik 17.11.2026): numrene hentes fra Forhandlerportalen (S.portalProduktRoller, fra tabellen
+// portal_produkter: rolle per portal-slug, se migrasjon 20261117220000). Matchingen av ordren mot en modell er UENDRET (regexene over),
+// bare numrene kommer fra portalen; tabellen over er reserven for en modell/rolle portalen ikke har (f.eks. Durango).
+// Ordrens egen slug (portalbestilling) brukes først, så radens slug. `reserve` er den hardkodede raden, brukt av ombyggingNummerFor().
+const OMBYGGING_ROLLER = ['ombygging', 'personbil', 'lafinto'];
+function portalRolleNummer(slug, rolle) {
+  if (!slug || !Array.isArray(S.portalProduktRoller)) return null;
+  const r = S.portalProduktRoller.find(x => x.modell_slug === slug && x.app_rolle === rolle);
+  return r && r.fiken_nummer ? String(r.fiken_nummer) : null;
+}
+function finnFikenOmbyggingModell(merke, modell, ordreSlug) {
   const tekst = `${merke||''} ${modell||''}`;
-  return FIKEN_OMBYGGING_MODELLER.find(r => r.match.test(tekst)) || null;
+  const rad = FIKEN_OMBYGGING_MODELLER.find(r => r.match.test(tekst)) || null;
+  const slugger = [ordreSlug, rad && rad.slug].filter(Boolean);
+  const fraPortal = {};
+  for (const rolle of OMBYGGING_ROLLER) {
+    for (const slug of slugger) { const nr = portalRolleNummer(slug, rolle); if (nr) { fraPortal[rolle] = nr; break; } }
+  }
+  if (!rad && !fraPortal.ombygging) return null;
+  const ut = { slug: (rad && rad.slug) || ordreSlug || null, reserve: rad, kilde: {} };
+  for (const rolle of OMBYGGING_ROLLER) {
+    ut[rolle] = fraPortal[rolle] || (rad && rad[rolle]) || null;
+    ut.kilde[rolle] = fraPortal[rolle] ? 'portal' : (rad && rad[rolle] ? 'app' : null);
+  }
+  return ut;
+}
+// Hvilket nummer en BESTEMT ordre skal ha for en rolle. Har ordren allerede fakturalinjen med det gamle (hardkodede) nummeret, og
+// portalen nå sier et annet, beholdes det gamle på denne ordren: ellers ville synkroniseringen lagt til en linje til (dobbel fakturering),
+// siden den bare legger til/fjerner det nummeret den får. avvik gir en synlig advarsel i Ombygging-boksen.
+function ombyggingNummerFor(o, modell, rolle) {
+  const nytt = modell && modell[rolle];
+  const gammelt = modell && modell.reserve && modell.reserve[rolle];
+  if (nytt && gammelt && nytt !== gammelt && (o.fikenLinjer||[]).some(l => l.produktnummer === gammelt)) {
+    return { nummer: gammelt, avvik: { rolle, gammelt, nytt } };
+  }
+  return { nummer: nytt || null, avvik: null };
 }
 
 // s09-012 steg 2: for en ordre som kom fra en portal-bestilling (o.portalModellSlug satt av
@@ -1215,14 +1254,15 @@ function synkroniserOmbyggingFikenLinjer(o) {
   if (!o.ombygging) return;
   const erOmbyggingValgt = !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy);
   const kan = kanoniskMerkeModell(o);
-  const modell = finnFikenOmbyggingModell(kan.merke, kan.modell);
+  const modell = finnFikenOmbyggingModell(kan.merke, kan.modell, o.portalModellSlug);
   if (!modell) return;
+  const nr = rolle => ombyggingNummerFor(o, modell, rolle).nummer;
   // "lafinto" (kun Rexton per nå) er en ALTERNATIV variant av samme ombygging, ikke et
   // tillegg - de to fakturalinjene er derfor gjensidig utelukkende.
-  const erLafinto = !!(modell.lafinto && o.ombygging.lafinto);
-  oppdaterFikenLinjeForOppskrift(modell.ombygging, erOmbyggingValgt && !erLafinto);
-  if (modell.lafinto) oppdaterFikenLinjeForOppskrift(modell.lafinto, erOmbyggingValgt && erLafinto);
-  if (modell.personbil) oppdaterFikenLinjeForOppskrift(modell.personbil, !!o.ombygging.personbil);
+  const erLafinto = !!(nr('lafinto') && o.ombygging.lafinto);
+  if (nr('ombygging')) oppdaterFikenLinjeForOppskrift(nr('ombygging'), erOmbyggingValgt && !erLafinto);
+  if (nr('lafinto')) oppdaterFikenLinjeForOppskrift(nr('lafinto'), erOmbyggingValgt && erLafinto);
+  if (nr('personbil')) oppdaterFikenLinjeForOppskrift(nr('personbil'), !!o.ombygging.personbil);
 }
 
 // Holder Fiken-drivstofflinjen i synk med den faktiske kundeprisen på hvert render - i

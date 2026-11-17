@@ -658,7 +658,8 @@ function renderKontakter() {
     '<button class="btn sm" onclick="apneForhandlerListe()">Forhandlere</button>' +
     (erAdmin ? ' <button class="btn sm red" onclick="apneNyKontakt()">+ Ny kontakt</button>' : '') +
     (erAdmin ? ' <button class="btn sm" id="hentSelgereBtn" onclick="hentSelgereFraPortalen()">Hent selgere fra portalen</button>' : '') +
-    (erAdmin ? ' <button class="btn sm" id="hentRabatterBtn" onclick="hentRabatterFraPortalen()">Hent rabatter fra portalen</button>' : '');
+    (erAdmin ? ' <button class="btn sm" id="hentRabatterBtn" onclick="hentRabatterFraPortalen()">Hent rabatter fra portalen</button>' : '') +
+    (erAdmin ? ' <button class="btn sm" id="hentProdukterBtn" onclick="hentProdukterFraPortalen()">Hent produkter fra portalen</button>' : '');
   const el = document.getElementById('kontaktListe');
   const andre = S.kontakter.filter(k=>k.type!=='Forhandler');
   if (!andre.length) { el.innerHTML='<div class="muted small">Ingen kontakter lagt til</div>'; return; }
@@ -736,6 +737,41 @@ async function hentRabatterFraPortalen() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Hent rabatter fra portalen'; }
   }
+}
+
+// "Hent produkter fra portalen" (trinn 2 av «Én produktliste», Henrik 17.11.2026): henter produktlista fra Forhandlerportalen inn i
+// portal_produkter. Ombyggingslinjen på fakturaen (finnFikenOmbyggingModell i ordre-detalj.js) bruker så portalens numre per modell.
+// stille = true: kalt automatisk ved innlasting for admin (se hentProdukterHvisGamle), bare feil vises.
+async function hentProdukterFraPortalen(stille = false) {
+  if (!me || me.rolle !== 'admin') return;
+  const btn = document.getElementById('hentProdukterBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Henter...'; }
+  try {
+    const res = await edgeFetch('hent-produkter-fra-portalen', { method: 'POST' });
+    const svar = await res.json().catch(() => ({}));
+    if (!res.ok || !svar.ok) { visToast('Kunne ikke hente produkter fra portalen: ' + (svar.error || res.status)); return; }
+    const { data } = await db.from('portal_produkter').select('modell_slug, app_rolle, fiken_nummer, hentet_at').not('app_rolle', 'is', null);
+    if (data) S.portalProduktRoller = data;
+    const endret = (svar.endredeRoller || []).length + (svar.fjernedeRoller || []).length;
+    if (!stille || endret) {
+      const deler = [`${svar.modeller} modeller, ${svar.rader} produkter hentet`];
+      if (endret) deler.push(`${endret} ombyggingsnummer endret (${[...(svar.endredeRoller||[]), ...(svar.fjernedeRoller||[])].join(', ')})`);
+      visToast(deler.join(', '), 'ok');
+    }
+  } catch (e) {
+    visToast('Henting av produkter feilet: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Hent produkter fra portalen'; }
+  }
+}
+// Automatisk for admin: henter på nytt når lista er eldre enn 6 timer (eller tom), så endringer i portalen kommer med uten et trykk.
+const PRODUKTLISTE_MAKS_ALDER_MS = 6 * 60 * 60 * 1000;
+let _produktlisteSjekket = false;
+function hentProdukterHvisGamle() {
+  if (_produktlisteSjekket || !me || me.rolle !== 'admin') return;
+  _produktlisteSjekket = true;
+  const nyeste = Math.max(0, ...(S.portalProduktRoller || []).map(r => Date.parse(r.hentet_at) || 0));
+  if (Date.now() - nyeste > PRODUKTLISTE_MAKS_ALDER_MS) hentProdukterFraPortalen(true);
 }
 
 // Kontakter kan nå ha flere e-postadresser, kommaseparert i samme felt (bedt om av Henrik

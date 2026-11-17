@@ -557,3 +557,92 @@ describe('kallFikenFakturer: "prøv igjen" kun når et nytt forsøk faktisk kan 
     expect(env.toaster[0]).toContain('prøv igjen');
   });
 });
+
+// Trinn 2 av «Én produktliste» (Henrik 17.11.2026): ombyggingsnumrene kommer fra Forhandlerportalen (S.portalProduktRoller, fra
+// portal_produkter), med den hardkodede lista som reserve. Matchingen av modellen er uendret.
+describe('trinn 2: numre fra portalen (S.portalProduktRoller)', () => {
+  let env;
+  const rolle = (modell_slug, app_rolle, fiken_nummer) => ({ modell_slug, app_rolle, fiken_nummer, hentet_at: '2026-11-17T12:00:00Z' });
+  beforeEach(() => { env = nyEnvironment(); });
+
+  it('uten portalliste: nøyaktig som før (reserven), kilde app', () => {
+    const t = env.finnFikenOmbyggingModell('KIA', 'EV9');
+    expect([t.ombygging, t.personbil, t.lafinto]).toEqual(['500', '524', null]);
+    expect(t.kilde.ombygging).toBe('app');
+  });
+
+  it('portalen vinner når den har rollen, og reserven fyller roller portalen mangler', () => {
+    env.S.portalProduktRoller = [rolle('kia-ev9', 'ombygging', '590')];
+    const t = env.finnFikenOmbyggingModell('KIA', 'EV9');
+    expect(t.ombygging).toBe('590');
+    expect(t.kilde.ombygging).toBe('portal');
+    expect(t.personbil).toBe('524');
+    expect(t.kilde.personbil).toBe('app');
+  });
+
+  it('modell uten portalrader (Durango) bruker reserven', () => {
+    env.S.portalProduktRoller = [rolle('kia-ev9', 'ombygging', '500')];
+    expect(env.finnFikenOmbyggingModell('Dodge', 'Durango').ombygging).toBe('2000');
+  });
+
+  it('ordrens egen slug (portalbestilling) brukes før radens slug', () => {
+    env.S.portalProduktRoller = [rolle('vw-id-buzz-kort', 'ombygging', '1800'), rolle('vw-id-buzz-lang', 'ombygging', '1850')];
+    expect(env.finnFikenOmbyggingModell('Volkswagen', 'ID BUZZ', 'vw-id-buzz-lang').ombygging).toBe('1850');
+    expect(env.finnFikenOmbyggingModell('Volkswagen', 'ID BUZZ').ombygging).toBe('1800');
+    // Lang uten egne roller faller tilbake på radens slug (kort)
+    env.S.portalProduktRoller = [rolle('vw-id-buzz-kort', 'ombygging', '1800')];
+    expect(env.finnFikenOmbyggingModell('Volkswagen', 'ID BUZZ', 'vw-id-buzz-lang').ombygging).toBe('1800');
+  });
+
+  it('en ny modell som bare finnes i portalen (via ordrens slug) gir treff', () => {
+    env.S.portalProduktRoller = [rolle('vw-transporter-t7', 'ombygging', '3000')];
+    const t = env.finnFikenOmbyggingModell('VW', 'Transporter T7', 'vw-transporter-t7');
+    expect(t.ombygging).toBe('3000');
+    expect(t.reserve).toBeNull();
+    expect(env.finnFikenOmbyggingModell('VW', 'Transporter T7')).toBeNull();
+  });
+
+  it('synk: ny ordre får portalens nummer', () => {
+    env.S.portalProduktRoller = [rolle('kia-ev9', 'ombygging', '590')];
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: true }, fikenLinjer: [] };
+    env.S.ordrer = [o]; env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.map(l => l.produktnummer)).toEqual(['590']);
+  });
+
+  it('synk: ordre som allerede har det gamle nummeret beholder det (ingen dobbel linje), og gir avvik', () => {
+    env.S.portalProduktRoller = [rolle('kia-ev9', 'ombygging', '590')];
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: true }, fikenLinjer: [{ produktnummer: '500', antall: 1 }] };
+    env.S.ordrer = [o]; env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.map(l => l.produktnummer)).toEqual(['500']);
+    const t = env.finnFikenOmbyggingModell('KIA', 'EV9');
+    expect(env.ombyggingNummerFor(o, t, 'ombygging')).toEqual({ nummer: '500', avvik: { rolle: 'ombygging', gammelt: '500', nytt: '590' } });
+    expect(env.ombyggingBoksHTML(o)).toContain('beholder 500');
+  });
+
+  it('synk: Lafinto og personbil fra portalen', () => {
+    env.S.portalProduktRoller = [rolle('kgm-rexton', 'ombygging', '2400'), rolle('kgm-rexton', 'lafinto', '2401'), rolle('kia-ev9', 'personbil', '524')];
+    const o = { id: 'ord_1', merke: 'KGM', modell: 'Rexton', ombygging: { nyttKjoretoy: true, lafinto: true }, fikenLinjer: [] };
+    env.S.ordrer = [o]; env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.map(l => l.produktnummer)).toEqual(['2401']);
+  });
+
+  it('samme numre i portal og reserve: helt uendret oppførsel og ingen advarsel', () => {
+    env.S.portalProduktRoller = [rolle('kia-ev9', 'ombygging', '500'), rolle('kia-ev9', 'personbil', '524')];
+    const o = { id: 'ord_1', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: true }, fikenLinjer: [{ produktnummer: '500', antall: 1 }] };
+    env.S.ordrer = [o]; env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.map(l => l.produktnummer)).toEqual(['500']);
+    expect(env.ombyggingBoksHTML(o)).not.toContain('Forhandlerportalen bruker nå');
+  });
+
+  it('hver hardkodet rad har en slug, og hver slug finnes i portal_modell_kobling-seeden', () => {
+    const seed = readFileSync(path.resolve(__dirname, '../supabase/migrations/20261030220000_portal_modell_kobling_seed.sql'), 'utf8');
+    for (const r of env.FIKEN_OMBYGGING_MODELLER ?? vm.runInContext('FIKEN_OMBYGGING_MODELLER', env)) {
+      expect(r.slug, String(r.match)).toBeTruthy();
+      expect(seed, r.slug).toContain(`'${r.slug}'`);
+    }
+  });
+});
