@@ -20,8 +20,6 @@ const PRODUKTLISTE_FRA = '2026-11-17T17:20:53Z';
 
 function erNyProduktliste(o) {
   if (!o || !PRODUKTLISTE_FRA || (typeof erLeveranse === 'function' && erLeveranse(o))) return false;
-  // «Kun ekstrautstyr» (Henrik 2026-11-17): bruker «Varer fra lager» med bare «Ekstra utstyr» (renderOrdreLagerbruk i lager.js), ikke «Skal på bilen».
-  if (o.kunEkstrautstyr === true) return false;
   // En ordre som nettopp er laget i appen har ingen createdAt før den er lest fra databasen: da brukes tidspunktet i id-en (ord_<ms>).
   let t = Date.parse(o.createdAt || '');
   if (!Number.isFinite(t)) { const m = /^ord_(\d{12,14})/.exec(String(o.id || '')); t = m ? Number(m[1]) : NaN; }
@@ -51,6 +49,9 @@ function beregnSkalPaaBilen(o) {
   const { modell, produkter } = produktlisteModell(o);
   const finnProdukt = nr => produkter.find(p => p.fiken_nummer === nr) || null;
   const bestilt = Array.isArray(o.portalLinjer) && o.portalLinjer.length > 0;
+  // «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17): aldri en ombyggingsrad (ombygging/personbil/Lafinto), verken fra boksene eller fra en
+  // bestilling. Sjekkliste-treff, «+ Legg til utstyr» og «Rett» virker som ellers, og lageret trekkes ved ankomst som ellers.
+  const kun = o.kunEkstrautstyr === true;
   const rader = [];
   const varsler = [];
   const leggTil = (nr, navn, kilde, grunn, extra = {}) => {
@@ -63,14 +64,19 @@ function beregnSkalPaaBilen(o) {
   const regelTreff = p => (Array.isArray(p.velges_nar) ? p.velges_nar : []).map(v => okSett.get(_norm(v))).find(Boolean) || null;
 
   if (bestilt) {
-    for (const l of o.portalLinjer) leggTil(String(l && l.produktnummer || ''), l && l.navn, 'bestilling', 'Bestilt i portalen');
+    for (const l of o.portalLinjer) {
+      const nr = String(l && l.produktnummer || '');
+      const p = finnProdukt(nr);
+      if (kun && p && p.app_rolle) { varsler.push(`Bestillingen har ${nr} ${p.navn}, men ordren er merket «Kun ekstrautstyr (ingen ombygging)», så den er ikke med.`); continue; }
+      leggTil(nr, l && l.navn, 'bestilling', 'Bestilt i portalen');
+    }
     for (const p of produkter) {
       if (p.nummer_status !== 'ok' || rader.some(r => r.nr === p.fiken_nummer)) continue;
       const punkt = regelTreff(p);
       if (punkt) varsler.push(`Sjekklista sier «${punkt}», men bestillingen har ikke ${p.fiken_nummer} ${p.navn}. Bestillingen gjelder; legg det til med «+ Legg til utstyr» hvis det skal på bilen.`);
     }
   } else {
-    const b = o.ombygging || {};
+    const b = kun ? {} : (o.ombygging || {});
     if (modell && (b.nyttKjoretoy || b.bruktKjoretoy)) {
       const lafinto = !!(b.lafinto && modell.lafinto);
       const rolle = lafinto ? 'lafinto' : 'ombygging';

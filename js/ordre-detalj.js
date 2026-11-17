@@ -1141,7 +1141,7 @@ function ombyggingBoksHTML(o) {
       <input type="checkbox" id="kunEkstrautstyr_${o.id}" ${kun?'checked':''} onchange="settKunEkstrautstyr('${o.id}',this.checked)" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
       <span style="font-size:13.5px;font-weight:${kun?'700':'400'};color:${kun?'#f4f4f5':'#a1a1aa'}">Kun ekstrautstyr (ingen ombygging)</span>
     </label>`;
-  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen. Velg utstyret under «Varer fra lager».</div>';
+  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen. Legg til utstyret i kortet under (sjekklista eller «+ Legg til utstyr»).</div>';
   return kunHTML + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
       <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
@@ -1345,6 +1345,8 @@ async function settKunEkstrautstyr(id, val) {
     logChange(o, val ? 'Merket som kun ekstrautstyr (ingen ombygging)' : 'Ikke lenger kun ekstrautstyr');
   } finally { _kunEkstrautstyrPagar.delete(id); }
   tegnPaaNytt();
+  // «Skal på bilen»: ombyggingsraden forsvinner/kommer tilbake. Bevisst handling, så et allerede trukket ombyggingsoppsett kan legges tilbake (tillatAngre).
+  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) synkProduktliste(o, { tillatAngre: true }).then(() => { if (activeOrdreId === id) renderSkalPaaBilen(id); }).catch(e => console.error('synkProduktliste:', e));
   if (!val) autoVelgUtstyrMal(id); // tilbake til vanlig ordre: samme automatiske utstyrsmal som en ny ordre får (gjør ingenting hvis en mal alt er valgt)
 }
 

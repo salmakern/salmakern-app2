@@ -890,7 +890,7 @@ function leveranseKolliSum(l) {
 }
 function erLeveranse(o) { return !!o && o.ordretype === 'leveranse'; }
 // «Kun ekstrautstyr (ingen ombygging)» (2026-11-17, Henrik): en vanlig bil-ordre for en bil som bare skal ha montert litt ekstrautstyr (gummimatte, kasse),
-// ikke en ny ombygging. Ingen tvangsflyt, ingen automatisk utstyrsmal, «Varer fra lager» med bare «Ekstra utstyr», ikke i Admin-ark, og kalenderen skrives
+// ikke en ny ombygging. Ingen tvangsflyt, ingen automatisk utstyrsmal, «Skal på bilen» uten ombyggingsrad (eldre ordrer: «Varer fra lager» med bare «Ekstra utstyr»), ikke i Admin-ark, og kalenderen skrives
 // målrettet som for en leveranse (rører aldri Admin-ark). Telles ikke i portalen (portal_import_fakta / portal_timer_fakta). Får ordre-lapp som vanlig.
 function erKunEkstrautstyr(o) { return !!o && !erLeveranse(o) && o.kunEkstrautstyr === true; }
 // Kalenderplasseringen skrives målrettet (leveranseSettKalender) og aldri via Admin-ark/Time på biltilsynet: leveranser og kun-ekstrautstyr-ordrer.

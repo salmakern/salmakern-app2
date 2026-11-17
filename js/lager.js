@@ -1503,7 +1503,7 @@ function renderOrdreLagerbruk() {
   };
 
   const modellTekst = merkeModell(o);
-  // «Kun ekstrautstyr» (Henrik 2026-11-17): bare «Ekstra utstyr», så ingen trekker en hel ombygging fra lageret ved et uhell. Er en ombygging-oppskrift
+  // «Kun ekstrautstyr» (Henrik 2026-11-17) på en ordre fra før «Skal på bilen» (nye ordrer får «Skal på bilen» uten ombyggingsrad): bare «Ekstra utstyr», så ingen trekker en hel ombygging fra lageret ved et uhell. Er en ombygging-oppskrift
   // likevel allerede trukket på ordren (huket av før avkrysningen ble slått på), vises Ombygging fortsatt, så trekket kan angres.
   const kun = o.kunEkstrautstyr === true; // inline (ikke erKunEkstrautstyr): funksjonen lastes alene i enkelte tester
   const visOmbygging = !kun || (S.lagerOppskrifter||[]).some(r => (r.type||'ombygging')==='ombygging' && oppskriftMatcherOrdre(r, o) && erOppskriftHuket(r));

@@ -118,7 +118,7 @@ describe('autoVelgUtstyrMal', () => {
   });
 });
 
-describe('Varer fra lager (renderOrdreLagerbruk)', () => {
+describe('Varer fra lager (renderOrdreLagerbruk, ordrer fra før «Skal på bilen»)', () => {
   const OPPSKRIFTER = [
     { id: 'opp_omb', navn: 'TEST Standard ombygging', biltype: 'KIA EV9', type: 'ombygging', ingredienser: [], fikenProduktnummer: '' },
     { id: 'opp_ekstra', navn: 'TEST Gummimatte', biltype: 'KIA EV9', type: 'ekstra_utstyr', ingredienser: [], fikenProduktnummer: '' },
@@ -142,13 +142,10 @@ describe('Varer fra lager (renderOrdreLagerbruk)', () => {
     expect(html).toContain('TEST Standard ombygging');
     expect(html).toContain('TEST Gummimatte');
   });
-  it('en NY «kun ekstrautstyr»-ordre får «Varer fra lager», ikke «Skal på bilen»', () => {
-    const nyKun = bil({ id: NY_ID, created_at: '2026-11-18T08:00:00Z', kun_ekstrautstyr: true });
-    expect(sandbox.erNyProduktliste(nyKun)).toBe(false);
-    expect(sandbox.erNyProduktliste(bil({ id: NY_ID, created_at: '2026-11-18T08:00:00Z' }))).toBe(true);
-    const html = vis(nyKun);
-    expect(html).toContain('TEST Gummimatte');
-    expect(html).not.toContain('TEST Standard ombygging');
+  it('en NY «kun ekstrautstyr»-ordre får «Skal på bilen» (Henriks valg), uten ombyggingsrad', () => {
+    const nyKun = bil({ id: NY_ID, created_at: '2026-11-18T08:00:00Z', kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true } });
+    expect(sandbox.erNyProduktliste(nyKun)).toBe(true);
+    expect(sandbox.beregnSkalPaaBilen(nyKun).rader.some((r) => r.kilde === 'ombygging')).toBe(false);
   });
   it('er en ombygging-oppskrift allerede trukket på ordren, vises Ombygging likevel (så trekket kan angres)', () => {
     S.lagerhistorikk = [{ id: 1, vareId: 'v1', ordreId: GAMMEL_ID, batchId: 'b1', oppskriftId: 'opp_omb', kommentar: 'TEST Standard ombygging', endring: -1 }];
