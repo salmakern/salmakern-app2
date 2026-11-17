@@ -742,7 +742,7 @@ lageret her. Portalen er fasit for navn og pris; DELENE (oppskriften i `lager_op
   ikke hente-hemmeligheten, fordi den skriver. Én rpc, ingen utgående kall.
 - **Ingen endring i `js/*.js` eller `sw.js`**: appen leser de nye kolonnene ikke ennå (`dbToLagerOppskrift` ignorerer dem, og appens egne
   `update` på oppskrifter rører dem ikke).
-- **Kjent etter utrulling**: produktnummer 500 har TO ukoblede oppskrifter i appen (standard EV9 og «500, 502»), så EV9-standardvarianten gir «flere oppskrifter» i portalen til én av dem er koblet/ryddet.
+- **Koblet 17.11 (Henriks ja)**: EV9-standardvarianten i portalen (nr 500, variant-id `cmt8mz6fb000004jmst5doptz`) er koblet til oppskriften «Standard ombygging» (`oppskrift_1790228049862`). «Ombygging 108 grader seter» («500, 502», samme deler men gulvbrakett 1 og 2 i 180-utgave) er BEVISST ukoblet: den er hele ombyggingen i en annen utgave, ikke et tillegg, og ville gitt dobbelt lagertrekk om den ble koblet til tillegget 502. Hvordan 180-utgaven skal ligge i portalen, avgjøres i trinn 3.
 - **Utrulling (gjort 17.11, slik det ble gjort)**: lag hemmeligheten (64 heks-tegn) og sett den både i Supabase (`secrets set`) og i Vercel;
   kjør migrasjonen; `functions deploy portal-oppskrift`; sjekk at et kall uten hemmelighet gir 401; legg ut portalgrenen `trinn1/ny-variant-deler`.
   Portalen uten appdelen er ufarlig (delevelgeren sier at lageret ikke svarer, og varianten lagres som før).
