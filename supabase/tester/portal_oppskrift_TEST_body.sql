@@ -112,6 +112,12 @@ begin
   insert into _res(navn, ok, info) values ('T12 tom liste på koblet oppskrift tømmer delene', r->>'status' = 'oppdatert'
     and (select ingredienser from lager_oppskrifter where id = v_id) = '[]'::jsonb, r::text);
 
+  -- T12b nytt produktnummer i portalen: portalens egen oppskrift følger, en koblet app-oppskrift beholder sine numre
+  r := portal_oppskrift_lagre(v_basis || '{"variantId":"v_TEST","produktnummer":"TEST911","deler":[]}');
+  insert into _res(navn, ok, info) values ('T12b portal-oppskrift får nytt nummer', (select fiken_produktnummer from lager_oppskrifter where id = v_id) = 'TEST911', r::text);
+  r := portal_oppskrift_lagre(v_basis || '{"tilleggId":"t_TEST_905","produktnummer":"TEST912","deler":[]}');
+  insert into _res(navn, ok, info) values ('T12c app-oppskrift beholder sine numre', (select fiken_produktnummer from lager_oppskrifter where id = 'oppskrift_TEST_gammel') = 'TEST904, TEST905', r::text);
+
   -- T13 ukjent modell-slug: biltype faller tilbake på modellnavnet
   r := portal_oppskrift_lagre(v_basis || '{"variantId":"v_TEST_ny_modell","produktnummer":"TEST908","modellSlug":"TEST-finnes-ikke","modellNavn":"TEST Bil X","deler":[{"vareId":"vare_TEST_a","antall":1}]}');
   insert into _res(navn, ok, info) values ('T13 ukjent slug gir biltype = modellnavn og biltypeFraKobling=false', not (r->>'biltypeFraKobling')::boolean

@@ -152,7 +152,11 @@ begin
   end if;
 
   if r.id is not null then
-    update lager_oppskrifter set ingredienser = v_deler where id = r.id;
+    -- En oppskrift portalen selv har laget følger portalens produktnummer (endres nummeret i portalen, endres det her ved neste lagring).
+    -- En oppskrift som fantes i appen fra før (kan ha flere numre, «500, 502») får aldri nummeret endret herfra.
+    update lager_oppskrifter set ingredienser = v_deler,
+      fiken_produktnummer = case when kilde = 'portal' then v_nr else fiken_produktnummer end
+     where id = r.id;
     return jsonb_build_object('status', 'oppdatert', 'oppskriftId', r.id, 'antallDeler', jsonb_array_length(v_deler), 'biltypeFraKobling', v_fra_kobling);
   end if;
 

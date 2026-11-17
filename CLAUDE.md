@@ -726,3 +726,25 @@ alternativer side ved side og la Henrik velge, ikke bestem selv.
 - **Dodge Durango (2000)** står nå i `FIKEN_OMBYGGING_MODELLER` (ingen personbil-kode i Fiken). `fiken-nummer-brukt` har 2000 og nytt 502-navn i `FASTE_NUMRE` (krever utrulling av funksjonen).
 - **Flere Fiken-numre per oppskrift**: EV9-oppskriften «Ombygging 108 grader seter» har `fiken_produktnummer` «500, 502», og det er RIKTIG (Henrik 17.11: andre deler enn standard ombygging, og begge numrene skal på fakturaen). `oppskriftProduktnumre()` i `js/lager.js` deler feltet på komma/semikolon/mellomrom (før ble «500, 502» brukt som ett nummer for ekstrautstyr), og `fiken-nummer-brukt` gjør det samme. En ombygging-oppskrift legger fortsatt ingen fakturalinjer selv: 500 kommer fra Ombygging-boksen og 502 fra sjekklistepunktet «180 svingbare» (trinn 3 skal la ordren lese numrene fra oppskriften).
 - **Data rettet 17.11 (Henriks ja, prøvd i rullet-tilbake transaksjon først)**: Rexton-oppskriftene «Kasse med lokk og gassdempere» og «Gummimatte standard» peker nå på 2402 og 2406 (2403/2405 fantes ikke i Fiken), og punktet i EV9-malen (u110) heter «Tillegg for 180 graders stoler» (var «180 svingbare»). Utrullet samme dag: appen (sw.js v84) og `fiken-nummer-brukt`. LC250 personbil 2508 (står i Fiken, men uten pris; ingen ordre brukte den) er fjernet fra `FIKEN_OMBYGGING_MODELLER` og `FASTE_NUMRE` (Henrik: «fjern den»; sw.js v85). **Venter på Henrik:** varianten «6-seter svingbare» (502) i portalen skal få Fikens navn i portalens admin (s04-008). 21 Drivstoff finnes i Fiken (14 ordrer har fått kladd med den), men mangler i `fiken_priser` fordi synken hopper over produkter uten fast pris (bevisst).
+
+## Én produktliste, trinn 1: «Ny variant» i portalen lager oppskriften her (2026-11-17, UTRULLET samme dag med Henriks ja)
+
+Henriks valg 17.11 (forslag https://claude.ai/artifact/8hHsZExhbqjMgkHp5e2yed): «Ny variant» i portalen er ett skjema med deler søkt opp i
+lageret her. Portalen er fasit for navn og pris; DELENE (oppskriften i `lager_oppskrifter`) bor her, og portalen har ingen egen deleliste.
+- **Database** (`20261117200000_portal_oppskrift.sql`, kjørt 17.11; 73 oppskrifter urørt, ingen koblet): `lager_oppskrifter.portal_variant_id` / `portal_tillegg_id` (unike, aldri
+  begge) og `kilde` (`app`/`portal`). Funksjonene `portal_oppskrift_hent` og `portal_oppskrift_lagre` (bare service_role). Tillegg/løsninger
+  kobles på tilleggets id, aldri på nummeret (ikke unikt i portalen). En oppskrift som finnes fra før kobles på produktnummer (delt som
+  `oppskriftProduktnumre()`), men bare når NØYAKTIG én ukoblet har nummeret; flere gir `FLERE_OPPSKRIFTER` (ryddes her først). Navnet på en
+  eksisterende oppskrift endres aldri herfra (brukes til eldre lagertrekk og «Skal ha»-linjer). Ingen deler og ingen oppskrift = ingenting lages.
+  Standard-variant gir type `ombygging`, alt annet `ekstra_utstyr`; `biltype` fra `portal_modell_kobling` (ellers portalens modellnavn).
+  Bare oppskrifter portalen har laget (`kilde = portal`) følger et nytt produktnummer fra portalen.
+- **Edge-funksjonen `portal-oppskrift`** (utrullet 17.11; uten/feil hemmelighet 401, GET 405, hent med hemmelighet 200 med 178 varer, tom lagring på et TEST-id ga `ingen_deler` uten skriving): egen hemmelighet `SALMAKERN_OPPSKRIFT_SECRET` (header `x-salmakern-oppskrift-secret`),
+  ikke hente-hemmeligheten, fordi den skriver. Én rpc, ingen utgående kall.
+- **Ingen endring i `js/*.js` eller `sw.js`**: appen leser de nye kolonnene ikke ennå (`dbToLagerOppskrift` ignorerer dem, og appens egne
+  `update` på oppskrifter rører dem ikke).
+- **Kjent etter utrulling**: produktnummer 500 har TO ukoblede oppskrifter i appen (standard EV9 og «500, 502»), så EV9-standardvarianten gir «flere oppskrifter» i portalen til én av dem er koblet/ryddet.
+- **Utrulling (gjort 17.11, slik det ble gjort)**: lag hemmeligheten (64 heks-tegn) og sett den både i Supabase (`secrets set`) og i Vercel;
+  kjør migrasjonen; `functions deploy portal-oppskrift`; sjekk at et kall uten hemmelighet gir 401; legg ut portalgrenen `trinn1/ny-variant-deler`.
+  Portalen uten appdelen er ufarlig (delevelgeren sier at lageret ikke svarer, og varianten lagres som før).
+- **Test**: `test/portal-oppskrift.test.js` (24) og `supabase/tester/portal_oppskrift_TEST_body.sql` (30 kontroller, kjørt mot produksjon i
+  rullet-tilbake transaksjon 17.11, alle OK, databasen kontrollert uendret etterpå). Portalens tester: se portalens CLAUDE.md.
