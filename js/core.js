@@ -1832,6 +1832,8 @@ async function aktiverInnloggetApp() {
   if (timerTab) timerTab.style.display = (me.kanForeLonn === false) ? 'none' : '';
   const adminTab = document.getElementById('adminTab');
   if (adminTab) adminTab.style.display = (me.rolle === 'admin') ? '' : 'none';
+  const faktureringTab = document.getElementById('faktureringTab');
+  if (faktureringTab) faktureringTab.style.display = (me.rolle === 'admin') ? '' : 'none';
   // En feil i Timer-oppsettet (f.eks. blokkert lagring) skal aldri hindre selve innloggingen.
   try { initTimerPage(); } catch (e) { console.error('initTimerPage feilet, innloggingen fortsetter:', e); }
   // Data kunne ikke leses før vi hadde en gyldig sesjon - hentes nå.

@@ -446,6 +446,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <button class="tab" id="lagerTab" onclick="showPage('lager',this)">Lager</button>
         <button class="tab" onclick="showPage('mer',this)">Mer</button>
         <button class="tab" id="adminTab" style="display:none" onclick="showPage('admin',this)">Admin</button>
+        <button class="tab" id="faktureringTab" style="display:none" onclick="showPage('fakturering',this)">Fakturering</button>
       </div>
       <div id="globalLavLagerVarsel" style="display:none"></div>
     </div>
@@ -1203,6 +1204,15 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="muted small" style="margin-top:4px">Hver forhandler som egen rad, hver modell som egen kolonne - antall solgt i krysningen.</div>
         <div id="detRapportPivot" style="margin-top:10px"></div>
       </div>
+    </section>
+
+    <!-- ── FAKTURERING (trinn 4 «én produktliste», bare admin, js/fakturering.js) ── -->
+    <section id="fakturering" class="page">
+      <div class="card" style="margin-bottom:12px">
+        <div class="h">Fakturering <span class="kort-admin-merke">ADMIN</span></div>
+        <div class="small muted" style="margin-top:4px">Alle ordrer som venter på fakturering (Klar til henting, Vist på biltilsynet og Hentet uten fakturering). 🟢 klar · 🟡 sjekk selv · 🔴 stopper. Summen er veiledende og før kundens rabatt.</div>
+      </div>
+      <div id="faktureringInnhold"></div>
     </section>
 
     <!-- ── ADMIN ── -->
@@ -1964,6 +1974,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <script src="js/lager-hylle.js"></script>
 <script src="js/ordre-lapp.js"></script>
 <script src="js/skal-paa-bilen.js"></script>
+<script src="js/fakturering.js"></script>
 <!-- Ansatt-detalj modal -->
 <div class="modal" id="ansattDetaljModal">
   <div class="modal-box" style="max-width:520px;width:95%">

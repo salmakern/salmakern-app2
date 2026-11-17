@@ -826,6 +826,20 @@ function fakturaSjekk(o) {
   // disse tas med merket slik, uten bulk-handling og uten automatikk).
   if (o.ordreStatus === 'hentet') leggTil('ikke_avstemt', 'Hentet før denne sjekken fantes - ikke avstemt', niva === 'rod' ? 'rod' : 'gul');
 
+  // Trinn 4: på en ordre med «Skal på bilen» (trinn 3) sammenlignes lista med fakturaen. Bare produkter modellen har i portalen tas med
+  // (drivstoff, frakt, hengerfeste o.l. er ikke på lista). Gult: det kan være riktig (f.eks. en bestilt linje med rabatt som er fjernet fra
+  // bilen, men skal faktureres likevel), men admin bør se det før kladden lages.
+  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) {
+    const { rader } = beregnSkalPaaBilen(o);
+    const kjente = new Set(produktlisteModell(o).produkter.map(p => p.fiken_nummer).filter(Boolean));
+    const aktive = new Set(rader.filter(r => !r.fjernet).map(r => r.nr));
+    const paaFaktura = new Set((o.fikenLinjer || []).map(l => String(l.produktnummer || '')));
+    const mangler = [...aktive].filter(nr => !paaFaktura.has(nr));
+    const ekstra = [...paaFaktura].filter(nr => kjente.has(nr) && !aktive.has(nr));
+    if (mangler.length) leggTil('liste_mangler_paa_faktura', `Står på bilen, men ikke på fakturaen: ${mangler.join(', ')}`, 'gul');
+    if (ekstra.length) leggTil('faktura_ikke_paa_liste', `På fakturaen, men ikke på «Skal på bilen»: ${ekstra.join(', ')}`, 'gul');
+  }
+
   return { niva, grunner };
 }
 

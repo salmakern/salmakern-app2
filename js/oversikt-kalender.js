@@ -33,6 +33,7 @@ function showPage(id, btn) {
   if (id==='arkiv')    renderArkiv();
   if (id==='lager')    { aktivKategori=null; oppskriftAktivModell=null; document.getElementById('lagerListeView').style.display='block'; document.getElementById('kategoriDetaljView').style.display='none'; document.getElementById('vareDetaljView').style.display='none'; document.getElementById('oppskriftModellerView').style.display='none'; document.getElementById('oppskriftModellDetaljView').style.display='none'; renderLagerListe(); }
   if (id==='mer')      renderMer();
+  if (id==='fakturering') renderFakturering();
   if (id==='admin')    { document.getElementById('adminArkHovedView').style.display='block'; document.getElementById('adminHelsesjekkView').style.display='none'; renderAdminArk(true); }
   renderGlobalLavLagerVarsel();
 }
