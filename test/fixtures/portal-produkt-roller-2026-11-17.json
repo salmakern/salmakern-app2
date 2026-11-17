@@ -1,0 +1,21 @@
+[
+  {"modell_slug":"kgm-rexton","app_rolle":"lafinto","fiken_nummer":"2401"},
+  {"modell_slug":"kgm-rexton","app_rolle":"ombygging","fiken_nummer":"2400"},
+  {"modell_slug":"kia-ev9","app_rolle":"ombygging","fiken_nummer":"500"},
+  {"modell_slug":"kia-ev9","app_rolle":"personbil","fiken_nummer":"524"},
+  {"modell_slug":"land-rover-defender-110","app_rolle":"ombygging","fiken_nummer":"1400"},
+  {"modell_slug":"land-rover-defender-110","app_rolle":"personbil","fiken_nummer":"1415"},
+  {"modell_slug":"land-rover-discovery-5","app_rolle":"ombygging","fiken_nummer":"200"},
+  {"modell_slug":"land-rover-discovery-5","app_rolle":"personbil","fiken_nummer":"229"},
+  {"modell_slug":"mercedes-eqv","app_rolle":"ombygging","fiken_nummer":"1600"},
+  {"modell_slug":"mercedes-g","app_rolle":"ombygging","fiken_nummer":"300"},
+  {"modell_slug":"mercedes-g","app_rolle":"personbil","fiken_nummer":"318"},
+  {"modell_slug":"mercedes-gls","app_rolle":"ombygging","fiken_nummer":"400"},
+  {"modell_slug":"mercedes-gls","app_rolle":"personbil","fiken_nummer":"417"},
+  {"modell_slug":"mercedes-vito","app_rolle":"ombygging","fiken_nummer":"1500"},
+  {"modell_slug":"mercedes-vklasse","app_rolle":"ombygging","fiken_nummer":"1700"},
+  {"modell_slug":"toyota-lc-150","app_rolle":"ombygging","fiken_nummer":"2900"},
+  {"modell_slug":"toyota-lc-250","app_rolle":"ombygging","fiken_nummer":"2500"},
+  {"modell_slug":"vw-id-buzz-kort","app_rolle":"ombygging","fiken_nummer":"1800"},
+  {"modell_slug":"vw-id-buzz-kort","app_rolle":"personbil","fiken_nummer":"1812"}
+]

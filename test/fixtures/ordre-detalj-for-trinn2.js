@@ -1,0 +1,2007 @@
+// ════════════════════════════════════════════════════
+// ORDRE DETAIL
+// ════════════════════════════════════════════════════
+let ordreListScrollY = 0;
+
+function openOrdre(id, fraArkiv=false, fraOversikt=false) {
+  ordreListScrollY = window.scrollY;
+  activeOrdreId = id;
+  openedFromArkiv = fraArkiv;
+  openedFraOversikt = fraOversikt;
+  apneOppskriftDropdowns.clear(); // ikke arv en åpen Ombygging/Ekstra utstyr-liste fra forrige ordre
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('ordre').classList.add('active');
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.getElementById('ordreList').style.display   = 'none';
+  document.getElementById('ordreDetail').style.display = 'block';
+  buildOrdreDetail();
+  window.scrollTo(0, 0);
+}
+
+function tilbakeOrdreList() {
+  activeOrdreId = null;
+  document.getElementById('ordreDetail').style.display = 'none';
+  document.getElementById('ordreList').style.display = 'block';
+  if (openedFromArkiv) {
+    openedFromArkiv = false;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('arkiv').classList.add('active');
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab')[3].classList.add('active');
+    renderArkiv();
+  } else if (openedFraOversikt) {
+    openedFraOversikt = false;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('oversikt').classList.add('active');
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab')[0].classList.add('active');
+    renderOversikt();
+  } else {
+    renderOrdreList();
+  }
+  openedFromArkiv = false;
+  openedFraOversikt = false;
+  setTimeout(() => window.scrollTo(0, ordreListScrollY), 0);
+}
+
+function utstyrMalDropdown(ordreId, selectId, applyFn, biltype, gjeldendeMalNavn) {
+  const maler = (S.utstyrMaler||[]);
+  if (!maler.length) return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap">
+    <span class="muted small">Ingen maler opprettet ennå.</span>
+    ${me&&me.rolle==='admin'?`<button class="btn sm red" onclick="openModal('nyUtstyrMal')">+ Lag mal</button>`:'<span class="muted small">Admin kan lage maler under Mer.</span>'}
+  </div>`;
+  const gjeldendeIdx = gjeldendeMalNavn ? maler.findIndex(m=>m.navn===gjeldendeMalNavn) : -1;
+  return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center">
+    <select id="${selectId}" style="flex:1;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:7px;font-size:12px">
+      <option value="">– Velg mal –</option>
+      ${maler.map((m,i)=>`<option value="${i}" ${i===gjeldendeIdx?'selected':''}>${esc(m.navn)}${m.biltype?' ('+esc(m.biltype)+')':''}</option>`).join('')}
+    </select>
+    <button class="btn sm red" onclick="const si=document.getElementById('${selectId}').selectedIndex-1; if(si>=0) ${applyFn}('${ordreId}',si)">Bruk</button>
+  </div>`;
+}
+
+function utstyrSjekklisteHTML(sjekk, ordreId, toggleFn, malNavn) {
+  if (!sjekk.length) return `<div class="muted small" style="margin-top:6px;padding:8px 0">Velg en mal over for å legge inn punkter.</div>`;
+  const ok = sjekk.filter(p=>p.ok).length;
+  return `<div style="margin-top:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span class="small muted">${esc(malNavn)}</span>
+      <span class="pill ${ok===sjekk.length?'ok':'warn'}">${ok}/${sjekk.length} ✓</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px 8px">
+      ${sjekk.map((p,i)=>`
+        <label style="display:flex;align-items:center;gap:7px;padding:6px 8px;cursor:pointer;min-width:0;border-radius:9px;background:${p.ok?'rgba(34,197,94,.07)':'transparent'}">
+          <input type="checkbox" ${p.ok?'checked':''} onchange="${toggleFn}('${ordreId}',${i})" style="width:15px;height:15px;accent-color:#22c55e;flex-shrink:0">
+          <span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${p.ok?'#86efac':'#71717a'}" title="${esc(p.punkt)}">${esc(p.punkt)}</span>
+        </label>`).join('')}
+    </div>
+  </div>`;
+}
+
+// Genererer et bilde-kort (Ankomst/Levering/Avstand-skader) - felt og etiketter hentes
+// fra den delte FOTO_SIDER-oppslaget i core.js, slik at opplasting/sletting/rendering
+// alle er enige om hvilket felt på ordren og hvilke bokser som hører til hver side.
+function fotoSeksjonHTML(o, side, tittel) {
+  const { felt, labler } = FOTO_SIDER[side];
+  const bilder = o[felt] || (o[felt] = labler.map(() => null));
+  return `<div class="card">
+    <div class="h">${tittel} (<span id="bildeTeller_${side}_${o.id}" style="color:${bilder.filter(Boolean).length===labler.length?'#4ade80':'#fca5a5'}">${bilder.filter(Boolean).length}/${labler.length}</span>)</div>
+    <div class="photo-grid">${labler.map((lbl,i)=>`
+      <div class="photo-box" id="foboks_${side}_${i}" onclick="${bilder[i]?`openLightbox('fo_${side}_${i}_src')`:`document.getElementById('fo_${side}_${i}').click()`}">
+        ${bilder[i]
+          ? `<img id="fo_${side}_${i}_src" ${filBildeAttr(bilder[i])} style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+             <div class="hover-del" onclick="event.stopPropagation()">
+               <button data-viewonly onclick="openLightbox('fo_${side}_${i}_src')" title="Vis fullt bilde">🔍</button>
+               <button onclick="document.getElementById('fo_${side}_${i}').click()" title="Bytt bilde">📷</button>
+               <button onclick="slettFoto('${o.id}','${side}',${i})" title="Slett">🗑</button>
+             </div>`
+          : `<div style="position:absolute;inset:0;border-radius:8px;background:repeating-linear-gradient(45deg,#22222a 0 7px,#17171b 7px 14px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px">
+               <div style="font-size:20px;opacity:.5">📷</div>
+               <div style="background:#0f0f12;border:1px solid #27272a;border-left:2px solid #52525b;padding:3px 7px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#d4d4d8;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(lbl)}</div>
+             </div>`}
+      </div>
+      <input type="file" id="fo_${side}_${i}" accept="image/*" capture="environment" style="display:none" onchange="lastOppFoto(event,'${o.id}','${side}',${i})">`).join('')}</div>
+  </div>`;
+}
+
+// Bilder - manglende deler: fritt voksende liste (0-uendelig), i motsetning til de faste
+// FOTO_SIDER-seksjonene over - se lastOppBildeManglendeDel()/slettBildeManglendeDel() i
+// ordre-diverse.js. Siste rute er alltid en "+ Legg til"-knapp, ikke en tallfast plass.
+function manglendeDelerHTML(o) {
+  const bilder = o.bilderManglendeDeler || [];
+  return `<div class="card">
+    <div class="h">Bilder – Manglende deler${bilder.length?` (${bilder.length})`:''}</div>
+    <div class="photo-grid" id="manglendeDelerListe_${o.id}">${bilder.map((url,i)=>`
+      <div class="photo-box" onclick="openLightbox('mdel_${i}_src')">
+        <img id="mdel_${i}_src" ${filBildeAttr(url)} style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:8px 8px 0 0">
+        <div class="hover-del" onclick="event.stopPropagation()">
+          <button data-viewonly onclick="openLightbox('mdel_${i}_src')" title="Vis fullt bilde">🔍</button>
+          <button onclick="slettBildeManglendeDel('${o.id}',${i})" title="Slett">🗑</button>
+        </div>
+      </div>`).join('')}
+      <div class="photo-box" onclick="document.getElementById('mdelInput_${o.id}').click()">
+        <div style="position:absolute;inset:0;border-radius:8px;background:repeating-linear-gradient(45deg,#22222a 0 7px,#17171b 7px 14px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px">
+          <div style="font-size:20px;opacity:.5">+</div>
+          <div style="background:#0f0f12;border:1px solid #27272a;border-left:2px solid #52525b;padding:3px 7px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#d4d4d8">Legg til</div>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="mdelInput_${o.id}" accept="image/*" capture="environment" style="display:none" onchange="lastOppBildeManglendeDel(event,'${o.id}')">
+  </div>`;
+}
+
+function buildOrdreDetail() {
+  try {
+  const o = S.ordrer.find(x=>x.id===activeOrdreId);
+  if (!o) return;
+  // Ikke rebuild mens bruker har et interaktivt element fokusert i detaljvisningen
+  const detailEl = document.getElementById('ordreDetail');
+  const focusTag = document.activeElement?.tagName;
+  if (detailEl?.contains(document.activeElement) && (focusTag==='SELECT'||focusTag==='INPUT'||focusTag==='TEXTAREA')) return;
+  if (erLeveranse(o)) { buildLeveranseDetail(o); return; } // ordre uten bil: egen visning, se js/leveranse.js
+  synkroniserOmbyggingFikenLinjer(o);
+  synkroniserDrivstoffFikenLinje(o);
+  vegvesenAutoGenererHvisKomplett(o);
+  // Vegvesen-dokumenter (Fabrikantattest/Egenerklæring/Vektfordeling, + Melding om
+  // registrering for Nytt Kjøretøy) gjelder "Nytt Kjøretøy"- ELLER "Brukt
+  // Kjøretøy"-ombygginger (se vegvesen-dokumenter.js sin egen fil-header) - styrer om
+  // Regenerer/Skriv ut-knappene under vises. Bruker samme flåte-kilde-logikk som selve
+  // auto-genereringen (primærkjøretøyet hvis flåte).
+  const vegvesenKontekst = vegvesenFlateKontext(o);
+  const vegvesenKilde = (vegvesenKontekst ? vegvesenKontekst.primaer : o).ombygging;
+  const vegvesenGjelderDenneOrdren = !!(vegvesenKilde?.nyttKjoretoy || vegvesenKilde?.bruktKjoretoy);
+  const erAdmin = me && me.rolle==='admin';
+  const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  // "meldt på"/"meldt av"-hendelser vises i egen boks under Ansatte på ordren i stedet for
+  // i den generelle Endringer-loggen - samme underliggende o.endringer, splittet ved visning.
+  const erAnsattEndring = e => /meldt på$|meldt av$/.test(e.txt);
+  const ansatteEndringer = o.endringer.filter(erAnsattEndring);
+  const generelleEndringer = o.endringer.filter(e => !erAnsattEndring(e));
+
+  document.getElementById('ordreDetail').innerHTML = `
+  <div style="position:sticky;top:var(--top-h,0px);z-index:40;background:#09090b;padding:8px 0;border-bottom:1px solid #27272a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <button class="btn sm" onclick="tilbakeOrdreList()" style="padding:5px 9px;font-size:11px">${openedFromArkiv ? '← Tilbake til arkiv' : openedFraOversikt ? '← Oversikt' : '← Alle ordrer'}</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button id="prioritertBtn_${o.id}" class="btn sm" onclick="togglePrioritert('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;${o.prioritert?'background:rgba(250,204,21,.12);border-color:#facc15;color:#facc15':''}">${o.prioritert?'Prioritert ✕':'+ Prioriter'}</button>
+      <button class="btn sm" onclick="genPDF('${o.id}')" title="Last ned PDF-rapport" style="border-radius:10px;padding:5px 9px;font-size:11px">PDF</button>
+      ${typeof ordreLappKnappHTML === 'function' ? ordreLappKnappHTML(o) : ''}
+      <button id="kjoreseddelBtn_${o.id}" class="btn sm" onclick="apneKjoreseddelModal('${o.id}')" title="Velg hvilket prøveskilt som er i bruk på denne bilen" style="border-radius:10px;padding:5px 9px;font-size:11px">${o.kjoreseddelSkilt?esc(o.kjoreseddelSkilt):'Skilt'}</button>
+      <button id="oppdaterOrdreKnapp" class="btn sm" onclick="oppdaterAktivOrdre()" title="Hent siste endringer" style="border-radius:10px;padding:5px 9px;font-size:11px">Oppdater</button>
+      ${me?.rolle==='admin' ? `<button class="btn sm" onclick="slettOrdre('${o.id}')" style="border-radius:10px;padding:5px 9px;font-size:11px;background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:#fca5a5">Slett ordre</button>` : ''}
+    </div>
+  </div>
+  ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">Arkivert ordre — kun visning</div>`:''}
+  ${portalBekreftBannerHTML(o)}
+  <div class="card" style="padding:12px 16px;margin-bottom:0">
+    <div class="row" style="flex-wrap:wrap;align-items:center;gap:8px 12px">
+      <div style="flex:1 1 0">
+        ${o.regnr
+          ? `<div class="title" style="letter-spacing:.02em">${esc(o.regnr)}</div>
+             ${o.chassis?`<div class="small" style="color:#71717a;margin-top:2px;${CHASSIS_HEL_STIL}">CHASSIS <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#d4d4d8;letter-spacing:.02em">${esc(o.chassis)}</span></div>`:''}`
+          : `<div style="font-size:10px;letter-spacing:.16em;color:#52525b">CHASSIS</div>
+             <div style="margin-top:3px">${o.chassis?`<span class="chassis-stor" style="${CHASSIS_HEL_STIL}">${esc(o.chassis)}</span>`:'Uten reg.nr'}</div>`}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;flex-shrink:0">
+        ${statusDropdown(o.id, o.ordreStatus, 'font-size:13px;padding:6px 11px;border-radius:999px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
+        <div style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:5px 12px">
+          <span class="pill ${o.godkjent?'ok':'bad'}" style="font-size:11px;margin:0">${o.godkjent?'Godkjent / lukket':'Aktiv'}</span>
+          ${erAdmin ? `<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;white-space:nowrap">
+            Vedtak
+            <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:15px;height:15px;accent-color:#22c55e;cursor:pointer">
+          </label>` : ''}
+        </div>
+        ${portalBadgeHTML(o, true)}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g2l">
+    <div>
+
+      <div class="card">
+        <div class="h">Kunde og bilinfo</div>
+
+        <div class="grid g2" style="gap:8px;margin-top:10px">
+          <div class="felt-wrap">
+            <label>Forhandler</label>
+            <div style="display:flex;gap:6px">
+              <input id="kundeInput_${o.id}" value="${esc(o.kunde)}" autocomplete="off"
+                oninput="renderForhandlerOrgnrForslag('kundeInput_${o.id}','forhandlerOrgnrInput_${o.id}','typeForslag_forhandlerOrgnr_${o.id}');renderEierForslag('kundeInput_${o.id}','eierInput_${o.id}','typeForslag_eier_${o.id}');renderForhandlerNrForslag('kundeInput_${o.id}','forhandlerNrInput_${o.id}','typeForslag_forhandlerNr_${o.id}');renderForhandlerForslag(null,null,'kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
+                onchange="sf('${o.id}','kunde',this.value);autoFyllForhandlerNr('${o.id}');autoFyllForhandlerOrgnr('${o.id}');autoFyllForhandlerFullmakt('${o.id}');varsleHvisForhandlerDataMangler('${o.id}')"
+                onfocus="visFeltDropdown('typeForslag_kunde_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_kunde_${o.id}'))" style="flex:1">
+              ${o.kunde?`<button class="btn sm" onclick="visKundeHistorikk('${esc(o.kunde).replace(/'/g,"\\'")}')" title="Se alle ordrer for denne kunden" style="white-space:nowrap;flex-shrink:0">📋 Historikk</button>`:''}
+            </div>
+            <div id="typeForslag_kunde_${o.id}" class="felt-dropdown">${feltForslagHTML('kundeInput_'+o.id, forhandlerForslag())}</div>
+          </div>
+          <div class="felt-wrap">
+            <label>Kontaktperson</label>
+            <input id="eierInput_${o.id}" value="${esc(o.eier)}" autocomplete="off" onchange="sf('${o.id}','eier',this.value)"
+              onfocus="visFeltDropdown('typeForslag_eier_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_eier_${o.id}'))">
+            <div id="typeForslag_eier_${o.id}" class="felt-dropdown">${feltForslagHTML('eierInput_'+o.id, kontaktpersonKontakterForslag(o.kunde))}</div>
+          </div>
+          <div class="felt-wrap">
+            <label>Merke</label>
+            <input id="merkeInput_${o.id}" value="${esc(o.merke||'')}" autocomplete="off"
+              oninput="renderModellForslag('merkeInput_${o.id}','modellInput_${o.id}','typeForslag_modell_${o.id}');renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}');renderForhandlerForslag('merkeInput_${o.id}','modellInput_${o.id}','kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
+              onchange="sf('${o.id}','merke',this.value);renderOrdreLagerbruk();autoVelgUtstyrMal('${o.id}')"
+              onfocus="visFeltDropdown('typeForslag_merke_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_merke_${o.id}'))">
+            <div id="typeForslag_merke_${o.id}" class="felt-dropdown">${feltForslagHTML('merkeInput_'+o.id, merkeForslag())}</div>
+          </div>
+          <div class="felt-wrap">
+            <label>Type</label>
+            <input id="typeInput_${o.id}" value="${esc(o.type||'')}" autocomplete="off"
+              oninput="renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
+              onchange="sf('${o.id}','type',this.value)"
+              onfocus="visFeltDropdown('typeForslag_type_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_type_${o.id}'))">
+            <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag(o.merke, o.modell))}</div>
+          </div>
+          <div class="felt-wrap">
+            <label>Modell</label>
+            <input id="modellInput_${o.id}" value="${esc(o.modell||'')}" autocomplete="off"
+              oninput="renderTypeForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','typeForslag_type_${o.id}');renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}');renderForhandlerForslag('merkeInput_${o.id}','modellInput_${o.id}','kundeInput_${o.id}','typeForslag_kunde_${o.id}')"
+              onchange="sf('${o.id}','modell',this.value);renderOrdreLagerbruk();autoVelgUtstyrMal('${o.id}')"
+              onfocus="visFeltDropdown('typeForslag_modell_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_modell_${o.id}'))">
+            <div id="typeForslag_modell_${o.id}" class="felt-dropdown">${feltForslagHTML('modellInput_'+o.id, modellForslag(o.merke))}</div>
+          </div>
+          <div class="felt-wrap">
+            <label>Variant</label>
+            <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" autocomplete="off" onchange="sf('${o.id}','variant',this.value)"
+              onfocus="visFeltDropdown('typeForslag_var_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_var_${o.id}'))">
+            <div id="typeForslag_var_${o.id}" class="felt-dropdown">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.merke, o.modell, o.type))}</div>
+          </div>
+          <div><label>Farge</label><select onchange="sf('${o.id}','farge',this.value)">${fargeSelectOptions(o.farge)}</select></div>
+          <div class="felt-wrap">
+            <label>Versjon</label>
+            <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" autocomplete="off" onchange="sf('${o.id}','versjon',this.value)"
+              onfocus="visFeltDropdown('typeForslag_ver_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_ver_${o.id}'))">
+            <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.merke, o.modell, o.type))}</div>
+          </div>
+          <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
+          <div class="felt-wrap">
+            <label>Forhandler org.nr</label>
+            <input id="forhandlerOrgnrInput_${o.id}" value="${esc(vegvesenFormaterOrgnr(o.forhandlerOrgnr||''))}" autocomplete="off" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer"
+              onfocus="visFeltDropdown('typeForslag_forhandlerOrgnr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerOrgnr_${o.id}'))">
+            <div id="typeForslag_forhandlerOrgnr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerOrgnrInput_'+o.id, forhandlerOrgnrForslag(o.kunde))}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Dokumenter</div>
+          <div class="grid g2" style="gap:8px">
+            <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
+            <div><label>Fullmakt</label>${dokStatusDropdown(o.id,'fullmakt',o.fullmakt)}</div>
+            <div class="felt-wrap">
+              <label>Typegodkjenning</label>
+              <input id="typegodkjenningInput_${o.id}" value="${esc(o.typegodkjenning||'')}" autocomplete="off" onchange="sf('${o.id}','typegodkjenning',this.value)" placeholder="f.eks. e4*2018/858*00178*04"
+                onfocus="visFeltDropdown('typeForslag_typegodkjenning_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_typegodkjenning_${o.id}'))">
+              <div id="typeForslag_typegodkjenning_${o.id}" class="felt-dropdown">${feltForslagHTML('typegodkjenningInput_'+o.id, typegodkjenningForslag(o.merke, o.modell))}</div>
+            </div>
+            <div><label>Egenvekt (fra COC)</label><input type="number" value="${o.egenvektCoc||''}" onchange="sf('${o.id}','egenvektCoc',this.value)" placeholder="kg"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Identifikasjon</div>
+          <div class="grid g2" style="gap:8px">
+            <div>
+              <label>Reg.nr</label>
+              <div style="display:flex;gap:6px">
+                <input id="regnr_${o.id}" value="${esc(o.regnr)}" onchange="sf('${o.id}','regnr',this.value.toUpperCase());this.value=this.value.toUpperCase()" style="text-transform:uppercase">
+                <button class="btn sm red" onclick="slaOppRegnr('${o.id}')" title="Hent bilinfo fra Statens vegvesen" style="white-space:nowrap;flex-shrink:0">🔍 Søk</button>
+              </div>
+              <div id="regnrStatus_${o.id}" class="small" style="margin-top:4px"></div>
+            </div>
+            <div>
+              <label>Chassis-nr (VIN)</label>
+              <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase;font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.02em" oninput="this.nextElementSibling.textContent=this.value.length+'/17';this.nextElementSibling.style.color=this.value.length===17?'#4ade80':'#71717a'" onchange="if(sf('${o.id}','chassis',this.value)){this.value=this.value.toUpperCase();}else{this.value='${esc(o.chassis)}';this.dispatchEvent(new Event('input'))}">
+              <div class="small" style="margin-top:2px;text-align:right;color:${(o.chassis||'').length===17?'#4ade80':'#71717a'}">${(o.chassis||'').length}/17</div>
+            </div>
+            <div>
+              <label>Serienummer</label>
+              <div class="small" style="padding:6px 0">${esc(adminArkFinnRadForVisning(o.chassis)?.serienummer||'') || '<span class="muted">Ikke registrert</span>'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <label>Flåte</label>
+          <div class="small" style="padding:6px 0">${(() => {
+            const f = (S.flater||[]).find(x=>x.id===o.flateId);
+            return f ? esc(f.flatenummer) : 'Ingen flåte';
+          })()}</div>
+        </div>
+      </div>
+
+      <div class="card" style="${o.ansatteSignert.length?'animation:pulseGlow 3s ease-in-out infinite':''}">
+        <div class="h">Ansatte på ordren</div>
+        <div style="margin-top:6px" id="ansOrdre">${renderAnsOrdre(o)}</div>
+        ${!o.ansatteSignert.find(a=>a.id===me.id)
+          ?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="meldPaa('${o.id}')">+ Meld meg på</button>`
+          :`<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+              <span class="small ok-text">✓ Du er meldt på</span>
+              <button class="btn sm" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" onclick="meldAv('${o.id}')">Meld meg av</button>
+            </div>`
+        }
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:8px;width:100%" onclick="apneAdminMeldPaaModal('${o.id}')">👥 Meld på ansatte</button>`:''}
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Endringer</div>
+          ${ansatteEndringer.length?[...ansatteEndringer].reverse().map(e=>`<div style="display:flex;gap:10px;padding:6px 0;border-top:1px solid #1f1f23;font-size:12px;align-items:baseline">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#52525b;flex-shrink:0;white-space:nowrap">${esc(e.tid)}</span>
+            <span style="color:#d4d4d8;min-width:0">${esc(e.txt)}<span style="color:#52525b"> · ${esc(e.av)}</span></span>
+          </div>`).join(''):'<div class="small muted">Ingen registrerte endringer</div>'}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h">Ombygging</div>
+        <div id="ombyggingBoks_${o.id}">${ombyggingBoksHTML(o)}</div>
+      </div>
+
+      <div class="card">
+        <div class="h">Varer fra lager</div>
+        <div id="ordreLagerbruk_${o.id}" style="margin-top:8px"></div>
+      </div>
+
+      <div class="card">
+        <div class="h">Vekter (kg)</div>
+        <table><thead><tr><th></th>
+          <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Ved ankomst</th>
+          <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Endring</th>
+          <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Før visning</th>
+        </tr></thead><tbody>
+          ${[['totalvekt','Totalvekt'],['vogntog','Vogntog'],['foraksel','Foraksel'],['bakaksel','Bakaksel']].map(([k,lbl],i)=>{
+            const rod = ['totalvekt','vogntog'].includes(k) && o.vekter[k].e && o.vekter[k].a && o.vekter[k].e !== o.vekter[k].a;
+            const vektInputStil = "font-family:ui-monospace,'SF Mono',Menlo,monospace;text-align:right;";
+            return `<tr>
+              <td class="small muted" style="padding:6px 8px;white-space:nowrap">${lbl}</td>
+              <td><input value="${o.vekter[k].a}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'a')" onchange="sv('${o.id}','${k}','a',this.value)" style="${vektInputStil}"></td>
+              <td><input value="${o.vekter[k].e}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'e')" onchange="sv('${o.id}','${k}','e',this.value)" style="${vektInputStil}${rod?'color:#ef4444;border-color:#ef4444':''}"></td>
+              <td>${k==='vogntog' ? '<span class="small muted">–</span>' : `<input value="${o.vekter[k].v}" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" onkeydown="vektEnter(event,${i},'v')" onchange="sv('${o.id}','${k}','v',this.value)" style="${vektInputStil}">`}</td>
+            </tr>`;
+          }).join('')}
+        </tbody></table>
+      </div>
+
+      <div class="card">
+        <div class="h">Drivstoff</div>
+        <div id="drivstoffKort_${o.id}" style="margin-top:10px">${drivstoffKortHTML(o)}</div>
+      </div>
+
+      <div class="card">
+        <div class="h">Utstyr – Har ved ankomst</div>
+${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrMalNavn||'')}
+        <div id="utstyrSjekkliste_${o.id}">${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}</div>
+      </div>
+
+      <div class="card" style="${o.utstyr?.skalHaBekreftet?'border-color:#22c55e;background:rgba(34,197,94,.06)':''}">
+        <div class="h">Utstyr – Skal ha etter visning</div>
+        <div class="small muted" style="margin-top:6px">Valgte Ekstra utstyr-oppskrifter legges automatisk til her - skriv gjerne inn mer for hånd i tillegg.</div>
+        <textarea id="skalHaInput_${o.id}" rows="4" style="margin-top:8px" placeholder="Ingen tilvalg" onchange="su('${o.id}','skalHa',this.value)">${esc(o.utstyr?.skalHa||'')}</textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:13px;font-weight:700;color:${o.utstyr?.skalHaBekreftet?'#86efac':'#a1a1aa'}">
+          <input type="checkbox" ${o.utstyr?.skalHaBekreftet?'checked':''} onchange="toggleSkalHaBekreftet('${o.id}',this.checked)" style="width:17px;height:17px;accent-color:#22c55e;cursor:pointer">
+          ✔ Utstyr bekreftet klargjort
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="h">Forhandler.nr</div>
+        <div class="felt-wrap" style="margin-top:8px">
+          <input id="forhandlerNrInput_${o.id}" value="${esc(o.utstyr?.forhandlerNr||'')}" autocomplete="off" onchange="su('${o.id}','forhandlerNr',this.value);oppdaterHengerfesteNrVisning('${o.id}')"
+            onfocus="visFeltDropdown('typeForslag_forhandlerNr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerNr_${o.id}'))">
+          <div id="typeForslag_forhandlerNr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerNrInput_'+o.id, forhandlerNrForslag(o.kunde))}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="h">Hengerfeste</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <select onchange="settHengerfeste('${o.id}',this.value)" style="background:${o.utstyr?.hengerfeste==='hengerfeste'?'#42200688':'#09090b88'};color:${o.utstyr?.hengerfeste==='hengerfeste'?'#fef08a':'#e4e4e7'};border:2px solid ${o.utstyr?.hengerfeste==='hengerfeste'?'#facc15':'#3f3f46'};border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer">
+            <option value="ikke_hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'':'selected'}>Ikke hengerfeste</option>
+            <option value="hengerfeste" ${o.utstyr?.hengerfeste==='hengerfeste'?'selected':''}>Hengerfeste</option>
+          </select>
+          <span id="hengerfesteNrVisning_${o.id}" style="font-size:13px;font-weight:700;color:#f4f4f5">${hengerfesteNrVisningHTML(o)}</span>
+        </div>
+      </div>
+
+      ${fotoSeksjonHTML(o, 'a', 'Bilder – Ankomst')}
+      ${fotoSeksjonHTML(o, 's', 'Bilder – Avstand/skader')}
+      ${fotoSeksjonHTML(o, 'l', 'Bilder – Levering')}
+      ${manglendeDelerHTML(o)}
+
+      <div class="card" id="ordretimerKort_ordreTimerSessions_${o.id}">
+        ${ordreTimerKortHTML(o, 'ordreTimerSessions')}
+      </div>
+      <div class="card" id="ordretimerKort_klargjoringTimerSessions_${o.id}">
+        ${ordreTimerKortHTML(o, 'klargjoringTimerSessions')}
+      </div>
+      ${erAdmin?`<div class="card" id="bilEffektivitetBadge_${o.id}"><div class="small muted">Beregner brukt tid...</div></div>`:''}
+
+      <div class="card">
+        <div class="h">Notater</div>
+        <textarea rows="3" style="margin-top:8px" onchange="sf('${o.id}','notater',this.value)">${esc(o.notater)}</textarea>
+      </div>
+
+      <div class="card">
+        <div class="h">Endringer</div>
+        ${(() => {
+          const vises = [...generelleEndringer].reverse();
+          if (!vises.length) return '<div class="small muted">Ingen registrerte endringer</div>';
+          const VIS = 12;
+          const rad = (e,skjult) => `<div${skjult?' data-skjult':''} style="display:${skjult?'none':'flex'};gap:10px;padding:6px 0;border-top:1px solid #1f1f23;font-size:12px;align-items:baseline">
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#52525b;flex-shrink:0;white-space:nowrap">${esc(e.tid)}</span>
+            <span style="color:#d4d4d8;min-width:0">${esc(e.txt)}<span style="color:#52525b"> · ${esc(e.av)}</span></span>
+          </div>`;
+          return `<div>${vises.slice(0,VIS).map(e=>rad(e,false)).join('')}${vises.slice(VIS).map(e=>rad(e,true)).join('')}</div>`
+            + (vises.length>VIS?`<button class="btn sm" style="margin-top:8px" onclick="this.previousElementSibling.querySelectorAll('[data-skjult]').forEach(e=>e.style.display='flex');this.remove()">Vis ${vises.length-VIS} eldre endringer</button>`:'');
+        })()}
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div>
+      <div class="card" id="tvangsflytBoks_${o.id}">${tvangsflytBoksHTML(o)}</div>
+
+      <div class="card">
+        <div class="h">Time på biltilsynet</div>
+        <div class="grid g3" style="margin-top:8px">
+          <div><label>Dato</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet):'<span class="muted">Ikke satt</span>'}</div></div>
+          <div><label>Tid</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynetTid||'<span class="muted">Ikke satt</span>'}</div></div>
+          <div><label>Sted</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynetSted?esc(o.tidBiltilsynetSted):'<span class="muted">–</span>'}</div></div>
+        </div>
+        <div class="small muted" style="margin-top:8px">Settes under Time bekreftet i Admin-arket</div>
+      </div>
+
+      <div class="card">
+        <div class="h">Diagnose</div>
+        <div style="margin-top:8px">
+          ${o.diagnose
+            ? `<span class="pill ok">✔ Diagnose utført av ${o.diagnoseAv}</span>
+               <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleDiagnose('${o.id}')">Fjern diagnose</button>`
+            : `<div class="muted small" style="margin-bottom:8px">Ikke utført</div>
+               <button class="btn sm red" style="width:100%" onclick="toggleDiagnose('${o.id}')">✔ Merk diagnose utført</button>`}
+        </div>
+      </div>
+
+      ${me&&me.rolle==='admin'?`
+      <div class="card">
+        <div class="h">Fakturering</div>
+        <div class="small muted" style="margin-top:6px">Produktnummer og antall som skal med på Fiken-fakturaen.</div>
+        <div id="fikenLinjer_${o.id}" style="margin-top:10px">${fikenLinjerHTML(o)}</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+          ${o.fakturert
+            ? `<span class="pill ok">✔ Fakturert</span>
+               <button class="btn sm" style="margin-top:8px;width:100%" onclick="toggleFakturert('${o.id}')">Merk som ikke fakturert</button>`
+            : `<div class="muted small" style="margin-bottom:8px">Ikke fakturert</div>
+               <label style="display:flex;align-items:center;gap:7px;margin-bottom:10px;cursor:pointer">
+                 <input type="checkbox" id="brukRabatt_${o.id}" checked style="width:15px;height:15px;accent-color:#22c55e">
+                 <span class="small">Bruk kundens avtalte rabatt</span>
+               </label>
+               <button class="btn sm red" id="fakturerBtn_${o.id}" style="width:100%" onclick="fakturerViaFiken('${o.id}')">✔ Merk som fakturert (oppretter kladd i Fiken)</button>`}
+        </div>
+      </div>`:''}
+
+      <div class="card">
+        <div class="h">Dokumenter</div>
+        <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
+        ${me&&me.rolle==='admin'?`<label id="dokDropzone_${o.id}" class="dok-dropzone small muted" style="margin-top:8px;display:block" title="Samme filnavn erstatter forrige versjon"
+            ondragover="dokDragOver(event,'${o.id}')" ondragleave="dokDragLeave(event,'${o.id}')" ondrop="dokDrop(event,'${o.id}')">
+          Dra dokumenter hit, eller klikk for å velge
+          <input type="file" multiple accept="${DOK_TILLATTE_EXT.map(e=>'.'+e).join(',')}" onchange="lastOppDokument(event,'${o.id}')" style="display:none">
+        </label>`:''}
+        ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="genererVegvesenDokumenter('${o.id}')" title="${vegvesenGjelderDenneOrdren?'Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🔄 Regenerer Vegvesen-dokumenter</button>
+        <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
+      </div>
+
+      ${(o.godkjent&&erGodkjenner)?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
+      ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
+    </div>
+  </div>`;
+  renderOrdreLagerbruk();
+  sikreOrdreTimerTicking(o);
+  if (erAdmin) renderBilEffektivitetBadge(o);
+  if (o.status === 'arkivert') {
+    const detail = document.getElementById('ordreDetail');
+    const header = detail.firstElementChild;
+    detail.querySelectorAll('input, textarea, select').forEach(el => {
+      el.disabled = true;
+      el.style.cursor = 'not-allowed';
+    });
+    detail.querySelectorAll('button').forEach(btn => {
+      if (!header.contains(btn) && !btn.hasAttribute('data-viewonly')) { btn.disabled = true; btn.style.opacity = '0.4'; }
+    });
+  }
+  } catch(err) {
+    document.getElementById('ordreDetail').innerHTML = `<div class="card"><div class="err-text">Feil ved lasting av ordre: ${err.message}</div><button class="btn sm" style="margin-top:8px" onclick="tilbakeOrdreList()">← Tilbake</button></div>`;
+  }
+}
+
+// "Ansatte på ordren" lar flere ansatte jobbe på samme bil samtidig, hver i sin egen
+// nettleserøkt - to ansatte som endrer ULIKE felt på samme ordre tett i tid (f.eks. én
+// merker diagnose utført mens en annen fyller inn en vekt) kunne tidligere overskrive
+// hverandre stille, siden toggleDiagnose() gikk via den generelle save() (full-rad-upsert
+// basert på nettleserens lokale kopi - se kommentaren i core.js save()). Skriver nå i
+// stedet KUN diagnose/diagnose_av direkte - helt ordinære kolonner, og Postgres håndterer
+// konkurrerende UPDATE på ULIKE kolonner på samme rad helt trygt av seg selv (funnet
+// 2026-10-22, samme rotårsak som dokumenter-/endringer-kappløpet, men løst enklere siden
+// dette ikke er et array-felt).
+function toggleDiagnose(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.diagnose = !o.diagnose;
+  o.diagnoseAv = o.diagnose ? me.navn : '';
+  logChange(o, o.diagnose ? 'Diagnose utført' : 'Diagnose fjernet');
+  planleggLocalSpeiling();
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
+  if (db) db.from('ordrer').update({ diagnose: o.diagnose, diagnose_av: o.diagnoseAv }).eq('id', id)
+    .then(r=>{if(r.error) console.error('Kunne ikke lagre diagnose:', r.error.message);});
+  buildOrdreDetail();
+}
+
+// Bekrefter at "Utstyr - Skal ha etter visning" faktisk er klargjort - del av
+// tvangsflyt() lenger ned, så en ordre med utfylt tekst her ikke kan lukkes før denne er
+// huket av (bedt om av Henrik 2026-10-08). su() nullstiller denne automatisk igjen hvis
+// teksten endres etterpå, se ordre-diverse.js. Samme målrettet-oppdatering-fiks som
+// toggleDiagnose() over (funnet 2026-10-22) - skriver kun utstyr-feltet, ikke hele raden.
+function toggleSkalHaBekreftet(id, bekreftet) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.utstyr.skalHaBekreftet = bekreftet;
+  logChange(o, bekreftet ? 'Utstyr etter visning bekreftet' : 'Utstyr etter visning - bekreftelse fjernet');
+  planleggLocalSpeiling();
+  ignorerRealtimeFor.add(id);
+  setTimeout(()=>ignorerRealtimeFor.delete(id), 10000);
+  if (db) db.from('ordrer').update({ utstyr: o.utstyr }).eq('id', id)
+    .then(r=>{if(r.error) console.error('Kunne ikke lagre bekreftelse:', r.error.message);});
+  buildOrdreDetail();
+}
+
+// Fakturalinjer (produktnummer + antall) som senere skal sendes til Fiken ved
+// fakturering - én ordre kan trenge flere linjer (f.eks. ombygging + ekstra utstyr),
+// akkurat som en vanlig faktura har flere linjer.
+// Sorterer fakturalinjer etter produktnummer (bedt om av Henrik 2026-11-02), både i
+// Fakturering-kortet og i fakturaen som sendes til Fiken. Rene tall sammenlignes som tall
+// (21 før 100), ellers som tekst; en linje uten produktnummer (nylagt, ennå ikke utfylt)
+// havner sist så den ikke hopper opp øverst mens man skriver. Returnerer en KOPI - selve
+// o.fikenLinjer-rekkefølgen (som databasen eier) røres ikke. Sorteringen er stabil, så
+// like produktnumre beholder rekkefølgen de ble lagt inn i.
+function sorterFikenLinjer(linjer) {
+  const nr = l => String(l?.produktnummer ?? '').trim();
+  return [...(linjer || [])].sort((a, b) => {
+    const na = nr(a), nb = nr(b);
+    if (!na || !nb) return !na && !nb ? 0 : !na ? 1 : -1;
+    if (/^\d+$/.test(na) && /^\d+$/.test(nb)) return Number(na) - Number(nb) || (na < nb ? -1 : na > nb ? 1 : 0);
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+}
+function fikenLinjerHTML(o) {
+  const linjer = sorterFikenLinjer(o.fikenLinjer);
+  // Hver linje skal ha en stabil id fra databasen (backfillet i migrasjonen
+  // 20261023120000) - denne lazy-tildelingen er kun et sikkerhetsnett for linjer som av
+  // en eller annen grunn mangler den i akkurat denne nettleserfanens kopi.
+  linjer.forEach(l => { if (!l.id) l.id = nyFikenLinjeId(); });
+  return `<div style="display:flex;flex-direction:column;gap:8px">
+    ${linjer.map(l => `
+      <div style="display:flex;gap:6px;align-items:center">
+        <input value="${esc(l.produktnummer||'')}" placeholder="Produktnr." onchange="settFikenLinje('${o.id}','${l.id}','produktnummer',this.value)" style="flex:2;min-width:0">
+        <input type="number" min="1" value="${l.antall||1}" onchange="settFikenLinje('${o.id}','${l.id}','antall',this.value)" style="width:64px;flex-shrink:0">
+        ${l.belop!==undefined?`<input type="number" step="0.01" value="${l.belop||0}" title="Overstyrt beløp (kr) - erstatter produktets faste pris i Fiken" onchange="settFikenLinje('${o.id}','${l.id}','belop',this.value)" style="width:90px;flex-shrink:0">`:''}
+        <button class="btn sm" onclick="fjernFikenLinje('${o.id}','${l.id}')" style="flex-shrink:0" title="Fjern linje">✕</button>
+      </div>`).join('')}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
+      ${erLeveranse(o) ? '' : `<button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>
+      <button class="btn sm" onclick="leggTilFikenLinjeDrivstoff('${o.id}')">⛽ Hent drivstoff</button>`}
+    </div>
+  </div>`;
+}
+// Skriver ÉN fakturalinje atomisk (radlås i databasen, se oppdater_ordre_fiken_linje() i
+// migrasjonen 20261022150000) i stedet for å lese/endre/skrive hele fikenLinjer-arrayet fra
+// nettleserens eget minne - brukt av de PRODUKTNUMMER-keyede skrivingene (drivstoff, "Hent
+// fra Utstyr-boksen").
+async function oppdaterOrdreFikenLinje(o, produktnummer, linje) {
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', { p_ordre_id: o.id, p_produktnummer: produktnummer, p_linje: linje });
+    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
+  } else {
+    o.fikenLinjer = o.fikenLinjer || [];
+    const idx = o.fikenLinjer.findIndex(l=>l.produktnummer===produktnummer);
+    if (linje) { if (idx!==-1) o.fikenLinjer[idx]=linje; else o.fikenLinjer.push(linje); }
+    else if (idx!==-1) o.fikenLinjer.splice(idx,1);
+  }
+  planleggLocalSpeiling();
+  const el = document.getElementById('fikenLinjer_'+o.id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+function nyFikenLinjeId() {
+  return 'fl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+// Skriver ÉN fakturalinje atomisk, keyet på linjens stabile id (se oppdater_ordre_-
+// fiken_linje_ved_id() i migrasjonen 20261023120000) - brukt av den rent manuelle
+// linjeredigeringen (legg til/fjern/rediger felt i Fakturering-kortet). Kan ikke bruke
+// den PRODUKTNUMMER-keyede funksjonen over her, siden en linje kan ha tom/duplikat
+// produktnummer mens den skrives inn (funnet og vurdert 2026-10-22, fikset 2026-10-23).
+async function oppdaterOrdreFikenLinjeVedId(o, linjeId, linje) {
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_fiken_linje_ved_id', { p_ordre_id: o.id, p_linje_id: linjeId, p_linje: linje });
+    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
+  } else {
+    o.fikenLinjer = o.fikenLinjer || [];
+    const idx = o.fikenLinjer.findIndex(l=>l.id===linjeId);
+    if (linje) { if (idx!==-1) o.fikenLinjer[idx]=linje; else o.fikenLinjer.push(linje); }
+    else if (idx!==-1) o.fikenLinjer.splice(idx,1);
+  }
+  planleggLocalSpeiling();
+}
+async function leggTilFikenLinje(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!o.fikenLinjer) o.fikenLinjer = [];
+  const ny = {id: nyFikenLinjeId(), produktnummer:'', antall:1};
+  o.fikenLinjer.push(ny);
+  await oppdaterOrdreFikenLinjeVedId(o, ny.id, ny);
+  const el = document.getElementById('fikenLinjer_'+id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+// "Utstyr – Skal ha etter visning" inneholder rene produktnumre på egne linjer, men kan
+// også ha fritekst innimellom (bekreftet av Henrik) - bare linjer som er RENE tall skal
+// tas med her, alt annet ignoreres bevisst i stedet for å risikere feil tekst på en ekte
+// faktura. Samme nummer på flere linjer telles opp som antall i stedet for flere 1-linjer.
+function hentFikenLinjerFraUtstyr(o) {
+  const linjer = (o.utstyr?.skalHa || '').split('\n').map(l => l.trim()).filter(l => /^\d+$/.test(l));
+  const antallPerNummer = {};
+  linjer.forEach(n => { antallPerNummer[n] = (antallPerNummer[n]||0) + 1; });
+  return Object.entries(antallPerNummer).map(([produktnummer, antall]) => ({produktnummer, antall}));
+}
+async function leggTilFikenLinjerFraUtstyr(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const nye = hentFikenLinjerFraUtstyr(o);
+  if (!nye.length) { visToast('Fant ingen rene produktnumre i Utstyr-boksen'); return; }
+  // Oppdaterer en eksisterende linje for samme produktnummer i stedet for å pushe en ny
+  // (uten dette ga et andre trykk duplikate fakturalinjer - funnet 2026-10-15). Knappen
+  // skal fjernes helt etter hvert (bedt om av Henrik), så bare denne minimale fiksen -
+  // ikke bygget om til automatisk synk slik ombygging/drivstoff er.
+  for (const {produktnummer, antall} of nye) {
+    await oppdaterOrdreFikenLinje(o, produktnummer, {produktnummer, antall});
+  }
+}
+async function fjernFikenLinje(id, linjeId) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
+  const idx = o.fikenLinjer.findIndex(l=>l.id===linjeId);
+  if (idx===-1) return;
+  o.fikenLinjer.splice(idx, 1);
+  await oppdaterOrdreFikenLinjeVedId(o, linjeId, null);
+  const el = document.getElementById('fikenLinjer_'+id);
+  if (el) el.innerHTML = fikenLinjerHTML(o);
+}
+// Fiken sitt "Drivstoff"-produkt (nr. 21, bekreftet av Henrik) har ingen fastpris - kunde-
+// prisen er ulik fra ordre til ordre, så beløpet overstyres alltid med drivstoffKundepris(o)
+// i stedet for å hente pris fra produktet slik de andre linjene gjør. Legger til/oppdaterer
+// ÉN linje (ikke flere ved gjentatte trykk) siden en ordre kun har én reell drivstoffpris.
+const FIKEN_PRODUKTNUMMER_DRIVSTOFF = '21';
+async function leggTilFikenLinjeDrivstoff(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const belop = drivstoffKundepris(o);
+  if (!belop) { visToast('Ingen drivstoffpris registrert på denne ordren'); return; }
+  await oppdaterOrdreFikenLinje(o, FIKEN_PRODUKTNUMMER_DRIVSTOFF, {produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop});
+}
+async function settFikenLinje(id, linjeId, felt, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
+  const linje = o.fikenLinjer.find(l=>l.id===linjeId); if(!linje) return;
+  if (felt==='antall') val = Number(val)||1;
+  else if (felt==='belop') val = Number(val)||0;
+  linje[felt] = val;
+  await oppdaterOrdreFikenLinjeVedId(o, linjeId, linje);
+}
+
+// ============================================================
+// Fiken-fakturering - kaller Edge Function fiken-fakturer, som oppretter en KLADD i
+// Fiken (aldri sendt automatisk, se funksjonens egen kommentar for hvorfor). To runder
+// når kunden er ukjent for koblingen: første kall uten bekreftetContactId får tilbake
+// en kandidatliste fra Fiken, admin velger riktig kunde i fikenKundeBekreft-modalen,
+// og et nytt kall med bekreftetContactId fullfører og husker koblingen for godt.
+// ============================================================
+let fikenFaktureringOrdreId = null;
+let fikenFaktureringKandidater = [];
+let fikenFaktureringBrukRabatt = true;
+
+async function kallFikenFakturer(id, ekstra) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return 'error';
+  try {
+    const res = await edgeFetch('fiken-fakturer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordreId: id, kundeNavn: o.kunde, kontaktpersonNavn: o.eier, chassisNr: o.chassis, regnr: o.regnr, referanse: erLeveranse(o) ? leveranseFakturaReferanse(o) : undefined, linjer: sorterFikenLinjer(o.fikenLinjer), brukRabatt: fikenFaktureringBrukRabatt, ...ekstra })
+    });
+    const data = await res.json();
+    if (data.needsBekreftelse) {
+      fikenFaktureringOrdreId = id;
+      fikenFaktureringKandidater = data.kandidater || [];
+      document.getElementById('fikenKundeListe').innerHTML = fikenFaktureringKandidater.map(k=>`<option value="${esc(k.navn)}">`).join('');
+      document.getElementById('fikenKundeNavnVis').textContent = o.kunde || '';
+      document.getElementById('fikenKundeInput').value = '';
+      document.getElementById('fikenKundeErr').textContent = '';
+      document.getElementById('fikenKundeRabattOmbygging').checked = false;
+      document.getElementById('fikenKundeRabattEkstraUtstyr').checked = false;
+      openModal('fikenKundeBekreft');
+      return 'needsBekreftelse';
+    }
+    if (!res.ok || data.error) {
+      const feil = new Error(data.error || ('Fiken svarte ' + res.status));
+      feil.status = res.status;
+      throw feil;
+    }
+    o.fakturert = true;
+    o.fikenKladdUrl = data.draftUrl || o.fikenKladdUrl;
+    // s09-006: edge-funksjonen lagrer nå selv fiken_kladd_url + fakturert på ordren, atomisk,
+    // i SAMME kall som kladden ble opprettet i Fiken (se fiken-fakturer/index.ts) - uavhengig
+    // av om klientens nettleser fortsatt er tilkoblet etterpå. Denne save() er nå en ufarlig
+    // duplikat-lagring (speiler lokal state), ikke lenger den eneste lagringen - men beholdes
+    // siden den også fanger opp andre lokale endringer (f.eks. brukRabatt-avkrysningen) som
+    // edge-funksjonen selv ikke skriver tilbake.
+    if (!data.alleredeOpprettet) logChange(o, 'Fakturert - kladd opprettet i Fiken');
+    leveranseSjekkArkiver(o); // en leveranse som er sendt og nå fakturert arkiveres (no-op for bil-ordrer)
+    await save(id);
+    if (o.status === 'arkivert') renderArkiv();
+    else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
+    else buildOrdreDetail();
+    visToast(data.alleredeOpprettet
+      ? 'Denne ordren hadde allerede en kladd i Fiken - det er ikke opprettet en ny'
+      : 'Kladd opprettet i Fiken - gå inn og send den derfra');
+    return 'ok';
+  } catch (e) {
+    // Rettet 5.11 (uavhengig gjennomgang): "prøv igjen" er misvisende på en 4xx - en
+    // validerings-/forretningsregel-avvisning (manglende rabattsats, ukjent produkt osv.)
+    // feiler PRESIS likt neste gang uten at noe faktisk er rettet først. Beholdes kun for
+    // transiente feil (nettverk, 5xx) der et nytt forsøk faktisk kan hjelpe.
+    const varigAvvist = typeof e.status === 'number' && e.status >= 400 && e.status < 500;
+    visToast('Kunne ikke opprette faktura i Fiken: ' + e.message + (varigAvvist ? '' : ' - prøv igjen'));
+    return 'error';
+  }
+}
+
+// s90-20261104-5 steg 2 (avtalt rekkefølge for fakturering/lager, 5.11): ÉN delt sjekk brukt
+// BÅDE av "Klar til fakturering"-lista (renderKlarTilFakturering, oversikt-kalender.js, ren
+// lesevisning) OG av selve blokkeringen i fakturerViaFiken under - før dette hadde de to
+// stedene HVER SIN logikk, og fakturerViaFiken sin brukte ordrens frie merke/modell-tekst
+// (finnFikenOmbyggingModell(o.merke, o.modell)) i stedet for den nyere, portal-slug-bevisste
+// kanoniskMerkeModell() som resten av appen (synkroniserOmbyggingFikenLinjer) bruker siden
+// s09-012 steg 2 - en portal-ordre for en modell UTEN hardkodet regex-match (f.eks. Toyota
+// Land Cruiser 150, Dodge Durango) kunne dermed bli blokkert fra fakturering selv om
+// ombyggingslinjen kom riktig fra selve bestillingen (funnet av uavhengig gjennomgang 4.11,
+// s90-20261104-6). Returnerer { niva: 'gronn'|'gul'|'rod', grunner: [{kode, tekst}] } - 'rod'
+// er ting som faktisk stopper/bør stoppe fakturering, 'gul' er informasjon en admin bør se
+// over selv (ingen av 'gul'-funnene endrer dagens fakturerings-OPPFØRSEL - bare synliggjør
+// den, se s90-20261104-6 for de faktiske rettelsene som gjenstår i senere steg).
+function fakturaSjekk(o) {
+  const grunner = [];
+  let niva = 'gronn';
+  const leggTil = (kode, tekst, ny) => { grunner.push({ kode, tekst }); if (ny === 'rod') niva = 'rod'; else if (ny === 'gul' && niva !== 'rod') niva = 'gul'; };
+
+  if (!o.fikenLinjer || !o.fikenLinjer.length) {
+    leggTil('ingen_linjer', 'Ingen fakturalinjer', 'rod');
+    return { niva, grunner };
+  }
+
+  const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
+  if (erOmbyggingValgt) {
+    const kan = kanoniskMerkeModell(o);
+    if (!finnFikenOmbyggingModell(kan.merke, kan.modell)) {
+      leggTil('ukjent_modell', `Ingen kjent Fiken-produktlinje for «${kan.merke||''} ${kan.modell||''}»`.trim() + ' - ombyggingslinjen mangler', 'rod');
+    }
+  }
+
+  if (!o.kunde) leggTil('ingen_kunde', 'Kunde mangler på ordren', 'rod');
+
+  const utenFrossetPris = (o.fikenLinjer||[]).filter(l => {
+    const erOverstyrtBelop = l.belop !== undefined && l.belop !== null;
+    return !erOverstyrtBelop && !(typeof l.pris === 'number' && l.pris > 0);
+  });
+  if (utenFrossetPris.length) leggTil('uten_frosset_pris', `${utenFrossetPris.length} linje(r) uten frosset pris - Fiken sin pris akkurat nå blir brukt`, 'gul');
+
+  // S.fikenKundeAlias/S.fikenKundeRabatt lastes i loadFromSupabase() (kun lesbare for admin via
+  // RLS - uendret for andre roller, de kan ikke fakturere uansett). Kan være udefinert/tomt
+  // (f.eks. gammel PWA-cache uten denne lastingen ennå) - da hoppes denne delen bare over,
+  // akkurat som portalModellKobling allerede gjør ved feilende lasting.
+  const alias = o.kunde ? (S.fikenKundeAlias||[]).find(a => a.alias === o.kunde) : null;
+  if (o.kunde && (S.fikenKundeAlias||[]).length && !alias) {
+    leggTil('ukjent_fiken_kunde', 'Ukjent kunde i Fiken ennå - må velges manuelt ved fakturering', 'gul');
+  } else if (alias) {
+    const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
+    const rabattRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
+    if (manglerFrossetRabatt && !rabattRad) {
+      leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
+    } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
+      // Rettet 5.11 (uavhengig gjennomgang fant at lista viste GRØNT for ordre serveren
+      // faktisk avviser 400 på): samme NULL-regel som fiken-fakturer sin sperre (09cf8f2).
+      // Grov tilnærming med vilje - sjekker ikke NØYAKTIG hvilken kategori hver linje faller
+      // i slik serveren gjør (klienten har ikke nødvendigvis Fiken sitt produktnavn
+      // tilgjengelig), så den kan varsle noen ordre som i praksis ikke rammes - det er en
+      // bevisst avveining: heller varsle for mye enn å vise et falskt grønt lys.
+      leggTil('rabatt_kategori_mangler', 'Kundens rabatt er ikke fullstendig satt i Fiken-rabatt (minst én kategori står tomt, ikke 0 %) - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist', 'rod');
+    }
+  }
+
+  // «Hentet»-ordre fakturert FØR denne sjekken fantes (s90-20261104-5, avtalt med Henrik:
+  // disse tas med merket slik, uten bulk-handling og uten automatikk).
+  if (o.ordreStatus === 'hentet') leggTil('ikke_avstemt', 'Hentet før denne sjekken fantes - ikke avstemt', niva === 'rod' ? 'rod' : 'gul');
+
+  return { niva, grunner };
+}
+
+async function fakturerViaFiken(id) {
+  if (!me || me.rolle !== 'admin') return;
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!o.fikenLinjer || !o.fikenLinjer.length) { visToast('Legg til minst én fakturalinje først'); return; }
+  // Stopper fakturering helt ved en 'rod'-grunn (i dag kun: ombygging huket av men modellen
+  // har ingen kjent Fiken-produktlinje) - samme sjekk (fakturaSjekk) som "Klar til
+  // fakturering"-lista viser, se kommentaren der for hvorfor dette er delt (funnet 2026-10-14,
+  // rettet til å bruke kanoniskMerkeModell 5.11).
+  const sjekk = fakturaSjekk(o);
+  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde');
+  if (stopper) {
+    visToast(stopper.tekst + (stopper.kode === 'ukjent_modell' ? ' - legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.' : '.'));
+    return;
+  }
+  fikenFaktureringBrukRabatt = document.getElementById('brukRabatt_'+id)?.checked ?? true;
+  const btn = document.getElementById('fakturerBtn_'+id);
+  if (btn) { btn.disabled = true; btn.textContent = 'Oppretter kladd i Fiken...'; }
+  const status = await kallFikenFakturer(id, {});
+  if (status !== 'ok' && btn) { btn.disabled = false; btn.textContent = '✔ Merk som fakturert (oppretter kladd i Fiken)'; }
+}
+
+// Kalt fra fikenKundeBekreft-modalen etter at admin har valgt riktig kunde fra
+// datalist-forslagene (fylt av kallFikenFakturer sin needsBekreftelse-gren). Setter
+// samtidig avtalt rabatt for kunden - naturlig sted å gjøre det siden dette uansett er
+// "sett opp denne kundens Fiken-kobling for første gang"-øyeblikket (bedt om av Henrik
+// 2026-09-16). Kun av/på (ikke fritekst-prosent) - 20 % er den klare standardsatsen når
+// det faktisk gis rabatt (54 av 63 ombygging-kunder i historikken). Skrives FØR selve
+// fakturakallet, slik at rabatten gjelder allerede på DENNE fakturaen.
+// Ombygging og ekstra utstyr har ulik standardsats (bedt om av Henrik 2026-09-17 - satt
+// ned fra en tidligere felles 20% til 10% kun for ekstra utstyr).
+const FIKEN_RABATT_STANDARDSATS_OMBYGGING = 20;
+const FIKEN_RABATT_STANDARDSATS_EKSTRA_UTSTYR = 10;
+async function bekreftFikenKunde() {
+  const navn = (document.getElementById('fikenKundeInput').value || '').trim();
+  // Case-ufølsom match - mobil/nettleser autokapitaliserer ofte bokstaven rett etter en
+  // bindestrek ("Ikke" i stedet for "ikke"), og en eksakt match ville da feile selv om
+  // brukeren tydelig valgte riktig kunde (bekreftet av Henrik i testing).
+  const valgt = fikenFaktureringKandidater.find(k => k.navn.toLowerCase() === navn.toLowerCase());
+  if (!valgt) { document.getElementById('fikenKundeErr').textContent = 'Velg en kunde fra listen'; return; }
+  const btn = document.getElementById('fikenKundeBekreftBtn');
+  btn.disabled = true; btn.textContent = 'Oppretter...';
+
+  if (db) {
+    // Pengefelle rettet 5.11 (sikkerhetsgjennomgang): denne modalen er ment for FØRSTE gang en
+    // Fiken-kobling settes opp for en kunde, men checkboksene starter alltid avkrysset (se
+    // needsBekreftelse-grenen over) uansett hva som faktisk er avtalt. Har den valgte
+    // Fiken-kunden (contactId) FRA FØR en rad i fiken_kunde_rabatt - f.eks. fordi en annen
+    // stavemåte/alias av samme kunde allerede er koblet et annet sted - ville et ubetinget
+    // upsert her stille overskrevet en ekte avtalt rabatt med 0 % bare fordi boksene sto
+    // uavkrysset i DENNE modalen. Finnes raden fra før: la den stå urørt, varsle i stedet.
+    const eksisterende = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === valgt.contactId);
+    if (eksisterende) {
+      visToast(`Kunden har allerede en avtalt rabatt i Fiken-rabatt (ombygging ${eksisterende.rabatt_ombygging ?? 'ikke satt'}%, ekstra utstyr ${eksisterende.rabatt_ekstra_utstyr ?? 'ikke satt'}%) - den er IKKE endret.`);
+    } else {
+      const rabattOmbygging = document.getElementById('fikenKundeRabattOmbygging').checked ? FIKEN_RABATT_STANDARDSATS_OMBYGGING : 0;
+      const rabattEkstraUtstyr = document.getElementById('fikenKundeRabattEkstraUtstyr').checked ? FIKEN_RABATT_STANDARDSATS_EKSTRA_UTSTYR : 0;
+      const rad = { fiken_contact_id: valgt.contactId, fiken_navn: valgt.navn, rabatt_ombygging: rabattOmbygging, rabatt_ekstra_utstyr: rabattEkstraUtstyr, oppdatert_av: me?.navn || '' };
+      const { error } = await db.from('fiken_kunde_rabatt').upsert(rad, { onConflict: 'fiken_contact_id' });
+      if (error) visToast('Kunne ikke lagre rabatt: ' + error.message);
+    }
+  }
+
+  kallFikenFakturer(fikenFaktureringOrdreId, {
+    bekreftetContactId: valgt.contactId,
+    bekreftetFikenNavn: valgt.navn,
+    bekreftetAv: me?.navn || ''
+  }).then(status => {
+    btn.disabled = false; btn.textContent = 'Bekreft og opprett faktura';
+    if (status === 'ok') closeModal('fikenKundeBekreft');
+  });
+}
+
+function toggleFakturert(id) {
+  if (!me || me.rolle !== 'admin') return;
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const nyVerdi = !o.fakturert;
+  // Kan nå trykkes fra flere steder: Fakturering-kortet på selve ordresiden, Arkiv-kortet,
+  // og avkrysningen på ordrekortet i Ordreliste - oppdater den visningen man faktisk står
+  // i, ikke bare anta at det er ordresiden (samme mønster som brukt for lager tidligere).
+  const tegnOppPaNytt = () => {
+    if (o.status === 'arkivert') renderArkiv();
+    else if (document.getElementById('ordreList')?.style.display !== 'none') renderOrdreList();
+    else buildOrdreDetail();
+  };
+  // Bekreftelse lagt til 5.11 (sikkerhetsgjennomgang, pengefelle - ingen dialog tidligere, lett å
+  // trykke ved en feil, f.eks. på ordrekortets lille checkbox under scrolling/dra). Å FJERNE
+  // merkingen er den farligste retningen: admin kan senere tro ordren aldri ble fakturert og
+  // opprette en NY, ekte kladd i Fiken for noe som allerede er fakturert. Avbrytes dialogen må
+  // checkboksen/kortet tegnes opp på nytt - nettleseren har allerede snudd checkboksen visuelt
+  // før onchange kjører.
+  const sporsmal = nyVerdi
+    ? 'Marker ordren som fakturert?'
+    : 'Fjerne fakturert-markeringen? Hvis ordren allerede ER fakturert i Fiken, kan dette føre til at den faktureres på nytt ved en feil.';
+  if (!confirm(sporsmal)) { tegnOppPaNytt(); return; }
+  o.fakturert = nyVerdi;
+  logChange(o, o.fakturert ? 'Merket som fakturert' : 'Fakturert-markering fjernet');
+  const arkivert = leveranseSjekkArkiver(o); // en leveranse som er sendt og nå fakturert arkiveres (no-op for bil-ordrer)
+  save(id);
+  // save() utelater BEVISST status/ordre_status (se sendLagring i core.js) - uten dette egne,
+  // målrettede kallet (som endreLeveranseStatus() bruker) ble en leveranse arkivert her lokalt
+  // på skjermen, men sto fortsatt som "aktiv" i databasen og dukket opp igjen ved neste
+  // innlasting (rettet 5.11, pengefelle funnet i sikkerhetsgjennomgangen).
+  if (arkivert && db) {
+    ignorerRealtimeFor.add(id);
+    setTimeout(() => ignorerRealtimeFor.delete(id), 10000);
+    db.from('ordrer').update({ status: o.status, ordre_status: o.ordreStatus }).eq('id', id)
+      .then(r => { if (r.error) { console.error('Kunne ikke lagre automatisk arkivering:', r.error.message); visToast('Arkivering ble ikke lagret: ' + r.error.message); } });
+  }
+  tegnOppPaNytt();
+}
+
+function togglePrioritert(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.prioritert = !o.prioritert;
+  logChange(o, o.prioritert ? 'Merket som prioritert' : 'Fjernet prioritering');
+  planleggLocalSpeiling();
+  if (db) db.from('ordrer').update({prioritert:o.prioritert}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Prioritering-oppdatering feilet:', r.error.message);});
+  renderOrdreList(); renderOversikt();
+  const btn = document.getElementById('prioritertBtn_' + id);
+  if (btn) { btn.textContent = o.prioritert ? 'PRIORITERT ✕' : '+ Prioriter'; btn.style.background = o.prioritert ? 'rgba(250,204,21,.12)' : ''; btn.style.borderColor = o.prioritert ? '#facc15' : ''; btn.style.color = o.prioritert ? '#facc15' : ''; }
+}
+
+// godkjentBiltilsyn ligger IKKE i ordreToDb() (med vilje - se save()), så den må alltid
+// lagres via sitt eget målrettede update-kall, ikke via sf()/save(). settGodkjentBiltilsyn
+// tar en eksplisitt verdi (brukt fra Admin-arkets Vedtak-kolonne); toggleGodkjentBiltilsyn
+// er den opprinnelige av/på-varianten brukt på selve ordresiden/ordrekortet.
+function settGodkjentBiltilsyn(id, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (o.godkjentBiltilsyn === val) return;
+  o.godkjentBiltilsyn = val;
+  logChange(o, val ? 'Godkjent på biltilsynet' : 'Fjernet godkjent-merking (biltilsyn)');
+  planleggLocalSpeiling();
+  if (db) db.from('ordrer').update({godkjent_biltilsyn:val}).eq('id', id)
+    .then(r=>{if(r.error) console.error('Godkjent-biltilsyn oppdatering feilet:', r.error.message);});
+  renderOrdreList(); renderOversikt();
+  if (activeOrdreId===id) buildOrdreDetail();
+}
+function toggleGodkjentBiltilsyn(id) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  settGodkjentBiltilsyn(id, !o.godkjentBiltilsyn);
+}
+
+function renderAnsOrdre(o) {
+  if (!o.ansatteSignert.length) return '<div class="small muted">Ingen ansatte meldt på</div>';
+  return o.ansatteSignert.map(a=>{
+    const ini = (a.navn||'?').split(' ').map(d=>d[0]).slice(0,2).join('').toUpperCase();
+    return `<div class="box" style="padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="flex-shrink:0;width:26px;height:26px;border-radius:999px;background:#18181b;border:1px solid #27272a;display:flex;align-items:center;justify-content:center;font-size:10.5px;color:#a1a1aa">${esc(ini)}</span>
+      <span style="font-size:13.5px">${esc(a.navn)}</span>
+      <span class="small muted">meldt på ${a.tid}</span>
+    </div>`;
+  }).join('');
+}
+// Lar admin melde ansatte på/av ordren via et eget vindu i stedet for kun seg selv -
+// f.eks. når en ansatt glemmer å melde seg på selv, eller admin fordeler arbeid. Viser
+// ALLE aktive ansatte med avmerket boks for de som allerede er meldt på - admin kan både
+// legge til og fjerne i samme vindu ved å hake av/på, i stedet for separate knapper for
+// hvert (bedt om av brukeren 2026-09-03, etter to tidligere runder med enklere varianter).
+let adminMeldPaaOrdreId = null;
+function apneAdminMeldPaaModal(ordreId) {
+  adminMeldPaaOrdreId = ordreId;
+  const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
+  const alle = (S.ansatte||[]).filter(a => a.aktiv);
+  document.getElementById('adminMeldPaaListe').innerHTML = alle.length ? alle.map(a => {
+    const paameldt = !!o.ansatteSignert.find(x=>x.id===a.id);
+    return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">
+      <input type="checkbox" class="adminMeldPaaCheck" value="${a.id}" ${paameldt?'checked':''} style="width:16px;height:16px;accent-color:#ef4444;flex-shrink:0">
+      <span class="small">${esc(a.navn)}</span>
+    </label>`;
+  }).join('') : '<div class="small muted">Ingen aktive ansatte funnet</div>';
+  openModal('adminMeldPaa');
+}
+// Samme atomiske oppdater_ordre_ansatt_signert()-fiks som meldPaa()/meldAv() (ordre-
+// diverse.js) - kaller den én gang PER faktisk endret ansatt (ikke en full-rad-lagring av
+// hele lista), slik at en samtidig selv-påmelding fra en ansatt IKKE fanget opp av admins
+// øyeblikksbilde av avkrysningsboksene ikke overskrives (funnet 2026-10-22).
+async function bekreftAdminMeldPaa() {
+  const o = S.ordrer.find(x=>x.id===adminMeldPaaOrdreId); if(!o) return;
+  const id = adminMeldPaaOrdreId;
+  const endringer = [];
+  document.querySelectorAll('#adminMeldPaaListe .adminMeldPaaCheck').forEach(c => {
+    const ansattId = Number(c.value);
+    const ansatt = (S.ansatte||[]).find(a=>a.id===ansattId); if (!ansatt) return;
+    const erAlleredePaameldt = !!o.ansatteSignert.find(a=>a.id===ansattId);
+    if (c.checked && !erAlleredePaameldt) {
+      const nyAnsatt = {id:ansatt.id, navn:ansatt.navn, tid:fmt(new Date())};
+      o.ansatteSignert.push(nyAnsatt);
+      logChange(o, ansatt.navn+' meldt på');
+      endringer.push({ ansattId, ansatt: nyAnsatt });
+    } else if (!c.checked && erAlleredePaameldt) {
+      o.ansatteSignert = o.ansatteSignert.filter(a=>a.id!==ansattId);
+      logChange(o, ansatt.navn+' meldt av');
+      endringer.push({ ansattId, ansatt: null });
+    }
+  });
+  buildOrdreDetail();
+  closeModal('adminMeldPaa');
+  if (db) {
+    for (const { ansattId, ansatt } of endringer) {
+      const { data, error } = await db.rpc('oppdater_ordre_ansatt_signert', { p_ordre_id: id, p_ansatt_id: ansattId, p_ansatt: ansatt });
+      if (error) { console.error('Kunne ikke oppdatere påmelding:', error.message); continue; }
+      o.ansatteSignert = data || o.ansatteSignert;
+    }
+  }
+  planleggLocalSpeiling();
+}
+
+function tvangsflyt(o) {
+  if (erLeveranse(o)) return []; // en leveranse har ingen tvangsflyt (ingen bil, biltilsyn eller godkjenning)
+  // "Ansatt meldt på" fjernet herfra 2026-11-14 (Henrik): sjekket CURRENT ansatteSignert.length,
+  // ikke historikk - en ordre der alle har meldt seg av igjen (f.eks. ved endt skift) ville
+  // aldri oppfylt kravet uten at noen ble stående "meldt på" kunstig, selv om bilen faktisk var
+  // jobbet på. Ga aldri reell verdi som gate for å godkjenne/lukke.
+  const ombyggingValgt = o.ombygging && Object.values(o.ombygging).some(Boolean);
+  return [
+    {lbl:'Diagnose utført',   ok: !!o.diagnose},
+    {lbl:'6 bilder ankomst',  ok: o.bilderAnkomst.every(Boolean)},
+    {lbl:'6 bilder levering', ok: o.bilderLevering.every(Boolean)},
+    {lbl:'Vekter fylt ut',    ok: !!o.vekter.totalvekt.a},
+    {lbl:'Ombygging valgt',   ok: ombyggingValgt},
+    {lbl:'Time på biltilsynet', ok: !!(o.tidBiltilsynet && o.tidBiltilsynetTid)},
+    // Kreves bekreftet UANSETT om feltet har tekst eller ikke - et tomt felt kan bety
+    // "ingenting å legge til", men det kan like gjerne bety at ingen har sjekket ennå, som
+    // er nøyaktig det som skal hindres (rettet 2026-10-08 etter at Henrik påpekte at et
+    // tomt felt ikke varslet i det hele tatt: "da varsler den ikke om at det ikke er
+    // bekreftet" - et unntak for tom tekst ville latt akkurat det glemmes videre). Denne
+    // rettelsen ble ved et uhell også fjernet av en senere tilbakerulling til et tidligere
+    // commit-punkt samme dag (603ae59) og lagt tilbake igjen etter at det ble oppdaget.
+    {lbl:'Utstyr etter visning bekreftet', ok: !!o.utstyr?.skalHaBekreftet}
+  ];
+}
+
+// Innholdet i "Tvangsflyt"-kortet i sidepanelet - egen funksjon (i stedet for inline i
+// buildOrdreDetail()) slik at sv()/sfOmbygging()/sf() kan tegne akkurat denne boksen på nytt
+// etter at de endrer et felt tvangsflyt(o) leser (vekter, ombygging) - UTEN å kalle
+// buildOrdreDetail() selv, som bevisst nekter å kjøre mens brukeren har et annet
+// input/select/textarea fokusert andre steder på siden (se guard-en øverst i
+// buildOrdreDetail()). Uten dette ble boksen stående med feil krav-status/deaktivert
+// "Godkjenn og lukk"-knapp helt til noe HELT ANNET tilfeldigvis trigget en full rendering
+// (funnet 2026-10-22).
+function tvangsflytBoksHTML(o) {
+  if (erLeveranse(o)) return '';
+  const tf = tvangsflyt(o);
+  const tvangsflytOk = tf.every(t=>t.ok);
+  const erAdmin = me && me.rolle==='admin';
+  const kanLukke = tvangsflytOk || erAdmin;
+  const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  return `<div class="row"><div class="h">Tvangsflyt</div><span class="pill ${tvangsflytOk?'ok':'bad'}" style="margin:0">${tf.filter(t=>t.ok).length} av ${tf.length} krav</span></div>
+    <div style="display:flex;gap:3px;margin-top:10px">
+      ${tf.map(t=>`<span title="${esc(t.lbl)}" style="flex:1;height:5px;border-radius:999px;background:${t.ok?'#4ade80':'rgba(239,68,68,.5)'}"></span>`).join('')}
+    </div>
+    <div class="box" style="margin-top:10px;padding:0;overflow:hidden">
+      ${tf.map((t,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-top:1px solid ${i===0?'transparent':'#1f1f23'};background:${t.ok?'transparent':'rgba(239,68,68,.05)'}">
+        <span style="flex-shrink:0;width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:${t.ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.14)'};border:1px solid ${t.ok?'rgba(34,197,94,.35)':'rgba(239,68,68,.4)'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
+        <span style="font-size:13.5px;color:${t.ok?'#a1a1aa':'#f4f4f5'}">${esc(t.lbl)}</span>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+      ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
+        ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:8px">${erAdmin?'Tvangsflyt ikke fullført - du kan overstyre som admin.':'Fullfør tvangsflyt først.'}</div>`:''}
+        <button class="btn red" style="width:100%" ${kanLukke&&erGodkjenner?'':'disabled'} onclick="openModal('godkjenn')">${kanLukke?(erGodkjenner?(tvangsflytOk?'Godkjenn og lukk':'⚠ Godkjenn og lukk (overstyr)'):'Krever godkjenner-rolle'):'Ufullstendig'}</button>`}
+    </div>`;
+}
+// Tegner Tvangsflyt-boksen på nytt i det eksisterende DOM-elementet (se tvangsflytBoksHTML())
+// - trygt å kalle fra sv()/sfOmbygging()/sf() uten sideeffekter hvis ordren ikke er den som
+// faktisk vises akkurat nå (f.eks. en bakgrunnstrigget vegvesenBeregnOgSettEndring() for en
+// annen ordre enn den brukeren har åpen).
+function oppdaterTvangsflytBoks(o) {
+  const el = document.getElementById('tvangsflytBoks_' + o.id);
+  if (el) el.innerHTML = tvangsflytBoksHTML(o);
+}
+
+function ombyggingBoksHTML(o) {
+  // Varsel når Nytt/Brukt Kjøretøy er huket av men merke/modell ikke matcher noen kjent
+  // Fiken-ombyggingslinje (se FIKEN_OMBYGGING_MODELLER/finnFikenOmbyggingModell under) -
+  // uten dette forsvant selve ombyggingslinjen stille fra fakturagrunnlaget, og en ordre
+  // kunne bli fakturert med andre linjer (utstyr, drivstoff) men uten jobben selv (funnet
+  // 2026-10-14). Vises som en synlig, vedvarende advarsel i stedet for en toast, siden
+  // tilstanden varer helt til modellen legges inn - en toast som bare vises én gang (f.eks.
+  // ved avkryssing) ville vært glemt igjen neste gang noen åpner ordren dager senere.
+  const erOmbyggingValgt = !!(o.ombygging?.nyttKjoretoy || o.ombygging?.bruktKjoretoy);
+  const kan = kanoniskMerkeModell(o);
+  const manglerFikenModell = erOmbyggingValgt && !finnFikenOmbyggingModell(kan.merke, kan.modell);
+  // s09-012 steg 2: fritekst-feltene kan ha blitt rettet (eller feilskrevet) i etterkant av at
+  // ordren kom fra portalen - selve Fiken-matchingen bruker alltid den kanoniske teksten over,
+  // men en ansatt bør få vite at det som vises i Merke/Modell ikke er det som faktisk faktureres.
+  const slugRad = o.portalModellSlug && Array.isArray(S.portalModellKobling) ? S.portalModellKobling.find(r => r.portal_modell_slug === o.portalModellSlug) : null;
+  const slugAvviker = !!slugRad && (
+    (kan.merke||'').trim().toLowerCase() !== (o.merke||'').trim().toLowerCase() ||
+    (kan.modell||'').trim().toLowerCase() !== (o.modell||'').trim().toLowerCase()
+  );
+  const varselHTML = `${manglerFikenModell ? `<div style="margin-top:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fca5a5">
+        ⚠ Ingen kjent Fiken-produktlinje for "${esc(kan.merke||'')} ${esc(kan.modell||'')}" - ombyggingslinjen mangler i fakturagrunnlaget. Legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil.
+      </div>` : ''}${slugAvviker ? `<div style="margin-top:10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px 12px;font-size:12.5px;color:#fbbf24">
+        ⚠ Merke/Modell («${esc(o.merke||'')} ${esc(o.modell||'')}») stemmer ikke med modellen fra portal-bestillingen («${esc(kan.merke||'')} ${esc(kan.modell||'')}»). Fakturering bruker modellen fra bestillingen.
+      </div>` : ''}`;
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+    ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
+      <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
+        <input type="checkbox" ${o.ombygging?.[k]?'checked':''} onchange="sfOmbygging('${o.id}','${k}',this.checked)" style="width:18px;height:18px;accent-color:#ef4444;flex-shrink:0">
+        <span style="font-size:13.5px;font-weight:${o.ombygging?.[k]?'700':'400'};color:${o.ombygging?.[k]?'#f4f4f5':'#a1a1aa'}">${lbl}</span>
+      </label>
+    `).join('')}
+  </div>${varselHTML}`;
+}
+// Fiken produktnummer for selve ombyggingen (Nytt/Brukt Kjøretøy) og evt. personbil-
+// ombygging (motsatt retning, N1->M1) per modell - i motsetning til Ekstra utstyr-
+// oppskriftene (som kun legges til automatisk for "ekstra_utstyr"-type i Lager) har
+// disse ingen oppskrift/kobling der, så de må håndteres separat her. Numrene er hentet
+// direkte fra Fiken sin egen produktliste (fiken-produkter-funksjonen) og bekreftet av
+// Henrik 2026-09-16. Unntak: 529 og 549 (personbil for EV9/Rexton og Land Cruiser 250)
+// er generiske "Ombygging til personbil" uten modellnavn i selve Fiken-teksten - tilordnet
+// ut fra plasseringen i Fiken sin nummerrekkefølge (529 rett etter EV9/Rexton sin egen
+// serie 500-528, 549 rett etter det som ser ut som Land Cruiser 250-tilbehør 545-548),
+// IKKE bekreftet av Fiken selv - juster om det viser seg feil. MB Vito/EQV/V-klasse har
+// ingen personbil-kode i Fiken i det hele tatt (personbil: null under).
+// Produktnumrene under ble oppdatert 2026-09-17 etter en full opprydding i Fiken sin
+// produktkatalog - hver ombyggingsmodell fikk sin egen dedikerte "hundre" (i stedet for
+// at flere modeller delte tallområde, f.eks. KIA EV9 og KGM Rexton som tidligere lå i
+// samme 500-blokk). Se git-historikk for den fullstendige omnummereringsplanen.
+const FIKEN_OMBYGGING_MODELLER = [
+  { match: /\bev9\b/i, ombygging: '500', personbil: '524' },
+  { match: /discovery\s*5\b/i, ombygging: '200', personbil: '229' },
+  // Utstyrsmalen heter bare "Defender" (ikke "Defender 110") og "Geländewagen" (ikke
+  // "...2018") - matcher derfor den korte teksten malene faktisk bruker, ikke et krav om
+  // årsmodell/variant i selve merke/modell-feltet (bekreftet av Henrik 2026-09-16: kun
+  // Defender 110 og Geländewagen 2018-> er i aktiv bruk, ikke 130 eller den eldre 166).
+  { match: /defender\b/i, ombygging: '1400', personbil: '1415' },
+  { match: /gel[aä]ndewagen/i, ombygging: '300', personbil: '318' },
+  { match: /\bgls\b/i, ombygging: '400', personbil: '417' },
+  { match: /\bvito\b/i, ombygging: '1500', personbil: null },
+  { match: /\beqv\b/i, ombygging: '1600', personbil: null },
+  { match: /v-?klasse/i, ombygging: '1700', personbil: null },
+  { match: /id\.?\s*buzz/i, ombygging: '1800', personbil: '1812' },
+  // Rexton har ingen egen personbil-kode i Fiken (aldri fakturert, aldri opprettet) -
+  // matcher derfor mønsteret til Vito/EQV/V-klasse (null) i stedet for tidligere feilaktig
+  // å dele EV9 sin kode "529". "lafinto": Lafinto-varianten (2401, "Varebilombyyging av
+  // KGM Rexton - Lafinto") ERSTATTER standard ombygging (2400, "Varebilombygging av
+  // Rexton") når "Lafinto"-boksen er huket av - det er to alternative Fiken-produkter for
+  // samme jobb, ikke et tillegg oppå (bekreftet av Henrik 2026-09-24).
+  { match: /rexton/i, ombygging: '2400', personbil: null, lafinto: '2401' },
+  // Land Cruiser 150 manglet her (funnet av avviksjekken mot portalens produktkatalog
+  // 2026-11-16, s09-026) - produktet fantes i Fiken hele tiden ("Varebilombygging av
+  // Toyota LC 150", 2900), bare aldri lagt inn i denne tabellen. Ingen personbil-kode
+  // funnet for LC 150 i Fiken (samme mønster som Vito/EQV/V-klasse).
+  { match: /land\s*cruiser\s*150|\blc\s*150\b/i, ombygging: '2900', personbil: null },
+  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: null },
+  // LC 250: personbil-koden 2508 er fjernet 17.11.2026 (Henrik: «fjern den»). Den fantes aldri i
+  // Fiken, ingen ordre hadde brukt den, og LC 250 bygges ikke om til personbil.
+  // Dodge Durango manglet her (trinn 0 «én produktliste», 17.11.2026): modellen er koblet i
+  // portal_modell_kobling (dodge-durango) og bygges fortsatt (Henrik 17.11), men ga «ukjent
+  // modell» ved fakturering. Fiken har «Varebilombygging av Dodge Durango.» (2000) og ingen
+  // personbil-kode (samme mønster som Vito/EQV/V-klasse/LC 150).
+  { match: /durango/i, ombygging: '2000', personbil: null },
+];
+function finnFikenOmbyggingModell(merke, modell) {
+  const tekst = `${merke||''} ${modell||''}`;
+  return FIKEN_OMBYGGING_MODELLER.find(r => r.match.test(tekst)) || null;
+}
+
+// s09-012 steg 2: for en ordre som kom fra en portal-bestilling (o.portalModellSlug satt av
+// portal_koble_bestilling) brukes den KANONISKE merke/modell-teksten fra portal_modell_kobling
+// (S.portalModellKobling, hentet én gang ved innlogging via hent_portal_modell_kobling) i stedet
+// for ordrens egne fritekst-felt - en ansatt som retter en skrivefeil i Merke/Modell i etterkant
+// skal ikke kunne stoppe eller endre Fiken-matchingen. Ordre UTEN slug (alle manuelt opprettede,
+// og alle ordre fra før dette ble bygget) faller tilbake til fritekst - helt uendret oppførsel.
+function kanoniskMerkeModell(o) {
+  if (o.portalModellSlug && Array.isArray(S.portalModellKobling)) {
+    const rad = S.portalModellKobling.find(r => r.portal_modell_slug === o.portalModellSlug);
+    if (rad) return { merke: rad.merke, modell: rad.modell };
+  }
+  return { merke: o.merke, modell: o.modell };
+}
+
+// Sørger for at o.fikenLinjer faktisk stemmer med det ombygging-boksene sier akkurat nå.
+// Kalles både fra selve avkryssingen (sfOmbygging) OG fra buildOrdreDetail() ved hver
+// åpning/rerendring av ordren - sistnevnte fanger opp ordre der boksen ble huket av (eller
+// merke/modell ble endret) uten at dette rakk å trigge et onchange-kall, som ellers ville
+// latt fakturagrunnlaget mangle selve ombyggingslinjen for godt. oppdaterFikenLinjeForOppskrift
+// er selv en no-op (ingen lagring) når linjen allerede står riktig, så dette er trygt å
+// kalle på hvert eneste render uten å skape unødvendige lagringer.
+function synkroniserOmbyggingFikenLinjer(o) {
+  if (!o.ombygging) return;
+  const erOmbyggingValgt = !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy);
+  const kan = kanoniskMerkeModell(o);
+  const modell = finnFikenOmbyggingModell(kan.merke, kan.modell);
+  if (!modell) return;
+  // "lafinto" (kun Rexton per nå) er en ALTERNATIV variant av samme ombygging, ikke et
+  // tillegg - de to fakturalinjene er derfor gjensidig utelukkende.
+  const erLafinto = !!(modell.lafinto && o.ombygging.lafinto);
+  oppdaterFikenLinjeForOppskrift(modell.ombygging, erOmbyggingValgt && !erLafinto);
+  if (modell.lafinto) oppdaterFikenLinjeForOppskrift(modell.lafinto, erOmbyggingValgt && erLafinto);
+  if (modell.personbil) oppdaterFikenLinjeForOppskrift(modell.personbil, !!o.ombygging.personbil);
+}
+
+// Holder Fiken-drivstofflinjen i synk med den faktiske kundeprisen på hvert render - i
+// motsetning til ombygging rett over krevde denne tidligere et manuelt trykk på
+// "⛽ Hent drivstoff" (leggTilFikenLinjeDrivstoff) hver gang prisen endret seg, og en
+// utdatert pris kunne bli stående i fakturagrunnlaget til noen husket å trykke på nytt
+// (bedt om av Henrik 2026-10-15: "den oppdaterte prisen [skal] alltid ligge i
+// faktureringa"). Ingen toast her ved manglende pris (i motsetning til knappen) - de
+// fleste ordre har rett og slett ingen drivstoffpris ennå, og det er ikke en feil. No-op
+// (ingen lagring) når linjen allerede stemmer, trygt å kalle på hvert render.
+async function synkroniserDrivstoffFikenLinje(o) {
+  const belop = drivstoffKundepris(o);
+  if (!belop) return;
+  const eksisterende = (o.fikenLinjer||[]).find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
+  if (eksisterende && eksisterende.antall===1 && eksisterende.belop===belop) return;
+  await oppdaterOrdreFikenLinje(o, FIKEN_PRODUKTNUMMER_DRIVSTOFF, {produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop});
+}
+
+function sfOmbygging(id, felt, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (!o.ombygging) o.ombygging = {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
+  o.ombygging[felt] = val;
+  save(id);
+  // Oppdater kun ombygging-boksen - ikke bygg om hele ordresiden (samme fiks som utstyr-sjekklisten).
+  const container = document.getElementById('ombyggingBoks_' + id);
+  if (container) container.innerHTML = ombyggingBoksHTML(o);
+  synkroniserOmbyggingFikenLinjer(o);
+  // Tvangsflyt-kravet "Ombygging valgt" leser o.ombygging - samme begrunnelse som i sv()
+  // over (funnet 2026-10-22).
+  oppdaterTvangsflytBoks(o);
+  // Rydder bort tidligere auto-genererte Vegvesen-dokumenter hvis Nytt ELLER Brukt
+  // Kjøretøy skrus av etter at de allerede er laget - ellers blir de stående og se
+  // gyldige ut for en kategori ordren ikke lenger tilhører (se vegvesen-dokumenter.js -
+  // selve funksjonen rydder kun hvis INGEN av de to lenger er aktuelle, så dette er trygt
+  // å kalle på et rent kategoribytte Nytt<->Brukt også).
+  if ((felt === 'nyttKjoretoy' || felt === 'bruktKjoretoy') && !val) vegvesenFjernGenererteDokumenterHvisIkkeLengerAktuelt(o);
+}
+
+// ════════════════════════════════════════════════════
+// KJØRESEDDEL / PRØVESKILT
+// ════════════════════════════════════════════════════
+// De 3 fysiske årsprøvekjennemerkene (prøveskilt) Henrik eier - faste, hardkodet her på
+// samme måte som VEGVESEN_MODELLER i vegvesen-dokumenter.js. Ikke en database-tabell, siden
+// dette ikke endrer seg uten at Henrik faktisk kjøper/mister et fysisk skilt.
+const PROVESKILT_LISTE = ['AGV 99', 'ACR 62', 'AJR 83'];
+
+/**
+ * Bygger ett prøveskilt som en klikkbar SVG-lignende HTML-boks, visuelt tro mot et ekte
+ * norsk årsprøvekjennemerke (rent rødt felt, hvit innfelt kant, hvit opphøyd skrift, to
+ * svarte monteringsspor) - se referansebilde Henrik sendte 2026-10-29. Bruker `cqw`
+ * (container query-enheter) for ALLE mål slik at skiltet skaleres korrekt uansett hvor bred
+ * modal-boksen er, siden `aspect-ratio` holder høyde/bredde-forholdet fast (276/1050).
+ * Teksten bruker 'Arial Narrow' (systemfont) i stedet for den originale Archivo-fonten i
+ * design-referansen - appen er en offline-fungerende PWA, og en ekstern Google Fonts-
+ * avhengighet ville enten krevd nettverk første gang eller ekstra service worker-cching for
+ * noe som bare er et lite visuelt detalj.
+ */
+function proveskiltHTML(regnr, valgt) {
+  const [bokstaver, tall] = regnr.split(' ');
+  const cq = v => (v/1050*100).toFixed(3) + 'cqw';
+  // RETTET TILBAKE 2026-10-30: all "flating" gjort tidligere i dag (flat farge, skarpe
+  // hjørner osv.) var et feilspor - Henrik hadde vist et bilde han selv mente var fasiten,
+  // men det viste seg å være et eksempel JEG hadde laget, ikke den faktiske design-spec'en.
+  // Den faktiske spec'en (Downloads/"AJR 83 plate design.zip", README.md + Skilt.dc.html fra
+  // designeren) matcher pikselnøyaktig denne versjonen - glanset gradient, embossed skygge,
+  // border-radius 16/12/7px, monteringsspor 94x24px med radius 12px. Eneste bevisste avvik
+  // fra spec'en: 'Arial Narrow' i stedet for 'Archivo' (appen er en offline PWA, og en ekstern
+  // Google Fonts-avhengighet ville krevd nettverk/ekstra service worker-caching for et lite
+  // visuelt detalj). overflow:hidden på alle tre nivåene (Henrik: "bilde må følge den hvite
+  // kanten") - uten dette klippes ikke de indre lagene til sin egen avrundede form.
+  return `
+  <div onclick="velgKjoreseddelILista('${regnr.replace(/'/g,"\\'")}')" title="${valgt ? 'Klikk for å fjerne valget' : 'Velg dette prøveskiltet'}"
+    style="container-type:inline-size;width:100%;max-width:320px;aspect-ratio:1050/276;box-sizing:border-box;overflow:hidden;background:#d9161c;border-radius:${cq(6)};padding:${cq(3)};box-shadow:0 ${cq(10)} ${cq(30)} rgba(0,0,0,.18);cursor:pointer;${valgt?'outline:3px solid #22c55e;outline-offset:3px':''}">
+    <div style="width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(180deg,#ffffff,#ececec);border-radius:${cq(4)};padding:${cq(13)}">
+      <div style="position:relative;width:100%;height:100%;box-sizing:border-box;overflow:hidden;background:linear-gradient(170deg,#e81c22 0%,#d8141a 60%,#c81218 100%);border-radius:${cq(2)};box-shadow:inset 0 0 0 ${cq(3)} #b80f14,inset 0 0 0 ${cq(5)} rgba(255,255,255,.18),inset 0 ${cq(3)} ${cq(6)} rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:${cq(80)}">
+        <div style="position:absolute;top:${cq(14)};left:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
+        <div style="position:absolute;top:${cq(14)};right:${cq(52)};width:${cq(94)};height:${cq(24)};border-radius:${cq(12)};background:#151313"></div>
+        <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.04em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(bokstaver)}</span>
+        <span style="font-family:'Arial Narrow',Arial,sans-serif;font-weight:700;font-size:${cq(212)};line-height:1;letter-spacing:.06em;color:#fbfbfb;margin-top:${cq(30)};text-shadow:0 -1px 0 #fff,${cq(2)} ${cq(3)} 0 #a90d12,${cq(3)} ${cq(5)} ${cq(6)} rgba(0,0,0,.35)">${esc(tall)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+let kjoreseddelModalOrdreId = null;
+// Lokalt, ikke-lagret valg mens modalen er åpen - lagres først når "Bruk" trykkes (bedt om
+// av Henrik 2026-10-30: "det må være en knapp som heter bruk"). Tidligere lagret et klikk
+// på et skilt med en gang, uten noen bekreftelse.
+let kjoreseddelModalValgt = '';
+function kjoreseddelModalInnholdHTML() {
+  return `
+  <div style="display:flex;flex-direction:column;gap:12px;align-items:center">
+    ${PROVESKILT_LISTE.map(skilt => proveskiltHTML(skilt, skilt === kjoreseddelModalValgt)).join('')}
+  </div>
+  <button class="btn red" style="margin-top:14px;width:100%" onclick="bekreftKjoreseddelSkilt()">Bruk</button>`;
+}
+function apneKjoreseddelModal(ordreId) {
+  const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  kjoreseddelModalOrdreId = ordreId;
+  kjoreseddelModalValgt = o.kjoreseddelSkilt || '';
+  document.getElementById('kjoreseddelModalListe').innerHTML = kjoreseddelModalInnholdHTML();
+  openModal('kjoreseddelModal');
+}
+// Oppdaterer kun den lokale, ikke-lagrede markeringen i modalen - se bekreftKjoreseddelSkilt().
+function velgKjoreseddelILista(skilt) {
+  kjoreseddelModalValgt = (kjoreseddelModalValgt === skilt) ? '' : skilt;
+  const liste = document.getElementById('kjoreseddelModalListe');
+  if (liste) liste.innerHTML = kjoreseddelModalInnholdHTML();
+}
+function bekreftKjoreseddelSkilt() {
+  const id = kjoreseddelModalOrdreId; if (!id) return;
+  if (!sf(id, 'kjoreseddelSkilt', kjoreseddelModalValgt)) return;
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const knapp = document.getElementById('kjoreseddelBtn_' + id);
+  if (knapp) knapp.textContent = o.kjoreseddelSkilt ? ('🔢 ' + o.kjoreseddelSkilt) : '🔢 Skilt';
+  closeModal('kjoreseddelModal');
+}
+
+// ════════════════════════════════════════════════════
+// SAVE HELPERS
+// ════════════════════════════════════════════════════
+/**
+ * HTML-escaper &, < og " - bruk på ALL fritekst en ansatt har skrevet inn
+ * før den settes i innerHTML (se CLAUDE.md "Escaping").
+ * @param {string | null | undefined} s
+ * @returns {string}
+ */
+function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+// Brukes KUN der chassis skal stå HELT og på ÉN linje (ordre-detalj-headeren og ordrekortene i
+// "Ordre"-lista, se CHASSIS_HEL_STIL rett under) - IKKE i ordreLabel()/ordreLabelFull() selv,
+// som fortsatt brukes uendret andre steder (PDF-tittel, slette-bekreftelse, kalenderkort,
+// flåte-etiketter) der full tekst og vanlig linjebryting er riktig.
+//
+// Chassisnummeret har ingen mellomrom å bryte på, så vanlig tekstbryting kan enten la det flyte
+// utenfor kortet eller dele det midt i nummeret ("det blir så mye forvirring når chassis.nr
+// deles opp", Henrik 2026-10-29). Fram til 2026-11-02 ble det i stedet avkortet fra venstre
+// ("…8156T6077262" via en RTL-blokk) for at statusdropdownen alltid skulle stå ved siden av -
+// men på en smalere telefon (kortet ca. 327 px) forsvant da starten av nummeret, og Henrik ba
+// om å se HELE chassis.nr. Nå er nummeret aldri avkortet og aldri delt (white-space:nowrap);
+// raden bryter i stedet (flex-wrap) slik at statusdropdownen havner UNDER nummeret når det ikke
+// er plass ved siden av. Venstrekolonnen har flex:1 1 0 og INGEN overflow:hidden/min-width:0,
+// så dens minstebredde er det hele nummeret, og det er det som utløser bruddet.
+const CHASSIS_HEL_STIL = 'white-space:nowrap';
+
+// Escaper her ved kilden (i stedet for på hvert av de ~20 stedene disse to brukes) siden
+// regnr/chassis er fritekst en ansatt skriver inn, og etiketten alltid går rett i innerHTML.
+function ordreLabel(o){ if (erLeveranse(o)) return esc(leveranseTittel(o)); return esc(o.regnr) || (o.chassis ? 'Chassis: '+esc(o.chassis) : 'Uten reg.nr'); }
+// Chassisnummeret brøt tidligere midt i seg selv på mobil, fikset tre runder på rad
+// (2026-09-30, 2026-10-01, 2026-10-02) ved å pakke "Chassis: <nr>" inn i en
+// white-space:nowrap-span - men det tvang samtidig status-knappen ved siden av ned på en
+// egen linje når det ikke var plass (siden hele frasen måtte flyttes samlet), noe Henrik
+// ikke ville ha (2026-10-02: "det er status skal være ved siden av"). Løsningen er å IKKE
+// bruke nowrap i det hele tatt - vanlig tekstbryting bryter naturlig ved mellomrommet FØR
+// selve nummeret (så "Chassis:" og nummeret havner på hver sin linje i stedet for midt i et
+// ord), og status-knappen kan da bli stående ved siden av tittelen slik den skal. Bekreftet
+// visuelt i 360px mobilbredde med flere chassis-lengder før dette ble endret.
+function ordreLabelFull(o){
+  if (erLeveranse(o)) {
+    // merking først; reg.nr og chassis hvis de også er fylt ut (samme skille som for biler)
+    const deler = [leveranseTittel(o)];
+    if (o.regnr && o.regnr !== deler[0]) deler.push(o.regnr);
+    if (o.chassis && o.chassis !== deler[0]) deler.push('Chassis: '+o.chassis);
+    return deler.map(esc).join(' · ');
+  }
+  if (o.regnr && o.chassis) return esc(o.regnr)+' · Chassis: '+esc(o.chassis);
+  if (!o.regnr && o.chassis) return 'Chassis: '+esc(o.chassis);
+  return ordreLabel(o);
+}
+
+// Foreslår Merke/Modell/Type/Variant/Versjon basert på hva som faktisk er brukt på
+// tidligere ordre, sortert etter hvor ofte de forekommer (mest brukt først). Hvert felt
+// filtreres til det som er brukt sammen med feltene til VENSTRE for det i kjeden
+// Merke → Modell → Type → Variant → Versjon (tomt felt til venstre = ikke filtrer på
+// det) - de henger som regel sammen (f.eks. har "Sprinter" andre varianter enn "Crafter").
+//
+// Vises som en nedtrekkbar liste under feltet (samme mønster som en vanlig <select>,
+// men lar deg fortsatt skrive inn en helt ny verdi) - IKKE nettleserens innebygde
+// <datalist>, som har vist seg upålitelig på tvers av nettlesere/mobil (spesielt
+// iPhone, der forslagene ofte ikke vises i det hele tatt), se samme begrunnelse ved
+// kalStedForslagListe()/renderKalStedForslag() i oversikt-kalender.js.
+function frekvenssortert(verdier) {
+  const tell = {};
+  verdier.forEach(v => { if (v) tell[v] = (tell[v]||0) + 1; });
+  return Object.keys(tell).sort((a,b) => tell[b]-tell[a] || a.localeCompare(b,'no'));
+}
+function kjedeFilter(merke, modell, type) {
+  return S.ordrer.filter(o =>
+    (!merke  || (o.merke ||'').toLowerCase()===merke.toLowerCase())  &&
+    (!modell || (o.modell||'').toLowerCase()===modell.toLowerCase()) &&
+    (!type   || (o.type  ||'').toLowerCase()===type.toLowerCase())
+  );
+}
+function merkeForslag() {
+  return frekvenssortert(S.ordrer.map(o=>o.merke));
+}
+// Filtrert på Merke+Modell 2026-09-25 (bedt om av Henrik: "typegodkjenning må også være
+// forslag fra tidligere kia ev9") - samme mønster som typeForslag()/variantForslag()
+// rett under, i stedet for å foreslå typegodkjenninger på tvers av alle modeller.
+function typegodkjenningForslag(merke, modell) {
+  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.typegodkjenning));
+}
+function modellForslag(merke) {
+  return frekvenssortert(kjedeFilter(merke).map(o=>o.modell));
+}
+function typeForslag(merke, modell) {
+  return frekvenssortert(kjedeFilter(merke, modell).map(o=>o.type));
+}
+function variantForslag(merke, modell, type) {
+  return frekvenssortert(kjedeFilter(merke, modell, type).map(o=>o.variant));
+}
+function versjonForslag(merke, modell, type) {
+  return frekvenssortert(kjedeFilter(merke, modell, type).map(o=>o.versjon));
+}
+// Forhandler-forslaget hentet tidligere fra tidligere ordres Forhandler-felt (frekvens-
+// sortert per Merke+Modell), men er byttet ut 2026-09-24 til å hentes fra Kontakter ->
+// Forhandlere i stedet (bedt om av Henrik, etter at 49 forhandlere fra ordre-historikken
+// ble importert dit) - samme kilde som kontaktpersonKontakterForslag() allerede bruker.
+// Rører IKKE eksisterende ordres o.kunde-verdi i det hele tatt - kun denne
+// forslagslisten er byttet ut (Henrik bekreftet eksplisitt: "enten ikke gjør noe med de
+// tidligere ordrene eller så må du endre der" - dette er det trygge alternativet, siden
+// forslag aldri overskriver noe automatisk).
+function forhandlerForslag() {
+  const navn = (S.kontakter||[]).filter(k=>k.type==='Forhandler').map(k=>k.navn);
+  // Vanlig strengsammenligning (ikke localeCompare) med vilje - se samme forklaring ved
+  // kontaktpersonKontakterForslag()/vegvesen-dokumenter.js sin flåte-sortering.
+  return [...new Set(navn)].sort((a,b) => {
+    const na = a.toUpperCase(), nb = b.toUpperCase();
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+}
+// Kontaktperson fikk et NYTT forslag igjen 2026-09-22 - denne gangen fra Kontakter-
+// registeret (S.kontakter), ikke fra tidligere ordre som den gamle (fjernede) varianten.
+// Formålet er et annet: gjøre det lettere å treffe eksakt samme skrivemåte som en
+// eksisterende Kontakt-oppføring, siden fraktbestilling/hentevarsel fra Admin-arket slår
+// opp e-post på nøyaktig navn (se adminArkFinnKontaktEpost i admin-ark.js) - en kontaktperson
+// skrevet inn litt annerledes enn i Kontakter gir "fant ingen e-post"-feil der.
+// Filtrert på forhandler 2026-09-23 (bekreftet av Henrik): kontaktpersoner ligger nå
+// nøstet under sin forhandler (S.kontakter type "Forhandler", .kontaktpersoner-array, se
+// ansatte-utstyr.js) i stedet for som egne rader i Kontakter. Finnes en Forhandler-kontakt
+// med nøyaktig samme navn som ordrens Forhandler-felt (o.kunde), vis kun DENNE forhandlerens
+// kontaktpersoner. Finnes ingen match ennå (uregistrert forhandler, eller feltet er tomt),
+// fall tilbake til alle kontaktpersoner på tvers av alle forhandlere - samme
+// alltid-vis-noe-oppførsel som før denne endringen.
+function kontaktpersonKontakterForslag(kunde) {
+  const forhandlere = (S.kontakter||[]).filter(k => k.type === 'Forhandler');
+  const treff = forhandlere.find(k => (k.navn||'').trim().toLowerCase() === (kunde||'').trim().toLowerCase());
+  const navn = treff ? (treff.kontaktpersoner||[]).map(p=>p.navn) : forhandlere.flatMap(k=>(k.kontaktpersoner||[]).map(p=>p.navn));
+  // Vanlig strengsammenligning (ikke localeCompare) med vilje - localeCompare() uten
+  // eksplisitt locale ga overraskende ikke-alfabetisk rekkefølge for repeterte bokstaver
+  // under nb-NO (oppdaget i js/vegvesen-dokumenter.js sin flåte-sortering 2026-09-21).
+  return [...new Set(navn)].sort((a,b) => {
+    const na = a.toUpperCase(), nb = b.toUpperCase();
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+}
+// Forhandler org.nr henger sammen med selve forhandler-NAVNET (samme forhandler har
+// alltid samme org.nr), ikke med Merke/Modell - filtrerer derfor på eksakt kunde-navn i
+// stedet for å gjenbruke kjedeFilter() (bedt om av Henrik 2026-09-16: "org. nr må hentes
+// fra forhandler sånn forslag det er på alt annet").
+function forhandlerOrgnrForslag(kunde) {
+  if (!kunde) return [];
+  return frekvenssortert(S.ordrer.filter(o => (o.kunde||'').toLowerCase()===kunde.toLowerCase()).map(o=>o.forhandlerOrgnr));
+}
+// Samme mønster som forhandlerOrgnrForslag() rett over - Forhandler.nr er et
+// referansenummer forhandleren selv oppgir, henger sammen med forhandler-NAVNET, ikke
+// Merke/Modell. Endret fra en nedtrekksliste med forhandlernavn til fritekst med
+// forslag 2026-09-25 etter tilbakemelding fra Henrik - han skal TASTE INN et tall, ikke
+// velge en forhandler fra Kontakter.
+function forhandlerNrForslag(kunde) {
+  if (!kunde) return [];
+  return frekvenssortert(S.ordrer.filter(o => (o.kunde||'').toLowerCase()===kunde.toLowerCase()).map(o=>o.utstyr?.forhandlerNr));
+}
+function feltForslagHTML(inputId, verdier) {
+  if (!verdier.length) return '<div class="small muted" style="padding:9px 12px">Ingen tidligere verdier</div>';
+  return verdier.slice(0,20).map(v =>
+    `<div class="felt-dropdown-item" data-input="${inputId}" data-verdi="${esc(v)}" onmousedown="event.preventDefault();velgFeltForslag(this)">${esc(v)}</div>`
+  ).join('');
+}
+function velgFeltForslag(el) {
+  const input = document.getElementById(el.dataset.input);
+  if (!input) return;
+  input.value = el.dataset.verdi;
+  input.dispatchEvent(new Event('input', {bubbles:true}));
+  input.dispatchEvent(new Event('change', {bubbles:true}));
+  skjulFeltDropdown(el.closest('.felt-dropdown'));
+}
+// Nedtrekkslisten vises ved fokus og skjules ved blur. onmousedown+preventDefault på
+// selve raden (i stedet for onclick) gjør at valget rekker å registreres FØR
+// blur-eventet skjuler lista - uten det ville feltet miste fokus og lista forsvinne
+// før klikket i det hele tatt nådde frem.
+function visFeltDropdown(listeId) {
+  const el = document.getElementById(listeId);
+  if (el) el.style.display = 'block';
+}
+function skjulFeltDropdown(el) {
+  if (el) el.style.display = 'none';
+}
+// Oppdaterer forslagslisten til ett felt i kjeden ut fra hva som faktisk står i
+// feltene til venstre for det akkurat nå - kalt fra oninput på Merke/Modell/Type
+// (feltene som har noe til høyre for seg i kjeden Merke → Modell → Type → Variant →
+// Versjon). feltVerdi(id) leser gjeldende verdi av et felt via input-elementets id.
+function feltVerdi(inputId) { return document.getElementById(inputId)?.value||''; }
+function renderModellForslag(merkeInputId, modellInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(modellInputId, modellForslag(feltVerdi(merkeInputId)));
+}
+function renderTypeForslag(merkeInputId, modellInputId, typeInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(typeInputId, typeForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId)));
+}
+function renderVariantForslag(merkeInputId, modellInputId, typeInputId, variantInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(variantInputId, variantForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId), feltVerdi(typeInputId)));
+}
+function renderVersjonForslag(merkeInputId, modellInputId, typeInputId, versjonInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(versjonInputId, versjonForslag(feltVerdi(merkeInputId), feltVerdi(modellInputId), feltVerdi(typeInputId)));
+}
+// Filtrert på det som faktisk er skrevet i selve Forhandler-feltet (ikke bare en statisk
+// topp-20-liste som før) - med 83+ forhandlere i Kontakter ville de aller fleste aldri
+// vært synlige i forslagslisten uten dette (rapportert av Henrik 2026-09-26: "hvorfor får
+// jeg ikke sett alle forhandlerne når jeg skal velge forhandler i opprett ordre").
+// merkeInputId/modellInputId brukes ikke her (forhandlerlisten er ikke merke-/
+// modellavhengig) - beholdt i signaturen siden begge kallstedene allerede sender dem inn.
+function renderForhandlerForslag(merkeInputId, modellInputId, kundeInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  const sok = feltVerdi(kundeInputId).trim().toLowerCase();
+  const alle = forhandlerForslag();
+  el.innerHTML = feltForslagHTML(kundeInputId, sok ? alle.filter(n => n.toLowerCase().includes(sok)) : alle);
+}
+function renderForhandlerOrgnrForslag(kundeInputId, orgnrInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(orgnrInputId, forhandlerOrgnrForslag(feltVerdi(kundeInputId)));
+}
+function renderForhandlerNrForslag(kundeInputId, nrInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(nrInputId, forhandlerNrForslag(feltVerdi(kundeInputId)));
+}
+// Forhandler.nr henger sammen med forhandleren, ikke ordren isolert - når Forhandler-feltet
+// endres, fylles Forhandler.nr derfor automatisk ut (bedt om av Henrik 2026-09-25: "når det
+// blir valgt forhandler i ordren så skal den automatisk legge inn forhandler.nr"). Overskriver
+// bevisst et evt. eksisterende nummer på ordren - stemmer nummeret ikke lenger overens med
+// den (nye) forhandleren, er det gamle uansett feil.
+// Kilde: KUN forhandlerens eget forhandlerNr-felt i Kontakter (satt via apneRedigerForhandler
+// i ansatte-utstyr.js) - IKKE lenger et gjett ut fra ordre-historikk (fjernet 2026-09-25 etter
+// beskjed fra Henrik: han venter fortsatt på de ekte numrene fra forhandlerne selv, og et
+// gjettet tall fra en tidligere, potensielt feilskrevet testverdi ville vært misvisende inntil
+// da). Blir stående tomt helt til et ekte nummer er registrert på forhandleren i Kontakter.
+// Delt av autoFyllForhandlerNr() (eksisterende ordre) og opprettOrdre() i ordre-diverse.js
+// (helt NY ordre) - sistnevnte hadde ingen tilsvarende oppslag i det hele tatt, så
+// Forhandler.nr sto alltid tomt på en fersk ordre helt til noen tilfeldigvis rørte
+// Forhandler-feltet på nytt på detaljsiden (rapportert av Henrik 2026-09-26: "har du gjort
+// sånn at det blir hentet automatisk etter at jeg har valgt forhandler?" - svaret var nei,
+// kun for eksisterende ordre, ikke ved selve opprettelsen).
+function finnForhandlerNr(kundeNavn) {
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (kundeNavn||'').trim().toLowerCase());
+  return forhandlerKontakt?.forhandlerNr || '';
+}
+function autoFyllForhandlerNr(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const nr = finnForhandlerNr(o.kunde);
+  if (!nr) return;
+  su(id, 'forhandlerNr', nr);
+  const input = document.getElementById('forhandlerNrInput_'+id);
+  if (input) input.value = nr;
+  oppdaterHengerfesteNrVisning(id);
+}
+// Samme mønster som finnForhandlerNr/autoFyllForhandlerNr rett over, for det juridiske
+// org.nr-et (hentet fra Brønnøysundregistrene og lagret på forhandleren i Kontakter, se
+// hentOrgnrForAlleForhandlere() i js/ansatte-utstyr.js) i stedet for et referansenummer
+// forhandleren selv oppgir - bedt om av Henrik 2026-09-27: "gjør sånn at ordren henter den
+// infoen automatisk inn så vi slipper å skrive inn org.,nr oss selv".
+function finnForhandlerOrgnr(kundeNavn) {
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (kundeNavn||'').trim().toLowerCase());
+  return forhandlerKontakt?.orgnr || '';
+}
+function autoFyllForhandlerOrgnr(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const orgnr = finnForhandlerOrgnr(o.kunde);
+  if (!orgnr) return;
+  sf(id, 'forhandlerOrgnr', orgnr);
+  const input = document.getElementById('forhandlerOrgnrInput_'+id);
+  if (input) input.value = vegvesenFormaterOrgnr(orgnr);
+}
+// Samme mønster som finnForhandlerNr/finnForhandlerOrgnr rett over, men for en allerede
+// opplastet fullmakt-fil på forhandleren (lastet opp i Kontakter → Forhandler-detalj, se
+// lastOppForhandlerFullmakt i js/ansatte-utstyr.js) - kopieres automatisk inn i ordrens egen
+// dokumentliste slik at fullmakten følger med ordren uten at noen må huske å legge den ved
+// manuelt hver gang (bedt om av Henrik 2026-10-09: "når man legger til forhandlerne i ordren
+// så blir den automatisk lagt inn i dokumenter"). Gjør ingenting hvis forhandleren mangler
+// fullmakt, eller ordren allerede har et dokument med akkurat dette navnet (unngår duplikater
+// hver gang Forhandler-feltet trigges på nytt med samme forhandler).
+function finnForhandlerFullmakt(kundeNavn) {
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === (kundeNavn||'').trim().toLowerCase());
+  return forhandlerKontakt?.fullmaktUrl ? { navn: forhandlerKontakt.fullmaktNavn || 'Fullmakt.pdf', url: forhandlerKontakt.fullmaktUrl } : null;
+}
+function autoFyllForhandlerFullmakt(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const fullmakt = finnForhandlerFullmakt(o.kunde);
+  if (!fullmakt) return;
+  o.dokumenter = o.dokumenter || [];
+  if (!o.dokumenter.some(d => d.navn === fullmakt.navn)) {
+    o.dokumenter = [...o.dokumenter, { navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
+    logChange(o, 'La automatisk til fullmakt fra forhandler: ' + fullmakt.navn);
+    // ATOMISK per dokument (oppdater_ordre_dokument, radlåst) i stedet for å skrive HELE dokumenter-lista fra denne økten sitt minne:
+    // et dokument en kollega la til/slettet samtidig (eller en flåte-generering) ble ellers overskrevet og forsvant (revisjon 2026-11-02).
+    if (db) db.rpc('oppdater_ordre_dokument', { p_ordre_id: id, p_navn: fullmakt.navn, p_dokument: o.dokumenter[o.dokumenter.length-1] })
+      .then(r=>{
+        if (r.error) { console.error('Fullmakt-auto-vedlegg feilet:', r.error.message); return; }
+        if (r.data?.dokumenter) {
+          o.dokumenter = r.data.dokumenter;
+          const el = document.getElementById('dokumenterListe_'+id);
+          if (el) el.innerHTML = dokumenterListeHTML(o);
+        }
+      });
+    planleggLocalSpeiling();
+    const listEl = document.getElementById('dokumenterListe_'+id);
+    if (listEl) listEl.innerHTML = dokumenterListeHTML(o);
+  }
+  // Setter selve "Fullmakt"-statusen (nedtrekket på ordresiden, speilet i Admin-ark og på
+  // ordrekortet) til "Har" når forhandleren faktisk har en fullmakt registrert - tidligere
+  // ble kun FILEN kopiert inn over, mens status sto igjen på "Har ikke" til noen krysset
+  // den av manuelt (bedt om av Henrik 2026-10-15). Kjøres uavhengig av if-blokken over, så
+  // den også retter opp status på ordre der filen allerede ble lagt til en tidligere gang.
+  // Nedgraderer aldri en status som alt er 'har'.
+  if (o.fullmakt !== 'har') {
+    sf(id, 'fullmakt', 'har');
+    const dd = document.getElementById('dokStatus_fullmakt_'+id);
+    if (dd) dd.outerHTML = dokStatusDropdown(id, 'fullmakt', 'har');
+  }
+}
+// Varsler når autoFyllForhandlerNr/Orgnr/Fullmakt over ikke fant noe å fylle ut - alle tre
+// var til nå helt stille ved svikt (bedt om av Henrik 2026-10-14: "det er ikke alltid org.nr
+// følger med forhandleren når man legger det inn" - viste seg å ramme Forhandler.nr også,
+// samme rotårsak tre steder). To ulike svikt-tilfeller gir ulik beskjed: ingen Forhandler-
+// kontakt med dette navnet i det hele tatt (alle tre uteblir), eller kontakten finnes men
+// mangler selve dataen på kortet (kun Forhandler.nr/org.nr nevnes - fullmakt er ofte bevisst
+// fraværende for en forhandler uten signert fullmakt, så den tas ikke med her for å unngå
+// støy).
+function varsleHvisForhandlerDataMangler(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o || !(o.kunde||'').trim()) return;
+  const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === o.kunde.trim().toLowerCase());
+  if (!forhandlerKontakt) {
+    visToast(`Fant ingen forhandler med navnet "${o.kunde}" i Kontakter - sjekk stavemåten, eller legg den til der. Forhandler.nr/org.nr/fullmakt fylles ikke ut automatisk.`);
+    return;
+  }
+  const mangler = [];
+  if (!forhandlerKontakt.forhandlerNr) mangler.push('Forhandler.nr');
+  if (!forhandlerKontakt.orgnr) mangler.push('org.nr');
+  if (mangler.length) visToast(`${o.kunde} mangler ${mangler.join(' og ')} i Kontakter.`);
+}
+
+// Selve nummeret fra "Forhandler.nr"-feltet, vist rett ved siden av Hengerfeste-valget -
+// men KUN når hengerfeste faktisk er huket av (bedt om av Henrik 2026-09-26: "når man
+// velger forhandler så kommer forhandler.nr rett ved siden av hengerfeste hvis det er
+// valgt"). Samme betingelse/format som hengerfesteKortHTML() i oversikt-kalender.js bruker
+// på det kompakte ordrekortet - to atskilte visninger av samme regel, siden de lever på
+// hver sin side (ordre-detalj her, oversikten der).
+function hengerfesteNrVisningHTML(o) {
+  if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
+  const nr = o.utstyr?.forhandlerNr;
+  return nr ? esc(nr) : '';
+}
+// Kalles etter ALT som kan endre enten hengerfeste-valget eller forhandler.nr på denne
+// ordren (settHengerfeste, forhandlerNrInput sin onchange, autoFyllForhandlerNr over) -
+// ingen av disse gjør en full re-rendering av siden (su()/sf() lagrer bare), så denne
+// cellen må oppdateres direkte for at verdien skal vises med en gang uten omlasting.
+function oppdaterHengerfesteNrVisning(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  const el = document.getElementById('hengerfesteNrVisning_'+id);
+  if (el) el.textContent = hengerfesteNrVisningHTML(o);
+}
+function renderEierForslag(kundeInputId, eierInputId, listeId) {
+  const el = document.getElementById(listeId); if (!el) return;
+  el.innerHTML = feltForslagHTML(eierInputId, kontaktpersonKontakterForslag(feltVerdi(kundeInputId)));
+}
+
+// Kjente modeller = biltype-feltet på utstyr-malene, pluss modell-feltet på lagervarer
+// (siden en lagervare med Modell="EV9" også bør gjøre "EV9" valgbart som oppskrift-modell).
+function alleKjenteModeller() {
+  return [...new Set([
+    ...(S.utstyrMaler||[]).map(m=>m.biltype),
+    ...(S.lagervarer||[]).map(v=>v.modell)
+  ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'no'));
+}
+const FARGE_LISTE = ['Hvit','Rød','Blå','Grønn','Grå','Svart','Beige','Brun','Gul','Oransje','Sølv','Gull','Rosa','Fiolet','Turkis'];
+// Tar med gjeldende verdi som eget valg selv om den ikke er i listen (f.eks. en gammel
+// ordre med en skrivefeil i fargen) - da forsvinner ikke det som faktisk står lagret.
+function fargeSelectOptions(gjeldende) {
+  const farger = FARGE_LISTE.slice();
+  if (gjeldende && !farger.includes(gjeldende)) farger.push(gjeldende);
+  return `<option value="">– Velg farge –</option>` + farger.map(f=>`<option value="${esc(f)}" ${f===gjeldende?'selected':''}>${esc(f)}</option>`).join('');
+}
+function modellSelectOptions(gjeldende) {
+  const modeller = alleKjenteModeller();
+  if (gjeldende && !modeller.includes(gjeldende)) { modeller.push(gjeldende); modeller.sort((a,b)=>a.localeCompare(b,'no')); }
+  return `<option value="">– Velg modell –</option>` + modeller.map(m=>`<option value="${esc(m)}" ${m===gjeldende?'selected':''}>${esc(m)}</option>`).join('');
+}
+
+// Merke + Modell er det som faktisk fylles ut på ordrer i praksis, og brukes derfor
+// som modell-nøkkelen for å matche oppskrifter - ikke det separate Type-feltet.
+function merkeModell(o) { return `${o.merke||''} ${o.modell||''}`.trim(); }
+
+function fmt(d){ return d.toLocaleTimeString('no',{hour:'2-digit',minute:'2-digit'}); }
+
+// Pusher lokalt for umiddelbar visning, OG persisterer atomisk til databasen via
+// legg_til_ordre_endring() (se migrasjonen 20261022140000) - uavhengig av hvilken save()/
+// update()-vei som ellers lagrer resten av ordren akkurat nå. Uten dette delte den
+// generelle save() (og flere egne målrettede update()-kall) sin "les hele arrayet fra
+// nettleserens minne, skriv hele arrayet tilbake"-oppførsel samme kappløpsrisiko som den
+// bekreftede dokumenter-hendelsen 2026-10-22 - to uavhengige lagringer på samme ordre tett i
+// tid kunne overskrive hverandres logglinjer. save() og de andre målrettede update()-kallene
+// sender derfor ikke lenger "endringer" i sin egen payload i det hele tatt (se egne
+// kommentarer der) - denne funksjonen er nå det ENESTE stedet som skriver kolonnen.
+function logChange(o, txt) {
+  const entry = {av:me?.navn||'?', tid:new Date().toLocaleString('no'), txt};
+  o.endringer.push(entry);
+  if (db && o.id) {
+    // Fire-and-forget ga tidligere INGEN gjenforsøk ved feil (f.eks. midlertidig nettbrudd) - linjen
+    // forsvant da stille (console.error er usynlig for en vanlig ansatt) og kom aldri tilbake, siden
+    // den aldri nådde databasen og dermed ikke fulgte med ved neste omlasting. Ett nytt forsøk etter
+    // 3 s, og først hvis BEGGE feiler vises et synlig varsel (bedre enn å late som ingenting skjedde).
+    const sendEndring = (forsokNr) => db.rpc('legg_til_ordre_endring', { p_ordre_id: o.id, p_av: entry.av, p_tid: entry.tid, p_tekst: txt })
+      .then(r => {
+        if (!r.error) return;
+        if (forsokNr === 1) { setTimeout(() => sendEndring(2), 3000); return; }
+        console.error('Kunne ikke lagre endringslogg (etter nytt forsøk):', r.error.message);
+        visToast('Kunne ikke lagre en endringslogg-linje - last siden på nytt senere for å sjekke om den kom med');
+      });
+    sendEndring(1);
+  }
+}
+
+function sf(id, field, val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return false;
+  // Chassis-nr normaliseres alltid til store bokstaver her - uansett hvilket skjema/felt
+  // som kaller sf() med det - slik at det matcher konsekvent mot Admin-ark uten å være
+  // avhengig av at hvert enkelt inputfelt husker å gjøre det selv. Et chassis-nr er
+  // enten tomt eller nøyaktig 17 tegn - aldri noe midt imellom.
+  if (field === 'chassis') {
+    val = (val||'').trim().toUpperCase();
+    if (val && val.length !== 17) {
+      alert(`Chassis-nr må være nøyaktig 17 tegn (er nå ${val.length}).`);
+      return false;
+    }
+    // s08-058 (Henrik, "ja synk automatisk"): retter noen en tastefeil i chassis.nr på en
+    // ordre som kom fra Forhandlerportalen, skal portal-bestillingens lagrede chassis
+    // (ident) følge rettelsen - ellers kan en senere bestilling fra portalen med riktig
+    // chassis ikke lenger matche denne bestillingen. Fire-and-forget: blokkerer aldri selve
+    // lagringen, og gjør ingenting (0 rader) hvis ordren uansett ikke kom fra portalen.
+    if (val && val !== o.chassis) synkroniserPortalBestillingIdent(id, val);
+  }
+  // s08-004 (Henrik, "lag noe som skiller de fra hverandre" 2026-11-13): org.nr alene skiller
+  // ikke forhandler-AVDELINGER som deler org.nr (f.eks. Bertel O. Steen Innlandet AS har flere).
+  // Hold forhandler_kontakt_id ved like hver gang org.nr settes/endres - ALDRI en gjetning:
+  // se synkroniserForhandlerKontaktId().
+  if (field === 'forhandlerOrgnr' && val !== o.forhandlerOrgnr) synkroniserForhandlerKontaktId(id, val, o.kunde);
+  o[field]=val; logChange(o,field+' oppdatert'); save(id);
+  // Ordre-lapp (js/ordre-lapp.js): skrives ut automatisk når bilen er kommet og forhandleren er skrevet inn - også når det skjer på stasjons-PC-en selv.
+  if ((field === 'kunde' || field === 'ankomstdato') && typeof ordreLappTaIgjen === 'function') { try { ordreLappTaIgjen(); } catch (e) { console.warn('ordre-lapp:', e && e.message); } }
+  if (['type','variant','versjon'].includes(field)) synkroniserFraPrimaer(id);
+  // Merke/Modell styrer BÅDE "Ombygging valgt"-advarselen (manglende Fiken-produktlinje,
+  // se ombyggingBoksHTML()) og selve ombyggingslinjen i fakturagrunnlaget - uten dette ble
+  // begge stående med feil/utdatert status helt til noe HELT ANNET trigget en full
+  // rendering, selv om sfOmbygging() (avkrysningsboksene i SAMME kort) allerede gjorde
+  // nøyaktig dette ved egen endring (funnet 2026-10-22).
+  if (['merke','modell'].includes(field)) {
+    const container = document.getElementById('ombyggingBoks_' + id);
+    if (container) container.innerHTML = ombyggingBoksHTML(o);
+    synkroniserOmbyggingFikenLinjer(o);
+  }
+  return true;
+}
+// s08-058: synker portal_bestillinger.ident til et rettet chassis.nr (RPC, SECURITY DEFINER
+// - portal_bestillinger kan ikke skrives direkte av en vanlig innlogget ansatt). Oppdaterer
+// ALLE bestillinger knyttet til ordren, uansett om den ble opprettet som ny ordre
+// (ordrer.portal_bestilling_id satt) eller koblet til en allerede eksisterende ordre (da er
+// det bare portal_bestillinger.ordre_id som peker hit) - samme to veier som
+// portal_avvis_ordre() allerede dekker. Ren beste-innsats: feiler kallet, logges det bare.
+async function synkroniserPortalBestillingIdent(ordreId, nyttChassis) {
+  if (!db) return;
+  const { error } = await db.rpc('portal_oppdater_bestilling_chassis', { p_ordre_id: ordreId, p_nytt_chassis: nyttChassis });
+  if (error) console.warn('Kunne ikke synkronisere portal-bestillingens chassis:', error.message);
+}
+// s08-004: finner hvilken SPESIFIKKE Kontakter-rad (avdeling) et org.nr+kunde-tekst faktisk
+// hører til, og skriver den til ordrer.forhandler_kontakt_id (målrettet update - ALDRI via
+// den generelle save(), samme begrunnelse som portal_bestilling_id m.fl.). To entydige regler,
+// ALDRI en gjetning - finner ingen av dem, gjøres ingenting (feltet blir stående som det var):
+//  1) org.nr matcher nøyaktig ÉN forhandler-kontakt.
+//  2) org.nr matcher FLERE (deler org.nr, f.eks. Bertel O. Steen Innlandet AS) - da kreves et
+//     EKSAKT (trimmet, case-uavhengig) treff mellom kunde-teksten og navnet på én av dem.
+// Samme to regler som backfillen i migrasjonen 20261113090000 (portal-ordre sin egen
+// forhandler_kontakt_id, satt av portal_koble_bestilling, er bevisst IKKE en regel her -
+// det er portal-koblingens egen jobb, ikke noe denne funksjonen skal overstyre).
+async function synkroniserForhandlerKontaktId(ordreId, orgnr, kundeTekst) {
+  if (!db || !orgnr) return;
+  const o = String(orgnr).replace(/\s/g, '');
+  const kandidater = (S.kontakter||[]).filter(k => k.type === 'Forhandler' && String(k.orgnr||'').replace(/\s/g, '') === o);
+  let kontaktId = null;
+  if (kandidater.length === 1) kontaktId = kandidater[0].id;
+  else if (kandidater.length > 1) {
+    const treff = kandidater.find(k => (k.navn||'').trim().toLowerCase() === (kundeTekst||'').trim().toLowerCase());
+    if (treff) kontaktId = treff.id;
+  }
+  if (!kontaktId) return;
+  const { error } = await db.from('ordrer').update({ forhandler_kontakt_id: kontaktId }).eq('id', ordreId);
+  if (error) console.warn('Kunne ikke sette forhandler_kontakt_id:', error.message);
+}
+// Skriver nå det/de spesifikke vekt-delfeltet(ene) atomisk via oppdater_ordre_vekter_felt()
+// (radlås i databasen, se migrasjonen 20261022190000) i stedet for den generelle save()
+// (full-rad-upsert, som også inkluderer HELE o.vekter fra nettleserens lokale kopi). Denne
+// funksjonen og vegvesenBeregnOgSettEndring() (vegvesen-dokumenter.js, kjører automatisk i
+// bakgrunnen) skriver begge til o.vekter - uten dette kunne en ansatt som tastet inn ett
+// vektfelt overskrive en nylig automatisk beregning av et ANNET vektfelt, eller omvendt
+// (funnet 2026-10-22, samme rotårsak som dokumenter-/fikenLinjer-kappløpet).
+async function sv(id,k,col,val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  o.vekter[k][col]=val;
+  const felter = { [`${k}.${col}`]: val };
+  if (['foraksel','bakaksel'].includes(k) && col==='a') {
+    o.vekter[k].e = val;
+    felter[`${k}.e`] = val;
+    const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
+    const inp = document.querySelector('#ordreDetail table')?.querySelectorAll('tbody tr')[rader.indexOf(k)]?.querySelectorAll('input')[1];
+    if (inp) inp.value = val;
+  }
+  planleggLocalSpeiling();
+  if (db) {
+    const { data, error } = await db.rpc('oppdater_ordre_vekter_felt', { p_ordre_id: id, p_felter: felter });
+    if (error) { console.error('Kunne ikke lagre vektfelt:', error.message); visToast('Kunne ikke lagre vektfeltet - prøv igjen'); return; }
+    o.vekter = data || o.vekter;
+  }
+  if (['totalvekt','vogntog'].includes(k) && (col==='a'||col==='e')) oppdaterVektFarge(id,k);
+  // Tvangsflyt-kravet "Vekter fylt ut" leser o.vekter.totalvekt.a - uten dette ble
+  // sidepanelet stående å vise kravet som ikke oppfylt (og "Godkjenn og lukk" deaktivert
+  // for en godkjenner) selv rett etter at feltet faktisk ble fylt ut (funnet 2026-10-22).
+  if (k === 'totalvekt' && col === 'a') oppdaterTvangsflytBoks(o);
+  synkroniserFraPrimaer(id);
+}
+// ASYNC siden 2026-10-30 (s09-005) - skriver nå sekundærbilenes type/variant/versjon/
+// vekter/typegodkjenning/ombygging atomisk via oppdater_ordre_fra_primaer() i stedet for
+// den generelle save() (full-rad-upsert fra nettleserens lokale kopi, som også skriver
+// o.vekter - se kommentaren på sv() lenger opp). Kallerne (sv()/sf()) avventer den IKKE
+// (samme fire-and-forget-mønster som før), bare selve funksjonen er nå async.
+async function synkroniserFraPrimaer(id) {
+  const primaer = S.ordrer.find(x=>x.id===id); if (!primaer) return;
+  const flater = (S.flater||[]).filter(f => f.primaerOrdreId === id);
+  if (!flater.length) return;
+  for (const f of flater) {
+    for (const o of (S.ordrer||[]).filter(x => x.flateId===f.id && x.id!==id)) {
+      // En flåte er alltid Nytt Kjøretøy, og typegodkjenningsnummeret er likt for alle
+      // bilene i den (bekreftet av Henrik 2026-10-15) - uten dette måtte Nytt Kjøretøy
+      // krysses av for hånd på hver enkelt sekundærbil for at DENS EGEN Fiken-fakturalinje
+      // skulle bli riktig (se synkroniserOmbyggingFikenLinjer), og det var en kjent,
+      // dokumentert mangel at sekundærbiler kunne stå uten nyttKjoretoy=true (se
+      // vegvesen-dokumenter.js sin vegvesenAutoGenererHvisKomplett, som måtte omgå dette
+      // ved å sjekke PRIMÆRENS ombygging i stedet for bilens egen, funnet i test
+      // 2026-09-21 - denne fiksen fjerner selve årsaken i stedet for bare workarounden).
+      if (db) {
+        const { data, error } = await db.rpc('oppdater_ordre_fra_primaer', {
+          p_sekundaer_id: o.id, p_type: primaer.type, p_variant: primaer.variant,
+          p_versjon: primaer.versjon, p_vekter: primaer.vekter, p_typegodkjenning: primaer.typegodkjenning
+        });
+        if (error) { console.error('Kunne ikke synkronisere fra primærkjøretøy:', error.message); continue; }
+        Object.assign(o, data);
+      } else {
+        // Offline/uten db - oppdater kun lokalt, som før.
+        o.type = primaer.type; o.variant = primaer.variant; o.versjon = primaer.versjon;
+        o.vekter = JSON.parse(JSON.stringify(primaer.vekter));
+        o.typegodkjenning = primaer.typegodkjenning;
+        o.ombygging = o.ombygging || {nyttKjoretoy:false,bruktKjoretoy:false,lafinto:false,personbil:false};
+        o.ombygging.nyttKjoretoy = true;
+      }
+      planleggLocalSpeiling();
+    }
+  }
+}
+function oppdaterVektFarge(id,k) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  const rod = o.vekter[k].e && o.vekter[k].a && o.vekter[k].e !== o.vekter[k].a;
+  const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
+  const table = document.querySelector('#ordreDetail table');
+  if (!table) return;
+  const inp = table.querySelectorAll('tbody tr')[rader.indexOf(k)]?.querySelectorAll('input')[1];
+  if (!inp) return;
+  inp.style.color = rod ? '#ef4444' : '';
+  inp.style.borderColor = rod ? '#ef4444' : '';
+}
+// Oppdaterer "Endring"-inputfeltene (kolonne 'e') i Vekter-tabellen med de 4 verdiene
+// vegvesenBeregnOgSettEndring() (vegvesen-dokumenter.js) nettopp regnet ut og lagret på
+// o.vekter - den funksjonen kjører i bakgrunnen fra vegvesenAutoGenererHvisKomplett() lenge
+// etter at tabellen allerede er tegnet, og gjorde tidligere ALDRI noen tilsvarende DOM-
+// oppdatering (i motsetning til sv() sin egen foraksel/bakaksel-synk rett over) - den
+// ansatte så fortsatt den gamle/tomme verdien i feltet selv om den nettopp lagrede, ekte
+// justerte totalvekten (den som faktisk havner på Fabrikantattest/trinn 2-lappen) var en
+// annen (funnet 2026-10-22).
+function oppdaterVektInputVerdierIDOM(o) {
+  const table = document.querySelector('#ordreDetail table');
+  if (!table) return;
+  const rader = ['totalvekt','vogntog','foraksel','bakaksel'];
+  rader.forEach((k,i) => {
+    const inp = table.querySelectorAll('tbody tr')[i]?.querySelectorAll('input')[1];
+    if (inp) inp.value = o.vekter[k].e;
+  });
+  oppdaterVektFarge(o.id,'totalvekt');
+  oppdaterVektFarge(o.id,'vogntog');
+}
+function vektEnter(e, rad, kol) {
+  const cols = ['a','e','v'];
+  const ki = cols.indexOf(kol);
+  const k = e.key;
+  if (!['Enter','ArrowDown','ArrowUp','ArrowLeft','ArrowRight'].includes(k)) return;
+  const table = e.target.closest('table');
+  if (!table) return;
+  const rows = table.querySelectorAll('tbody tr');
+  let nr = rad, nk = ki;
+  if (k === 'Enter' || k === 'ArrowDown')  nr = rad + 1;
+  else if (k === 'ArrowUp')                nr = rad - 1;
+  else if (k === 'ArrowRight') { if (ki < 2) nk = ki + 1; else { nr = rad + 1; nk = 0; } }
+  else if (k === 'ArrowLeft')  { if (ki > 0) nk = ki - 1; else { nr = rad - 1; nk = 2; } }
+  if (nr < 0 || nr >= rows.length) return;
+  e.preventDefault();
+  const inp = rows[nr].querySelectorAll('input')[nk];
+  if (inp) { inp.focus(); inp.select(); }
+}
+function sd(id,f,val) {
+  const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if(!o.drivstoff) o.drivstoff={totalpris:'',satsId:''};
+  o.drivstoff[f]=val; save(id);
+  const el = document.getElementById('drivstoffKort_'+id);
+  if (el) el.innerHTML = drivstoffKortHTML(o);
+}
+
+// Regner ut kundeprisen etter at valgt drivstoff-sats er brukt på totalprisen
+// (rabatt/påslags-formelen for hver satstype) - returnerer 0 hvis det mangler
+// totalpris eller sats. Delt mellom "Endring"-boksen på selve drivstoffkortet under
+// og de kompakte Drivstoff-radene på ordrekort/Ordrearkiv, som viser DENNE prisen,
+// aldri den rå totalprisen (satt av forhandler/verksted, ikke det kunden skal se).
+function drivstoffKundepris(o) {
+  const df = o.drivstoff||{};
+  const totalpris = parseFloat(String(df.totalpris||df.literpris||'').replace(',','.'))||0;
+  const sats = (S.drivstoffSatser||[]).find(s=>s.id===(df.satsId||''));
+  if (!totalpris || !sats) return 0;
+  let kundepris = totalpris;
+  if(sats.type==='kr_rabatt')      kundepris=totalpris-parseFloat(sats.verdi||0);
+  if(sats.type==='prosent_rabatt') kundepris=totalpris*(1-parseFloat(sats.verdi||0)/100);
+  if(sats.type==='uten_moms')      kundepris=totalpris/1.25;
+  if(sats.type==='uten_mva')       kundepris=totalpris*0.8;
+  if(sats.type==='bos')            kundepris=(totalpris*0.8)/0.97;
+  if(sats.type==='prosent')        kundepris=totalpris*(parseFloat(sats.verdi||100)/100);
+  if(sats.type==='fast_pris')      kundepris=parseFloat(sats.verdi||0);
+  return kundepris<0 ? 0 : kundepris;
+}
+function drivstoffKundeprisTekst(o) {
+  const kundepris = drivstoffKundepris(o);
+  return kundepris ? kundepris.toLocaleString('no-NO',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' kr' : '';
+}
+
+function drivstoffKortHTML(o) {
+  const df = o.drivstoff||{};
+  const satsId = df.satsId||'';
+  const satser = S.drivstoffSatser||[];
+  const kundepris = drivstoffKundepris(o);
+  const endringHTML = kundepris ? `<div style="flex:1;min-width:100px">
+      <label>Endring</label>
+      <div style="background:#052e16;border:1px solid #16a34a66;border-radius:10px;padding:10px;text-align:center;font-size:14px;font-weight:800;color:#86efac;line-height:1.4">${drivstoffKundeprisTekst(o)}</div>
+    </div>` : '';
+  return `<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px">
+      <label>Totalpris (kr)</label>
+      <input inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${df.totalpris||df.literpris||''}" onchange="sd('${o.id}','totalpris',this.value)">
+    </div>
+    <div style="flex:2;min-width:160px">
+      <label>Sats</label>
+      <select onchange="sd('${o.id}','satsId',this.value)" style="width:100%;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:10px;padding:10px;font-size:13px">
+        <option value="">– Ingen sats –</option>
+        ${satser.map(s=>`<option value="${s.id}" ${satsId===s.id?'selected':''}>${esc(s.navn)}</option>`).join('')}
+      </select>
+    </div>
+    ${endringHTML}
+  </div>`;
+}
+

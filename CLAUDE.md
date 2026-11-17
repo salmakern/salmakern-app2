@@ -771,3 +771,11 @@ Dodge Durango (2000) mangler i portalen og bruker reserven.
   (kolonnen finnes allerede), så appen. Rekkefølgen er ikke kritisk (appen faller tilbake på tabellen hvis `portal_produkter` mangler).
 - **Test**: `test/fiken-ombygging.test.js` (10 nye), `test/hent-produkter-fra-portalen.test.js` (24) og
   `supabase/tester/portal_produkter_TEST_body.sql` (13, rullet tilbake 17.11, alle OK).
+- **Bevis for uendrede fakturalinjer**: `test/trinn2-samme-fakturalinjer.test.js` kjører den gamle `js/ordre-detalj.js` (kopi fra main
+  120d5ce i `test/fixtures/ordre-detalj-for-trinn2.js`) og den nye side om side, med portalens faktiske roller 17.11
+  (`test/fixtures/portal-produkt-roller-2026-11-17.json`), for 29 biler (fritekst + alle portal-slugger) x 16 avkrysninger x 6
+  utgangstilstander: identiske `fikenLinjer`. Kontrolltest: et endret nummer i portalen gir avvik. Endres en rolle i portalen, oppdater fiksturen.
+- **Bevisst IKKE byttet ut i trinn 2** (ikke trygt): `*_PUNKT_PRODUKTNUMMER` i `js/ansatte-utstyr.js` (kobler utstyrsmalens sjekkliste-tekst
+  til et nummer; portalen kjenner ikke de tekstene, og avkrysningen erstattes i trinn 3), `FASTE_NUMRE` i `fiken-nummer-brukt` (varsler
+  portalen om numre APPEN bruker; portalens egne numre der ville fått varselet til å slå ut på alt), og `fiken_priser.kategori` (styrer
+  rabattsatsen; å bytte til portalens prisgruppe kan endre rabatten på eksisterende linjer, Henriks beslutning).
