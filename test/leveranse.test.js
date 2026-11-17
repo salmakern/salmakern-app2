@@ -692,7 +692,7 @@ describe('chassis-koblinger ignorerer leveranser', () => {
     expect(linjer.length).toBeGreaterThanOrEqual(7);
     for (const l of linjer) expect(l).toContain('!erLeveranse(');
     expect(les('js/ordre-diverse.js')).toContain("o.status==='aktiv' && !erLeveranse(o) && samsvarerChassis(o.chassis, chassis)");
-    expect(les('js/arkiv-mer.js')).toContain('!S.ordrer.some(o => !erLeveranse(o) && samsvarerChassis(o.chassis, r.chassisNr))');
+    expect(les('js/arkiv-mer.js')).toContain('!S.ordrer.some(o => !erLeveranse(o) && !erKunEkstrautstyr(o) && samsvarerChassis(o.chassis, r.chassisNr))'); // + kun ekstrautstyr (2026-11-17)
     expect(les('js/flate.js').match(/!erLeveranse\(o\)/g).length).toBe(2);
   });
   it('Admin-ark bygger ikke rader av leveranser', () => {

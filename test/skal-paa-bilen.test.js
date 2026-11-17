@@ -218,3 +218,40 @@ describe('produktRettelse og visning', () => {
     expect(app.consoleFeil).toEqual([]);
   });
 });
+
+// «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17: bruk den nye lista): aldri en ombyggingsrad, ellers som vanlig.
+describe('«Skal på bilen» for en «kun ekstrautstyr»-ordre', () => {
+  it('ekte port: en ny kun-ekstrautstyr-ordre får den nye lista (porten gjelder likt)', () => {
+    expect(EKTE_GATE(bil({ created_at: '2026-11-18T08:00:00Z', kun_ekstrautstyr: true }))).toBe(true);
+    expect(EKTE_GATE(bil({ created_at: '2026-11-17T08:00:00Z', kun_ekstrautstyr: true }))).toBe(false);
+  });
+  it('ingen ombyggingsrad fra boksene (heller ikke personbil), men sjekklista virker', () => {
+    const o = bil({ kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true, personbil: true }, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] });
+    const { rader } = sandbox.beregnSkalPaaBilen(o);
+    expect(nr(rader)).toEqual(['501']);
+    expect(rader.some((r) => r.kilde === 'ombygging')).toBe(false);
+  });
+  it('en bestilt ombygging tas ikke med (med varsel), bestilt ekstrautstyr gjør det', () => {
+    const o = bil({ kun_ekstrautstyr: true, portal_linjer: [{ produktnummer: '500', navn: 'Standard ombygging' }, { produktnummer: '503', navn: 'Heldekkende gulv' }] });
+    const { rader, varsler } = sandbox.beregnSkalPaaBilen(o);
+    expect(nr(rader)).toEqual(['503']);
+    expect(varsler.join('|')).toMatch(/Kun ekstrautstyr/);
+  });
+  it('«+ Legg til utstyr» og «Rett» (rettelser) virker som ellers', () => {
+    const o = bil({ kun_ekstrautstyr: true, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }],
+      produkt_rettelser: [{ handling: 'fjern', produktnummer: '501', av: 'TEST Ola', at: '2026-11-18T09:00:00Z' }, { handling: 'legg_til', produktnummer: '503', navn: 'Heldekkende gulv', av: 'TEST Kari', at: '2026-11-18T09:05:00Z' }] });
+    const { rader } = sandbox.beregnSkalPaaBilen(o);
+    expect(nr(rader)).toEqual(['503']);
+    expect(rader.find((r) => r.nr === '501').fjernet).toBe(true);
+  });
+  it('lager: ingenting før ankomst; ved ankomst trekkes bare ekstrautstyret, aldri ombyggingsoppskriften', async () => {
+    const o = bil({ kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true }, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] });
+    await sandbox.synkProduktliste(o);
+    expect(fake.rpc.filter((k) => k.navn === 'lager_trekk_oppskrift')).toEqual([]);
+    expect(fake.rpc.filter((k) => k.navn === 'oppdater_ordre_fiken_linje').map((k) => [k.args.p_produktnummer, !!k.args.p_linje])).toEqual([['501', true]]);
+    o.ordreStatus = 'ikke_paabegynt';
+    fake.svar.lager_trekk_oppskrift = () => ({ data: { batchId: 'batch_TEST', ikkeFunnet: 0 }, error: null });
+    await sandbox.synkProduktliste(o);
+    expect(fake.rpc.filter((k) => k.navn === 'lager_trekk_oppskrift').map((k) => k.args.p_oppskrift_id)).toEqual(['opp_501']);
+  });
+});

@@ -219,7 +219,7 @@ function renderOversikt(q) {
             <b style="cursor:pointer" onclick="openOrdre('${o.id}',false,true)">${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}${kunEkstrautstyrBadgeHTML(o)}</div>
           ${ansatteSignertChipHTML(o)}
           ${meldPaaKnappHTML(o)}
           ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
@@ -244,7 +244,7 @@ function renderOversikt(q) {
             <b>${ordreLabelFull(o)}</b>
             ${statusDropdown(o.id, o.ordreStatus)}
           </div>
-          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}</div>
+          <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}${kunEkstrautstyrBadgeHTML(o)}</div>
           ${ansatteSignertChipHTML(o)}
           ${meldPaaKnappHTML(o)}
           ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
@@ -942,6 +942,8 @@ function dokStatusKortHTML(o) {
 // stedet for en full ✔/✕-liste, siden kortene har begrenset plass.
 function tvangsflytBarHTML(o) {
   if (erLeveranse(o)) return '';
+  // «Kun ekstrautstyr» har ingen tvangsflyt: merket står der stolpen ellers ville stått (Ordre-lista).
+  if (erKunEkstrautstyr(o)) return `<div onclick="event.stopPropagation()">${kunEkstrautstyrBadgeHTML(o)}</div>`;
   const tf = tvangsflyt(o);
   const oppfylt = tf.filter(t=>t.ok).length;
   const si = statusInfo(o.ordreStatus);
@@ -1054,8 +1056,8 @@ function dragOrdreEnd(e) {
   if (moved) {
     const slot = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cal-slot');
     const o = S.ordrer.find(x => x.id === id);
-    if (slot && o && erLeveranse(o)) {
-      // Leveranse: bare kalendertiden endres (målrettet skriving). «Sted» er Time på biltilsynet, som bare gjelder biler, og Admin-ark røres aldri (chassis.nr kan være samme som en bil).
+    if (slot && o && kalenderUtenAdminArk(o)) {
+      // Leveranse eller «kun ekstrautstyr»: bare kalendertiden endres (målrettet skriving). «Sted» er Time på biltilsynet, som bare gjelder biler, og Admin-ark røres aldri (chassis.nr kan være samme som en bil).
       const dato = slot.dataset.dato, tid = slot.dataset.tid;
       const lovet = leveranseSettKalender(o, dato, tid, 'Flyttet til kalender (dra): ' + dato + ' ' + tid);
       renderAll();
@@ -1173,12 +1175,12 @@ document.addEventListener('click', closeCalMenu);
 // Henrik: datoen "ble liggende" etter fjerning).
 async function fjernFraKalender(id) {
   const o = S.ordrer.find(x => x.id === id); if (!o) return;
-  if (erLeveranse(o)) {
-    // Leveranse: bare kalendertiden fjernes. Chassis.nr kan være samme som en bil, så Admin-ark røres ikke.
+  if (kalenderUtenAdminArk(o)) {
+    // Leveranse eller «kun ekstrautstyr»: bare kalendertiden fjernes. Chassis.nr kan være samme som en bil, så Admin-ark røres ikke.
     const ok = await leveranseSettKalender(o, '', '', 'Fjernet fra kalender');
     renderOversikt();
     if (activeOrdreId === id) buildOrdreDetail();
-    if (ok) visToast(`${leveranseTittel(o)} tatt ut av kalenderen`); // toasten bruker textContent: rå tittel
+    if (ok) visToast(`${ordreLabelFullTekst(o)} tatt ut av kalenderen`); // toasten bruker textContent: rå tittel (leveransetittel for en leveranse)
     return;
   }
   logChange(o, 'Fjernet fra kalender');
