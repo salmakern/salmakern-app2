@@ -112,7 +112,8 @@
 // v107 - Fabrikantattest for Brukt Kjøretøy: «FABRIKANT 2»-raden heter nå «OMBYGGING» (gjelder alle modeller; Nytt Kjøretøy er uendret)
 // v108 - Hengerfeste-filter på Ordre-siden; Modul-System-logoen i headeren er større (28 -> 40 px)
 // v109 - Diagnose-kravet fra 2026-11-20 er fjernet igjen (Henrik 25.11: «diagnose skal ikke være der») - blokkerer ikke lenger overgangen til Påbegynt. Ansatt-/bildekravet er uendret
-const CACHE = 'salmakern-v109';
+// v110 - «Bilen er hentet»-e-posten sendes automatisk ved status Hentet; admin har en reserveknapp i Admin-ark når den ikke gikk ut
+const CACHE = 'salmakern-v110';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
