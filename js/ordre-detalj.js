@@ -1290,6 +1290,7 @@ function sfOmbygging(id, felt, val) {
   const container = document.getElementById('ombyggingBoks_' + id);
   if (container) container.innerHTML = ombyggingBoksHTML(o);
   synkroniserOmbyggingFikenLinjer(o);
+  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) synkProduktliste(o, { tillatAngre: true }).then(() => renderSkalPaaBilen(id));
   // Tvangsflyt-kravet "Ombygging valgt" leser o.ombygging - samme begrunnelse som i sv()
   // over (funnet 2026-10-22).
   oppdaterTvangsflytBoks(o);

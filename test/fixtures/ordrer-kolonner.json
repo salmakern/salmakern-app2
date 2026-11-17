@@ -493,6 +493,13 @@
    "nullable": true
   },
   {
+   "kolonne": "produkt_rettelser",
+   "type": "jsonb",
+   "udt": "jsonb",
+   "default": "'[]'::jsonb",
+   "nullable": false
+  },
+  {
    "kolonne": "ordretype",
    "type": "text",
    "udt": "text",

@@ -759,6 +759,10 @@ async function endreStatus(id, nyStatus) {
     visToast('Kunne ikke endre status: ' + feil + ' — prøv igjen.');
     return;
   }
+  // Trinn 3: delene på «Skal på bilen» trekkes fra lager når bilen kommer (alt forbi «På vei»). Idempotent per ordre+oppskrift.
+  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o) && nyStatus !== 'paa_vei') {
+    synkProduktliste(o).catch(e => console.error('synkProduktliste ved ankomst:', e));
+  }
   // Start/stopp automatisk Ombygging-klokka ut fra faseovergangen ('paabegynt'), og meld
   // av alle når fasen er over - ingen ny knapp, se ordreAktivFase()/migrasjonen
   // 20261023140000. KUN Ombygging er automatisert - Klargjøring ble bevisst fjernet fra

@@ -36,6 +36,16 @@ describe('lesProduktliste', () => {
     expect(r.rader[0]).toMatchObject({ app_rolle: 'ombygging', fiken_nummer: '500', nummer_status: 'ok' });
     expect(r.rader[3]).toMatchObject({ fiken_nummer: null, nummer_status: 'intervall' });
   });
+  it('velges_nar følger med; mangler feltet blir det tom liste; feil form avvises', () => {
+    const l = kopi(LISTE); l.modeller[0].varianter[0].tillegg[0].velges_nar = ['4-seter bak 180', 'Tillegg for 180 graders stoler'];
+    const r = lesProduktliste(l);
+    expect(r.rader[1].velges_nar).toEqual(['4-seter bak 180', 'Tillegg for 180 graders stoler']);
+    expect(r.rader[0].velges_nar).toEqual([]);
+    for (const feil of ['tekst', [''], [1], Array(21).fill('x'), ['x'.repeat(101)]]) {
+      const m = kopi(LISTE); m.modeller[0].varianter[0].velges_nar = feil;
+      expect(lesProduktliste(m), JSON.stringify(feil).slice(0, 30)).toBeNull();
+    }
+  });
   it('varianter uten app_rolle-felt (eldre portal) er lov og gir null', () => {
     const l = kopi(LISTE); delete l.modeller[0].varianter[0].app_rolle;
     expect(lesProduktliste(l).rader[0].app_rolle).toBeNull();

@@ -612,7 +612,7 @@ async function loadFromSupabase() {
     db.from('fiken_kunde_alias').select('alias, fiken_contact_id'),
     db.from('fiken_kunde_rabatt').select('fiken_contact_id, rabatt_ombygging, rabatt_ekstra_utstyr'),
     // Trinn 2 «Én produktliste»: ombyggingsnumrene per modell fra Forhandlerportalen (bare radene med en rolle, ca. 20).
-    db.from('portal_produkter').select('modell_slug, app_rolle, fiken_nummer, hentet_at').not('app_rolle', 'is', null)
+    db.from('portal_produkter').select('portal_id, type, modell_slug, variant_portal_id, fiken_nummer, nummer_status, navn, app_rolle, velges_nar, hentet_at')
   ]);
   // VIKTIG: må sjekkes for ALLE spørringer, ikke bare ansatte - hvis f.eks. ordre-
   // spørringen feiler forbigående (nettverksglipp, sesjonsfornyelse etter lang pause
@@ -631,7 +631,9 @@ async function loadFromSupabase() {
   S.portalModellKobling = pmkR.data || [];
   // Ikke-kritisk: feiler lesingen (gammel PWA uten tabellen, nettfeil), brukes den hardkodede lista i ordre-detalj.js som før.
   if (ppR.error) console.error('Henting av produktlista fra portalen feilet:', ppR.error.message);
-  S.portalProduktRoller = ppR.data || [];
+  S.portalProdukter = ppR.data || [];
+  // Trinn 2: rollene (ombygging/personbil/lafinto) per modell, som finnFikenOmbyggingModell bruker.
+  S.portalProduktRoller = S.portalProdukter.filter(r => r.app_rolle);
   // Ikke-kritisk (bare admin-tilgjengelig, RLS) - en feilende lesing (gammel PWA-cache uten
   // disse spørringene, forbigående nettfeil) skal bare gi en tom liste, ikke kaste og blokkere
   // hele innlastingen for det (samme prinsipp som portalModellKobling over).
@@ -944,6 +946,10 @@ function dbToOrdre(r) {
     // rabatt_prosent fra portalen, brukt av leggTilPortalUtstyrLinjer() (js/lager.js) ved
     // Bekreft. Samme regel som de fire over: LESES her, skrives ALDRI av ordreToDb/save().
     portalLinjer:r.portal_linjer||null,
+    // Trinn 3 «Skal på bilen»: når ordren ble opprettet (styrer om den nye lista gjelder), og rettelsene (skrives bare av
+    // legg_til_ordre_produkt_rettelse, aldri av save()/ordreToDb).
+    createdAt:r.created_at||'',
+    produktRettelser:Array.isArray(r.produkt_rettelser) ? r.produkt_rettelser : [],
     // Leveranse (ordre uten bil, 2026-11-03): ordretype/leveranse skrives av ordreToDb BARE for leveranser (så en bil-ordre kan lagres også mot en database uten kolonnene), frakt_bestilt_* aldri.
     ordretype:r.ordretype==='leveranse'?'leveranse':'bil', leveranse:normaliserLeveranse(r.leveranse),
     fraktBestiltAt:r.frakt_bestilt_at||null, fraktBestiltAv:r.frakt_bestilt_av||'', fraktBestiltTil:r.frakt_bestilt_til||'',
@@ -1110,7 +1116,7 @@ function dbToLagerhistorikk(r) {
   return { id:r.id, vareId:r.vare_id, vareNavn:r.vare_navn||'', endring:Number(r.endring)||0, type:r.type||'justering', ordreId:r.ordre_id||null, batchId:r.batch_id||null, oppskriftId:r.oppskrift_id||null, ansattNavn:r.ansatt_navn||'', kommentar:r.kommentar||'', createdAt:r.created_at||'' };
 }
 function dbToLagerOppskrift(r) {
-  return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', type:r.type||'ombygging', ingredienser:r.ingredienser||[], fikenProduktnummer:r.fiken_produktnummer||'', kostpris:r.kostpris||0, createdAt:r.created_at||'' };
+  return { id:r.id, navn:r.navn||'', biltype:r.biltype||'', type:r.type||'ombygging', ingredienser:r.ingredienser||[], fikenProduktnummer:r.fiken_produktnummer||'', kostpris:r.kostpris||0, createdAt:r.created_at||'', portalVariantId:r.portal_variant_id||null, portalTilleggId:r.portal_tillegg_id||null };
 }
 function dbToAdminArkRad(r) {
   return { id:r.id, chassisNr:r.chassis_nr||'', aar:Number(r.aar)||0, rekkefolge:Number(r.rekkefolge)||0,

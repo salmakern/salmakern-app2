@@ -750,8 +750,8 @@ async function hentProdukterFraPortalen(stille = false) {
     const res = await edgeFetch('hent-produkter-fra-portalen', { method: 'POST' });
     const svar = await res.json().catch(() => ({}));
     if (!res.ok || !svar.ok) { visToast('Kunne ikke hente produkter fra portalen: ' + (svar.error || res.status)); return; }
-    const { data } = await db.from('portal_produkter').select('modell_slug, app_rolle, fiken_nummer, hentet_at').not('app_rolle', 'is', null);
-    if (data) S.portalProduktRoller = data;
+    const { data } = await db.from('portal_produkter').select('portal_id, type, modell_slug, variant_portal_id, fiken_nummer, nummer_status, navn, app_rolle, velges_nar, hentet_at');
+    if (data) { S.portalProdukter = data; S.portalProduktRoller = data.filter(r => r.app_rolle); }
     const endret = (svar.endredeRoller || []).length + (svar.fjernedeRoller || []).length;
     if (!stille || endret) {
       const deler = [`${svar.modeller} modeller, ${svar.rader} produkter hentet`];
@@ -1489,7 +1489,9 @@ function toggleUtstyrPunkt(ordreId, idx) {
   const o = S.ordrer.find(x=>x.id===ordreId); if(!o) return;
   const punkt = o.utstyrSjekkliste[idx];
   punkt.ok = !punkt.ok;
-  if (erKiaEv9(o)) {
+  // Trinn 3: på en ordre med «Skal på bilen» velges produktene ut fra reglene i portalen (synkProduktliste), ikke de faste koblingene under.
+  const nyListe = typeof erNyProduktliste === 'function' && erNyProduktliste(o);
+  if (!nyListe && erKiaEv9(o)) {
     if (/panorama/i.test(punkt.punkt || '')) {
       oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
       oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
@@ -1502,23 +1504,24 @@ function toggleUtstyrPunkt(ordreId, idx) {
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
     }
   }
-  if (erMercedesGelandewagen(o)) {
+  if (!nyListe && erMercedesGelandewagen(o)) {
     const produktnr = GELANDEWAGEN_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
-  if (erMercedesGls(o)) {
+  if (!nyListe && erMercedesGls(o)) {
     const produktnr = GLS_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
-  if (erIdBuzz(o)) {
+  if (!nyListe && erIdBuzz(o)) {
     const produktnr = ID_BUZZ_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
-  if (erDiscovery5(o)) {
+  if (!nyListe && erDiscovery5(o)) {
     const produktnr = DISCOVERY5_PUNKT_PRODUKTNUMMER[punkt.punkt];
     if (produktnr) oppdaterFikenLinjeForOppskrift(produktnr, punkt.ok);
   }
   save(ordreId);
+  if (nyListe) synkProduktliste(o, { tillatAngre: true }).then(() => renderSkalPaaBilen(ordreId));
   // Oppdater kun sjekklisten - ikke bygg om hele ordresiden, det gir et lite
   // layout-hopp midt i trykket som kan gjøre at neste trykk treffer feil boks.
   const container = document.getElementById('utstyrSjekkliste_' + ordreId);

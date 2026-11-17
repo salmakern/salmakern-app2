@@ -1433,6 +1433,12 @@ function renderOrdreLagerbruk() {
   const el = document.getElementById('ordreLagerbruk_' + activeOrdreId);
   if (!el) return;
   const o = S.ordrer.find(x=>x.id===activeOrdreId); if (!o) return;
+  // Trinn 3: ordrer opprettet etter PRODUKTLISTE_FRA får «Skal på bilen» (js/skal-paa-bilen.js) i stedet for avkrysningen under.
+  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) {
+    el.innerHTML = skalPaaBilenHTML(o);
+    synkProduktliste(o).then(() => { if (activeOrdreId === o.id) renderSkalPaaBilen(o.id); }).catch(e => console.error('synkProduktliste:', e));
+    return;
+  }
 
   const ordreBatchRader = (S.lagerhistorikk||[]).filter(h=>h.ordreId===o.id && h.batchId);
   // Trekk matches primært via oppskriftId (satt fra og med 2026-09-11). Eldre rader fra

@@ -11,9 +11,22 @@ const NUMMER = /^[1-9][0-9]{0,9}$/
 export type Rad = {
   portal_id: string; type: 'variant' | 'tillegg' | 'losning'; modell_slug: string; modell_navn: string; variant_portal_id: string | null
   produktnummer: string; fiken_nummer: string | null; nummer_status: string; navn: string; prisgruppe: string | null; app_rolle: string | null
+  velges_nar: string[]
 }
 
 const tekst = (v: unknown, maks = 200): string | null => (typeof v === 'string' && [...v].length <= maks ? v : null)
+
+// «Velges når» (trinn 3, valgfritt felt): liste med høyst 20 tekster à 1-100 tegn. Mangler feltet (eldre portal) = tom liste. null = ugyldig.
+function velgesNar(v: unknown): string[] | null {
+  if (v === undefined) return []
+  if (!Array.isArray(v) || v.length > 20) return null
+  const ut: string[] = []
+  for (const x of v) {
+    if (typeof x !== 'string' || x.trim() === '' || [...x].length > 100) return null
+    ut.push(x)
+  }
+  return ut
+}
 
 function nummerFelt(o: Record<string, unknown>): { produktnummer: string; fiken_nummer: string | null; nummer_status: string } | null {
   const produktnummer = tekst(o.produktnummer, 40)
@@ -49,16 +62,20 @@ export function lesProduktliste(data: unknown): { rader: Rad[]; roller: number }
         rollePerModell.add(slug + ':' + rolle)
         roller++
       }
+      const vn = velgesNar(v.velges_nar)
+      if (!vn) return null
       sett.add(id)
       antVar++
-      rader.push({ portal_id: id, type: 'variant', modell_slug: slug, modell_navn: navn, variant_portal_id: null, ...nr, navn: tekst(v.navn) ?? '', prisgruppe: tekst(v.prisgruppe, 20), app_rolle: rolle })
+      rader.push({ portal_id: id, type: 'variant', modell_slug: slug, modell_navn: navn, variant_portal_id: null, ...nr, navn: tekst(v.navn) ?? '', prisgruppe: tekst(v.prisgruppe, 20), app_rolle: rolle, velges_nar: vn })
       for (const t of v.tillegg) {
         if (!ER_OBJEKT(t)) return null
         const tid = tekst(t.portal_id, 64), tnr = nummerFelt(t)
         if (!tid || !tnr || sett.has(tid) || (t.type !== 'tillegg' && t.type !== 'losning')) return null
+        const tvn = velgesNar(t.velges_nar)
+        if (!tvn) return null
         sett.add(tid)
         antTil++
-        rader.push({ portal_id: tid, type: t.type, modell_slug: slug, modell_navn: navn, variant_portal_id: id, ...tnr, navn: tekst(t.navn) ?? '', prisgruppe: null, app_rolle: null })
+        rader.push({ portal_id: tid, type: t.type, modell_slug: slug, modell_navn: navn, variant_portal_id: id, ...tnr, navn: tekst(t.navn) ?? '', prisgruppe: null, app_rolle: null, velges_nar: tvn })
       }
     }
   }
