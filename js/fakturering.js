@@ -120,9 +120,10 @@ async function faktureringLagKladd(id) {
   finally { _faktureringIGang.delete(id); renderFakturering(); }
 }
 
-// Oversikt: kort lenke til siden (alternativ A, se renderKlarTilFakturering for B).
+// Oversikt-kortet «Klar til fakturering» (Henriks valg A 17.11): antall per farge og en knapp til siden. Kalles av renderKlarTilFakturering.
 function faktureringOversiktLenkeHTML() {
   const alle = faktureringKandidater().map(o => faktureringSjekk(o).niva);
+  // faktureringSjekk fanger en ordre som kaster, så én rar ordre aldri blanker kortet.
   const n = v => alle.filter(x => x === v).length;
   if (!alle.length) return '<div class="muted small">Ingen ordre venter på fakturering</div>';
   return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">

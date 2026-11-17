@@ -813,3 +813,20 @@ sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bil
   id-en `ord_<ms>`), og en håndlagt linje ble stående etter «Angre». **Statusbyttet er IKKE kjørt i produksjon**: enhver statusendring på en
   ordre sender et ekte push-varsel (triggeren `ordre-push`), så ankomst-hooken i `endreStatus` er bare dekket av enhetstest. Alle TEST-rader
   slettet etterpå (ordre, oppskrift, vare, ansatt, PIN).
+
+## Én produktliste, trinn 4: siden «Fakturering» (2026-11-17, bygget, IKKE utrullet)
+
+Henriks valg: «begge» (Fakturering-kortet i ordren som før, pluss en egen side), «Lag kladd» som knapp på siden, og alternativ A på Oversikt.
+Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
+- **Siden** (fane «Fakturering», `#faktureringTab`, bare admin; `showPage('fakturering')` kaller `renderFakturering()`): samme utvalg som før
+  (`faktureringKandidater`: aktive bil-ordrer, ikke fakturert, status klar_henting/vist_biltilsyn/hentet) og samme `fakturaSjekk` som stopper
+  knappen i ordren. Per ordre: fakturalinjene, en VEILEDENDE sum FØR rabatt (overstyrt `belop`, ellers frosset `pris`, ellers `fiken_priser.pris_kr`,
+  hentet én gang når siden åpnes) og grunnene. Filter Alle/Klare/Sjekk selv/Stopper.
+- **«Lag kladd i Fiken»** (`faktureringLagKladd`): sperret når noe stopper (rødt), mens en kladd lages, og uten linjer. Bekreftelse med kunde,
+  antall linjer og sum, så den VANLIGE `fakturerViaFiken` (samme kontroller, edge-funksjon og avtalte rabatt). Ingen egen Fiken-vei.
+- **Oversikt** (`renderKlarTilFakturering`): kortet «Klar til fakturering» viser bare antall klare / sjekk selv / stopper og «Åpne Fakturering →»
+  (`faktureringOversiktLenkeHTML`); lista med hver ordre er flyttet til siden.
+- **`fakturaSjekk`** gir nå i tillegg gult for ordrer med «Skal på bilen» (trinn 3): «Står på bilen, men ikke på fakturaen» og «På fakturaen, men
+  ikke på «Skal på bilen»». Bare numre modellen har i portalen sammenlignes (drivstoff, frakt, hengerfeste o.l. telles ikke). Gamle ordrer uendret.
+- `sw.js` CACHE v88. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. **Ikke testet:** en ekte kladd fra siden
+  (Fiken-kladder kan ikke slettes) og siden i den innloggede, utrullede appen.

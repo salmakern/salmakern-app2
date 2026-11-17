@@ -37,7 +37,7 @@ describe('Oversikt: «Klar til fakturering» (admin, ren lesevisning)', () => {
     expect(sandbox.document.getElementById('klarTilFaktureringListe').innerHTML).toMatch(/Ingen ordre venter/);
   });
 
-  it('viser en grønn ordre uten noen grunner, og en rød med grunn - rød sorteres først', () => {
+  it('kort lenke (trinn 4, valg A): antall per farge og en knapp til siden Fakturering, ingen liste', () => {
     const { sandbox, settMe, S } = lastApp();
     settMe({ id: 1, navn: 'Admin', rolle: 'admin' });
     S.ordrer = [
@@ -46,19 +46,18 @@ describe('Oversikt: «Klar til fakturering» (admin, ren lesevisning)', () => {
     ];
     sandbox.renderKlarTilFakturering();
     const html = sandbox.document.getElementById('klarTilFaktureringListe').innerHTML;
-    expect(html).toContain("openOrdre('ord_rod',false,true)");
-    expect(html).toContain("openOrdre('ord_gronn',false,true)");
-    expect(html).toContain('Ingen fakturalinjer');
-    // Rød skal stå FØR grønn i den sammensatte HTML-strengen.
-    expect(html.indexOf('ord_rod')).toBeLessThan(html.indexOf('ord_gronn'));
+    expect(html).toContain('1 klare');
+    expect(html).toContain('1 stopper');
+    expect(html).toContain("showPage('fakturering'");
+    expect(html).not.toContain('openOrdre(');
   });
 
-  it('en "hentet" ordre som ikke er fakturert vises med «ikke avstemt»', () => {
+  it('en "hentet" ordre som ikke er fakturert telles med (gul: ikke avstemt)', () => {
     const { sandbox, settMe, S } = lastApp();
     settMe({ id: 1, navn: 'Admin', rolle: 'admin' });
     S.ordrer = [nyOrdre({ ordreStatus: 'hentet' })];
     sandbox.renderKlarTilFakturering();
-    expect(sandbox.document.getElementById('klarTilFaktureringListe').innerHTML).toMatch(/ikke avstemt/);
+    expect(sandbox.document.getElementById('klarTilFaktureringListe').innerHTML).toContain('1 sjekk selv');
   });
 
   it('en leveranse tas ikke med (egen fakturerings-/arkiveringsflyt)', () => {
@@ -75,7 +74,8 @@ describe('Oversikt: «Klar til fakturering» (admin, ren lesevisning)', () => {
     S.ordrer = [nyOrdre({ id: 'ord_rar', fikenLinjer: 'ikke en liste' }), nyOrdre({ id: 'ord_ok' })];
     expect(() => sandbox.renderKlarTilFakturering()).not.toThrow();
     const html = sandbox.document.getElementById('klarTilFaktureringListe').innerHTML;
-    expect(html).toContain("openOrdre('ord_ok',false,true)");
+    expect(html).toContain('sjekk selv');
+    expect(html).toContain("showPage('fakturering'");
   });
 
   it('ren lesevisning: gjør aldri noe skrivende selv - ingen db-kall trigget av selve renderingen', () => {
