@@ -169,10 +169,15 @@ function erOmbyggingslinje(produktnavn: string): boolean {
 // (migrasjon 20261111200000) er en eksplisitt, forhåndsbekreftet kategori per produktnummer -
 // brukes her når satt, ellers faller vi tilbake på navnegjetting som før (NULL = uendret
 // oppførsel for alt Henrik ikke har sett på ennå). `kategoriMap` fylles rett under.
-function linjeKategori(produkt: { navn: string }, kategoriMap: Map<string, 'ombygging' | 'ekstra_utstyr'>, produktnummer: string): 'ombygging' | 'ekstra' {
+// 'modulsystem' (migrasjon 20261117100000, Henrik 17.11) finnes BARE som eksplisitt kategori -
+// navnegjettingen gir aldri 'modulsystem', så et produkt som ikke er tagget er uendret.
+type FikenKategori = 'ombygging' | 'ekstra_utstyr' | 'modulsystem'
+type LinjeKategori = 'ombygging' | 'ekstra' | 'modulsystem'
+function linjeKategori(produkt: { navn: string }, kategoriMap: Map<string, FikenKategori>, produktnummer: string): LinjeKategori {
   const eksplisitt = kategoriMap.get(produktnummer)
   if (eksplisitt === 'ombygging') return 'ombygging'
   if (eksplisitt === 'ekstra_utstyr') return 'ekstra'
+  if (eksplisitt === 'modulsystem') return 'modulsystem'
   return erOmbyggingslinje(produkt.navn) ? 'ombygging' : 'ekstra'
 }
 
@@ -316,7 +321,7 @@ Deno.serve(async (req) => {
     // egen, liten spørring (ikke en del av produktMap, siden den kommer fra Fiken sitt API
     // og ikke kjenner til vårt eget kategori-felt).
     const { data: kategoriRader } = await supabase.from('fiken_priser').select('produktnummer, kategori').not('kategori', 'is', null)
-    const kategoriMap = new Map<string, 'ombygging' | 'ekstra_utstyr'>((kategoriRader || []).map((r: any) => [String(r.produktnummer), r.kategori]))
+    const kategoriMap = new Map<string, FikenKategori>((kategoriRader || []).map((r: any) => [String(r.produktnummer), r.kategori]))
     const ukjente = linjer.map((l: any) => l.produktnummer).filter((n: string) => !produktMap.has(String(n)))
     if (ukjente.length) return jsonSvar({ error: `Fant ikke Fiken-produkt for produktnummer: ${ukjente.join(', ')}` }, 400)
     // Hver fakturalinje MÅ ha en konto (bekreftet av Henrik) - stopp heller kladden helt
@@ -335,25 +340,29 @@ Deno.serve(async (req) => {
     // fiken_kunde_rabatt, så satsene aldri driver fra hverandre. Mangler ordren en
     // forhandler-kontakt, eller finnes den forhandleren ikke (ennå) i portal_kunde_rabatt,
     // faller vi tilbake til fiken_kunde_rabatt som før - helt uendret for alt det gjelder.
-    // rabatt_modulsystem leses bevisst IKKE her: ingen Fiken-produkter er tagget med den
-    // kategorien ennå (avklart med Henrik 13.11 - produktene er «ikke fordelt i Fiken»), så den
-    // har ingenting å brukes på foreløpig. Samme NULL-sjekk som før gjelder uansett kilde: kun
+    // rabatt_modulsystem (17.11): brukes BARE for linjer med fiken_priser.kategori =
+    // 'modulsystem' (tillegg som bevisst ikke skal ha forhandlerrabatt). Den finnes bare i
+    // portalen - fiken_kunde_rabatt har ingen tilsvarende kolonne - så når portal-raden mangler
+    // (ordre uten forhandler_kontakt_id, eller forhandleren finnes ikke i portalen) får en
+    // modulsystem-linje 0 %, aldri ombygging-/ekstrautstyr-satsen og aldri en stopp: «ingen
+    // rabatt» er nettopp hensikten med kategorien. Samme NULL-sjekk som før gjelder uansett kilde: kun
     // forhåndsutfylt der historikken/portalen var konsekvent. Mangler HELE raden: aldri avtalt
     // noe for denne kunden, trygt å anta 0%. Finnes raden, men ÉN av de to kolonnene er NULL:
     // noen har satt opp den ENE satsen (f.eks. ombygging) men aldri tatt stilling til den andre
     // (ekstra utstyr) - IKKE det samme som "avtalt 0%", og skal ALDRI stille anta 0% (rettet
     // 5.11, uavhengig sikkerhetsgjennomgang: 68 av 100 rader i fiken_kunde_rabatt hadde NULL i
     // minst én kolonne). Stopper fakturering HELT i stedet for å gjette - se sjekken rett under.
-    let rabattRad: { rabatt_ombygging: number | null; rabatt_ekstra_utstyr: number | null } | null = null
+    let rabattRad: { rabatt_ombygging: number | null; rabatt_ekstra_utstyr: number | null; rabatt_modulsystem?: number | null } | null = null
     let rabattKilde: 'portal' | 'lokal' = 'lokal'
     if (eksisterendeOrdre.forhandler_kontakt_id) {
       const { data: portalRad } = await supabase
         .from('portal_kunde_rabatt')
-        .select('rabatt_standard, rabatt_ekstrautstyr')
+        .select('rabatt_standard, rabatt_ekstrautstyr, rabatt_modulsystem')
         .eq('kontakt_id', eksisterendeOrdre.forhandler_kontakt_id)
         .maybeSingle()
       if (portalRad) {
-        rabattRad = { rabatt_ombygging: portalRad.rabatt_standard, rabatt_ekstra_utstyr: portalRad.rabatt_ekstrautstyr }
+        // `?? null`: en rad uten feltet i det hele tatt (eldre testmock/skjema) regnes som NULL (ikke avtalt).
+        rabattRad = { rabatt_ombygging: portalRad.rabatt_standard, rabatt_ekstra_utstyr: portalRad.rabatt_ekstrautstyr, rabatt_modulsystem: portalRad.rabatt_modulsystem ?? null }
         rabattKilde = 'portal'
       }
     }
@@ -375,9 +384,11 @@ Deno.serve(async (req) => {
     const rabattSkalBrukes = brukRabatt !== false
     const rabattOmbygging = rabattSkalBrukes ? (rabattRad?.rabatt_ombygging ?? 0) : 0
     const rabattEkstraUtstyr = rabattSkalBrukes ? (rabattRad?.rabatt_ekstra_utstyr ?? 0) : 0
+    // Bare portal-kilden har en modulsystem-sats; lokal kilde (fiken_kunde_rabatt) eller ingen rad = 0 %.
+    const rabattModulsystem = rabattSkalBrukes && rabattKilde === 'portal' ? (rabattRad?.rabatt_modulsystem ?? 0) : 0
 
     if (rabattSkalBrukes && rabattRad) {
-      const trengerSats = (kategori: 'ombygging' | 'ekstra') => linjer.some((l: any) => {
+      const trengerSats = (kategori: LinjeKategori) => linjer.some((l: any) => {
         const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
         const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
         if (erOverstyrtBelop || erLaastRabatt) return false // har sin egen kilde, trenger ikke denne satsen
@@ -390,6 +401,11 @@ Deno.serve(async (req) => {
       }
       if (rabattRad.rabatt_ekstra_utstyr === null && trengerSats('ekstra')) {
         return jsonSvar({ error: `Kundens rabatt for ekstra utstyr er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
+      }
+      // Samme regel for modulsystem, men BARE når portal-raden finnes og har feltet tomt (NULL =
+      // ikke tatt stilling til i portalen). Lokal kilde har ingen slik kolonne: 0 %, ingen stopp.
+      if (rabattKilde === 'portal' && rabattRad.rabatt_modulsystem === null && trengerSats('modulsystem')) {
+        return jsonSvar({ error: `Kundens modulsystem-rabatt er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
       }
     }
 
@@ -453,7 +469,9 @@ Deno.serve(async (req) => {
         // linje med frosset portal-rabatt. Før dette ignorerte en slik linje avkrysningen
         // "Bruk kundens avtalte rabatt" helt, stikk i strid med det teksten lover.
         const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
-        const rabatt = !rabattSkalBrukes ? 0 : (erLaastRabatt ? l.rabatt : (linjeKategori(produkt, kategoriMap, String(l.produktnummer)) === 'ombygging' ? rabattOmbygging : rabattEkstraUtstyr))
+        const kat = linjeKategori(produkt, kategoriMap, String(l.produktnummer))
+        const kategoriSats = kat === 'ombygging' ? rabattOmbygging : kat === 'modulsystem' ? rabattModulsystem : rabattEkstraUtstyr
+        const rabatt = !rabattSkalBrukes ? 0 : (erLaastRabatt ? l.rabatt : kategoriSats)
         if (rabatt > 0) line.discount = rabatt
       }
       if (chassisNr && i === linjer.length - 1) line.comment = `Ch. nr. ${chassisNr}`

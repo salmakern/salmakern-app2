@@ -796,7 +796,7 @@ describe('fiken-fakturer: rabatt fra Forhandlerportalen (portal_kunde_rabatt) ov
     expect(draftKall).toHaveLength(0);
   });
 
-  it('rabatt_modulsystem fra portalen leses bevisst ikke og påvirker ingenting (ingen Fiken-produkt er kategorisert som "modulsystem" ennå)', async () => {
+  it('rabatt_modulsystem = NULL påvirker ingenting når ingen linje er kategorisert som "modulsystem" (se egen describe for modulsystem-linjer)', async () => {
     const svar = svarMedOrdre({
       forhandlerKontaktId: 'k18',
       linjer: [linje('100'), linje('200')],
@@ -855,6 +855,121 @@ describe('fiken-fakturer: fiken_priser.kategori overstyrer navnegjetting (migras
     };
     const [l] = await hentLinjer({ svar }, standardBody([linje('200', { rabatt: 5 })]));
     expect(l.discount).toBe(5);
+  });
+});
+
+// fiken_priser.kategori = 'modulsystem' (migrasjon 20261117100000, Henrik 17.11: et tillegg på
+// «Standard ombygging» som IKKE skal ha forhandlerrabatt). Satsen er portal_kunde_rabatt.
+// rabatt_modulsystem; uten portal-rad (lokal kilde eller ingen kilde) er den 0 % - aldri
+// ombygging-/ekstrautstyr-satsen, og aldri en stopp. Navnet på testproduktet inneholder
+// bevisst «ombygging», så navnegjettingen ville gitt ombygging-satsen hvis kategorien ble oversett.
+describe('fiken-fakturer: fiken_priser.kategori = modulsystem (migrasjon 20261117100000)', () => {
+  const MODUL_PRODUKT = { productId: 300, productNumber: '300', name: 'Tillegg standard ombygging (modulsystem)', incomeAccount: '3010' };
+  const PRODUKTER = [...ALLE_PRODUKTER, MODUL_PRODUKT];
+  const MODUL_KATEGORI = { fiken_priser: { data: [{ produktnummer: '300', kategori: 'modulsystem' }], error: null } };
+
+  function svarMedOrdre({ forhandlerKontaktId, linjer, ekstra = {} }) {
+    return {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: { data: { fiken_kladd_url: null, fiken_linjer: linjer, forhandler_kontakt_id: forhandlerKontaktId ?? null }, error: null },
+      ...MODUL_KATEGORI,
+      ...ekstra,
+    };
+  }
+
+  it('portal-rad med rabatt_modulsystem 0: modulsystem-linjen får ingen discount, mens ombygging/ekstra utstyr får sine portal-satser', async () => {
+    const linjer = [linje('100'), linje('200'), linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18', linjer,
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: 0 }, error: null } },
+    });
+    const l = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer));
+    expect(l[0].discount).toBe(30);
+    expect(l[1].discount).toBe(15);
+    expect(l[2]).not.toHaveProperty('discount');
+  });
+
+  it('portal-rad med rabatt_modulsystem 5: modulsystem-linjen får 5 (satsen leses fra portalen, er ikke hardkodet 0)', async () => {
+    const linjer = [linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18', linjer,
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: 5 }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer));
+    expect(l.discount).toBe(5);
+  });
+
+  it('forhandler finnes IKKE i portal_kunde_rabatt (faller til fiken_kunde_rabatt): modulsystem-linjen får 0 %, ikke den lokale ombygging-satsen', async () => {
+    const linjer = [linje('100'), linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_ukjent', linjer,
+      ekstra: {
+        portal_kunde_rabatt: { data: null, error: null },
+        fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+      },
+    });
+    const l = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer));
+    expect(l[0].discount).toBe(20);
+    expect(l[1]).not.toHaveProperty('discount');
+  });
+
+  it('ordre UTEN forhandler_kontakt_id: modulsystem-linjen får 0 %', async () => {
+    const linjer = [linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: null, linjer,
+      ekstra: { fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer));
+    expect(l).not.toHaveProperty('discount');
+  });
+
+  it('lokal kilde med NULL-kolonner stopper IKKE en faktura som bare har en modulsystem-linje (den trenger ingen lokal sats)', async () => {
+    const linjer = [linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: null, linjer,
+      ekstra: { fiken_kunde_rabatt: { data: { rabatt_ombygging: null, rabatt_ekstra_utstyr: null }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer));
+    expect(l).not.toHaveProperty('discount');
+  });
+
+  it('portal-raden finnes, men rabatt_modulsystem er NULL og fakturaen har en modulsystem-linje: 400 (samme NULL-regel som de andre satsene)', async () => {
+    const linjer = [linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18', linjer,
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null }, error: null } },
+    });
+    const { kall, draftKall } = await last({ svar, produkter: PRODUKTER });
+    const res = await kall(standardBody(linjer));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/modulsystem-rabatt er ikke satt i Forhandlerportalen/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('brukRabatt:false nuller modulsystem-satsen også', async () => {
+    const linjer = [linje('300')];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18', linjer,
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: 5 }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer, { brukRabatt: false }));
+    expect(l).not.toHaveProperty('discount');
+  });
+
+  it('en FROSSET rabatt på linjen (l.rabatt fra en portal-bestilling) vinner fortsatt, også over kategorien modulsystem (bevisst uendret, se CLAUDE.md)', async () => {
+    const linjer = [linje('300', { rabatt: 12 })];
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k18', linjer,
+      ekstra: { portal_kunde_rabatt: { data: { rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: 0 }, error: null } },
+    });
+    const [l] = await hentLinjer({ svar, produkter: PRODUKTER }, standardBody(linjer));
+    expect(l.discount).toBe(12);
+  });
+
+  it('portal-spørringen ber om rabatt_modulsystem-kolonnen (ellers ville satsen alltid vært undefined)', () => {
+    expect(fikenFakturerKilde).toMatch(/\.select\('rabatt_standard, rabatt_ekstrautstyr, rabatt_modulsystem'\)/);
   });
 });
 
