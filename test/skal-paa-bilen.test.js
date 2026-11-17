@@ -169,6 +169,12 @@ describe('synkProduktliste: lager og fakturalinjer', () => {
     await sandbox.synkProduktliste(o);
     expect(fake.rpc.filter((k) => k.navn === 'oppdater_ordre_fiken_linje').map((k) => [k.args.p_produktnummer, k.args.p_linje])).toEqual([['501', null]]);
   });
+  it('lagt til for hånd og så angret: fakturalinjen fjernes også (nettlesertest 17.11)', async () => {
+    const o = bil({ fiken_linjer: [{ produktnummer: '503', antall: 1 }],
+      produkt_rettelser: [{ handling: 'legg_til', produktnummer: '503', av: 'TEST', at: '2026-11-18T10:00:00Z' }, { handling: 'angre', produktnummer: '503', av: 'TEST', at: '2026-11-18T10:01:00Z' }] });
+    await sandbox.synkProduktliste(o);
+    expect(fake.rpc.filter((k) => k.navn === 'oppdater_ordre_fiken_linje').map((k) => [k.args.p_produktnummer, k.args.p_linje])).toEqual([['503', null]]);
+  });
   it('en bestilt linje med rabatt fjernes aldri automatisk', async () => {
     const o = bil({ portal_linjer: [{ produktnummer: '501', navn: 'Takluke' }], fiken_linjer: [{ produktnummer: '501', antall: 1, rabatt: 20 }],
       produkt_rettelser: [{ handling: 'fjern', produktnummer: '501', av: 'TEST', at: '2026-11-18T10:00:00Z' }] });

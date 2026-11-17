@@ -19,7 +19,9 @@ const PRODUKTLISTE_FRA = null;
 
 function erNyProduktliste(o) {
   if (!o || !PRODUKTLISTE_FRA || (typeof erLeveranse === 'function' && erLeveranse(o))) return false;
-  const t = Date.parse(o.createdAt || '');
+  // En ordre som nettopp er laget i appen har ingen createdAt før den er lest fra databasen: da brukes tidspunktet i id-en (ord_<ms>).
+  let t = Date.parse(o.createdAt || '');
+  if (!Number.isFinite(t)) { const m = /^ord_(\d{12,14})/.exec(String(o.id || '')); t = m ? Number(m[1]) : NaN; }
   return Number.isFinite(t) && t >= Date.parse(PRODUKTLISTE_FRA);
 }
 function erAnkommet(o) {
@@ -154,6 +156,11 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
       if (p.nummer_status !== 'ok' || !(p.velges_nar || []).length) continue;
       if (!rader.some(r => r.nr === p.fiken_nummer && !r.fjernet)) await oppdaterFikenLinjeForOppskrift(p.fiken_nummer, false, o.id);
     }
+  }
+  // Et produkt som ble lagt til for hånd og så angret, har ingen rad lenger: linjen det fikk skal også bort (funnet i nettlesertest 17.11).
+  const lagtTilForHand = new Set((Array.isArray(o.produktRettelser) ? o.produktRettelser : []).filter(r => r && r.handling === 'legg_til').map(r => r.produktnummer));
+  for (const nr of lagtTilForHand) {
+    if (!rader.some(r => r.nr === nr)) await oppdaterFikenLinjeForOppskrift(nr, false, o.id);
   }
   // 2) Lager, bare etter ankomst.
   if (!erAnkommet(o) || !db) return;

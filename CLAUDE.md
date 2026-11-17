@@ -782,7 +782,7 @@ Dodge Durango (2000) mangler i portalen og bruker reserven.
   portalen om numre APPEN bruker; portalens egne numre der ville fått varselet til å slå ut på alt), og `fiken_priser.kategori` (styrer
   rabattsatsen; å bytte til portalens prisgruppe kan endre rabatten på eksisterende linjer, Henriks beslutning).
 
-## Én produktliste, trinn 3: «Skal på bilen» (2026-11-17/18, BYGGET, IKKE utrullet; porten er AV)
+## Én produktliste, trinn 3: «Skal på bilen» (2026-11-17, database og portal UTE, appkoden ikke pushet; porten er AV)
 
 Henriks valg: én liste (A) med «Rett» og «+ Legg til utstyr»; appen velger selv ombygging og tillegg ut fra modell + bestilling +
 «Har ved ankomst»-sjekklista; bestillingen gjelder (appen bare varsler); «Valgt fordi …» på raden; lager trekkes ved ankomst, aldri når
@@ -801,9 +801,15 @@ sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bil
 - **Lager og faktura** (`synkProduktliste`): fakturalinjer for sjekkliste-/manuelle rader (en linje med rabatt fjernes aldri automatisk);
   lagertrekk først etter ankomst (alt forbi «På vei»), via `lager_trekk_oppskrift` (idempotent per ordre+oppskrift). Delene legges tilbake
   (`lager_angre_oppskrift_trekk`) BARE ved en bevisst handling (Rett, sjekkliste, boksene), aldri fra en vanlig opptegning.
-- **Database** (`20261118100000_skal_paa_bilen.sql`, IKKE kjørt): `portal_produkter.velges_nar`, `ordrer.produkt_rettelser`, synk-funksjonen
+- **Database** (`20261118100000_skal_paa_bilen.sql`, kjørt 17.11; første henting med reglene: 115 produkter, 16 med «velges når», 19 roller uendret): `portal_produkter.velges_nar`, `ordrer.produkt_rettelser`, synk-funksjonen
   med `velges_nar`, og RPC-en for rettelser. `sw.js` CACHE v87.
 - **Test**: `test/skal-paa-bilen.test.js` (17, hele appen i testriggen, falsk database), `test/hent-produkter-fra-portalen.test.js` (25),
   `supabase/tester/skal_paa_bilen_TEST_body.sql` (7, rullet tilbake 17.11). Forhåndsvist med appens CSS ved 1280 og 375 px.
-  **Ikke testet**: RPC-en for rettelser med en ekte innlogging, og hele flyten med en TEST-ordre i nettleser (krever migrasjonen og at
-  porten slås på).
+  **Nettlesertest 17.11** (Henriks ja; migrasjonen `20261118100000` og portalen `fe30027` lagt ut først, porten slått på BARE lokalt for ordrer
+  fra «nå»): TEST-ansatt (990031) logget inn i appen kjørt lokalt mot den ekte databasen, TEST-ordre EV9: «Panorama glasstak» ga Takluke 501
+  med «Valgt fordi» og fakturalinje; «Rett → Fjern» lagret rettelsen med navn/tid fra databasen og fjernet linjen; «+ Legg til utstyr» (søk
+  «503») la til 503 med en TEST-oppskrift; lagertrekk (status satt bare lokalt, se under) trakk TEST-varen 10 → 9 én gang, ny synk trakk ikke
+  på nytt; «Angre» la delene tilbake (10). To feil funnet og rettet: en nettopp laget ordre manglet `createdAt` lokalt (nå tidspunktet fra
+  id-en `ord_<ms>`), og en håndlagt linje ble stående etter «Angre». **Statusbyttet er IKKE kjørt i produksjon**: enhver statusendring på en
+  ordre sender et ekte push-varsel (triggeren `ordre-push`), så ankomst-hooken i `endreStatus` er bare dekket av enhetstest. Alle TEST-rader
+  slettet etterpå (ordre, oppskrift, vare, ansatt, PIN).
