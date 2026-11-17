@@ -65,6 +65,20 @@ describe('toggleUtstyrPunkt - KIA EV9 (regresjon for panorama/4-seter bak 180)',
     expect(skalHaKall.some(k => k.navn === '502')).toBe(false);
   });
 
+  it.each(['180 svingbare', 'Tillegg for 180 graders stoler', ' 180 Svingbare '])(
+    'dagens mal-tekst «%s» gir også 502 (malen heter ikke lenger «4-seter bak 180»)', (tekst) => {
+      o.utstyrSjekkliste[1].punkt = tekst;
+      env.toggleUtstyrPunkt('ord_1', 1);
+      expect(fikenLinjeKall).toContainEqual({ produktnummer: '502', skalStaa: true });
+      expect(skalHaKall.some(k => k.navn === '502')).toBe(false);
+    });
+
+  it('«4-seter bak» (uten 180) gir IKKE 502', () => {
+    o.utstyrSjekkliste[1].punkt = '4-seter bak';
+    env.toggleUtstyrPunkt('ord_1', 1);
+    expect(fikenLinjeKall.length).toBe(0);
+  });
+
   it('punkter uten kjent kobling (Airbag) rører verken skal ha eller fiken', () => {
     env.toggleUtstyrPunkt('ord_1', 2);
     expect(fikenLinjeKall.length).toBe(0);

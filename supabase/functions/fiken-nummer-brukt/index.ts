@@ -4,7 +4,7 @@
 //
 // Tre kilder:
 // 1. Faste numre i bestillingsappens kode (FASTE_NUMRE under) - må holdes i takt med js/ordre-detalj.js (FIKEN_OMBYGGING_MODELLER, drivstoff)
-//    og js/ansatte-utstyr.js (panorama, 4-seter 180, hengerfeste, utstyr-punkt per modell).
+//    og js/ansatte-utstyr.js (panorama, 180 graders stoler, hengerfeste, utstyr-punkt per modell).
 // 2. lager_oppskrifter.fiken_produktnummer (oppskrifter som skriver fakturalinjer).
 // 3. ordrer.fiken_linjer for ordrer som IKKE er fakturert ennå (fakturagrunnlaget som sendes til Fiken).
 // Beskyttet med den delte hemmeligheten (x-sync-secret) fordi svaret inneholder ordredata (regnr/kunde). Skriver aldri noe.
@@ -26,7 +26,7 @@ function jsonSvar(body: unknown, status = 200) {
 const FASTE_NUMRE: Record<string, string> = {
   '21': 'Drivstoff (fast fakturalinje)',
   '501': 'Panorama glasstak (KIA EV9)',
-  '502': '4-seter bak 180 (KIA EV9)',
+  '502': 'Tillegg for 180 graders stoler (KIA EV9)',
   '521': 'Hengerfeste',
   '500': 'Ombygging KIA EV9', '524': 'Ombygging til personbil KIA EV9',
   '200': 'Ombygging Land Rover Discovery 5', '229': 'Ombygging til personbil Discovery 5',
@@ -36,6 +36,7 @@ const FASTE_NUMRE: Record<string, string> = {
   '1500': 'Ombygging Mercedes Vito', '1600': 'Ombygging Mercedes EQV', '1700': 'Ombygging Mercedes V-Klasse',
   '1800': 'Ombygging VW ID. Buzz', '1812': 'Ombygging til personbil VW ID. Buzz',
   '2400': 'Ombygging KGM Rexton', '2401': 'Ombygging KGM Rexton (Lafinto)',
+  '2000': 'Ombygging Dodge Durango',
   '2500': 'Ombygging Toyota Land Cruiser 250', '2508': 'Ombygging til personbil Land Cruiser 250',
   '2900': 'Ombygging Toyota Land Cruiser 150',
   '308': 'Utstyr Geländewagen: DVD-skjermer', '302': 'Utstyr Geländewagen: Airbag 2. seterad',

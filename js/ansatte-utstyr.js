@@ -1364,7 +1364,7 @@ function applyUtstyrMal(ordreId, malIdx) {
   }
 }
 
-// "501" (panorama glasstak) og "502" (4-seter bak 180) er KIA EV9-spesifikke
+// "501" (panorama glasstak) og "502" («Tillegg for 180 graders stoler» i Fiken) er KIA EV9-spesifikke
 // Fiken-produktnumre - skal BÅDE stå i "Utstyr - Skal ha etter visning" (fritekst-
 // påminnelse for den som gjør klar bilen) OG legges rett inn i fakturagrunnlaget
 // (fikenLinjer), samtidig (bekreftet av Henrik 2026-09-24: "må fortsatt havne i
@@ -1382,9 +1382,20 @@ const FIKEN_PRODUKTNUMMER_PANORAMA = '501';
 // visning" via oppdaterSkalHaForOppskrift() under, uten noen egen formatering/kapitalisering.
 const FIKEN_PRODUKTNUMMER_IKKE_PANORAMA = 'Ikke 501';
 const FIKEN_PRODUKTNUMMER_4SETER_180 = '502';
+// Punktet i EV9-malen som utløser 502. Malen (innstillinger.utstyr_maler, «KIA EV9») har
+// hatt to tekster: «4-seter bak 180» (gammel, står fortsatt i 85 eldre ordrers sjekkliste)
+// og «180 svingbare» (dagens mal, 17.11.2026). Koden lyttet bare på den gamle, så 502 kom
+// aldri med fra en ny ordre (funnet 17.11, trinn 0 «én produktliste»). Fikens eget navn
+// («Tillegg for 180 graders stoler», Henriks valg 17.11) godtas også, så malen kan få det
+// navnet uten ny kodeendring.
+const PUNKT_180_STOLER = ['4-seter bak 180', '180 svingbare', 'Tillegg for 180 graders stoler'];
+function erPunkt180Stoler(tekst) {
+  const t = String(tekst || '').trim().toLowerCase();
+  return PUNKT_180_STOLER.some(p => p.toLowerCase() === t);
+}
 
 // Samme mønster for Mercedes-Benz Geländewagen (bekreftet av Henrik 2026-09-24) - kun
-// fikenLinjer, ikke "Skal ha etter visning" (som 4-seter bak 180, ikke som panorama).
+// fikenLinjer, ikke "Skal ha etter visning" (som 502/180 graders stoler, ikke som panorama).
 // Punkt-tekstene er hentet direkte fra den ekte utstyr-malen ("Mercedes-Benz
 // Geländewagen", biltype "Geländewagen") i databasen.
 function erMercedesGelandewagen(o) {
@@ -1448,10 +1459,10 @@ function toggleUtstyrPunkt(ordreId, idx) {
       oppdaterSkalHaForOppskrift(FIKEN_PRODUKTNUMMER_IKKE_PANORAMA, !punkt.ok);
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_PANORAMA, punkt.ok);
     }
-    // 4-seter bak 180 skal, ulikt panorama, KUN i fikenLinjer - ikke i "Skal ha etter
+    // 502 (180 graders stoler) skal, ulikt panorama, KUN i fikenLinjer - ikke i "Skal ha etter
     // visning" i det hele tatt (bekreftet av Henrik 2026-09-24, samme mønster som
     // hengerfeste).
-    if (punkt.punkt === '4-seter bak 180') {
+    if (erPunkt180Stoler(punkt.punkt)) {
       oppdaterFikenLinjeForOppskrift(FIKEN_PRODUKTNUMMER_4SETER_180, punkt.ok);
     }
   }

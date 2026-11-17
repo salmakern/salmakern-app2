@@ -719,3 +719,9 @@ samme måte når booking-verktøyet endres.
 Se kritisk på visuelle endringer ved faktisk visningsstørrelse/bakgrunn før de vises frem som
 ferdige. Ved subjektive designvalg (f.eks. hvilken logofil/størrelse) - vis flere reelle
 alternativer side ved side og la Henrik velge, ikke bestem selv.
+
+## Én produktliste, trinn 0: rydding av produktavvik (2026-11-17)
+
+- **502 («Tillegg for 180 graders stoler», Fikens navn er fasit) kom aldri med fra EV9-sjekklisten**: dagens mal har punktet «180 svingbare», koden lyttet bare på «4-seter bak 180» (gammel tekst, står i eldre ordrer). `erPunkt180Stoler()` i `js/ansatte-utstyr.js` godtar nå alle tre tekstene (også Fikens navn, så malen kan døpes om uten kodeendring). Ingen ordre har noen gang fått 502 automatisk.
+- **Dodge Durango (2000)** står nå i `FIKEN_OMBYGGING_MODELLER` (ingen personbil-kode i Fiken). `fiken-nummer-brukt` har 2000 og nytt 502-navn i `FASTE_NUMRE` (krever utrulling av funksjonen).
+- **Ikke rettet, venter på Henrik**: EV9-oppskriften «Ombygging 108 grader seter» har `fiken_produktnummer` «500, 502» (uskadelig i dag: ombygging-oppskrifter legger aldri fakturalinjer), Rexton-oppskriftene peker på 2403/2405 og LC250 personbil på 2508, som ikke finnes i `fiken_priser` (synket 17.11 kl. 13). 21 Drivstoff finnes i Fiken (14 ordrer har fått kladd med den), men mangler i `fiken_priser` fordi synken hopper over produkter uten fast pris (bevisst).
