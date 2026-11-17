@@ -50,7 +50,7 @@ describe('finnFikenOmbyggingModell (matcher merke/modell mot Fiken-produktnumre)
     ['Mercedes-Benz', 'V-Klasse', '1700', null],
     ['VW', 'ID.Buzz', '1800', '1812'],
     ['KGM', 'Rexton', '2400', null],
-    ['Toyota', 'Land Cruiser 250', '2500', '2508'],
+    ['Toyota', 'Land Cruiser 250', '2500', null],
     ['Dodge', 'Durango', '2000', null],
   ])('%s %s -> ombygging %s, personbil %s', (merke, modell, ombygging, personbil) => {
     const treff = env.finnFikenOmbyggingModell(merke, modell);

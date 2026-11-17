@@ -1176,7 +1176,9 @@ const FIKEN_OMBYGGING_MODELLER = [
   // Toyota LC 150", 2900), bare aldri lagt inn i denne tabellen. Ingen personbil-kode
   // funnet for LC 150 i Fiken (samme mønster som Vito/EQV/V-klasse).
   { match: /land\s*cruiser\s*150|\blc\s*150\b/i, ombygging: '2900', personbil: null },
-  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: '2508' },
+  { match: /land\s*cruiser\s*250|\blc\s*250\b/i, ombygging: '2500', personbil: null },
+  // LC 250: personbil-koden 2508 er fjernet 17.11.2026 (Henrik: «fjern den»). Den fantes aldri i
+  // Fiken, ingen ordre hadde brukt den, og LC 250 bygges ikke om til personbil.
   // Dodge Durango manglet her (trinn 0 «én produktliste», 17.11.2026): modellen er koblet i
   // portal_modell_kobling (dodge-durango) og bygges fortsatt (Henrik 17.11), men ga «ukjent
   // modell» ved fakturering. Fiken har «Varebilombygging av Dodge Durango.» (2000) og ingen
