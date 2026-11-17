@@ -58,8 +58,16 @@ const bil = (over = {}) => {
 const nr = (rader) => rader.filter((r) => !r.fjernet).map((r) => r.nr);
 
 describe('porten', () => {
-  it('er av i koden (PRODUKTLISTE_FRA = null): ingen ordre bruker den nye lista, gamle ordrer er urørt', () => {
-    expect(EKTE_GATE(bil())).toBe(false);
+  it('slått på 2026-11-17T17:20:53Z: ordrer fra før beholder avkrysningen, nye får lista, leveranser aldri', () => {
+    expect(sandbox.PRODUKTLISTE_FRA ?? app.kjor('PRODUKTLISTE_FRA')).toBe('2026-11-17T17:20:53Z');
+    expect(EKTE_GATE(bil({ created_at: '2026-11-17T08:00:00Z' }))).toBe(false);
+    expect(EKTE_GATE(bil({ created_at: '2026-11-18T08:00:00Z' }))).toBe(true);
+    expect(EKTE_GATE(bil({ created_at: '2026-11-18T08:00:00Z', ordretype: 'leveranse', leveranse: { merking: 'TEST' } }))).toBe(false);
+    // Nettopp laget i appen (ingen created_at ennå): tidspunktet i id-en avgjør.
+    const ny = bil(); ny.createdAt = ''; ny.id = 'ord_' + (Date.parse('2026-11-17T17:20:53Z') + 60000);
+    expect(EKTE_GATE(ny)).toBe(true);
+    ny.id = 'ord_' + (Date.parse('2026-11-17T17:20:53Z') - 60000);
+    expect(EKTE_GATE(ny)).toBe(false);
   });
 });
 

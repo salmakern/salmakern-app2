@@ -14,8 +14,9 @@
 //    fylles ut før ankomst. Rettes noe etter ankomst, trekkes/legges delene tilbake med en gang.
 //  * Gjelder bare ordrer opprettet etter PRODUKTLISTE_FRA. Eldre ordrer beholder dagens avkrysning (renderOrdreLagerbruk i lager.js).
 
-// Settes ved utrulling (ISO-tid). null = av: ingen ordre bruker den nye lista ennå.
-const PRODUKTLISTE_FRA = null;
+// Slått på 17.11.2026 (Henrik: «Ja, slå på»). Bare ordrer opprettet etter dette tidspunktet får «Skal på bilen»; eldre ordrer beholder
+// avkrysningen. null = av for alle.
+const PRODUKTLISTE_FRA = '2026-11-17T17:20:53Z';
 
 function erNyProduktliste(o) {
   if (!o || !PRODUKTLISTE_FRA || (typeof erLeveranse === 'function' && erLeveranse(o))) return false;

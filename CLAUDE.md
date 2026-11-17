@@ -782,13 +782,13 @@ Dodge Durango (2000) mangler i portalen og bruker reserven.
   portalen om numre APPEN bruker; portalens egne numre der ville fått varselet til å slå ut på alt), og `fiken_priser.kategori` (styrer
   rabattsatsen; å bytte til portalens prisgruppe kan endre rabatten på eksisterende linjer, Henriks beslutning).
 
-## Én produktliste, trinn 3: «Skal på bilen» (2026-11-17, database og portal UTE, appkoden ikke pushet; porten er AV)
+## Én produktliste, trinn 3: «Skal på bilen» (2026-11-17, UTRULLET og SLÅTT PÅ for nye ordrer samme dag, Henriks ja)
 
 Henriks valg: én liste (A) med «Rett» og «+ Legg til utstyr»; appen velger selv ombygging og tillegg ut fra modell + bestilling +
 «Har ved ankomst»-sjekklista; bestillingen gjelder (appen bare varsler); «Valgt fordi …» på raden; lager trekkes ved ankomst, aldri når
 sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bilen.js` (lastes sist).
-- **Porten**: `PRODUKTLISTE_FRA` (null = av). Bare ordrer med `created_at` etter den får den nye lista (`erNyProduktliste`); settes ved
-  utrulling. Eldre ordrer og leveranser: dagens avkrysning (`renderOrdreLagerbruk`) og de faste punkt-koblingene, uendret.
+- **Porten**: `PRODUKTLISTE_FRA` = `2026-11-17T17:20:53Z` (Henrik 17.11: «Ja, slå på»; null = av for alle). Bare ordrer med `created_at` (eller,
+  for en ordre nettopp laget i appen, tidspunktet i id-en `ord_<ms>`) etter den får den nye lista (`erNyProduktliste`). Å slå av igjen: sett null og push. Eldre ordrer og leveranser: dagens avkrysning (`renderOrdreLagerbruk`) og de faste punkt-koblingene, uendret.
 - **Regler i portalen**: `velgesNar` på variant/tillegg (sjekklistepunkt-tekster, uten forskjell på store/små bokstaver), speilet til
   `portal_produkter.velges_nar`. Skrevet 17.11 (Henriks ja): NØYAKTIG dagens `*_PUNKT_PRODUKTNUMMER`, panorama og 180-stoler, pluss nye
   tillegg i portalen for Discovery 201/202/204/205 og ID. Buzz 1801. Hengerfeste (521) er som før (eget valg på ordren).
