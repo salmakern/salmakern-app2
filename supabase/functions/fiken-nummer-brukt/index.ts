@@ -37,6 +37,7 @@ const FASTE_NUMRE: Record<string, string> = {
   '1800': 'Ombygging VW ID. Buzz', '1812': 'Ombygging til personbil VW ID. Buzz',
   '2400': 'Ombygging KGM Rexton', '2401': 'Ombygging KGM Rexton (Lafinto)',
   '2500': 'Ombygging Toyota Land Cruiser 250', '2508': 'Ombygging til personbil Land Cruiser 250',
+  '2900': 'Ombygging Toyota Land Cruiser 150',
   '308': 'Utstyr Geländewagen: DVD-skjermer', '302': 'Utstyr Geländewagen: Airbag 2. seterad',
   '306': 'Utstyr Geländewagen: Takluke', '309': 'Utstyr Geländewagen: Taktrekk i skinn',
   '401': 'Utstyr GLS: Klima i taket', '402': 'Utstyr GLS: Airbag', '403': 'Utstyr GLS: Koppholder i midtkonsoll',
