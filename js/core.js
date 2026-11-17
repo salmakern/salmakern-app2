@@ -31,6 +31,8 @@ const inFlightFotos = {};
 // feilen bare gikk til console.error, usynlig med mindre noen hadde devtools åpne).
 function initFeilovervaking() {
   if (!SENTRY_DSN) return;
+  // Ikke fra utviklingsmaskinen: feil under lokal testing (f.eks. et skript lastet to ganger, JAVASCRIPT-J 2026-11) forurenset feillista.
+  if (typeof location !== 'undefined' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
   const script = document.createElement('script');
   script.src = 'https://browser.sentry-cdn.com/8.45.0/bundle.min.js';
   script.crossOrigin = 'anonymous';
@@ -38,7 +40,7 @@ function initFeilovervaking() {
     if (!window.Sentry) return;
     window.Sentry.init({
       dsn: SENTRY_DSN,
-      environment: location.hostname === 'localhost' ? 'utvikling' : 'produksjon',
+      environment: 'produksjon',
       // Ikke send med noe fra selve appens tilstand (S) automatisk - unngår at
       // kunde-/ansattdata utilsiktet havner i feilrapporter.
       beforeSend(event) { return event; }
@@ -467,6 +469,20 @@ let activeOrdreId = null;
 let openedFromArkiv = false;
 let openedFraOversikt = false; // tilbakeOrdreList() sender tilbake til Oversikt i stedet for Ordre-lista når ordren ble åpnet derfra
 const ignorerRealtimeFor = new Set(); // ordre-ID-er vi nettopp lagret
+// LOKALE ENDRINGER SOM EN FULL INNLASTING IKKE SKAL OVERSKRIVE (2026-11-17, Sentry JAVASCRIPT-K). loadFromSupabase() bytter ut hele S.ordrer med det
+// databasen svarte. Leste den ordren MENS (eller rett før) denne enheten endret den, la den et eldre bilde over det nye på skjermen: sett 16.11, da fire
+// Vegvesen-dokumenter ble lagret mens sanntidsforbindelsen falt ut og utløste full innlasting, og lista viste 2 av 4 («dokumenter forsvinner, tilbake etter F5»).
+// Hver lokal endring av en ordre merkes derfor med tidspunkt: alt som kaller ignorerRealtimeFor.add (save() og alle målrettede skrivinger) og
+// dokumentskrivingene (som får lista tilbake fra RPC-en). loadFromSupabase() beholder det lokale objektet for ordrer endret etter at innlastingen startet,
+// eller inntil LOKAL_ENDRING_MARGIN_MS før (skrivingen kan ha vært underveis da databasen ble lest).
+const ordreLokaltEndretAt = {}; // ordre-id -> tidspunkt (ms) for siste lokale endring
+const LOKAL_ENDRING_MARGIN_MS = 10000;
+function merkLokalOrdreEndring(id) { if (id != null) ordreLokaltEndretAt[String(id)] = Date.now(); }
+function ordreLokaltEndretEtter(id, tidspunkt) { return (ordreLokaltEndretAt[String(id)] || 0) >= tidspunkt; }
+{
+  const leggTil = ignorerRealtimeFor.add.bind(ignorerRealtimeFor);
+  ignorerRealtimeFor.add = (id) => { merkLokalOrdreEndring(id); return leggTil(id); };
+}
 const ignorerRealtimeAnsatt = new Set(); // ansatt-ID-er vi nettopp lagret
 const ignorerRealtimeAdminArk = new Set(); // admin_ark-ID-er vi nettopp lagret
 const ignorerRealtimeFlate = new Set(); // flate-ID-er vi nettopp lagret
@@ -583,6 +599,7 @@ async function hentAlleRader(lagSporring, sideStorrelse = 1000) {
 }
 
 async function loadFromSupabase() {
+  const lastStart = Date.now();
   const [aR,oR,tR,sR,pmkR,fkaR,fkrR] = await Promise.all([
     db.from('ansatte').select('*').order('id'),
     hentAlleRader(() => db.from('ordrer').select('*').order('created_at').order('id')),
@@ -624,7 +641,14 @@ async function loadFromSupabase() {
   const LOCAL_TTL = 15000; // ms — behold lokale rader inntil Supabase bekrefter dem
 
   const prevAktiv = activeOrdreId ? prevOrdrer.find(o => String(o.id) === String(activeOrdreId)) : null;
+  const prevPerId = new Map(prevOrdrer.map(o => [String(o.id), o]));
   S.ordrer = (oR.data||[]).map(row => {
+    // Ordren er endret på denne enheten mens (eller rett før) innlastingen pågikk: behold det lokale objektet, se ordreLokaltEndretAt.
+    const lokal = prevPerId.get(String(row.id));
+    if (lokal && ordreLokaltEndretEtter(row.id, lastStart - LOKAL_ENDRING_MARGIN_MS)) {
+      dokLogg('full_innlasting_beholdt_lokal', {id:row.id, lokalt:(lokal.dokumenter||[]).length, database:(row.dokumenter||[]).length});
+      return lokal;
+    }
     const fresh = dbToOrdre(row);
     if (prevAktiv && String(row.id) === String(activeOrdreId)) dokLogg('full_innlasting', {id:row.id, fra:(prevAktiv.dokumenter||[]).length, til:fresh.dokumenter.length});
     if (ignorerRealtimeFor.has(String(row.id))) {
@@ -993,7 +1017,11 @@ function dokLogg(type, data) {
   dokLoggListe.push({ t: new Date().toISOString().slice(11, 23), type, ...(data || {}) });
   if (dokLoggListe.length > DOK_LOGG_MAKS) dokLoggListe.shift();
 }
-const dokSisteAntall = {};      // ordre-id -> antall dokumenter da lista sist ble tegnet
+// Én hendelse som én tekstlinje: «10:51:49.512 full_innlasting id=ord_1 fra=4 til=2».
+function dokLoggTekst(e) {
+  return e.t + ' ' + e.type + Object.keys(e).filter(k => k !== 't' && k !== 'type').map(k => ' ' + k + '=' + e[k]).join('');
+}
+const dokSisteAntall = {};     // ordre-id -> antall dokumenter da lista sist ble tegnet
 const dokBevisstTap = {};       // ordre-id -> {til, maks}: appen fjerner selv inntil `maks` dokumenter før tidspunktet `til`
 const dokKrympingRapportert = {}; // ordre-id -> tidspunkt for siste rapport (maks én per minutt per ordre)
 function dokumentTapBevisst(ordreIder, maks, sekunder = 20) {
@@ -1020,7 +1048,8 @@ async function dokumentKrympingSjekk(o) {
       objektUtskiftet: S.ordrer.find(x => x.id === o.id) !== o,
       ignorertRealtime: ignorerRealtimeFor.has(o.id), aktivOrdre: activeOrdreId === o.id,
       synlig: document.visibilityState, online: navigator.onLine, rolle: me?.rolle || null,
-      logg: [...dokLoggListe]
+      // Tekstlinjer, ikke objekter: 16.11 kom loggen frem i Sentry som uleselige «[VueViewModel]»-linjer.
+      logg: dokLoggListe.map(dokLoggTekst)
     };
     console.error('Dokumentlista ble tom/kortere på skjermen, men databasen har dem:', detaljer);
     if (window.Sentry) {

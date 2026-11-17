@@ -91,7 +91,9 @@
 // tåler at elementet mangler (HTML eldre enn skriptene)
 // v82 - filer i Storage vises via kortlevde signerte lenker (forberedelse til private bøtter); bildecachen
 // bruker filens faste adresse som nøkkel og lagrer bare ekte 200-svar
-const CACHE = 'salmakern-v82';
+// v83 - en full innlasting overskriver ikke lenger en ordre som nettopp er endret på enheten (dokumenter som
+// «forsvant»); Sentry er av på localhost
+const CACHE = 'salmakern-v83';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

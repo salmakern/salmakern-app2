@@ -1265,6 +1265,7 @@ async function vegvesenLagreGenerertDokument(ordreId, filnavn, pdfBytes) {
   if (dbError) { visToast('Kunne ikke lagre dokumentlisten for ' + filnavn + ': ' + dbError.message); return false; }
   const forrige = rpcData?.forrige || null;
   o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter || []), nyttDok];
+  merkLokalOrdreEndring(ordreId);
   dokLogg('dok_lagre', {id: ordreId, antall: o.dokumenter.length});
   if (forrige?.url) {
     const gammeltFilnavn = forrige.url.split('/ordre-dokumenter/')[1];
@@ -1390,6 +1391,7 @@ async function vegvesenLagreGenerertDokumentFlere(ordreIder, filnavn, pdfBytes) 
     }
     if (rpcData?.forrige && !forrige) forrige = rpcData.forrige;
     o.dokumenter = rpcData?.dokumenter || [...(o.dokumenter || []), nyttDok];
+    merkLokalOrdreEndring(id);
     dokLogg('dok_lagre', {id, antall: o.dokumenter.length});
     logChange(o, 'Generert dokument (flåte): ' + filnavn);
     oppdaterte.push(o);

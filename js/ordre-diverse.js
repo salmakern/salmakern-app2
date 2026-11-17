@@ -1464,6 +1464,7 @@ async function slettDokument(id, idx) {
     } else {
       m.dokumenter = m.dokumenter.filter(d => !(d.navn===dok.navn && d.url===dok.url));
     }
+    merkLokalOrdreEndring(m.id);
     dokLogg('dok_slett', {id:m.id, antall:m.dokumenter.length});
     logChange(m, 'Slettet dokument: ' + dok.navn);
     const listEl = document.getElementById('dokumenterListe_'+m.id);

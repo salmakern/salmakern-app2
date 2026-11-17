@@ -74,7 +74,9 @@ describe('dokumentKrympingSjekk', () => {
     expect(msg).toMatch(/krympet på skjermen/);
     expect(ctx.level).toBe('error');
     expect(ctx.extra).toMatchObject({ ordreId: 'o1', antallForrige: 5, antallPaaSkjerm: 0, antallIDatabasen: 5, objektUtskiftet: true, synlig: 'visible', online: true });
-    expect(ctx.extra.logg.some((e) => e.type === 'rt_update')).toBe(true);
+    // Loggen sendes som tekstlinjer (objektene kom frem i Sentry som uleselige «[VueViewModel]»-linjer 16.11).
+    expect(ctx.extra.logg.every((e) => typeof e === 'string')).toBe(true);
+    expect(ctx.extra.logg.some((e) => /^\d\d:\d\d:\d\d\.\d{3} rt_update id=o1 fra=5 til=0 harDok=true$/.test(e))).toBe(true);
     const alt = JSON.stringify(sentry);
     expect(alt).not.toContain('GEHEIMT-NAVN');
     expect(alt).not.toContain('hemmelig');
