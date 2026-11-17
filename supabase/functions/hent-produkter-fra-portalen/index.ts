@@ -100,7 +100,10 @@ Deno.serve(async (req) => {
       const melding = error.message === 'DOBBEL_ROLLE'
         ? "To varianter på samme modell har samme «Brukes i Salmaker'n som» i portalen - rett det i portalen"
         : 'Kunne ikke lagre produktlista (ingenting er endret)'
-      return jsonSvar({ error: melding }, error.message === 'DOBBEL_ROLLE' ? 409 : 500)
+      // Bare SQLSTATE og våre egne koder (aldri meldingsteksten fra databasen ellers), så en feil kan spores uten å røpe noe.
+      const kode = (typeof error.code === 'string' ? error.code.slice(0, 12) : '') + (/^[A-Z_]{3,30}$/.test(String(error.message)) ? ':' + error.message : '')
+      console.log(JSON.stringify({ fn: 'hent-produkter-fra-portalen', utfall: 'synk_feil', kode }))
+      return jsonSvar({ error: melding, kode }, error.message === 'DOBBEL_ROLLE' ? 409 : 500)
     }
     return jsonSvar({ ok: true, ...data })
   } catch (e) {

@@ -749,17 +749,17 @@ lageret her. Portalen er fasit for navn og pris; DELENE (oppskriften i `lager_op
 - **Test**: `test/portal-oppskrift.test.js` (24) og `supabase/tester/portal_oppskrift_TEST_body.sql` (30 kontroller, kjørt mot produksjon i
   rullet-tilbake transaksjon 17.11, alle OK, databasen kontrollert uendret etterpå). Portalens tester: se portalens CLAUDE.md.
 
-## Én produktliste, trinn 2: ombyggingsnumrene hentes fra portalen (2026-11-17, BYGGET, IKKE utrullet)
+## Én produktliste, trinn 2: ombyggingsnumrene hentes fra portalen (2026-11-17, UTRULLET samme dag med Henriks ja)
 
 Henrik 17.11: «start på trinn 2». Portalen er fasit for produktnummer. Hver variant i portalen kan merkes «Brukes i Salmaker'n som»
 (`Variant.appRolle`: OMBYGGING / PERSONBIL / LAFINTO, høyst én per modell). Satt 17.11 (Henriks ja): alle 12 standardombygginger,
 nye varianter for personbil (524, 229, 1415, 318, 417, 1812) og Lafinto (2401), og EQV/V-Klasse rettet fra «1600-1601»/«1700-1701» til
 1600/1700 med kjøleboks som tillegg 1601/1701. Etter dette er portalens nummer LIKT den gamle lista for hver rolle (null avvik); bare
 Dodge Durango (2000) mangler i portalen og bruker reserven.
-- **Database** (`20261117220000_portal_produkter.sql`, IKKE kjørt): `portal_produkter` (speil av portalens liste, innloggede leser, ingen
+- **Database** (`20261117220000_portal_produkter.sql` + rettingen `20261117230000_portal_produkter_synk_safeupdate.sql`, begge kjørt 17.11): `portal_produkter` (speil av portalens liste, innloggede leser, ingen
   skriver fra klienten) og `portal_produkter_synk(p)` (bare service_role; bytter ut hele lista atomisk, nekter tom/ugyldig liste og to
   varianter med samme rolle på en modell, og melder roller som er endret/fjernet).
-- **Edge `hent-produkter-fra-portalen`** (IKKE utrullet): som hent-rabatter (bare admin, `SALMAKERN_HENT_SECRET` mot portalen), henter
+- **Edge `hent-produkter-fra-portalen`** (utrullet 17.11; første henting: 110 produkter, 12 modeller, 19 roller, identiske med fiksturen beviset bruker): som hent-rabatter (bare admin, `SALMAKERN_HENT_SECRET` mot portalen), henter
   `/api/salmakern/produktnumre`, validerer strengt (`logikk.ts`, hele svaret avvises ved første brudd). Knapp «Hent produkter fra portalen»
   under Kontakter, og automatisk for admin ved innlogging når lista er eldre enn 6 t (`hentProdukterHvisGamle`).
 - **Klient**: `S.portalProduktRoller` (core.js). `FIKEN_OMBYGGING_MODELLER` har fått `slug` per rad; matchingen av ordren mot en modell er
@@ -767,7 +767,9 @@ Dodge Durango (2000) mangler i portalen og bruker reserven.
   bare som reserve. `ombyggingNummerFor(o, modell, rolle)`: har ordren allerede linjen med det GAMLE nummeret og portalen sier noe annet,
   beholdes det gamle på den ordren (ellers dobbel linje, synken fjerner aldri «det andre» nummeret) og Ombygging-boksen viser en gul advarsel.
   `sw.js` CACHE v86.
-- **Utrulling** (krever Henriks ja): migrasjonen, `functions deploy hent-produkter-fra-portalen`, portalgrenen `trinn2/produktliste`
+- **Lærdom fra utrullingen**: første henting feilet med SQLSTATE 21000 fordi Supabase kjører pg_safeupdate for kall via API-et: `delete from tabell` UTEN `where` avvises (SQL-testen kjørte direkte og fanget det ikke). Rettet med `where true`. Skriv alltid en WHERE i DELETE/UPDATE i funksjoner som kalles via rpc. Funksjonen svarer nå med SQLSTATE (aldri meldingsteksten) ved lagringsfeil.
+- **Ikke håndhevet ennå**: `hent-produkter-fra-portalen` står ikke i `EDGE_AUTH_ENFORCE`, så hvem som helst med anon-nøkkelen kan utløse en henting (skriver bare portalens egen liste på nytt). Legges til sammen med neste endring av hemmeligheten (les gjeldende verdi først, skriv hele lista).
+- **Utrulling** (gjort 17.11): migrasjonen, `functions deploy hent-produkter-fra-portalen`, portalgrenen `trinn2/produktliste`
   (kolonnen finnes allerede), så appen. Rekkefølgen er ikke kritisk (appen faller tilbake på tabellen hvis `portal_produkter` mangler).
 - **Test**: `test/fiken-ombygging.test.js` (10 nye), `test/hent-produkter-fra-portalen.test.js` (24) og
   `supabase/tester/portal_produkter_TEST_body.sql` (13, rullet tilbake 17.11, alle OK).
