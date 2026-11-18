@@ -95,7 +95,8 @@
 // «forsvant»); Sentry er av på localhost
 // v88 - «Kun ekstrautstyr (ingen ombygging)» på bil-ordrer: ingen tvangsflyt/utstyrsmal, bare Ekstra utstyr i Varer fra lager, ikke i Admin-ark
 // v89 - trinn 4: egen side «Fakturering» (admin) og kortere Oversikt-kort «Klar til fakturering»
-const CACHE = 'salmakern-v89';
+// v90 - «Hent selgere fra portalen» viser navn og grunn for forhandlere som trenger et manuelt blikk
+const CACHE = 'salmakern-v90';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
