@@ -848,8 +848,9 @@ tilganger kontrollert), appen ute (v92, ingen konsollfeil), `epost-bestilling` d
 lesing 18.11), så funksjonen bruker en egen `RESEND_INBOUND_API_KEY` (Full access). Henrik: prisene i innkjøpsportalen er de samme som i Fiken.
 **Mottak satt opp og bekreftet 18.11**: domenet `inn.salmaker.as` i Resend (Verified; DKIM-TXT, CNAME `rsend.inn`/`send.inn`, MX `inn` → receive-euw1.forge.rmta.net
 prio 10 hos Domeneshop), webhook `email.received`, og `RESEND_INBOUND_WEBHOOK_SECRET`/`RESEND_INBOUND_API_KEY`/`EPOST_BESTILLING_ADRESSE` satt. En TEST-e-post fra Henrik
-kom hele veien (logg «lagret», raden i Innkommende med «Ukjent avsender»), og TEST-raden er slettet. **Funn:** e-postens grunnpris (38 920 for EV9 i skjermbildet) er IKKE
-Fiken-prisen for 500 (51 500), så pris-kontrollen sender slike rader til Innkommende; venter på Henrik. Gjenstår også: prøving med Henriks ekte e-poster.
+kom hele veien (logg «lagret», raden i Innkommende med «Ukjent avsender»), og TEST-raden er slettet. **Priser (Henrik 18.11)**: Fiken har listeprisen UTEN rabatt, rabatten legges på
+fakturaen, og e-postens pris er forhandlerens pris ETTER rabatt. Kontrollen regner derfor Fiken-pris × (1 − sats) med forhandlerens sats fra `portal_kunde_rabatt`, valgt
+som i fiken-fakturer (kategori, ellers «ombygg» i Fiken-navnet; `linjeSats` i logikk.ts). Mangler satsen, går raden til Innkommende. Gjenstår også: prøving med Henriks ekte e-poster.
 
 Henrik 18.11: SELGEREN videresender bestillingen fra innkjøpsportalen; forhandleren finnes fra avsenderens e-post blant selgerne (kontaktpersoner i
 Kontakter); ukjent avsender går til «Innkommende»; «Mengde» kan være mer enn 1; datoene brukes ikke; finnes ikke ordren, lages den som «På vei», ikke
