@@ -177,25 +177,31 @@ begin
   insert into _res(navn, ok, info) values ('T7 logg_inn_med_pin: 6-sifret PIN gir pin_kort=false, standard okt_maks_minutter=240, er_delt_stasjon=false',
     v = 'ok:990011 kort=false okt=240 delt=false', v);
 
-  -- Legacy-ansatt med en gammel 4-sifret PIN, satt inn DIREKTE (opprett_ansatt krever nå 6 sifre,
-  -- og ansatte_pin har ingen RLS-policyer i det hele tatt - kun SECURITY DEFINER-funksjoner kan
-  -- skrive dit via vanlig PostgREST-rolle, men denne test-transaksjonen kjører uten rollebytte
-  -- til nå og kan derfor sette den direkte, akkurat som allerede-eksisterende 4-sifrede PIN-er i
-  -- produksjon kom til å ligge der fra før denne migreringen).
+  -- Legacy 4-sifret PIN kan ikke lenger FINNES i det hele tatt: CHECK-regelen ansatte_pin_seks_sifre
+  -- (20261116200000_pin_seks_sifre_og_ordre_sletting_kun_admin.sql, kjørt 16.11) krever nøyaktig 6
+  -- sifre på ALLE rader i ansatte_pin - lagt på etter at samtlige produksjons-PIN-er allerede var
+  -- 6 sifre. «Gammel 4-sifret PIN virker fortsatt for innlogging» (se CLAUDE.md, «Kort PIN kan ikke
+  -- finnes») stemmer derfor ikke lenger: denne testen sjekker nå i stedet at CHECK-regelen faktisk
+  -- stopper en slik rad, i stedet for å anta den fortsatt kan settes inn direkte.
   for i in 1..200 loop
     v_pin_gammel := lpad((1000 + floor(random() * 9000))::int::text, 4, '0');
     exit when not exists (select 1 from public.ansatte_pin where pin = v_pin_gammel);
   end loop;
   perform set_config('request.jwt.claims', v_admin_claims, true);
   execute 'set local role authenticated';
-  insert into public.ansatte (id, navn, rolle, aktiv, kan_fore_lonn) values (990013, 'TEST - gammel 4-sifret PIN', 'ansatt', true, true);
+  insert into public.ansatte (id, navn, rolle, aktiv, kan_fore_lonn) values (990013, 'TEST - avvist 4-sifret PIN', 'ansatt', true, true);
   execute 'reset role';
   perform set_config('request.jwt.claims', '', true);
-  insert into public.ansatte_pin (ansatt_id, pin) values (990013, v_pin_gammel);
 
-  v := pg_temp._innlogg_detaljer(c_fersk, v_pin_gammel);
-  insert into _res(navn, ok, info) values ('T8 logg_inn_med_pin: gammel 4-sifret PIN virker FORTSATT for innlogging (pin_kort=true, men IKKE avvist)',
-    v = 'ok:990013 kort=true okt=240 delt=false', v);
+  begin
+    insert into public.ansatte_pin (ansatt_id, pin) values (990013, v_pin_gammel);
+    v := 'satt inn uten feil';
+  exception
+    when check_violation then v := 'check_violation';
+    when others then v := sqlerrm;
+  end;
+  insert into _res(navn, ok, info) values ('T8 ansatte_pin_seks_sifre: en 4-sifret PIN avvises av check-constraint (kan ikke lenger settes inn i det hele tatt)',
+    v = 'check_violation', v);
 
   -- current_ansatt()/hent_innlogget_ansatt(): samme øktgrense-betingelse begge steder.
   select session_token into v_tok from public.ansatte where id = 990011;
