@@ -387,6 +387,13 @@ function bestiltFraktBadgeHTML(o, offsetCss) {
 // brukes også av filteret «Fra portal, ikke bekreftet».
 function erUbekreftetPortalOrdre(o) { return !!o.portalBestillingId && !o.portalBekreftetAt; }
 function portalBadgeHTML(o, kort) {
+  // Trinn 5: en ordre laget av en bestilling på e-post får samme slags merke («E-POST · IKKE BEKREFTET» / «E-POST»).
+  if (!o.portalBestillingId && o.epostBestillingId) {
+    const ub = !o.epostBekreftetAt;
+    const st = ub ? 'background:#1c1008;border:1px solid #b45309;color:#fbbf24' : 'background:#172554;border:1px solid #1d4ed8;color:#93c5fd';
+    const t = ub ? 'Bestilt på e-post - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt på e-post' + (o.epostBekreftetAv ? ' - bekreftet av ' + esc(o.epostBekreftetAv) : '');
+    return `<span title="${t}" style="display:inline-flex;align-items:center;${st};border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">${ub && !kort ? 'E-POST · IKKE BEKREFTET' : 'E-POST'}</span>`;
+  }
   if (!o.portalBestillingId) return '';
   const ubekreftet = !o.portalBekreftetAt;
   const stil = ubekreftet
@@ -956,6 +963,9 @@ function dbToOrdre(r) {
     // rabatt_prosent fra portalen, brukt av leggTilPortalUtstyrLinjer() (js/lager.js) ved
     // Bekreft. Samme regel som de fire over: LESES her, skrives ALDRI av ordreToDb/save().
     portalLinjer:r.portal_linjer||null,
+    // Trinn 5 (bestilling på e-post, migrasjon 20261118200000): en ordre LAGET av en e-post står som ikke bekreftet til en ansatt trykker Bekreft.
+    // Settes bare av databasefunksjonene (epost_bestilling_lagre / epost_bekreft_ordre); LESES her, skrives ALDRI av ordreToDb/save().
+    epostBestillingId:r.epost_bestilling_id||null, epostBekreftetAt:r.epost_bekreftet_at||null, epostBekreftetAv:r.epost_bekreftet_av||'',
     // Trinn 3 «Skal på bilen»: når ordren ble opprettet (styrer om den nye lista gjelder), og rettelsene (skrives bare av
     // legg_til_ordre_produkt_rettelse, aldri av save()/ordreToDb).
     createdAt:r.created_at||'',

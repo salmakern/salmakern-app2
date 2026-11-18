@@ -68,7 +68,9 @@ function beregnSkalPaaBilen(o) {
       const nr = String(l && l.produktnummer || '');
       const p = finnProdukt(nr);
       if (kun && p && p.app_rolle) { varsler.push(`Bestillingen har ${nr} ${p.navn}, men ordren er merket «Kun ekstrautstyr (ingen ombygging)», så den er ikke med.`); continue; }
-      leggTil(nr, l && l.navn, 'bestilling', 'Bestilt i portalen');
+      // Trinn 5: en bestilling på e-post har kilde 'epost' og antall (Mengde i e-posten), men ingen frosset rabatt.
+      const fraEpost = !!(l && l.kilde === 'epost');
+      leggTil(nr, l && l.navn, 'bestilling', fraEpost ? 'Bestilt på e-post' : 'Bestilt i portalen', { antall: Number(l && l.antall) > 1 ? Math.floor(Number(l.antall)) : 1, fraEpost });
     }
     for (const p of produkter) {
       if (p.nummer_status !== 'ok' || rader.some(r => r.nr === p.fiken_nummer)) continue;
@@ -159,6 +161,11 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
   //    og bestilte linjer (med frosset rabatt) av Bekreft; en linje med rabatt fjernes aldri automatisk (oppdaterFikenLinjeForOppskrift).
   for (const r of rader) {
     if (r.kilde === 'sjekkliste' || r.kilde === 'manuell') await oppdaterFikenLinjeForOppskrift(r.nr, !r.fjernet, o.id);
+    // Trinn 5: bestilt på e-post. Fakturalinjen (med antall, uten rabatt: kundens avtalte rabatt brukes) kommer når ordren er bekreftet.
+    else if (r.kilde === 'bestilling' && r.fraEpost && typeof epostOrdreBekreftet === 'function' && epostOrdreBekreftet(o)) {
+      if (r.fjernet) await oppdaterFikenLinjeForOppskrift(r.nr, false, o.id);
+      else await epostSikreFakturalinje(o, r.nr, r.antall || 1);
+    }
   }
   if (!bestilt) {
     for (const p of produkter) {
@@ -273,11 +280,11 @@ function skalPaaBilenHTML(o) {
           ? `<button class="btn sm" onclick="produktRettelse('${idJs}','angre','${nrJs}')">Legg tilbake</button>`
           : `<button class="btn sm red" onclick="produktRettelse('${idJs}','fjern','${nrJs}')">Fjern fra bilen</button>`}
       ${r.kilde === 'manuell' ? `<button class="btn sm" onclick="produktRettelse('${idJs}','angre','${nrJs}')">Angre (ta bort igjen)</button>` : ''}
-      ${r.kilde === 'bestilling' && !r.fjernet ? `<span class="small muted">Linjen i Fakturering har bestillingens rabatt og fjernes der hvis den ikke skal faktureres.</span>` : ''}
+      ${r.kilde === 'bestilling' && !r.fjernet && !r.fraEpost ? `<span class="small muted">Linjen i Fakturering har bestillingens rabatt og fjernes der hvis den ikke skal faktureres.</span>` : ''}
     </div>`;
     return `<div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:10px 12px;border-radius:10px;background:#0f0f12;border:1px solid ${r.rettet ? 'rgba(245,158,11,.45)' : '#27272a'};${r.fjernet ? 'opacity:.6' : ''}">
       <div style="min-width:0;flex:1">
-        <div style="font-weight:700;font-size:13.5px;${r.fjernet ? 'text-decoration:line-through' : ''}">${esc(r.navn)} ${r.rettet ? pill('Rettet', 'gul') : ''}</div>
+        <div style="font-weight:700;font-size:13.5px;${r.fjernet ? 'text-decoration:line-through' : ''}">${esc(r.navn)}${r.antall > 1 ? ` <span style="color:#a1a1aa;font-weight:600">× ${r.antall}</span>` : ''} ${r.rettet ? pill('Rettet', 'gul') : ''}</div>
         <div style="font-family:ui-monospace,monospace;font-size:11px;color:#a1a1aa">${esc(r.nr)} · ${typeTekst}</div>
         <div style="font-size:11.5px;color:#a1a1aa;margin-top:2px">Valgt fordi: ${esc(r.fjernet && r.rettet ? `${r.grunn}. Fjernet av ${r.rettet.av} ${r.rettet.dato}` : r.grunn)}</div>
         ${deler ? `<div style="font-size:11.5px;color:#71717a;margin-top:2px">${deler}</div>` : ''}
@@ -302,7 +309,7 @@ function skalPaaBilenHTML(o) {
         <button class="btn sm" onclick="skalPaaBilenLukkSok()">Lukk søk</button>
       </div>`;
   return `<div class="card" style="display:grid;gap:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="card-title" style="margin:0">Skal på bilen</div>${bestilt ? pill('Fra portalen', 'bla') : ''}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="card-title" style="margin:0">Skal på bilen</div>${bestilt ? pill(o.portalLinjer.some(l => l && l.kilde === 'epost') ? 'Fra e-post' : 'Fra portalen', 'bla') : ''}</div>
     ${varsler.map(v => `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:8px 10px;font-size:12px;color:#fbbf24">⚠ ${esc(v)}</div>`).join('')}
     ${rader.length ? rader.map(radHTML).join('') : '<div class="small muted">Ingenting valgt ennå. Huk av Nytt/Brukt kjøretøy, fyll ut «Har ved ankomst», eller legg til utstyr.</div>'}
     ${sokHTML}

@@ -839,3 +839,22 @@ Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
   ikke på «Skal på bilen»». Bare numre modellen har i portalen sammenlignes (drivstoff, frakt, hengerfeste o.l. telles ikke). Gamle ordrer uendret.
 - `sw.js` CACHE v89. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. Kontrollert etter utrulling: salmaker.as serverer v89 og `js/fakturering.js`, fanen og funksjonene finnes, ingen konsollfeil.
   **Ikke testet:** en ekte kladd fra siden (Fiken-kladder kan ikke slettes) og siden med data i en innlogget økt.
+
+## Én produktliste, trinn 5: bestilling på e-post (2026-11-18, BYGGET PÅ GREN `trinn5/epost-bestilling`, IKKE kjørt og IKKE utrullet)
+
+Henrik 18.11: SELGEREN videresender bestillingen fra innkjøpsportalen; forhandleren finnes fra avsenderens e-post blant selgerne (kontaktpersoner i
+Kontakter); ukjent avsender går til «Innkommende»; «Mengde» kan være mer enn 1; datoene brukes ikke; finnes ikke ordren, lages den som «På vei», ikke
+bekreftet. Rett på ordren BARE ved sikkert treff. Ingenting går til Fiken. Oppsett, regler og utrulling: `supabase/README.md`, «Bestilling på e-post».
+- **Server**: `supabase/functions/epost-bestilling/` (`tolk.ts` leser e-posten, `logikk.ts` vurderer raden, `flyt.ts` binder sammen, `signatur.ts` sjekker
+  Resend-varselet). Bygget etter Henriks SKJERMBILDER, ingen ekte e-post er sett som HTML/tekst: tolkeren må prøves på en ekte (anonymisert) e-post før utrulling.
+- **Database**: `epost_bestillinger` (Innkommende, bare admin leser), `ordrer.epost_bestilling_id/epost_bekreftet_at/epost_bekreftet_av` (leses av
+  `dbToOrdre`, skrives ALDRI av `ordreToDb`/`save()`; egne kolonner fordi `portal_bestilling_id` ville sendt status til portalen). Produktene ligger i
+  `ordrer.portal_linjer` med `kilde: 'epost'` og `antall`, UTEN `rabatt_prosent` (kundens avtalte rabatt brukes).
+- **App** (`js/epost-bestilling.js`, lastes sist): merket «E-POST · IKKE BEKREFTET» (i `portalBadgeHTML`), Bekreft-banneret (alle ansatte,
+  `epost_bekreft_ordre`), og kortet «Innkommende bestillinger på e-post» på Oversikt (admin): Legg på ordren / Lag ny ordre / Avvis. «Skal på bilen» viser
+  e-postlinjene som bestilling («Bestilt på e-post», × antall), og `synkProduktliste` legger fakturalinjene (med antall, uten rabatt) når ordren er bekreftet
+  (en ordre som fantes fra før: med en gang). `sw.js` CACHE v90 på grenen.
+- **Kjente begrensninger**: lagertrekket tar oppskriften én gang uansett antall; formatet for antall på et tilvalg er ikke sett (tolkeren godtar «x 2», «2 stk»
+  og «(2)»); prisene kontrolleres mot `fiken_priser` (stemmer innkjøpsportalens priser ikke med Fiken, havner alt i Innkommende, som er trygt, men må justeres).
+- **Test**: `test/epost-bestilling.test.js` (23), `test/epost-bestilling-app.test.js` (14, mutasjonssjekket), SQL 22 kontroller mot PGlite (også
+  mutasjonssjekket). Forhåndsvist med appens CSS ved 1280 og 375 px (statisk side, ikke innlogget).

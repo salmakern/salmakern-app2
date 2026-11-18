@@ -173,6 +173,7 @@ function buildOrdreDetail() {
   </div>
   ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">Arkivert ordre — kun visning</div>`:''}
   ${portalBekreftBannerHTML(o)}
+  ${typeof epostBekreftBannerHTML === 'function' ? epostBekreftBannerHTML(o) : ''}
   <div class="card" style="padding:12px 16px;margin-bottom:0">
     <div class="row" style="flex-wrap:wrap;align-items:center;gap:8px 12px">
       <div style="flex:1 1 0">
