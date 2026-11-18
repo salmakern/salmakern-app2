@@ -56,13 +56,14 @@ Deno.serve(async (req) => {
         return await r.json() as MottattEpost
       },
       hentData: async () => {
-        const [p, f, i] = await Promise.all([
+        const [p, f, i, r] = await Promise.all([
           db.from('portal_produkter').select('portal_id, type, modell_slug, modell_navn, fiken_nummer, nummer_status, navn, app_rolle'),
-          db.from('fiken_priser').select('produktnummer, pris_kr'),
+          db.from('fiken_priser').select('produktnummer, pris_kr, navn, kategori'),
           db.from('innstillinger').select('kontakter').eq('id', 1).maybeSingle(),
+          db.from('portal_kunde_rabatt').select('kontakt_id, rabatt_standard, rabatt_ekstrautstyr, rabatt_modulsystem'),
         ])
-        if (p.error || f.error || i.error) throw new Error('les_feil')
-        return { produkter: p.data ?? [], fikenPriser: f.data ?? [], kontakter: (i.data?.kontakter as never) ?? [] }
+        if (p.error || f.error || i.error || r.error) throw new Error('les_feil')
+        return { produkter: p.data ?? [], fikenPriser: f.data ?? [], kontakter: (i.data?.kontakter as never) ?? [], rabatter: r.data ?? [] }
       },
       lagre: async (p) => {
         const { data, error } = await db.rpc('epost_bestilling_lagre', { p })

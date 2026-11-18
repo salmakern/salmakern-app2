@@ -7,7 +7,9 @@ export type Produkt = {
   portal_id: string; type: string; modell_slug: string; modell_navn: string
   fiken_nummer: string | null; nummer_status: string; navn: string; app_rolle: string | null
 }
-export type FikenPris = { produktnummer: string; pris_kr: number | null }
+export type FikenPris = { produktnummer: string; pris_kr: number | null; navn?: string | null; kategori?: string | null }
+// Forhandlerens avtalte rabatt fra portalen (portal_kunde_rabatt), samme satser som fiken-fakturer bruker på fakturaen.
+export type Rabatt = { rabatt_standard: number | null; rabatt_ekstrautstyr: number | null; rabatt_modulsystem: number | null }
 export type Kontakt = { id?: string; navn?: string; type?: string; kontaktpersoner?: Array<{ navn?: string; epost?: string }> }
 export type Linje = { produktnummer: string; navn: string; antall: number }
 export type Vurdering = { rad: number; chassis: string | null; modell_slug: string | null; linjer: Linje[]; sikker: boolean; grunner: string[]; grunnTekst: string; tilvalgTekst: string; chassisRaa: string | null }
@@ -118,14 +120,33 @@ export function tolkTilvalg(tekst: string, produkter: Produkt[]): { linjer: Linj
 }
 
 // Hele vurderingen av én rad. sikker = ingen grunner. ctx.avsender er resultatet av finnSelger (feil gir en grunn på alle rader).
-export function vurderRad(r: EpostRad, ctx: { produkter: Produkt[]; fikenPriser: FikenPris[]; avsenderFeil: string | null; autentiseringFeil: string | null }): Vurdering {
+// Prisen i e-posten er forhandlerens pris ETTER rabatt; Fiken har listeprisen UTEN rabatt (Henrik 18.11: «rabatten blir lagt til på fakturaen»).
+// Kontrollen regner derfor som fakturaen (fiken-fakturer, linjeKategori): Fiken-pris × (1 − sats), der satsen velges etter linjens kategori
+// (fiken_priser.kategori, ellers «ombygg» i Fiken-navnet): ombygging → rabatt_standard, modulsystem → rabatt_modulsystem (0 hvis tom), ellers rabatt_ekstrautstyr.
+export function linjeSats(fp: FikenPris | undefined, rabatt: Rabatt): { sats: number | null; kategori: string } {
+  const k = fp?.kategori
+  const kategori = k === 'ombygging' || k === 'modulsystem' ? k : k === 'ekstra_utstyr' ? 'ekstra' : (/ombygg/i.test(String(fp?.navn ?? '')) ? 'ombygging' : 'ekstra')
+  const sats = kategori === 'ombygging' ? rabatt.rabatt_standard : kategori === 'modulsystem' ? (rabatt.rabatt_modulsystem ?? 0) : rabatt.rabatt_ekstrautstyr
+  return { sats: typeof sats === 'number' && Number.isFinite(sats) ? sats : null, kategori }
+}
+
+export function vurderRad(r: EpostRad, ctx: { produkter: Produkt[]; fikenPriser: FikenPris[]; rabatt: Rabatt | null; avsenderFeil: string | null; autentiseringFeil: string | null }): Vurdering {
   const grunner: string[] = []
   if (ctx.avsenderFeil) grunner.push(ctx.avsenderFeil)
   if (ctx.autentiseringFeil) grunner.push(ctx.autentiseringFeil)
   if (!r.chassis) grunner.push(r.chassisRaa ? `Ikke et gyldig chassis.nr: «${r.chassisRaa}»` : 'Chassis.nr mangler')
   const modell = finnModell(r.grunnTekst, ctx.produkter)
   const linjer: Linje[] = []
-  const pris = (nr: string) => { const f = ctx.fikenPriser.find(x => String(x.produktnummer) === nr); return f && Number.isFinite(Number(f.pris_kr)) && f.pris_kr !== null ? Number(f.pris_kr) : null }
+  // Netto (etter forhandlerens rabatt) for ett produktnummer, eller en grunn til at den ikke kan regnes ut.
+  const netto = (nr: string): { pris: number; liste: number; sats: number } | { feil: string } => {
+    const f = ctx.fikenPriser.find(x => String(x.produktnummer) === nr)
+    if (!f || f.pris_kr === null || !Number.isFinite(Number(f.pris_kr))) return { feil: `Ingen Fiken-pris for ${nr} å kontrollere mot` }
+    if (!ctx.rabatt) return { feil: 'Ingen avtalt rabatt for forhandleren i portalen å regne med' }
+    const { sats, kategori } = linjeSats(f, ctx.rabatt)
+    if (sats === null) return { feil: `Forhandleren mangler rabattsats for ${kategori === 'ombygging' ? 'ombygging' : 'ekstrautstyr'} i portalen` }
+    const liste = Number(f.pris_kr)
+    return { pris: Math.round(liste * (1 - sats / 100) * 100) / 100, liste, sats }
+  }
   if (!modell) grunner.push(`Modellen kjennes ikke igjen i «${r.grunnTekst.slice(0, 120)}»`)
   else {
     const modellProdukter = ctx.produkter.filter(p => p.modell_slug === modell.slug)
@@ -136,25 +157,26 @@ export function vurderRad(r: EpostRad, ctx: { produkter: Produkt[]; fikenPriser:
       const mengde = r.mengde ?? 1
       if (!(Number.isInteger(mengde) && mengde >= 1 && mengde <= 50)) grunner.push(`Ugyldig mengde: ${r.mengde}`)
       linjer.push({ produktnummer: grunn[0].fiken_nummer as string, navn: grunn[0].navn, antall: Number.isInteger(mengde) && mengde >= 1 ? mengde : 1 })
-      const fp = pris(grunn[0].fiken_nummer as string)
+      const n = netto(grunn[0].fiken_nummer as string)
       if (r.pris === null) grunner.push('Grunnprisen mangler i e-posten')
-      else if (fp === null) grunner.push(`Ingen Fiken-pris for ${grunn[0].fiken_nummer} å kontrollere mot`)
-      else if (!likt(r.pris, fp)) grunner.push(`Grunnprisen ${kr(r.pris)} er ikke Fiken-prisen ${kr(fp)} for ${grunn[0].fiken_nummer}`)
+      else if ('feil' in n) { if (!ctx.avsenderFeil || ctx.rabatt) grunner.push(n.feil) }
+      else if (!likt(r.pris, n.pris)) grunner.push(`Grunnprisen ${kr(r.pris)} stemmer ikke: Fiken-prisen ${kr(n.liste)} for ${grunn[0].fiken_nummer} minus forhandlerens rabatt ${n.sats} % er ${kr(n.pris)}`)
     }
     const tv = tolkTilvalg(r.tilvalgTekst, modellProdukter)
     grunner.push(...tv.grunner)
     linjer.push(...tv.linjer)
-    // Summene: tilvalgene etter Fiken-pris = «Totalpris på tilvalg», og grunnbeløp + tilvalg = «Totalpris inkl. tilvalg».
+    // Summene: tilvalgene etter Fiken-pris minus forhandlerens rabatt = «Totalpris på tilvalg», og grunnbeløp + tilvalg = «Totalpris inkl. tilvalg».
     const tt = r.totalTilvalg
     if (tt === null) { if (tv.linjer.length) grunner.push('«Totalpris på tilvalg» mangler') }
     else if (tt === 0 && tv.linjer.length) grunner.push('Tilvalg står oppført, men «Totalpris på tilvalg» er 0')
     else if (tt > 0 && !tv.linjer.length && !tv.grunner.length) grunner.push(`«Totalpris på tilvalg» er ${kr(tt)}, men ingen tilvalg står oppført`)
     else if (tv.linjer.length && !tv.grunner.length) {
-      const priser = tv.linjer.map(l => pris(l.produktnummer))
-      if (priser.some(p => p === null)) grunner.push('Ingen Fiken-pris for alle tilvalgene å kontrollere mot')
+      const priser = tv.linjer.map(l => netto(l.produktnummer))
+      const feil = priser.find(p => 'feil' in p) as { feil: string } | undefined
+      if (feil) { if (!ctx.avsenderFeil || ctx.rabatt) grunner.push(feil.feil) }
       else {
-        const sum = tv.linjer.reduce((s, l, i) => s + (priser[i] as number) * l.antall, 0)
-        if (!likt(sum, tt)) grunner.push(`Summen går ikke opp: tilvalgene er ${kr(sum)} etter Fiken-pris, e-posten sier ${kr(tt)}`)
+        const sum = tv.linjer.reduce((s, l, i) => s + (priser[i] as { pris: number }).pris * l.antall, 0)
+        if (!likt(sum, tt)) grunner.push(`Summen går ikke opp: tilvalgene er ${kr(sum)} etter Fiken-pris minus forhandlerens rabatt, e-posten sier ${kr(tt)}`)
       }
     }
     const grunnBelop = r.belop ?? (r.pris !== null ? r.pris * (r.mengde ?? 1) : null)

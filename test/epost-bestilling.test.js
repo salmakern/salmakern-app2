@@ -2,7 +2,7 @@
 // ALT her er SYNTETISK: oppdiktede priser, TESTWXYZ-chassis, test@example.no-adresser. Ingen ekte e-post, kunde eller chassis.
 import { describe, it, expect } from 'vitest';
 import { htmlTilTekst, tallFraTekst, tolkEpost } from '../supabase/functions/epost-bestilling/tolk.ts';
-import { avsenderAdresse, finnSelger, finnModell, grunnRolle, navnPasser, tolkTilvalg, vurderRad } from '../supabase/functions/epost-bestilling/logikk.ts';
+import { avsenderAdresse, finnSelger, finnModell, grunnRolle, linjeSats, navnPasser, tolkTilvalg, vurderRad } from '../supabase/functions/epost-bestilling/logikk.ts';
 
 const P = (nr, navn, ekstra = {}) => ({ portal_id: 'p' + nr, type: 'tillegg', modell_slug: 'kia-ev9', modell_navn: 'KIA EV9', fiken_nummer: nr, nummer_status: 'ok', navn, app_rolle: null, ...ekstra });
 const PRODUKTER = [
@@ -12,7 +12,13 @@ const PRODUKTER = [
   P('510', 'Gummimatte heldekkende gulv'),
   P('1600', 'Standard ombygging', { type: 'variant', app_rolle: 'ombygging', modell_slug: 'mercedes-eqv', modell_navn: 'Mercedes EQV' }),
 ];
-const PRISER = [{ produktnummer: '500', pris_kr: 38920 }, { produktnummer: '501', pris_kr: 3000 }, { produktnummer: '505', pris_kr: 12000 }, { produktnummer: '510', pris_kr: 4578 }];
+// Fiken har LISTEPRISEN uten rabatt (Henrik 18.11); e-posten har forhandlerens pris etter rabatt. 500 er ombygging etter Fiken-navnet,
+// 505 er ekstrautstyr etter fiken_priser.kategori, 501/510 etter navnet. Forhandler A: 20 % på ombygging, 10 % på ekstrautstyr.
+//   500: 48 650 × 0,8 = 38 920   505: 13 000 × 0,9 = 11 700   510: 5 420 × 0,9 = 4 878   (11 700 + 4 878 = 16 578)   501: 3 000 × 0,9 = 2 700
+const PRISER = [{ produktnummer: '500', pris_kr: 48650, navn: 'Varebilombygging KIA EV9' }, { produktnummer: '501', pris_kr: 3000, navn: 'Tillegg for panorama glasstak' },
+  { produktnummer: '505', pris_kr: 13000, navn: 'Heldekkende gulv', kategori: 'ekstra_utstyr' }, { produktnummer: '510', pris_kr: 5420, navn: 'Gummimatte' }];
+const RABATT = { rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: 0 };
+const RABATTER = [{ kontakt_id: 'k_test_a', ...RABATT }];
 const KONTAKTER = [
   { id: 'k_test_a', navn: 'TEST Forhandler A AS', type: 'Forhandler', kontaktpersoner: [{ navn: 'TEST Selger', epost: 'selger@example.no' }] },
   { id: 'k_test_b', navn: 'TEST Forhandler B AS', type: 'Forhandler', kontaktpersoner: [{ navn: 'TEST Dobbel', epost: 'dobbel@example.no' }] },
@@ -36,8 +42,8 @@ const HTML = `<html><head><style>td{color:red}</style></head><body><p>Fra: Innkj
 <tr><td></td><td colspan="5">Totalpris på tilvalg: 0</td></tr>
 </table></body></html>`;
 
-const ctx = (over = {}) => ({ produkter: PRODUKTER, fikenPriser: PRISER, avsenderFeil: null, autentiseringFeil: null, ...over });
-const rad = (over = {}) => ({ rad: 1, grunnTekst: 'KIA EV9 – ombygning til varebil klasse 2', mengde: 1, pris: 38920, belop: 38920, chassis: 'TESTWXYZ000000051', chassisRaa: null, tilvalgTekst: '501 - Tillegg for panorama glasstak', totalTilvalg: 3000, totalInkl: 41920, ...over });
+const ctx = (over = {}) => ({ produkter: PRODUKTER, fikenPriser: PRISER, rabatt: RABATT, avsenderFeil: null, autentiseringFeil: null, ...over });
+const rad = (over = {}) => ({ rad: 1, grunnTekst: 'KIA EV9 – ombygning til varebil klasse 2', mengde: 1, pris: 38920, belop: 38920, chassis: 'TESTWXYZ000000051', chassisRaa: null, tilvalgTekst: '501 - Tillegg for panorama glasstak', totalTilvalg: 2700, totalInkl: 41620, ...over });
 
 describe('tolk: tall og HTML', () => {
   it('norske beløp', () => {
@@ -151,12 +157,26 @@ describe('vurderRad: rett på ordren bare ved sikkert treff', () => {
     stopper({ chassis: null }, {}, /Chassis.nr mangler/);
     stopper({ grunnTekst: 'Ukjent modell ombygning' }, {}, /Modellen kjennes ikke igjen/);
     stopper({ grunnTekst: 'KIA EV9 personbil' }, {}, /Fant ikke personbil/);
-    stopper({ pris: 40000, belop: 40000, totalInkl: 43000 }, {}, /ikke Fiken-prisen/);
-    stopper({ totalTilvalg: 4200, totalInkl: 43120 }, {}, /Summen går ikke opp: tilvalgene er 3\s000/);
+    stopper({ pris: 48650, belop: 48650, totalInkl: 51350 }, {}, /Grunnprisen 48\s650 kr stemmer ikke: Fiken-prisen 48\s650 kr for 500 minus forhandlerens rabatt 20 % er 38\s920 kr/);
+    stopper({}, { rabatt: null }, /Ingen avtalt rabatt for forhandleren/);
+    stopper({}, { rabatt: { ...RABATT, rabatt_standard: null } }, /mangler rabattsats for ombygging/);
+    stopper({}, { rabatt: { ...RABATT, rabatt_ekstrautstyr: null } }, /mangler rabattsats for ekstrautstyr/);
+    stopper({ totalTilvalg: 3000, totalInkl: 41920 }, {}, /Summen går ikke opp: tilvalgene er 2\s700 kr etter Fiken-pris minus forhandlerens rabatt/);
     stopper({ totalInkl: 50000 }, {}, /Summen går ikke opp/);
     stopper({ tilvalgTekst: '599 Takboks' }, {}, /ikke kjennes igjen/);
-    stopper({ tilvalgTekst: '', totalTilvalg: 3000 }, {}, /ingen tilvalg står oppført/);
-    stopper({}, { fikenPriser: PRISER.filter((p) => p.produktnummer !== '501') }, /Fiken-pris for alle tilvalgene/);
+    stopper({ tilvalgTekst: '', totalTilvalg: 2700 }, {}, /ingen tilvalg står oppført/);
+    stopper({}, { fikenPriser: PRISER.filter((p) => p.produktnummer !== '501') }, /Ingen Fiken-pris for 501/);
+  });
+  it('rabatten velges etter linjens kategori, som på fakturaen', () => {
+    expect(linjeSats({ navn: 'Varebilombygging KIA EV9' }, RABATT)).toEqual({ sats: 20, kategori: 'ombygging' });
+    expect(linjeSats({ navn: 'Gummimatte' }, RABATT)).toEqual({ sats: 10, kategori: 'ekstra' });
+    expect(linjeSats({ navn: 'Gummimatte standard ombygging', kategori: 'ekstra_utstyr' }, RABATT)).toEqual({ sats: 10, kategori: 'ekstra' });
+    expect(linjeSats({ navn: 'Takluke', kategori: 'ombygging' }, RABATT)).toEqual({ sats: 20, kategori: 'ombygging' });
+    expect(linjeSats({ navn: 'Modul', kategori: 'modulsystem' }, { ...RABATT, rabatt_modulsystem: null })).toEqual({ sats: 0, kategori: 'modulsystem' });
+  });
+  it('ukjent avsender: ingen ekstra grunn om manglende rabatt (avsenderen er grunnen)', () => {
+    const v = vurderRad(rad(), ctx({ avsenderFeil: 'Ukjent avsender: x', rabatt: null }));
+    expect(v.grunner).toEqual(['Ukjent avsender: x']);
     stopper({ mengde: 0 }, {}, /Ugyldig mengde/);
   });
 });
@@ -167,7 +187,7 @@ describe('flyt: hele e-posten fra Resend til lagring (falske avhengigheter)', as
     const lagret = [];
     const r = await behandleEpost('test-email-id-1', {
       hentEpost: async () => epost,
-      hentData: async () => ({ produkter: PRODUKTER, fikenPriser: PRISER, kontakter: KONTAKTER }),
+      hentData: async () => ({ produkter: PRODUKTER, fikenPriser: PRISER, kontakter: KONTAKTER, rabatter: RABATTER }),
       lagre: async (p) => { lagret.push(p); return {}; },
     });
     return { r, p: lagret[0] };
@@ -210,7 +230,7 @@ describe('flyt: hele e-posten fra Resend til lagring (falske avhengigheter)', as
   });
   it('ugyldig id eller e-post som ikke finnes: ingenting lagres', async () => {
     const lagret = [];
-    const dep = { hentEpost: async () => null, hentData: async () => ({ produkter: [], fikenPriser: [], kontakter: [] }), lagre: async (p) => lagret.push(p) };
+    const dep = { hentEpost: async () => null, hentData: async () => ({ produkter: [], fikenPriser: [], kontakter: [], rabatter: [] }), lagre: async (p) => lagret.push(p) };
     expect((await behandleEpost('ugyldig id!', dep)).utfall).toBe('ugyldig_id');
     expect((await behandleEpost('test-email-id-2', dep)).utfall).toBe('fant_ikke_epost');
     expect(lagret).toEqual([]);
