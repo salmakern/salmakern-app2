@@ -1,13 +1,13 @@
 // Trinn 5: hele flyten for én mottatt e-post, uten Deno og uten nettverk (avhengighetene sendes inn), testet i test/epost-bestilling.test.js.
 // index.ts gjør bare signaturkontroll av Resend-varselet og kobler inn de ekte avhengighetene.
 import { htmlTilTekst, tolkEpost } from './tolk.ts'
-import { avsenderAdresse, finnSelger, vurderRad, type FikenPris, type Kontakt, type Produkt } from './logikk.ts'
+import { avsenderAdresse, finnSelger, vurderRad, type FikenPris, type Kontakt, type Produkt, type Rabatt } from './logikk.ts'
 
 export type Autentisering = { spf?: string; dkim?: string; dmarc?: string } | null
 export type MottattEpost = { from?: string | null; to?: unknown; html?: string | null; text?: string | null; headers?: unknown; authentication?: Autentisering }
 export type Avhengigheter = {
   hentEpost: (id: string) => Promise<MottattEpost | null>
-  hentData: () => Promise<{ produkter: Produkt[]; fikenPriser: FikenPris[]; kontakter: Kontakt[] }>
+  hentData: () => Promise<{ produkter: Produkt[]; fikenPriser: FikenPris[]; kontakter: Kontakt[]; rabatter: Array<Rabatt & { kontakt_id: string }> }>
   lagre: (p: Record<string, unknown>) => Promise<unknown>
 }
 
@@ -53,10 +53,11 @@ export async function behandleEpost(emailId: string, dep: Avhengigheter): Promis
   const selger = finnSelger(avsender, data.kontakter)
   const avsenderFeil = 'feil' in selger ? selger.feil : null
   const authFeil = autentiseringFeil(e.headers, e.authentication)
+  const rabatt = 'feil' in selger ? null : ((data.rabatter || []).find(x => x.kontakt_id === selger.kontakt_id) ?? null)
   // HTML-en har tabellen; tekstversjonen er reserve.
   const tekst = e.html ? htmlTilTekst(e.html) : String(e.text ?? '')
   const { rader, feil } = tolkEpost(tekst)
-  const vurderinger = rader.map(r => vurderRad(r, { produkter: data.produkter, fikenPriser: data.fikenPriser, avsenderFeil, autentiseringFeil: authFeil }))
+  const vurderinger = rader.map(r => vurderRad(r, { produkter: data.produkter, fikenPriser: data.fikenPriser, rabatt, avsenderFeil, autentiseringFeil: authFeil }))
   const ut = vurderinger.length ? vurderinger.map(v => ({
     rad: v.rad, chassis: v.chassis, chassis_raa: v.chassisRaa, modell_slug: v.modell_slug, grunn_tekst: v.grunnTekst, tilvalg_tekst: v.tilvalgTekst,
     linjer: v.linjer, sikker: v.sikker, grunner: v.grunner,
