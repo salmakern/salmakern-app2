@@ -155,6 +155,26 @@ describe('Innkommende (Oversikt, admin)', () => {
     sandbox.renderInnkommendeEpost(false);
     expect(kort().style.display).toBe('none');
   });
+  it('knappen på Ordre-siden (flyttet fra Oversikt 18.11): tall-badge for admin, skjult for andre', () => {
+    const btn = () => sandbox.document.getElementById('innkommendeEpostBtn');
+    const badge = () => sandbox.document.getElementById('innkommendeEpostBadge');
+    S.epostInnkommende = [rad(), rad({ id: 'epb_test_i2' })];
+    sandbox.renderInnkommendeEpost(false);
+    expect(btn().style.display).toBe('inline-flex');
+    expect(badge().style.display).toBe('flex');
+    expect(String(badge().textContent)).toBe('2');
+    S.epostInnkommende = [];
+    sandbox.renderInnkommendeEpost(false);
+    expect(btn().style.display).toBe('inline-flex');
+    expect(badge().style.display).toBe('none');
+    app.settMe({ id: 990002, navn: 'TEST Ansatt', rolle: 'ansatt' });
+    S.epostInnkommende = [rad()];
+    sandbox.renderInnkommendeEpost(false);
+    expect(btn().style.display).toBe('none');
+  });
+  it('apneInnkommendeEpostModal kaller openModal uten å feile (samme mønster som apneTilGodkjenningModal)', () => {
+    expect(() => sandbox.apneInnkommendeEpostModal()).not.toThrow();
+  });
   it('Legg på: bekreftelse, RPC og raden forsvinner; avbrutt gjør ingenting', async () => {
     ordre({ epost_bestilling_id: null });
     S.epostInnkommende = [rad()];

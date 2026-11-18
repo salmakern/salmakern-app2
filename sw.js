@@ -98,7 +98,8 @@
 // v90 - «Hent selgere fra portalen» viser navn og grunn for forhandlere som trenger et manuelt blikk
 // v91 - fiks: S.nextId forgiftet av timer-ID-stripping, blokkerte ny ansatt-oppretting
 // v92 - trinn 5: bestilling på e-post (merke og Bekreft på ordren, «Innkommende» på Oversikt, antall i «Skal på bilen»)
-const CACHE = 'salmakern-v92';
+// v93 - Oversikt: «Klar til fakturering»-kortet fjernet, «Innkommende» flyttet til en knapp på Ordre-siden, «På jobb nå»/«Stemplet inn nå» side om side
+const CACHE = 'salmakern-v93';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

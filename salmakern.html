@@ -460,28 +460,20 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div id="digitalKlokke" style="line-height:1;font-variant-numeric:tabular-nums">00:00:00</div>
         <div id="digitalKlokkeDato" style="margin-top:8px"></div>
       </div>
-      <div class="card" id="paaJobbNaKort" style="margin-bottom:12px;display:none">
-        <div class="h">På jobb nå</div>
-        <div id="paaJobbNaListe" style="margin-top:8px"></div>
-      </div>
-      <div class="card" id="stempletInnNaKort" style="margin-bottom:12px;display:none">
-        <div class="h">Stemplet inn nå <span class="kort-admin-merke">ADMIN</span></div>
-        <div id="stempletInnNaListe" style="margin-top:8px"></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="card" id="paaJobbNaKort" style="margin-bottom:0;flex:1;min-width:260px;display:none">
+          <div class="h">På jobb nå</div>
+          <div id="paaJobbNaListe" style="margin-top:8px"></div>
+        </div>
+        <div class="card" id="stempletInnNaKort" style="margin-bottom:0;flex:1;min-width:260px;display:none">
+          <div class="h">Stemplet inn nå <span class="kort-admin-merke">ADMIN</span></div>
+          <div id="stempletInnNaListe" style="margin-top:8px"></div>
+        </div>
       </div>
       <div class="card" id="langeKlokkerKort" style="margin-bottom:12px;display:none;border-color:rgba(251,191,36,.4)">
         <div class="h">Ordreklokker som har gått lenge <span class="kort-admin-merke">ADMIN</span></div>
         <div class="small muted" style="margin-top:4px">Ombygging-klokker som har stått i gang i over 10 timer, trolig glemt. De stoppes av seg selv etter 14 timer.</div>
         <div id="langeKlokkerListe" style="margin-top:8px"></div>
-      </div>
-      <div class="card" id="innkommendeEpostKort" style="margin-bottom:12px;display:none;border-color:rgba(251,191,36,.4)">
-        <div class="h">Innkommende bestillinger på e-post <span class="kort-admin-merke">ADMIN</span></div>
-        <div class="small muted" style="margin-top:4px">Bestillinger appen ikke var sikker på. Se over, og legg dem på ordren, lag en ny ordre eller avvis.</div>
-        <div id="innkommendeEpostListe" style="margin-top:8px;display:grid;gap:8px"></div>
-      </div>
-      <div class="card" id="klarTilFaktureringKort" style="margin-bottom:12px;display:none">
-        <div class="h">Klar til fakturering <span class="kort-admin-merke">ADMIN</span></div>
-        <div class="small muted" style="margin-top:4px">Antall biler som venter på faktura. Hele lista og «Lag kladd i Fiken» står på siden Fakturering.</div>
-        <div id="klarTilFaktureringListe" style="margin-top:8px"></div>
       </div>
       <div class="grid g2" style="margin-bottom:12px">
         <div class="card" id="merMoterKort" style="margin-bottom:0;display:none">
@@ -550,6 +542,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn" id="tilGodkjBtn" style="display:none;position:relative" onclick="apneTilGodkjenningModal()">
                 ✅ Til godkjenning<span class="knapp-tall-badge" id="tilGodkjBadge" style="display:none">0</span>
+              </button>
+              <button class="btn" id="innkommendeEpostBtn" style="display:none;position:relative" onclick="apneInnkommendeEpostModal()">
+                📧 Innkommende<span class="knapp-tall-badge" id="innkommendeEpostBadge" style="display:none">0</span>
               </button>
               <button class="btn" onclick="apneSkannModal()" title="Skann QR-koden på en ordre-lapp for å åpne ordren">📷 Skann</button>
               <button class="btn" onclick="apneNyLeveranseModal()" title="En ordre uten bil, for å sende av gårde løsninger">+ Ny leveranse</button>
@@ -1293,6 +1288,17 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <div class="muted small" style="margin-top:4px">Ordrer som har bestått tvangsflyt og venter på at en godkjenner lukker dem.</div>
     <div id="tilGodkjenningInnhold" style="margin-top:12px;max-height:65vh;overflow-y:auto"></div>
     <button class="btn" style="margin-top:14px;width:100%" onclick="closeModal('tilGodkjenningModal')">Lukk</button>
+  </div>
+</div>
+
+<div class="modal" id="innkommendeEpostModal">
+  <div class="modal-box">
+    <div class="h">Innkommende bestillinger på e-post <span class="kort-admin-merke">ADMIN</span></div>
+    <div class="muted small" style="margin-top:4px">Bestillinger appen ikke var sikker på. Se over, og legg dem på ordren, lag en ny ordre eller avvis.</div>
+    <div id="innkommendeEpostKort" style="margin-top:12px;max-height:65vh;overflow-y:auto">
+      <div id="innkommendeEpostListe" style="display:grid;gap:8px"></div>
+    </div>
+    <button class="btn" style="margin-top:14px;width:100%" onclick="closeModal('innkommendeEpostModal')">Lukk</button>
   </div>
 </div>
 
