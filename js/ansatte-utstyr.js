@@ -1346,6 +1346,8 @@ function slettUtstyrMalIdx(i) {
 async function autoVelgUtstyrMal(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   if (o.utstyrMalNavn) return;
+  // «Kun ekstrautstyr» (Henrik 2026-11-17): ingen ombygging, så ingen automatisk ombyggings-utstyrsmal (den kan legge til fakturalinjer). Kan velges manuelt.
+  if (o.kunEkstrautstyr === true) return;
   const mm = merkeModell(o).toLowerCase(); if (!mm) return;
   const mal = (S.utstyrMaler||[]).find(m => m.biltype && (mm.includes(m.biltype.toLowerCase()) || m.biltype.toLowerCase().includes(mm)));
   if (!mal) return;

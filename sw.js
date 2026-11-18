@@ -93,7 +93,9 @@
 // bruker filens faste adresse som nøkkel og lagrer bare ekte 200-svar
 // v83 - en full innlasting overskriver ikke lenger en ordre som nettopp er endret på enheten (dokumenter som
 // «forsvant»); Sentry er av på localhost
-const CACHE = 'salmakern-v88';
+// v88 - «Kun ekstrautstyr (ingen ombygging)» på bil-ordrer: ingen tvangsflyt/utstyrsmal, bare Ekstra utstyr i Varer fra lager, ikke i Admin-ark
+// v89 - trinn 4: egen side «Fakturering» (admin) og kortere Oversikt-kort «Klar til fakturering»
+const CACHE = 'salmakern-v89';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

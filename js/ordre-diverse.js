@@ -821,6 +821,8 @@ function opprettOrdre() {
   ny.farge   = document.getElementById('n_farge').value.trim();
   ny.chassis = chassis;
   ny._localAt = Date.now();
+  // «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17): ordreToDb skriver aldri kolonnen, så den legges til i insert-en under (bare når den er på).
+  ny.kunEkstrautstyr = !!document.getElementById('n_kunEkstrautstyr')?.checked;
   // Samme oppslag som autoFyllForhandlerNr()/autoFyllForhandlerOrgnr() bruker på
   // detaljsiden - uten dette sto Forhandler.nr/Org.nr alltid tomt på en fersk ordre inntil
   // Forhandler-feltet ble rørt på nytt.
@@ -836,8 +838,8 @@ function opprettOrdre() {
   const fullmakt = finnForhandlerFullmakt(ny.kunde);
   if (fullmakt) ny.dokumenter = [{ navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
   S.ordrer.push(ny);
-  if (db) db.from('ordrer').insert(ordreToDb(ny)).then(r=>{
-    if (r.error) { console.error(r.error.message); return; }
+  if (db) db.from('ordrer').insert({ ...ordreToDb(ny), ...(ny.kunEkstrautstyr ? { kun_ekstrautstyr: true } : {}) }).then(r=>{
+    if (r.error) { console.error(r.error.message); if (ny.kunEkstrautstyr) visToast('Kunne ikke opprette ordren: ' + r.error.message); return; }
     if (ny.dokumenter && ny.dokumenter.length) db.from('ordrer').update({dokumenter:ny.dokumenter}).eq('id', id)
       .then(r2=>{if(r2.error) console.error('Fullmakt-auto-vedlegg feilet:', r2.error.message);});
   });
@@ -857,9 +859,11 @@ function opprettOrdre() {
   if (nChassisTel) nChassisTel.textContent = '0/17';
   const statusFelt = document.getElementById('n_status');
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
+  const kunFelt = document.getElementById('n_kunEkstrautstyr');
+  if (kunFelt) kunFelt.checked = false;
   oppdaterNyOrdreStatusFelt();
   openOrdre(id);
-  autoVelgUtstyrMal(id);
+  autoVelgUtstyrMal(id); // gjør ingenting for en «kun ekstrautstyr»-ordre (se autoVelgUtstyrMal)
 }
 
 // Viser/skjuler Ankomstdato-feltet i "Ny ordre"-skjemaet basert på valgt status - feltet
@@ -880,8 +884,8 @@ function openFlytt(id) {
 }
 async function bekreftFlytt() {
   const o=S.ordrer.find(x=>x.id===flyttOrdreId); if(!o) return;
-  if (erLeveranse(o)) {
-    // Leveranse: bare kalendertiden settes (målrettet skriving). Time på biltilsynet/Admin-ark gjelder biler, og chassis.nr kan være samme som en bil.
+  if (kalenderUtenAdminArk(o)) {
+    // Leveranse eller «kun ekstrautstyr»: bare kalendertiden settes (målrettet skriving). Time på biltilsynet/Admin-ark gjelder biler som bygges om, og chassis.nr kan være samme som en bil.
     const dato = document.getElementById('fl_dato').value, tid = document.getElementById('fl_tid').value || '09:00';
     const ugyldig = leveranseKalenderUgyldig(dato, tid);
     if (ugyldig) { visToast(ugyldig); return; }

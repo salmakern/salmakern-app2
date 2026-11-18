@@ -814,6 +814,15 @@ sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bil
   ordre sender et ekte push-varsel (triggeren `ordre-push`), så ankomst-hooken i `endreStatus` er bare dekket av enhetstest. Alle TEST-rader
   slettet etterpå (ordre, oppskrift, vare, ansatt, PIN).
 
+## «Kun ekstrautstyr (ingen ombygging)» på bil-ordrer (2026-11-17, gren `henger/kun-ekstrautstyr`, IKKE utrullet før Henriks ja)
+
+Henrik: en kunde skal bare ha montert litt ekstrautstyr (gummimatte, kasse) på en bil som ble bygget om for lenge siden. Ingen ny ordretype og ikke en leveranse: en vanlig bil-ordre med avkrysningen «Kun ekstrautstyr (ingen ombygging)» («+ Ny ordre», og øverst i Ombygging-kortet i ordredetaljen). `erKunEkstrautstyr(o)` (core.js) er veiviseren.
+- **Database** (`20261118110000_kun_ekstrautstyr.sql`): `ordrer.kun_ekstrautstyr boolean not null default false`, og `portal_import_fakta` (står ikke i `aktive`; `utvalgte` uendret) og `portal_timer_fakta` (ingen rad) utelater slike ordrer. Kontraktene (versjon 1) er uendret; funksjonene er ellers byte-like kopier.
+- **Skrives aldri av `ordreToDb`/`save()`**: bare i insert-en ved opprettelse (når den er på) og av `settKunEkstrautstyr()` (målrettet update, tilbakerulling ved feil, logglinje etter vellykket skriving). Kan ikke slås på mens en Ombygging-boks er huket av. Ny klient mot gammel database: alt virker unntatt avkrysningen (tydelig feil).
+- **Oppførsel**: ingen tvangsflyt (`tvangsflyt()` gir `[]`, boksen sier «Ingen krav», godkjenning som før), ingen automatisk utstyrsmal (`autoVelgUtstyrMal`), «Skal på bilen» som andre nye ordrer (Henriks valg 17.11; porten `PRODUKTLISTE_FRA` gjelder likt), men `beregnSkalPaaBilen` lager ALDRI en ombyggingsrad: boksene ignoreres, og en bestilt linje med `app_rolle` (ombygging/personbil/Lafinto) tas ikke med (varsel i stedet). Sjekkliste-treff, «+ Legg til utstyr», «Rett» og lagertrekk ved ankomst virker som ellers. Slås avkrysningen av/på, kjøres `synkProduktliste` med `tillatAngre`. En ordre fra FØR porten som merkes kun ekstrautstyr bruker fortsatt «Varer fra lager», da med bare Ekstra utstyr (Ombygging vises bare hvis en ombygging-oppskrift alt er trukket, så trekket kan angres). Ikke i Admin-ark (`adminArkByggRader`, og ingen chassis-kobling fra Admin-ark eller «ukoblede rader» treffer slike ordrer). Kalenderen (dra/Flytt/Fjern) skrives målrettet som for en leveranse (`kalenderUtenAdminArk`, `leveranseSettKalender`), og `save()` sender ikke kalenderen: ellers ville bil-veien skrevet Time bekreftet i Admin-ark på bilens chassis. Ordre-lapp som vanlig. Merket «KUN EKSTRAUTSTYR» står på kortet (i Ordre-lista der tvangsflyt-stolpen ellers står) og i detaljens topp.
+- **Test**: `test/kun-ekstrautstyr.test.js` (28, full app-harness; mutasjonssjekket), egen describe i `test/skal-paa-bilen.test.js` (5), `supabase/tester/kun_ekstrautstyr_TEST_body.sql` (15, kjørt mot PGlite 17.11, ikke mot den ekte databasen; de eksisterende SQL-testene for import (65) og timer (76) er også grønne mot den nye migrasjonen i PGlite). `sw.js` CACHE v88. Sett med appens CSS i en statisk forhåndsvisning, ikke i en innlogget nettleser.
+- **Utrulling**: migrasjonen FØRST, så push av klienten. QA punkt 48.
+
 ## Én produktliste, trinn 4: siden «Fakturering» (2026-11-17, bygget, IKKE utrullet)
 
 Henriks valg: «begge» (Fakturering-kortet i ordren som før, pluss en egen side), «Lag kladd» som knapp på siden, og alternativ A på Oversikt.
@@ -828,5 +837,5 @@ Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
   (`faktureringOversiktLenkeHTML`); lista med hver ordre er flyttet til siden.
 - **`fakturaSjekk`** gir nå i tillegg gult for ordrer med «Skal på bilen» (trinn 3): «Står på bilen, men ikke på fakturaen» og «På fakturaen, men
   ikke på «Skal på bilen»». Bare numre modellen har i portalen sammenlignes (drivstoff, frakt, hengerfeste o.l. telles ikke). Gamle ordrer uendret.
-- `sw.js` CACHE v88. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. **Ikke testet:** en ekte kladd fra siden
+- `sw.js` CACHE v89. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. **Ikke testet:** en ekte kladd fra siden
   (Fiken-kladder kan ikke slettes) og siden i den innloggede, utrullede appen.

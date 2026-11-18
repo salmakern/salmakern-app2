@@ -1503,8 +1503,12 @@ function renderOrdreLagerbruk() {
   };
 
   const modellTekst = merkeModell(o);
-  const html = seksjonHTML('ombygging', 'Ombygging') + seksjonHTML('ekstra_utstyr', 'Ekstra utstyr');
-  el.innerHTML = html || `<div class="muted small">${modellTekst ? `Ingen oppskrift funnet for "${esc(modellTekst)}". Lag en under Lager-fanen.` : 'Fyll inn Merke og Modell på ordren for å se aktuelle oppskrifter.'}</div>`;
+  // «Kun ekstrautstyr» (Henrik 2026-11-17) på en ordre fra før «Skal på bilen» (nye ordrer får «Skal på bilen» uten ombyggingsrad): bare «Ekstra utstyr», så ingen trekker en hel ombygging fra lageret ved et uhell. Er en ombygging-oppskrift
+  // likevel allerede trukket på ordren (huket av før avkrysningen ble slått på), vises Ombygging fortsatt, så trekket kan angres.
+  const kun = o.kunEkstrautstyr === true; // inline (ikke erKunEkstrautstyr): funksjonen lastes alene i enkelte tester
+  const visOmbygging = !kun || (S.lagerOppskrifter||[]).some(r => (r.type||'ombygging')==='ombygging' && oppskriftMatcherOrdre(r, o) && erOppskriftHuket(r));
+  const html = (visOmbygging ? seksjonHTML('ombygging', 'Ombygging') : '') + seksjonHTML('ekstra_utstyr', 'Ekstra utstyr');
+  el.innerHTML = html || `<div class="muted small">${modellTekst ? `Ingen ${kun ? 'ekstrautstyr-oppskrift' : 'oppskrift'} funnet for "${esc(modellTekst)}". Lag en under Lager-fanen.` : 'Fyll inn Merke og Modell på ordren for å se aktuelle oppskrifter.'}</div>`;
   // Gjenopprett åpen/lukket-tilstand - innerHTML over lager helt nye DOM-elementer, så
   // .felt-dropdown sin CSS-default (display:none) ville ellers lukket en åpen liste hver
   // gang man haker av ÉN vare (toggleOppskriftPaaOrdre kaller denne funksjonen på nytt).

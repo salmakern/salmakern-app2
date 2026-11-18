@@ -252,7 +252,7 @@ function adminArkFinnKontaktEpost(navn, type) {
 // fra kilden (ordre hvis raden tilhører en ekte ordre, ellers admin_ark-raden) i stedet
 // for å stole på en Tabulator-cellesnapshot tatt ved forrige rendering.
 function adminArkHentRadData(chassisNr) {
-  const o = S.ordrer.find(x => !erLeveranse(x) && samsvarerChassis(x.chassis, chassisNr));
+  const o = S.ordrer.find(x => !erLeveranse(x) && !erKunEkstrautstyr(x) && samsvarerChassis(x.chassis, chassisNr));
   if (o) return { forhandler: o.kunde||'', kontaktperson: o.eier||'', fraktselskap: adminArkFinnRadForVisning(chassisNr)?.fraktselskap||'', chassisNr };
   const ark = adminArkFinnRadForVisning(chassisNr);
   return { forhandler: ark?.forhandler||'', kontaktperson: ark?.kontaktperson||'', fraktselskap: ark?.fraktselskap||'', chassisNr };
@@ -284,7 +284,7 @@ async function adminArkKallFraktEpost(payload) {
 // sorterOrdre() i core.js), UAVHENGIG av admin_ark-raden sin egen bestiltFrakt-kolonne som
 // fortsatt oppdateres via adminArkLagreFelter() som før (bedt om av Henrik 2026-09-30).
 async function adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato, ikkeVarsleKontakt) {
-  const o = S.ordrer.find(x => !erLeveranse(x) && samsvarerChassis(x.chassis, chassisNr)); if (!o) return;
+  const o = S.ordrer.find(x => !erLeveranse(x) && !erKunEkstrautstyr(x) && samsvarerChassis(x.chassis, chassisNr)); if (!o) return;
   o.bestiltFrakt = true;
   o.henteKlarDato = dato || '';
   const tekst = (dato ? `Bestilt frakt, henteklar ${fmtDatoKort(dato)}` : 'Bestilt frakt') + (ikkeVarsleKontakt ? ' (ikke varslet kontaktperson)' : '');
@@ -403,7 +403,7 @@ async function adminArkSendFraktBestilling() {
     }
     closeModal('klarForHenting');
     const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
-    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&samsvarerChassis(x.chassis,chassisNr)) };
+    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&!erKunEkstrautstyr(x)&&samsvarerChassis(x.chassis,chassisNr)) };
     await adminArkLagreFelter(radData, { bestiltFrakt: true });
     if (tabRad) tabRad.update({ bestiltFrakt: true });
     await adminArkSpeilBestiltFraktPaaOrdre(chassisNr, dato, ikkeVarsleKontakt);
@@ -433,7 +433,7 @@ async function adminArkVarsleHentet(chassisNr) {
     await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, fraktselskap: erLeveringAvOss ? '' : fraktselskapVisningsnavn(rad.fraktselskap||''), avsenderNavn: me?.navn });
     visToast('Varsel sendt til ' + rad.kontaktperson, 'ok');
     const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
-    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&samsvarerChassis(x.chassis,chassisNr)) };
+    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&!erKunEkstrautstyr(x)&&samsvarerChassis(x.chassis,chassisNr)) };
     await adminArkLagreFelter(radData, { hentetVarslet: true });
     if (tabRad) tabRad.update({ hentetVarslet: true });
   } catch (e) {
@@ -674,6 +674,7 @@ function adminArkNesteRekkefolge() {
 function adminArkByggRader() {
   const ordre = (S.ordrer||[]).filter(o => {
     if (erLeveranse(o)) return false; // Admin-arket gjelder biler (chassis), ikke leveranser
+    if (erKunEkstrautstyr(o)) return false; // «kun ekstrautstyr» (ingen ombygging, Henrik 2026-11-17) står ikke i Admin-ark
     const aar = o.ankomstdato ? Number(String(o.ankomstdato).slice(0,4)) : null;
     return aar === adminArkAar;
   });
@@ -876,7 +877,7 @@ async function adminArkLagreFelter(rad, endringer) {
   // tilsvarende kalenderplasseringen igjen (ellers blir det stående en "spøkelses-time" i
   // oversikten som ikke lenger stemmer med noe bekreftet).
   if ('timeBekreftet' in endringer || 'timeBekreftetTid' in endringer) {
-    const o = S.ordrer.find(x => !erLeveranse(x) && samsvarerChassis(x.chassis, ark.chassisNr));
+    const o = S.ordrer.find(x => !erLeveranse(x) && !erKunEkstrautstyr(x) && samsvarerChassis(x.chassis, ark.chassisNr));
     if (o) {
       o.tidBiltilsynet = ark.timeBekreftet||'';
       o.tidBiltilsynetTid = ark.timeBekreftetTid||'';
@@ -1658,7 +1659,7 @@ function renderAdminArk(scrollTilBunn) {
       // cellEdited). rad.utstyr ville da vært identisk med nyVerdi, og aldri funnet den
       // forrige linja som skal fjernes.
       const gammelVerdi = (cell.getOldValue()||'').trim();
-      const o = S.ordrer.find(x => !erLeveranse(x) && samsvarerChassis(x.chassis, rad.chassisNr));
+      const o = S.ordrer.find(x => !erLeveranse(x) && !erKunEkstrautstyr(x) && samsvarerChassis(x.chassis, rad.chassisNr));
       if (o) adminArkSyncUtstyr(o, gammelVerdi, nyVerdi);
       adminArkLagreFelter(rad, { utstyr: nyVerdi });
       return;
