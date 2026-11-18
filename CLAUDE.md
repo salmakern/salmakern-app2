@@ -823,7 +823,7 @@ Henrik: en kunde skal bare ha montert litt ekstrautstyr (gummimatte, kasse) på 
 - **Test**: `test/kun-ekstrautstyr.test.js` (28, full app-harness; mutasjonssjekket), egen describe i `test/skal-paa-bilen.test.js` (5), `supabase/tester/kun_ekstrautstyr_TEST_body.sql` (15, kjørt mot PGlite 17.11, ikke mot den ekte databasen; de eksisterende SQL-testene for import (65) og timer (76) er også grønne mot den nye migrasjonen i PGlite). `sw.js` CACHE v88. Sett med appens CSS i en statisk forhåndsvisning, ikke i en innlogget nettleser.
 - **Utrulling**: migrasjonen FØRST, så push av klienten. QA punkt 48.
 
-## Én produktliste, trinn 4: siden «Fakturering» (2026-11-17, bygget, IKKE utrullet)
+## Én produktliste, trinn 4: siden «Fakturering» (2026-11-17, UTRULLET 2026-11-18 med Henriks ja, commit 090f524)
 
 Henriks valg: «begge» (Fakturering-kortet i ordren som før, pluss en egen side), «Lag kladd» som knapp på siden, og alternativ A på Oversikt.
 Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
@@ -837,5 +837,5 @@ Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
   (`faktureringOversiktLenkeHTML`); lista med hver ordre er flyttet til siden.
 - **`fakturaSjekk`** gir nå i tillegg gult for ordrer med «Skal på bilen» (trinn 3): «Står på bilen, men ikke på fakturaen» og «På fakturaen, men
   ikke på «Skal på bilen»». Bare numre modellen har i portalen sammenlignes (drivstoff, frakt, hengerfeste o.l. telles ikke). Gamle ordrer uendret.
-- `sw.js` CACHE v89. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. **Ikke testet:** en ekte kladd fra siden
-  (Fiken-kladder kan ikke slettes) og siden i den innloggede, utrullede appen.
+- `sw.js` CACHE v89. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. Kontrollert etter utrulling: salmaker.as serverer v89 og `js/fakturering.js`, fanen og funksjonene finnes, ingen konsollfeil.
+  **Ikke testet:** en ekte kladd fra siden (Fiken-kladder kan ikke slettes) og siden med data i en innlogget økt.
