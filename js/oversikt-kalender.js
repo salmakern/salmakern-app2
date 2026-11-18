@@ -187,7 +187,6 @@ function renderOversikt(q) {
   renderMoterListe();
   renderStempletInnNa();
   renderLangeOrdreklokker();
-  renderKlarTilFakturering();
   if (typeof renderInnkommendeEpost === 'function') renderInnkommendeEpost();
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
@@ -362,22 +361,6 @@ function renderLangeOrdreklokker() {
       </div>`;
     }).join('');
   } catch (e) { console.error('renderLangeOrdreklokker feilet:', e && e.message); kort.style.display = 'none'; }
-}
-
-// "Klar til fakturering" på Oversikt (s90-20261104-5 steg 2, 5.11; kort lenke fra trinn 4): REN
-// LESEVISNING - gjør ALDRI noe automatisk. Grønn/gul/rød kommer fra fakturaSjekk(o) (ordre-detalj.js),
-// samme sjekk som faktisk blokkerer fakturerViaFiken. Admin-only.
-function renderKlarTilFakturering() {
-  const kort = document.getElementById('klarTilFaktureringKort');
-  const liste = document.getElementById('klarTilFaktureringListe');
-  if (!kort || !liste) return;
-  const erAdmin = me && me.rolle === 'admin';
-  kort.style.display = erAdmin ? 'block' : 'none';
-  if (!erAdmin) return;
-  // Trinn 4 (Henrik 17.11, alternativ A): bare antallet per farge og en knapp til siden «Fakturering» (js/fakturering.js), som har
-  // hele lista med linjer, sum og «Lag kladd i Fiken». Samme utvalg (faktureringKandidater) og samme sjekk (fakturaSjekk).
-  try { liste.innerHTML = faktureringOversiktLenkeHTML(); }
-  catch (e) { console.error('renderKlarTilFakturering feilet:', e && e.message); kort.style.display = 'none'; }
 }
 
 function calNaviger(dir) { calWeekOffset += dir; renderWeek(); }

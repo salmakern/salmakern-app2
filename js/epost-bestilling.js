@@ -140,19 +140,32 @@ function innkommendeEpostRadHTML(r) {
   </div>`;
 }
 
+// Flyttet fra en egen kort på Oversikt til en knapp med tall-badge på Ordre-siden (Henrik
+// 18.11, samme mønster som «Til godkjenning» - se apneTilGodkjenningModal i arkiv-mer.js):
+// kortet ("innkommendeEpostKort") ligger nå inni modalen, knappen/badgen er nytt.
 function renderInnkommendeEpost(hent = true) {
   const kort = document.getElementById('innkommendeEpostKort');
   const liste = document.getElementById('innkommendeEpostListe');
+  const btn = document.getElementById('innkommendeEpostBtn');
+  const badge = document.getElementById('innkommendeEpostBadge');
   if (!kort || !liste) return;
   const erAdmin = me && me.rolle === 'admin';
-  if (!erAdmin) { kort.style.display = 'none'; return; }
+  if (!erAdmin) { kort.style.display = 'none'; if (btn) btn.style.display = 'none'; return; }
   if (hent) hentInnkommendeEpost();
   const rader = Array.isArray(S.epostInnkommende) ? S.epostInnkommende : [];
   kort.style.display = rader.length ? 'block' : 'none';
+  if (btn) btn.style.display = 'inline-flex';
+  if (badge) { badge.style.display = rader.length ? 'flex' : 'none'; badge.textContent = rader.length; }
   if (!rader.length) return;
   try {
     liste.innerHTML = rader.map(r => { try { return innkommendeEpostRadHTML(r); } catch (e) { console.error('Innkommende-rad feilet:', e && e.message); return ''; } }).join('');
   } catch (e) { console.error('renderInnkommendeEpost feilet:', e && e.message); kort.style.display = 'none'; }
+}
+
+// Innholdet holdes ferskt av renderOversikt()/renderAll() (kjøres uansett hvilken side som er
+// åpen) - denne trenger bare å åpne modalen, som apneTilGodkjenningModal().
+function apneInnkommendeEpostModal() {
+  openModal('innkommendeEpostModal');
 }
 
 async function innkommendeHandling(id, rpc, args, bekreftTekst, okTekst) {

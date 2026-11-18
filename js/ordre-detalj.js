@@ -763,8 +763,9 @@ async function kallFikenFakturer(id, ekstra) {
 }
 
 // s90-20261104-5 steg 2 (avtalt rekkefølge for fakturering/lager, 5.11): ÉN delt sjekk brukt
-// BÅDE av "Klar til fakturering"-lista (renderKlarTilFakturering, oversikt-kalender.js, ren
-// lesevisning) OG av selve blokkeringen i fakturerViaFiken under - før dette hadde de to
+// BÅDE av Fakturering-siden (faktureringSjekk, js/fakturering.js, ren lesevisning - Oversikt
+// sitt eget sammendragskort er fjernet 18.11) OG av selve blokkeringen i fakturerViaFiken under -
+// før dette hadde de to
 // stedene HVER SIN logikk, og fakturerViaFiken sin brukte ordrens frie merke/modell-tekst
 // (finnFikenOmbyggingModell(o.merke, o.modell)) i stedet for den nyere, portal-slug-bevisste
 // kanoniskMerkeModell() som resten av appen (synkroniserOmbyggingFikenLinjer) bruker siden
