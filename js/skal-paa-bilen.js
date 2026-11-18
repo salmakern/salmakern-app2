@@ -15,7 +15,9 @@
 //  * Gjelder bare ordrer opprettet etter PRODUKTLISTE_FRA. Eldre ordrer beholder dagens avkrysning (renderOrdreLagerbruk i lager.js).
 //  * KIA EV9 (Henrik 18.11): (A) et spørsmål «180 eller ikke?» i kortet når bestillingen ikke avgjør det (svaret er en vanlig rettelse på 502),
 //    og (B) «Dørbeskyttere» (en ombygging-oppskrift uten produktnummer: bare deler, ingen fakturalinje) følger med så lenge ordren ikke har
-//    noe ekstra utstyr. Raden har kilde 'deler' og oppskriftens id som nøkkel (nr), så alle steder som antar et Fiken-nummer må hoppe over den.
+//    noe ekstra utstyr (ikke på en «kun ekstrautstyr»-ordre, og ikke når portalens produktliste ikke er lastet). Raden har kilde 'deler' og
+//    oppskriftens id som nøkkel (nr), så alle steder som antar et Fiken-nummer må hoppe over den. Oppskriften må ikke døpes om, få produktnummer
+//    eller finnes i flere like utgaver (da gjenkjennes den ikke, og delene legges tilbake ved neste bevisste handling): se CLAUDE.md.
 
 // Slått på 17.11.2026 (Henrik: «Ja, slå på»). Bare ordrer opprettet etter dette tidspunktet får «Skal på bilen»; eldre ordrer beholder
 // avkrysningen. null = av for alle.
@@ -32,6 +34,11 @@ function erAnkommet(o) {
   return !!o && !!o.ordreStatus && o.ordreStatus !== 'paa_vei';
 }
 const _norm = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+// En verdi i en JS-streng med apostrofer inni onclick="...": HTML-escapet (esc), bakstrek FØRST (ellers spiser en avsluttende \ apostrofen og
+// strengen lukkes for tidlig: SyntaxError eller kode i et portalnavn), så apostrof, og linjeskift/linjeseparatorer blir mellomrom (en rå
+// linjeskift i en JS-streng er en SyntaksError). Bruk den for ALLE portalstyrte verdier i onclick her, aldri bare esc(...).replace(/'/g, ...).
+const _LINJESKIFT = new RegExp('[\\r\\n\\u2028\\u2029]+', 'g');
+const _onclickStr = s => esc(String(s == null ? '' : s)).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(_LINJESKIFT, ' ');
 
 // KIA EV9: portal-slug, tillegget «180 graders stoler» (Fiken-nummer) og navnet på oppskriften med bare deler.
 const EV9_SLUG = 'kia-ev9';
@@ -41,6 +48,7 @@ const EV9_DORBESKYTTERE_GRUNN = 'KIA EV9 uten ekstra utstyr, bare ombygging';
 
 // En rettelse gjelder et Fiken-produktnummer, eller (bare for en rad med deler) id-en til en oppskrift. Alt annet i loggen ignoreres.
 const _erProduktnummer = nr => /^[1-9][0-9]{0,9}$/.test(String(nr == null ? '' : nr));
+const OPPSKRIFT_ID_PREFIKS = 'oppskrift_'; // oppskrifts-id-er (oppskrift_<ms>) er aldri produktnummer; databasen avviser dem som fakturalinje
 const _rettelseDato = r => (r && r.at ? new Date(r.at).toLocaleDateString('no-NO', { day: 'numeric', month: 'numeric' }) : '');
 
 // Rettelsesloggen (ordrer.produkt_rettelser) som tilstand per nøkkel: tilstand = siste fjern/legg_til (angre tar tilstanden bort, tilbake til det
@@ -120,7 +128,9 @@ function beregnSkalPaaBilen(o) {
       const nr = String(l && l.produktnummer || '');
       const p = finnProdukt(nr);
       if (kun && p && p.app_rolle) { varsler.push(`Bestillingen har ${nr} ${p.navn}, men ordren er merket «Kun ekstrautstyr (ingen ombygging)», så den er ikke med.`); continue; }
-      leggTil(nr, l && l.navn, 'bestilling', 'Bestilt i portalen');
+      // Trinn 5: en bestilling på e-post har kilde 'epost' og antall (Mengde i e-posten), men ingen frosset rabatt.
+      const fraEpost = !!(l && l.kilde === 'epost');
+      leggTil(nr, l && l.navn, 'bestilling', fraEpost ? 'Bestilt på e-post' : 'Bestilt i portalen', { antall: Number(l && l.antall) > 1 ? Math.floor(Number(l.antall)) : 1, fraEpost });
     }
     for (const p of produkter) {
       if (p.nummer_status !== 'ok' || rader.some(r => r.nr === p.fiken_nummer)) continue;
@@ -170,6 +180,10 @@ function beregnSkalPaaBilen(o) {
     spm180 = { svar: null, av: '', dato: '', kilde: null, nr: EV9_180_NR, navn: p180.navn || EV9_180_NR, portalId: p180.portal_id || '' };
     if (t) Object.assign(spm180, { svar: t.handling === 'legg_til' ? 'ja' : 'nei', av: t.av || '', dato: _rettelseDato(t), kilde: 'rettelse' });
     else if (rad180 && !rad180.fjernet) Object.assign(spm180, { svar: 'ja', kilde: 'sjekkliste' });
+    // Svaret går foran sjekklista (en bevisst rettelse), men er det «Nei» mens sjekklista senere ble huket av for 180, sier appen fra: ellers
+    // trekkes standarddelene og 502 kommer ikke på fakturaen for en bil som kan være en 180-bil, uten at noen ser motsigelsen.
+    const punkt180 = spm180.svar === 'nei' ? regelTreff(p180) : null;
+    if (punkt180) varsler.push(`Sjekklista sier «${punkt180}», men svaret på spørsmålet om 180 graders stoler er Nei, så standarddelene brukes og ${EV9_180_NR} kommer ikke på fakturaen. Trykk «Endre» hvis bilen er en 180-bil.`);
   }
 
   // (B) KIA EV9: «Dørbeskyttere» (bare deler, ingen fakturalinje). Regelen gir raden når ordren ikke har ekstra utstyr; en ansatt kan legge den
@@ -179,7 +193,9 @@ function beregnSkalPaaBilen(o) {
   if (dor) {
     const t = tilstand.get(dor.id);
     const hand = lagtTil.get(dor.id);
-    const regel = ev9DorbeskyttereRegel(rader);
+    // Regelen gir aldri raden av seg selv på en «kun ekstrautstyr»-ordre (en ansatt kan legge den til for hånd, og en hånd-lagt ombygging på en
+    // slik ordre gir den heller ikke) og aldri når modellen ikke har noen produkter i portalen (lista er ikke lastet: tvil hindrer dørbeskyttere).
+    const regel = !kun && produkter.length > 0 && ev9DorbeskyttereRegel(rader);
     const leggTilDor = (grunn, extra = {}) => rader.push({ nr: dor.id, navn: dor.navn || 'Dørbeskyttere', kilde: 'deler', grunn, portalId: null, type: null, rolle: null, fjernet: false, oppskrift: dor, ...extra });
     const lagtTilGrunn = x => `Lagt til av ${x.av || 'ukjent'}${_rettelseDato(x) ? ' ' + _rettelseDato(x) : ''}`;
     if (t && t.handling === 'legg_til') {
@@ -236,11 +252,21 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
   if (!erNyProduktliste(o)) return;
   const { rader, bestilt } = beregnSkalPaaBilen(o);
   const { produkter } = produktlisteModell(o);
+  // 0) En fakturalinje med en oppskrifts-id som produktnummer er aldri et Fiken-produkt (fiken-fakturer ville svart «Fant ikke Fiken-produkt»). Den
+  //    kan bare komme fra en GAMMEL klient (åpen fane/tilbakerulling) som leste en dørbeskyttere-rettelse som et vanlig produkt: rydd den bort.
+  for (const nr of (o.fikenLinjer || []).map(l => String(l && l.produktnummer || '')).filter(nr => nr.startsWith(OPPSKRIFT_ID_PREFIKS))) {
+    await oppdaterFikenLinjeForOppskrift(nr, false, o.id);
+  }
   // 1) Fakturalinjer for det appen la til (sjekkliste) eller som er lagt til for hånd. Ombyggingen styres av synkroniserOmbyggingFikenLinjer,
   //    og bestilte linjer (med frosset rabatt) av Bekreft; en linje med rabatt fjernes aldri automatisk (oppdaterFikenLinjeForOppskrift).
   //    En rad med bare deler (kilde 'deler', f.eks. dørbeskyttere) har ingen fakturalinje og går aldri hit.
   for (const r of rader) {
     if (r.kilde === 'sjekkliste' || r.kilde === 'manuell') await oppdaterFikenLinjeForOppskrift(r.nr, !r.fjernet, o.id);
+    // Trinn 5: bestilt på e-post. Fakturalinjen (med antall, uten rabatt: kundens avtalte rabatt brukes) kommer når ordren er bekreftet.
+    else if (r.kilde === 'bestilling' && r.fraEpost && typeof epostOrdreBekreftet === 'function' && epostOrdreBekreftet(o)) {
+      if (r.fjernet) await oppdaterFikenLinjeForOppskrift(r.nr, false, o.id);
+      else await epostSikreFakturalinje(o, r.nr, r.antall || 1);
+    }
   }
   if (!bestilt) {
     for (const p of produkter) {
@@ -326,14 +352,14 @@ function skalPaaBilenHTML(o) {
   const { rader, varsler, bestilt, spm180 } = beregnSkalPaaBilen(o);
   const { slug, produkter } = produktlisteModell(o);
   const ankommet = erAnkommet(o);
-  const idJs = esc(o.id).replace(/'/g, "\\'");
-  const arg = s => esc(s).replace(/'/g, "\\'"); // verdi i en JS-streng inni onclick: HTML-escapet og med apostrofer escapet
+  const idJs = _onclickStr(o.id);
+  const arg = _onclickStr; // verdi i en JS-streng inni onclick (HTML-escapet, bakstrek og apostrof escapet, linjeskift borte)
   const pill = (txt, farge) => {
     const f = { gron: ['rgba(34,197,94,.12)', '#86efac', 'rgba(34,197,94,.35)'], gul: ['rgba(245,158,11,.12)', '#fbbf24', 'rgba(245,158,11,.4)'], bla: ['rgba(59,130,246,.12)', '#93c5fd', 'rgba(59,130,246,.4)'], gra: ['#18181b', '#a1a1aa', '#27272a'] }[farge];
     return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;background:${f[0]};color:${f[1]};border:1px solid ${f[2]}">${esc(txt)}</span>`;
   };
   const radHTML = r => {
-    const nrJs = esc(r.nr).replace(/'/g, "\\'");
+    const nrJs = _onclickStr(r.nr);
     const opp = r.oppskrift;
     let status = '';
     if (r.fjernet) status = pill('Fjernet', 'gra');
@@ -363,11 +389,11 @@ function skalPaaBilenHTML(o) {
           ? `<button class="btn sm" onclick="produktRettelse('${idJs}','${leggTilbake}','${nrJs}'${navnArg})">Legg tilbake</button>`
           : `<button class="btn sm red" onclick="produktRettelse('${idJs}','fjern','${nrJs}'${navnArg})">Fjern fra bilen</button>`}
       ${r.kilde === 'manuell' || r.manuell ? `<button class="btn sm" onclick="produktRettelse('${idJs}','angre','${nrJs}'${navnArg})">Angre (ta bort igjen)</button>` : ''}
-      ${r.kilde === 'bestilling' && !r.fjernet ? `<span class="small muted">Linjen i Fakturering har bestillingens rabatt og fjernes der hvis den ikke skal faktureres.</span>` : ''}
+      ${r.kilde === 'bestilling' && !r.fjernet && !r.fraEpost ? `<span class="small muted">Linjen i Fakturering har bestillingens rabatt og fjernes der hvis den ikke skal faktureres.</span>` : ''}
     </div>`;
     return `<div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:10px 12px;border-radius:10px;background:#0f0f12;border:1px solid ${r.rettet ? 'rgba(245,158,11,.45)' : '#27272a'};${r.fjernet ? 'opacity:.6' : ''}">
       <div style="min-width:0;flex:1">
-        <div style="font-weight:700;font-size:13.5px;${r.fjernet ? 'text-decoration:line-through' : ''}">${esc(r.navn)} ${r.rettet ? pill('Rettet', 'gul') : ''}</div>
+        <div style="font-weight:700;font-size:13.5px;${r.fjernet ? 'text-decoration:line-through' : ''}">${esc(r.navn)}${r.antall > 1 ? ` <span style="color:#a1a1aa;font-weight:600">× ${r.antall}</span>` : ''} ${r.rettet ? pill('Rettet', 'gul') : ''}</div>
         <div style="font-family:ui-monospace,monospace;font-size:11px;color:#a1a1aa">${erDeler ? 'Kun deler, ingen fakturalinje' : esc(r.nr)} · ${typeTekst}</div>
         <div style="font-size:11.5px;color:#a1a1aa;margin-top:2px">Valgt fordi: ${esc(r.fjernet && r.rettet ? `${r.grunn}. Fjernet av ${r.rettet.av} ${r.rettet.dato}` : r.grunn)}</div>
         ${deler ? `<div style="font-size:11.5px;color:#71717a;margin-top:2px">${deler}</div>` : ''}
@@ -394,7 +420,7 @@ function skalPaaBilenHTML(o) {
     ? `<button class="btn sm" onclick="skalPaaBilenApneSok('${idJs}')">+ Legg til utstyr</button>`
     : `<div style="display:grid;gap:6px">
         <input id="skalPaaBilenSok_${esc(o.id)}" value="${esc(sok)}" placeholder="Søk på navn eller produktnummer (${produkter.length} produkter for modellen)" oninput="skalPaaBilenSok('${idJs}',this.value)" autocomplete="off">
-        ${treff.map(p => `<button class="btn sm" style="text-align:left;justify-content:flex-start" onclick="produktRettelse('${idJs}','legg_til','${esc(p.fiken_nummer).replace(/'/g, "\\'")}','${esc(p.navn).replace(/'/g, "\\'")}','${esc(p.portal_id).replace(/'/g, "\\'")}');skalPaaBilenLukkSok()">${esc(p.fiken_nummer)} ${esc(p.navn)}</button>`).join('')}
+        ${treff.map(p => `<button class="btn sm" style="text-align:left;justify-content:flex-start" onclick="produktRettelse('${idJs}','legg_til','${arg(p.fiken_nummer)}','${arg(p.navn)}','${arg(p.portal_id)}');skalPaaBilenLukkSok()">${esc(p.fiken_nummer)} ${esc(p.navn)}</button>`).join('')}
         ${dorKnapp}
         ${produkter.length ? '' : '<div class="small muted">Fant ingen produkter for denne modellen i portalen. Trykk «Hent produkter fra portalen» under Kontakter (admin).</div>'}
         <button class="btn sm" onclick="skalPaaBilenLukkSok()">Lukk søk</button>
@@ -423,7 +449,7 @@ function skalPaaBilenHTML(o) {
     }
   }
   return `<div class="card" style="display:grid;gap:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="card-title" style="margin:0">Skal på bilen</div>${bestilt ? pill('Fra portalen', 'bla') : ''}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="card-title" style="margin:0">Skal på bilen</div>${bestilt ? pill(o.portalLinjer.some(l => l && l.kilde === 'epost') ? 'Fra e-post' : 'Fra portalen', 'bla') : ''}</div>
     ${spmHTML}
     ${varsler.map(v => `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:8px 10px;font-size:12px;color:#fbbf24">⚠ ${esc(v)}</div>`).join('')}
     ${rader.length ? rader.map(radHTML).join('') : '<div class="small muted">Ingenting valgt ennå. Huk av Nytt/Brukt kjøretøy, fyll ut «Har ved ankomst», eller legg til utstyr.</div>'}

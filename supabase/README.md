@@ -337,6 +337,37 @@ SQL-testen (`tester/portal_timer_fakta_TEST_body.sql`, 76 sjekker S1-S20) er kj�
 Funksjonen er også kjørt som en ren SELECT (`--read-only`) mot de ekte radene: 34 rader, alle garantiene holder (alle 15 felt, alle statuskoder blant de åtte, alle datoer er ekte datoer, `hentet_dato` er satt for alle 20 hentede og aldri for de andre).
 **IKKE testet:** edge-funksjonen mot ekte Deno og ekte Supabase-gateway (bare falsk Deno i Vitest, som for `portal-import-fakta`); et ekte kall fra portalen (krever hemmeligheten og at portalen henter); at portalen faktisk tar imot svaret (portalens egen test); en enhet med annen tidssone enn norsk i loggen (`hentet_dato` fra logglinjen er enhetens lokale dato).
 
+## Bestilling på e-post (trinn 5 av «Én produktliste», 2026-11-18: migrasjon kjørt, app og funksjon utrullet; Resend/DNS gjenstår)
+
+Selgeren videresender bestillingen fra forhandlerens innkjøpsportal til en egen adresse. Edge-funksjonen `epost-bestilling` (Resend inbound) leser den, og
+`epost_bestilling_lagre` legger produktene rett på ordren ved sikkert treff, lager ordren («På vei», ikke bekreftet) når ingen aktiv bil-ordre har chassis.nr,
+eller legger raden i «Innkommende» (`epost_bestillinger`, status `innkommende`). Migrasjon `20261118200000_epost_bestilling.sql` (rollback øverst i filen).
+
+- **Rekkefølge ved utrulling** (hvert steg bare etter Henriks ja): (1) SQL-testen i rullet-tilbake transaksjon, (2) migrasjonen, (3) appen (sw.js v90; uten
+  migrasjonen viser appen bare ingen «Innkommende»), (4) hemmelighetene og funksjonen, (5) DNS + Resend, (6) én test-e-post fra en TEST-selger.
+- **DNS (Henrik valgte Resend 18.11 og er varslet; hver post legges inn først etter et eget ja)**: alt ligger under underdomenet `inn.salmaker.as`, ingenting
+  på `salmaker.as` selv (Microsoft 365-posten, nettsiden og appen røres ikke). Resend krever at domenet er lagt til og bekreftet FØR mottak slås på:
+  (1) Resend → Domains → Add domain `inn.salmaker.as` (region eu-west-1). Resend viser da postene for bekreftelse (DKIM-TXT `resend._domainkey.inn`, og MX + SPF-TXT
+  på `send.inn`). Verdiene er unike per domene og kopieres fra dashbordet, aldri fra denne fila. (2) Når domenet er bekreftet: slå på «Receiving» på domenets
+  side; Resend viser MX-posten for `inn` (vertsnavn `inn`, f.eks. `receive-euw1.forge.rmta.net` eller `inbound-smtp.<region>.amazonaws.com`, laveste
+  prioritet, f.eks. 10). (3) Legg den inn hos Domeneshop og trykk «I've added the record». IKKE bruk `forhandler.salmaker.as`: den peker til Vercel, og en
+  MX der kan komme i konflikt med den.
+- **Resend**: slå på mottak for underdomenet, og lag en webhook til `https://qoqpenbfdxeduylxirwk.supabase.co/functions/v1/epost-bestilling` med hendelsen
+  `email.received`. Varselet har bare metadata; funksjonen henter innholdet med `GET /emails/receiving/{id}`, som også gir `authentication` ({spf, dkim,
+  dmarc}): DMARC fail, eller verken SPF eller DKIM pass, gir Innkommende (Henrik 18.11).
+- **Hemmeligheter** (`npx supabase secrets set …`): `RESEND_INBOUND_WEBHOOK_SECRET` (whsec_… fra webhooken), `RESEND_INBOUND_API_KEY` (egen Resend-nøkkel med
+  Full access, bare for denne funksjonen; den felles `RESEND_API_KEY` er en ren sendenøkkel og gir 401 på lesing, sett 18.11) og `EPOST_BESTILLING_ADRESSE` (f.eks. `bestilling@inn.salmaker.as`; annen post ignoreres).
+- **Utrulling av funksjonen**: `npx supabase functions deploy epost-bestilling --project-ref qoqpenbfdxeduylxirwk --use-api --no-verify-jwt` (Resend sender
+  ingen Supabase-JWT; Svix-signaturen er nøkkelen). Røyktest: POST uten signatur gir 401, GET gir 405.
+- **Sikkert treff** (alt må stemme, ellers Innkommende): avsenderen er en kontaktperson (e-post) hos nøyaktig én forhandler i Kontakter; ingen feilet
+  DMARC/SPF; gyldig chassis.nr; modellen gjenkjennes i grunnproduktets tekst (`portal_produkter.modell_navn`), og modellen har én variant med rollen
+  (ombygging/personbil/Lafinto); grunnprisen = Fiken-prisen; hvert tilvalg er et nummer modellen har og navnet etter passer; tilvalgene etter Fiken-pris =
+  «Totalpris på tilvalg»; grunnbeløp + tilvalg = «Totalpris inkl. tilvalg». I databasen i tillegg: én aktiv bil-ordre for samme kunde, ikke hentet, opprettet
+  etter 17.11 (Skal på bilen), og uten en annen bestilling; eller ingen ordre (da lages den, maks 10 ubekreftede per forhandler).
+- **Lagres kort**: selve e-posten lagres aldri. Behandlede rader slettes etter 60 dager (pg_cron `epost-bestillinger-opprydding`).
+- **Test**: `test/epost-bestilling.test.js` (tolker, vurdering, flyt og signatur, 23), `test/epost-bestilling-app.test.js` (appen, 14) og
+  `supabase/tester/epost_bestilling_TEST_body.sql` (22 kontroller; kjørt mot PGlite med stubbet skjema 18.11, IKKE mot den ekte databasen).
+
 ## Lager: hyller og bestillinger (2026-11-03)
 
 Migrasjon `20261103200000_lager_hyller_og_bestillinger.sql` (kjørt 2026-11-03 etter Henriks ja; testet først i en rullet tilbake transaksjon, 28 av 28 kontroller; `supabase/tester/lager_hyller_og_bestillinger_TEST_body.sql`).

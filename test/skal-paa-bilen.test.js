@@ -1,6 +1,7 @@
 // Trinn 3 av «Én produktliste»: «Skal på bilen» (js/skal-paa-bilen.js), kjørt i hele appen (test/helpers/app-harness.js) med falsk database.
 // Syntetiske TEST-data: KIA EV9 med Standard ombygging 500, Takluke 501 («velges når» Panorama glasstak), 180-stoler 502 og to oppskrifter
 // for ombyggingen (vanlig og «500, 502» med 180-brakettene), som i den ekte databasen 17.11.
+import vm from 'node:vm';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { lastApp } from './helpers/app-harness.js';
 
@@ -717,6 +718,255 @@ describe('KIA EV9: 180-spørsmål og dørbeskyttere', () => {
         expect(grunner.map((g) => g.kode)).not.toContain('liste_mangler_paa_faktura');
         expect(JSON.stringify(grunner)).not.toContain('oppskrift_');
       });
+    });
+  });
+
+  // ── Rettelser etter den uavhengige gjennomgangen 18.11 ─────────────────────────────────────────────────────────
+
+  describe('spørsmålet gjelder bare KIA EV9 (slug-vernet)', () => {
+    it('en annen modell med et produkt 502 og en ombyggingsrad får ikke spørsmålet (bare slug skiller)', () => {
+      const gls = bil({ merke: 'Mercedes-Benz', modell: 'GLS', ombygging: { nyttKjoretoy: true } });
+      const slug = sandbox.produktlisteModell(gls).slug;
+      expect(slug).toBeTruthy();
+      expect(slug).not.toBe('kia-ev9');
+      S.portalProdukter.push({ portal_id: 'g502', type: 'tillegg', modell_slug: slug, fiken_nummer: '502', nummer_status: 'ok', navn: 'Tillegg for 180 graders stoler', app_rolle: null, velges_nar: [] });
+      const { rader, spm180 } = sandbox.beregnSkalPaaBilen(gls);
+      expect(sandbox.produktlisteModell(gls).produkter.some((p) => p.fiken_nummer === '502')).toBe(true); // forutsetning: modellen HAR 502 i portalen
+      expect(rader.some((r) => !r.fjernet && r.rolle === 'ombygging')).toBe(true); // ... og en ombyggingsrad
+      expect(spm180).toBeNull();
+      const html = sandbox.skalPaaBilenHTML(gls);
+      expect(html).not.toContain(SP180);
+      expect(html).not.toContain('180 graders stoler:');
+    });
+  });
+
+  describe('180-svaret «Nei» mot en sjekkliste som sier 180', () => {
+    const varselOm = (o) => sandbox.beregnSkalPaaBilen(o).varsler.filter((v) => /180/.test(v));
+    const SJEKK = { utstyr_sjekkliste: [{ punkt: 'Tillegg for 180 graders stoler', ok: true }] };
+
+    it('Nei (rettelse) mens sjekklista er huket av gir et varsel med råd om «Endre», også i kortet', () => {
+      const o = ombygg({ ...SJEKK, produkt_rettelser: [rett('fjern', '502')] });
+      const v = varselOm(o);
+      expect(v).toHaveLength(1);
+      expect(v[0]).toMatch(/Sjekklista sier «Tillegg for 180 graders stoler».*Nei.*standarddelene.*502.*ikke på fakturaen.*Endre/);
+      expect(sandbox.skalPaaBilenHTML(o)).toContain('⚠ Sjekklista sier «Tillegg for 180 graders stoler»');
+      // den eldre teksten i sjekklista teller også, og varselet siterer den
+      const gammel = ombygg({ utstyr_sjekkliste: [{ punkt: '4-seter bak 180', ok: true }], produkt_rettelser: [rett('fjern', '502')] });
+      expect(varselOm(gammel)[0]).toContain('«4-seter bak 180»');
+    });
+
+    it('ingen motsigelse, ingen varsel: nei uten sjekkliste, ja med sjekkliste, angre, sjekkliste uten svar, punkt ikke huket av', () => {
+      expect(varselOm(ombygg({ produkt_rettelser: [rett('fjern', '502')] }))).toEqual([]);
+      expect(varselOm(ombygg({ ...SJEKK, produkt_rettelser: [rett('legg_til', '502')] }))).toEqual([]);
+      expect(varselOm(ombygg({ ...SJEKK, produkt_rettelser: [rett('fjern', '502'), angreAv('502')] }))).toEqual([]);
+      expect(varselOm(ombygg(SJEKK))).toEqual([]);
+      expect(varselOm(ombygg({ utstyr_sjekkliste: [{ punkt: 'Tillegg for 180 graders stoler', ok: false }], produkt_rettelser: [rett('fjern', '502')] }))).toEqual([]);
+    });
+
+    it('selve utfallet er uendret: svaret går fortsatt foran sjekklista (standarddelene, 502 ikke på bilen)', () => {
+      const { rader, spm180 } = sandbox.beregnSkalPaaBilen(ombygg({ ...SJEKK, produkt_rettelser: [rett('fjern', '502')] }));
+      expect(spm180).toMatchObject({ svar: 'nei', kilde: 'rettelse' });
+      expect(rader.find((r) => r.nr === '500').oppskrift.id).toBe('opp_std');
+      expect(rader.find((r) => r.nr === '502').fjernet).toBe(true);
+    });
+  });
+
+  describe('dørbeskyttere og «kun ekstrautstyr»', () => {
+    const HAND_500 = rett('legg_til', '500', { navn: 'Standard ombygging' });
+
+    it('selv med Standard ombygging lagt til for hånd gir en kun-ordre ingen dørbeskyttere av seg selv', () => {
+      const { rader } = sandbox.beregnSkalPaaBilen(bil({ kun_ekstrautstyr: true, produkt_rettelser: [HAND_500] }));
+      expect(rader.find((r) => r.nr === '500')).toMatchObject({ kilde: 'manuell', rolle: 'ombygging', fjernet: false }); // forutsetning: ombyggingsraden finnes
+      expect(dorRad(rader)).toBeUndefined();
+      // samme ordre uten kun-flagget: regelen gir raden (så det er flagget som skiller)
+      expect(dorRad(sandbox.beregnSkalPaaBilen(bil({ produkt_rettelser: [HAND_500] })).rader)).toMatchObject({ kilde: 'deler', fjernet: false });
+    });
+
+    it('... men en ansatt kan legge dem til for hånd på en kun-ordre, og angre tar dem bort igjen', () => {
+      const med = bil({ kun_ekstrautstyr: true, produkt_rettelser: [HAND_500, rett('legg_til', DOR.id, { navn: 'Dørbeskyttere' })] });
+      expect(dorRad(sandbox.beregnSkalPaaBilen(med).rader)).toMatchObject({ kilde: 'deler', manuell: true, fjernet: false });
+      med.produktRettelser.push(angreAv(DOR.id));
+      expect(dorRad(sandbox.beregnSkalPaaBilen(med).rader)).toBeUndefined();
+    });
+
+    it('lager: en kun-ordre med ombyggingen lagt til for hånd trekker ikke dørbeskyttere ved ankomst', async () => {
+      const o = bil({ kun_ekstrautstyr: true, ordre_status: 'ikke_paabegynt', produkt_rettelser: [HAND_500] });
+      trekkSvar();
+      await sandbox.synkProduktliste(o);
+      expect(rpcKall('lager_trekk_oppskrift').map((k) => k.args.p_oppskrift_id)).not.toContain(DOR.id);
+    });
+  });
+
+  describe('dørbeskyttere når portalens produktliste ikke er lastet', () => {
+    it('ingen dørbeskyttere av seg selv (tvil hindrer), ingen trekk, men håndtilføyelse virker; lastes lista, kommer de', async () => {
+      S.portalProdukter = []; // loadFromSupabase setter [] når portal_produkter ikke lot seg hente
+      const o = ombygg({ ordre_status: 'ikke_paabegynt' });
+      expect(dorRad(sandbox.beregnSkalPaaBilen(o).rader)).toBeUndefined();
+      expect(() => sandbox.skalPaaBilenHTML(o)).not.toThrow();
+      trekkSvar();
+      await sandbox.synkProduktliste(o);
+      expect(rpcKall('lager_trekk_oppskrift').map((k) => k.args.p_oppskrift_id)).not.toContain(DOR.id);
+      const hand = ombygg({ produkt_rettelser: [rett('legg_til', DOR.id, { navn: 'Dørbeskyttere' })] });
+      expect(dorRad(sandbox.beregnSkalPaaBilen(hand).rader)).toMatchObject({ kilde: 'deler', manuell: true });
+      S.portalProdukter = PRODUKTER.map((p) => ({ ...p }));
+      expect(dorRad(sandbox.beregnSkalPaaBilen(o).rader)).toMatchObject({ kilde: 'deler', fjernet: false });
+    });
+  });
+
+  describe('«Rett»-menyen for vanlige rader (alle modeller)', () => {
+    const id = 'ord_TEST_SPB_MENY2';
+    const med = (apneNr, over) => {
+      sandbox.skalPaaBilenVeksleRett(id, apneNr);
+      try { return sandbox.skalPaaBilenHTML(ombygg({ id, ...over })); } finally { sandbox.skalPaaBilenVeksleRett(id, apneNr); }
+    };
+
+    it('aktiv sjekklisterad: «Fjern fra bilen» (fjern, uten navn-argument), ingen «Angre»', () => {
+      const html = med('501', MED_PANORAMA);
+      expect(html).toContain(`produktRettelse('${id}','fjern','501')">Fjern fra bilen`);
+      expect(html).not.toContain('Angre (ta bort igjen)');
+      expect(html).not.toContain('Legg tilbake');
+    });
+
+    it('fjernet sjekklisterad: «Legg tilbake» er angre (ikke legg_til), uten navn-argument', () => {
+      const html = med('501', { ...MED_PANORAMA, produkt_rettelser: [rett('fjern', '501')] });
+      expect(html).toContain(`produktRettelse('${id}','angre','501')">Legg tilbake`);
+      expect(html).not.toContain('Fjern fra bilen');
+      expect(html).not.toContain(`'legg_til','501'`);
+    });
+
+    it('manuelt lagt til rad: «Fjern fra bilen» og «Angre (ta bort igjen)» (angre), uten navn-argument', () => {
+      const html = med('503', { produkt_rettelser: [rett('legg_til', '503', { navn: 'Heldekkende gulv' })] });
+      expect(html).toContain(`produktRettelse('${id}','fjern','503')">Fjern fra bilen`);
+      expect(html).toContain(`produktRettelse('${id}','angre','503')">Angre (ta bort igjen)`);
+    });
+
+    it('ombyggingsraden rettes med boksene (ingen Fjern), og en bestilt rad har forklaringen om rabatten', () => {
+      const ombyggingsrad = med('500', {});
+      expect(ombyggingsrad).toContain('Ombyggingen endres med Nytt/Brukt/Lafinto/Personbil-boksene over.');
+      expect(ombyggingsrad).not.toContain('Fjern fra bilen');
+      const bestilt = med('503', { portal_linjer: [{ produktnummer: '500', navn: 'Standard ombygging' }, { produktnummer: '503', navn: 'Heldekkende gulv' }] });
+      expect(bestilt).toContain(`produktRettelse('${id}','fjern','503')">Fjern fra bilen`);
+      expect(bestilt).toContain('Linjen i Fakturering har bestillingens rabatt');
+    });
+  });
+
+  describe('portalstyrte verdier i onclick (backslash, apostrof, linjeskift) og id-attributter', () => {
+    // Kjører HVER onclick/oninput slik nettleseren ville (HTML-dekodet, kompilert og kjørt), med stubber for funksjonene den kan kalle.
+    // En verdi som bryter ut av JS-strengen gir enten SyntaxError eller kjører koden (alert).
+    const dekod = (s) => s.replace(/&lt;/g, '<').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+    const kjorOnclicks = (html) => {
+      const kall = [], alerts = [], feil = [];
+      const ctx = vm.createContext({
+        produktRettelse: (...a) => kall.push(['produktRettelse', ...a]),
+        skalPaaBilenVeksleRett: (...a) => kall.push(['veksleRett', ...a]),
+        skalPaaBilenApneSok: (...a) => kall.push(['apneSok', ...a]),
+        skalPaaBilenSok: (...a) => kall.push(['sok', ...a]),
+        skalPaaBilenLukkSok: () => {},
+        alert: (x) => alerts.push(x),
+      });
+      let antall = 0;
+      for (const m of html.matchAll(/ on(?:click|input)="([^"]*)"/g)) {
+        antall++;
+        const kode = dekod(m[1]).replace(/this\.value/g, "'x'");
+        try { vm.runInContext(kode, ctx); } catch (e) { feil.push(`${e.name}: ${e.message} :: ${kode.slice(0, 110)}`); }
+      }
+      return { kall, alerts, feil, antall };
+    };
+    const FARLIGE = ['Slutter med bakslash \\', "\\');alert(1);//", 'Linje\nskift\r\nto', `it's "q" & <b>x</b> \\\\ '`, "a'b\\'c"];
+    const sammenSlaatt = (s) => s.replace(/[\r\n\u2028\u2029]+/g, ' '); // linjeskift i en verdi blir ett mellomrom (en rå linjeskift er en SyntaksError i en JS-streng)
+
+    it.each(FARLIGE)('spørsmålet (navn og portal-id for 502) og ordre-id: %j kjører riktig og uten kode utenfra', (farlig) => {
+      S.portalProdukter = PRODUKTER.map((p) => (p.portal_id === 't502' ? { ...p, navn: farlig, portal_id: farlig } : { ...p }));
+      const id = "ord_X\\'" + 'q';
+      const html = sandbox.skalPaaBilenHTML(ombygg({ id }));
+      const { kall, alerts, feil, antall } = kjorOnclicks(html);
+      expect(antall).toBeGreaterThan(2);
+      expect(feil).toEqual([]);
+      expect(alerts).toEqual([]);
+      const forventet = sammenSlaatt(farlig);
+      expect(kall).toContainEqual(['produktRettelse', id, 'legg_til', '502', forventet, forventet]);
+      expect(kall).toContainEqual(['produktRettelse', id, 'fjern', '502', forventet, forventet]);
+      // besvart: «Endre»
+      const besvart = kjorOnclicks(sandbox.skalPaaBilenHTML(ombygg({ id, produkt_rettelser: [rett('legg_til', '502')] })));
+      expect(besvart.feil).toEqual([]);
+      expect(besvart.alerts).toEqual([]);
+      expect(besvart.kall).toContainEqual(['produktRettelse', id, 'fjern', '502', forventet, forventet]);
+    });
+
+    it.each(FARLIGE)('«+ Legg til utstyr»-treff (nummer, navn og portal-id): %j', (farlig) => {
+      S.portalProdukter = PRODUKTER.map((p) => (p.portal_id === 'v503' ? { ...p, navn: 'Heldekkende ' + farlig, portal_id: farlig } : { ...p }));
+      const id = 'ord_TEST_SPB_TREFF';
+      const o = ombygg({ id });
+      sandbox.skalPaaBilenApneSok(id);
+      try {
+        sandbox.skalPaaBilenSok(id, '503');
+        const { kall, alerts, feil } = kjorOnclicks(sandbox.skalPaaBilenHTML(o));
+        expect(feil).toEqual([]);
+        expect(alerts).toEqual([]);
+        expect(kall).toContainEqual(['produktRettelse', id, 'legg_til', '503', sammenSlaatt('Heldekkende ' + farlig), sammenSlaatt(farlig)]);
+      } finally { sandbox.skalPaaBilenLukkSok(); }
+    });
+
+    it('produktnummer fra en bestilling (r.nr) i «Rett»-menyen: også med bakstrek og apostrof', () => {
+      const id = 'ord_TEST_SPB_NR';
+      const nrFarlig = "5'0\\";
+      const o = ombygg({ id, portal_linjer: [{ produktnummer: '500', navn: 'Standard ombygging' }, { produktnummer: nrFarlig, navn: 'Rar linje' }] });
+      sandbox.skalPaaBilenVeksleRett(id, nrFarlig);
+      try {
+        const { kall, alerts, feil } = kjorOnclicks(sandbox.skalPaaBilenHTML(o));
+        expect(feil).toEqual([]);
+        expect(alerts).toEqual([]);
+        expect(kall).toContainEqual(['produktRettelse', id, 'fjern', nrFarlig]);
+        expect(kall).toContainEqual(['veksleRett', id, nrFarlig]);
+      } finally { sandbox.skalPaaBilenVeksleRett(id, nrFarlig); }
+    });
+
+    it('portal-id og ordre-id er escapet i både onclick og id-attributtet (ubesvart og besvart spørsmål)', () => {
+      S.portalProdukter = PRODUKTER.map((p) => (p.portal_id === 't502' ? { ...p, portal_id: "t5'02<img src=x onerror=alert(1)>" } : { ...p }));
+      const id = 'ord_"<i>x';
+      for (const over of [{}, { produkt_rettelser: [rett('legg_til', '502')] }]) {
+        const html = sandbox.skalPaaBilenHTML(ombygg({ id, ...over }));
+        expect(html).not.toContain('<img');
+        expect(html).not.toContain('<i>');
+        expect(html).toContain('id="spm180_ord_&quot;&lt;i>x"');
+        expect(html).toContain("t5\\'02&lt;img src=x onerror=alert(1)>");
+        expect(html).toContain("produktRettelse('ord_&quot;&lt;i>x',");
+      }
+    });
+  });
+
+  describe('rester fra en gammel klient: fakturalinje med en oppskrifts-id', () => {
+    const REST = { produktnummer: DOR.id, antall: 1 };
+
+    it('synkProduktliste fjerner linjen (bare den) via oppdater_ordre_fiken_linje, uten å røre vanlige linjer', async () => {
+      const o = ombygg({ fiken_linjer: [{ produktnummer: '500', antall: 1 }, REST] });
+      await sandbox.synkProduktliste(o);
+      expect(rpcKall('oppdater_ordre_fiken_linje').map((k) => [k.args.p_produktnummer, k.args.p_linje])).toEqual([[DOR.id, null]]);
+    });
+
+    it('ingen rester: ingen ekstra kall; og alle slike linjer fjernes (flere oppskrifts-id-er)', async () => {
+      await sandbox.synkProduktliste(ombygg({ fiken_linjer: [{ produktnummer: '500', antall: 1 }] }));
+      expect(rpcKall('oppdater_ordre_fiken_linje')).toEqual([]);
+      await sandbox.synkProduktliste(ombygg({ fiken_linjer: [REST, { produktnummer: 'oppskrift_1790236543999', antall: 1 }] }));
+      expect(rpcKall('oppdater_ordre_fiken_linje').map((k) => k.args.p_produktnummer).sort()).toEqual([DOR.id, 'oppskrift_1790236543999']);
+    });
+
+    it('Fakturering: en slik linje gir en RØD grunn (kladden lages ikke), og fakturerViaFiken stopper før Fiken kalles', async () => {
+      const o = ombygg({ kunde: 'TEST Kunde AS', fiken_linjer: [{ produktnummer: '500', antall: 1 }, REST] });
+      const sjekk = sandbox.fakturaSjekk(o);
+      expect(sjekk.niva).toBe('rod');
+      expect(sjekk.grunner.find((g) => g.kode === 'oppskrift_id_paa_faktura').tekst).toContain(DOR.id);
+      const toast = [];
+      let kalt = 0;
+      const orig = sandbox.kallFikenFakturer;
+      sandbox.visToast = (t) => toast.push(t);
+      sandbox.kallFikenFakturer = async () => { kalt++; return 'ok'; };
+      try { await sandbox.fakturerViaFiken(o.id); } finally { sandbox.kallFikenFakturer = orig; }
+      expect(kalt).toBe(0);
+      expect(toast.join(' ')).toContain('oppskrifts-id');
+      // uten slik linje: ingen slik grunn
+      const ren = ombygg({ kunde: 'TEST Kunde AS', fiken_linjer: [{ produktnummer: '500', antall: 1 }] });
+      expect(sandbox.fakturaSjekk(ren).grunner.map((g) => g.kode)).not.toContain('oppskrift_id_paa_faktura');
     });
   });
 });

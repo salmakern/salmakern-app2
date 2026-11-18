@@ -1,6 +1,6 @@
 {
  "hentet": "2026-11-17",
- "kilde": "information_schema.columns for public.ordrer (read-only) + kun_ekstrautstyr lagt til for hånd 2026-11-17 (migrasjon 20261118110000, ikke kjørt ennå)",
+ "kilde": "information_schema.columns for public.ordrer (read-only) + kun_ekstrautstyr lagt til for hånd 2026-11-17 (migrasjon 20261118110000, ikke kjørt ennå) + epost_bestilling_id/epost_bekreftet_at/epost_bekreftet_av lagt til for hånd 2026-11-18 (migrasjon 20261118200000, ikke kjørt ennå)",
  "kolonner": [
   {
    "kolonne": "id",
@@ -589,6 +589,27 @@
    "udt": "bool",
    "default": "false",
    "nullable": false
+  },
+  {
+   "kolonne": "epost_bestilling_id",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "epost_bekreftet_at",
+   "type": "timestamp with time zone",
+   "udt": "timestamptz",
+   "default": null,
+   "nullable": true
+  },
+  {
+   "kolonne": "epost_bekreftet_av",
+   "type": "text",
+   "udt": "text",
+   "default": null,
+   "nullable": true
   }
  ]
 }

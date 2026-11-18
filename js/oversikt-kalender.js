@@ -188,6 +188,7 @@ function renderOversikt(q) {
   renderStempletInnNa();
   renderLangeOrdreklokker();
   renderKlarTilFakturering();
+  if (typeof renderInnkommendeEpost === 'function') renderInnkommendeEpost();
   q = q || (document.getElementById('sokInput')||{}).value || '';
   const now = new Date();
   const mnd = now.getMonth(), yr = now.getFullYear();

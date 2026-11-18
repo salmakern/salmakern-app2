@@ -173,6 +173,7 @@ function buildOrdreDetail() {
   </div>
   ${o.status==='arkivert'?`<div style="background:#1c1008;border:1px solid #78350f;border-radius:10px;padding:10px 14px;margin-bottom:10px;color:#fbbf24;font-size:13px;font-weight:600">Arkivert ordre — kun visning</div>`:''}
   ${portalBekreftBannerHTML(o)}
+  ${typeof epostBekreftBannerHTML === 'function' ? epostBekreftBannerHTML(o) : ''}
   <div class="card" style="padding:12px 16px;margin-bottom:0">
     <div class="row" style="flex-wrap:wrap;align-items:center;gap:8px 12px">
       <div style="flex:1 1 0">
@@ -800,6 +801,11 @@ function fakturaSjekk(o) {
   });
   if (utenFrossetPris.length) leggTil('uten_frosset_pris', `${utenFrossetPris.length} linje(r) uten frosset pris - Fiken sin pris akkurat nå blir brukt`, 'gul');
 
+  // En oppskrifts-id (oppskrift_<ms>) er aldri et Fiken-produktnummer: en slik linje kan bare komme fra en gammel klient som leste en dørbeskyttere-rettelse
+  // som et vanlig produkt, og fiken-fakturer ville svart «Fant ikke Fiken-produkt». Rød, så kladden ikke lages før linjen er borte (appen rydder den selv ved neste synk).
+  const medOppskriftId = (o.fikenLinjer || []).map(l => String(l && l.produktnummer || '')).filter(nr => nr.startsWith('oppskrift_'));
+  if (medOppskriftId.length) leggTil('oppskrift_id_paa_faktura', `Fakturalinje med en oppskrifts-id i stedet for et produktnummer (${medOppskriftId.join(', ')}) - fjern den før fakturering`, 'rod');
+
   // S.fikenKundeAlias/S.fikenKundeRabatt lastes i loadFromSupabase() (kun lesbare for admin via
   // RLS - uendret for andre roller, de kan ikke fakturere uansett). Kan være udefinert/tomt
   // (f.eks. gammel PWA-cache uten denne lastingen ennå) - da hoppes denne delen bare over,
@@ -854,7 +860,7 @@ async function fakturerViaFiken(id) {
   // fakturering"-lista viser, se kommentaren der for hvorfor dette er delt (funnet 2026-10-14,
   // rettet til å bruke kanoniskMerkeModell 5.11).
   const sjekk = fakturaSjekk(o);
-  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde');
+  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde' || g.kode === 'oppskrift_id_paa_faktura');
   if (stopper) {
     visToast(stopper.tekst + (stopper.kode === 'ukjent_modell' ? ' - legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.' : '.'));
     return;

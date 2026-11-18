@@ -1,5 +1,7 @@
 -- Test av 20261118120000_produkt_rettelse_oppskrift_id.sql: legg_til_ordre_produkt_rettelse godtar nå også en oppskrifts-id (oppskrift_<10-16 siffer>) som
--- «produktnummer» (rad med bare deler: dørbeskyttere på KIA EV9), uten å slippe gjennom noe annet enn det som ble godtatt før.
+-- «produktnummer» (rad med bare deler: dørbeskyttere på KIA EV9), uten å slippe gjennom noe annet enn det som ble godtatt før (T1-T6). T7: grensen på 300
+-- rettelser per ordre. T8-T9: oppdater_ordre_fiken_linje og oppdater_ordre_fiken_linje_ved_id avviser å LEGGE TIL en fakturalinje med en oppskrifts-id
+-- (en gammel klient kan lese dørbeskyttere-rettelsen som et vanlig produkt), men tillater fortsatt å fjerne en slik rest og alt som gjaldt før.
 -- ALLTID i en transaksjon som rulles tilbake: testen setter inn en TEST-ordre (id ord_test_rett_oppskrift, merke TESTRETT) og alt rulles tilbake. Ansatt-
 -- radene LESES bare (for å lage innloggingsutsagn med request.jwt.claims); ingen ansatt endres. RPC-en gjør en UPDATE på TEST-ordren (bare produkt_rettelser),
 -- og eventuelle triggere i den transaksjonen forkastes ved rollback.
@@ -15,7 +17,7 @@ declare
   c_id constant text := 'ord_test_rett_oppskrift';
   c_dor constant text := 'oppskrift_1790236543257';
   v_ans bigint; v_tok text; v_navn text;
-  r jsonb; v_feil text; v_n int; v_for int; v_ugyldig text; v_ok boolean;
+  r jsonb; v_feil text; v_n int; v_for int; v_ugyldig text; v_ok boolean; v_linjer jsonb;
   v_ugyldige text[] := array['oppskrift_abc', 'oppskrift_123456789', 'oppskrift_12345678901234567', 'oppskrift_1790236543257x', 'x oppskrift_1790236543257',
     'OPPSKRIFT_1790236543257', 'oppskrift_', 'oppskrift', 'opp_1790236543257', '0501', '012', '0', 'ev9', '501 ', ' 501', '501x', '12345678901', '',
     '501' || chr(10), 'oppskrift_1790236543257' || chr(10), 'oppskrift_-1790236543257', 'oppskrift_17902365432.7'];
@@ -92,6 +94,69 @@ begin
             and p.proconfig is not null and 'search_path=public' = any (p.proconfig)), '');
   insert into _res(navn, ok, info) values ('T6 det finnes bare ÉN funksjon med dette navnet (ingen gammel overload ved siden av)',
     (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'legg_til_ordre_produkt_rettelse') = 1, '');
+
+  -- T7: grensen på 300 rettelser per ordre (299 fra før: den 300. godtas, den 301. avvises, og loggen vokser ikke)
+  update public.ordrer set produkt_rettelser = (select jsonb_agg(jsonb_build_object('handling', 'fjern', 'produktnummer', '501')) from generate_series(1, 299)) where id = c_id;
+  r := public.legg_til_ordre_produkt_rettelse(c_id, jsonb_build_object('handling', 'fjern', 'produktnummer', '501'));
+  insert into _res(navn, ok, info) values ('T7 rettelse nr. 300 godtas (299 fra før)', jsonb_array_length(r) = 300, jsonb_array_length(r)::text);
+  begin perform public.legg_til_ordre_produkt_rettelse(c_id, jsonb_build_object('handling', 'fjern', 'produktnummer', '501')); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T7 rettelse nr. 301 avvises med FOR_MANGE_RETTELSER', v_feil = 'FOR_MANGE_RETTELSER', v_feil);
+  begin perform public.legg_til_ordre_produkt_rettelse(c_id, jsonb_build_object('handling', 'legg_til', 'produktnummer', c_dor)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T7 grensen gjelder også en oppskrifts-id', v_feil = 'FOR_MANGE_RETTELSER', v_feil);
+  insert into _res(navn, ok, info) values ('T7 loggen vokste ikke etter de avviste kallene',
+    jsonb_array_length((select produkt_rettelser from public.ordrer where id = c_id)) = 300, jsonb_array_length((select produkt_rettelser from public.ordrer where id = c_id))::text);
+  update public.ordrer set produkt_rettelser = '[]'::jsonb where id = c_id;
+
+  -- T8: oppdater_ordre_fiken_linje (nøkkelen er produktnummeret)
+  update public.ordrer set fiken_linjer = '[]'::jsonb where id = c_id;
+  r := public.oppdater_ordre_fiken_linje(c_id, '501', jsonb_build_object('produktnummer', '501', 'antall', 1));
+  insert into _res(navn, ok, info) values ('T8 et vanlig produktnummer legges til som før', jsonb_array_length(r->'fikenLinjer') = 1 and r->'fikenLinjer'->0->>'produktnummer' = '501', r::text);
+  begin perform public.oppdater_ordre_fiken_linje(c_id, c_dor, jsonb_build_object('produktnummer', c_dor, 'antall', 1)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T8 en oppskrifts-id legges IKKE til som fakturalinje (UGYLDIG_PRODUKTNUMMER)', v_feil = 'UGYLDIG_PRODUKTNUMMER', v_feil);
+  begin perform public.oppdater_ordre_fiken_linje(c_id, 'oppskrift_', jsonb_build_object('produktnummer', 'oppskrift_', 'antall', 1)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T8 alt som begynner på «oppskrift_» avvises', v_feil = 'UGYLDIG_PRODUKTNUMMER', v_feil);
+  r := public.oppdater_ordre_fiken_linje(c_id, 'Oppskrift_1', jsonb_build_object('produktnummer', 'Oppskrift_1', 'antall', 1));
+  insert into _res(navn, ok, info) values ('T8 vernet gjelder bare prefikset «oppskrift_» (annen skrivemåte er et vanlig nummer, som før)', jsonb_array_length(r->'fikenLinjer') = 2, r::text);
+  r := public.oppdater_ordre_fiken_linje(c_id, 'Oppskrift_1', null);
+  insert into _res(navn, ok, info) values ('T8 ... og fjernes igjen som vanlig', jsonb_array_length(r->'fikenLinjer') = 1, r::text);
+  select fiken_linjer into v_linjer from public.ordrer where id = c_id;
+  insert into _res(navn, ok, info) values ('T8 ingen av de avviste kallene endret fakturalinjene', jsonb_array_length(v_linjer) = 1 and v_linjer->0->>'produktnummer' = '501', v_linjer::text);
+  -- en rest fra en gammel klient (alt lagret) kan fjernes
+  update public.ordrer set fiken_linjer = jsonb_build_array(jsonb_build_object('produktnummer', '501', 'antall', 1), jsonb_build_object('produktnummer', c_dor, 'antall', 1)) where id = c_id;
+  r := public.oppdater_ordre_fiken_linje(c_id, c_dor, null);
+  insert into _res(navn, ok, info) values ('T8 en rest med oppskrifts-id fjernes (p_linje null står åpent) og den andre linjen blir stående',
+    jsonb_array_length(r->'fikenLinjer') = 1 and r->'fikenLinjer'->0->>'produktnummer' = '501', r::text);
+  begin perform public.oppdater_ordre_fiken_linje('ord_test_finnes_ikke', '501', jsonb_build_object('produktnummer', '501', 'antall', 1)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T8 ukjent ordre: ORDRE_FINNES_IKKE som før', v_feil = 'ORDRE_FINNES_IKKE', v_feil);
+  perform set_config('request.jwt.claims', '', true);
+  begin perform public.oppdater_ordre_fiken_linje(c_id, c_dor, jsonb_build_object('produktnummer', c_dor, 'antall', 1)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T8 uten innlogging: IKKE_INNLOGGET (innloggingen sjekkes først)', v_feil = 'IKKE_INNLOGGET', v_feil);
+  perform set_config('request.jwt.claims', jsonb_build_object('ansatt_id', v_ans, 'session_token', v_tok)::text, true);
+
+  -- T9: oppdater_ordre_fiken_linje_ved_id (nøkkelen er linje-id-en)
+  update public.ordrer set fiken_linjer = '[]'::jsonb where id = c_id;
+  r := public.oppdater_ordre_fiken_linje_ved_id(c_id, 'l_test_1', jsonb_build_object('id', 'l_test_1', 'produktnummer', '501', 'antall', 1));
+  insert into _res(navn, ok, info) values ('T9 en linje med et vanlig produktnummer legges til som før', jsonb_array_length(r->'fikenLinjer') = 1, r::text);
+  begin perform public.oppdater_ordre_fiken_linje_ved_id(c_id, 'l_test_2', jsonb_build_object('id', 'l_test_2', 'produktnummer', c_dor, 'antall', 1)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T9 en ny linje med oppskrifts-id avvises (UGYLDIG_PRODUKTNUMMER)', v_feil = 'UGYLDIG_PRODUKTNUMMER', v_feil);
+  begin perform public.oppdater_ordre_fiken_linje_ved_id(c_id, 'l_test_1', jsonb_build_object('id', 'l_test_1', 'produktnummer', c_dor, 'antall', 1)); v_feil := 'ingen feil'; exception when others then v_feil := sqlerrm; end;
+  insert into _res(navn, ok, info) values ('T9 en eksisterende linje kan heller ikke endres til en oppskrifts-id', v_feil = 'UGYLDIG_PRODUKTNUMMER', v_feil);
+  r := public.oppdater_ordre_fiken_linje_ved_id(c_id, 'l_test_1', jsonb_build_object('id', 'l_test_1', 'antall', 2));
+  insert into _res(navn, ok, info) values ('T9 en endring uten produktnummer (antall) virker som før', r->'fikenLinjer'->0->>'produktnummer' = '501' and (r->'fikenLinjer'->0->>'antall')::int = 2, r::text);
+  select fiken_linjer into v_linjer from public.ordrer where id = c_id;
+  insert into _res(navn, ok, info) values ('T9 ingen av de avviste kallene endret fakturalinjene', jsonb_array_length(v_linjer) = 1 and v_linjer->0->>'produktnummer' = '501', v_linjer::text);
+  update public.ordrer set fiken_linjer = jsonb_build_array(jsonb_build_object('id', 'l_test_1', 'produktnummer', '501', 'antall', 1), jsonb_build_object('id', 'l_rest', 'produktnummer', c_dor, 'antall', 1)) where id = c_id;
+  r := public.oppdater_ordre_fiken_linje_ved_id(c_id, 'l_rest', null);
+  insert into _res(navn, ok, info) values ('T9 en rest med oppskrifts-id fjernes på linje-id (p_linje null står åpent)', jsonb_array_length(r->'fikenLinjer') = 1 and r->'fikenLinjer'->0->>'id' = 'l_test_1', r::text);
+
+  -- T10: rettighetene og form på de to Fiken-linje-funksjonene er uendret
+  v_ok := has_function_privilege('authenticated', 'public.oppdater_ordre_fiken_linje(text,text,jsonb)', 'execute')
+      and has_function_privilege('authenticated', 'public.oppdater_ordre_fiken_linje_ved_id(text,text,jsonb)', 'execute');
+  insert into _res(navn, ok, info) values ('T10 authenticated kan fortsatt kjøre begge Fiken-linje-funksjonene', v_ok, '');
+  insert into _res(navn, ok, info) values ('T10 begge er fortsatt security definer med fast search_path, og det finnes bare ÉN av hver',
+    (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('oppdater_ordre_fiken_linje', 'oppdater_ordre_fiken_linje_ved_id')
+       and p.prosecdef and p.proconfig is not null and 'search_path=public' = any (p.proconfig)) = 2
+    and (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('oppdater_ordre_fiken_linje', 'oppdater_ordre_fiken_linje_ved_id')) = 2, '');
 end; $test$;
 
 select navn, ok, info from _res order by n;
