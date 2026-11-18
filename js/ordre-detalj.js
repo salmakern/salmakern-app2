@@ -833,7 +833,8 @@ function fakturaSjekk(o) {
   if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) {
     const { rader } = beregnSkalPaaBilen(o);
     const kjente = new Set(produktlisteModell(o).produkter.map(p => p.fiken_nummer).filter(Boolean));
-    const aktive = new Set(rader.filter(r => !r.fjernet).map(r => r.nr));
+    // Rader med bare deler (kilde 'deler', f.eks. dørbeskyttere på EV9) har ingen fakturalinje og en oppskrifts-id som nøkkel: de er aldri med her.
+    const aktive = new Set(rader.filter(r => !r.fjernet && r.kilde !== 'deler').map(r => r.nr));
     const paaFaktura = new Set((o.fikenLinjer || []).map(l => String(l.produktnummer || '')));
     const mangler = [...aktive].filter(nr => !paaFaktura.has(nr));
     const ekstra = [...paaFaktura].filter(nr => kjente.has(nr) && !aktive.has(nr));

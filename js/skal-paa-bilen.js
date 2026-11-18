@@ -13,6 +13,9 @@
 //  * Lager trekkes ved ankomst (status forbi «På vei») via lager_trekk_oppskrift (idempotent per ordre+oppskrift), aldri når sjekklista
 //    fylles ut før ankomst. Rettes noe etter ankomst, trekkes/legges delene tilbake med en gang.
 //  * Gjelder bare ordrer opprettet etter PRODUKTLISTE_FRA. Eldre ordrer beholder dagens avkrysning (renderOrdreLagerbruk i lager.js).
+//  * KIA EV9 (Henrik 18.11): (A) et spørsmål «180 eller ikke?» i kortet når bestillingen ikke avgjør det (svaret er en vanlig rettelse på 502),
+//    og (B) «Dørbeskyttere» (en ombygging-oppskrift uten produktnummer: bare deler, ingen fakturalinje) følger med så lenge ordren ikke har
+//    noe ekstra utstyr. Raden har kilde 'deler' og oppskriftens id som nøkkel (nr), så alle steder som antar et Fiken-nummer må hoppe over den.
 
 // Slått på 17.11.2026 (Henrik: «Ja, slå på»). Bare ordrer opprettet etter dette tidspunktet får «Skal på bilen»; eldre ordrer beholder
 // avkrysningen. null = av for alle.
@@ -30,6 +33,55 @@ function erAnkommet(o) {
 }
 const _norm = s => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
+// KIA EV9: portal-slug, tillegget «180 graders stoler» (Fiken-nummer) og navnet på oppskriften med bare deler.
+const EV9_SLUG = 'kia-ev9';
+const EV9_180_NR = '502';
+const EV9_DORBESKYTTERE_NAVN = 'dørbeskyttere';
+const EV9_DORBESKYTTERE_GRUNN = 'KIA EV9 uten ekstra utstyr, bare ombygging';
+
+// En rettelse gjelder et Fiken-produktnummer, eller (bare for en rad med deler) id-en til en oppskrift. Alt annet i loggen ignoreres.
+const _erProduktnummer = nr => /^[1-9][0-9]{0,9}$/.test(String(nr == null ? '' : nr));
+const _rettelseDato = r => (r && r.at ? new Date(r.at).toLocaleDateString('no-NO', { day: 'numeric', month: 'numeric' }) : '');
+
+// Rettelsesloggen (ordrer.produkt_rettelser) som tilstand per nøkkel: tilstand = siste fjern/legg_til (angre tar tilstanden bort, tilbake til det
+// appen selv valgte), lagtTil = siste legg_til siden siste angre (også når en fjern kom etterpå: «ble lagt til for hånd»).
+function rettelseTilstand(o) {
+  const tilstand = new Map();
+  const lagtTil = new Map();
+  for (const r of (Array.isArray(o.produktRettelser) ? o.produktRettelser : [])) {
+    if (!r || !r.produktnummer) continue;
+    if (r.handling === 'angre') { tilstand.delete(r.produktnummer); lagtTil.delete(r.produktnummer); continue; }
+    if (r.handling === 'fjern' || r.handling === 'legg_til') {
+      tilstand.set(r.produktnummer, r);
+      if (r.handling === 'legg_til') lagtTil.set(r.produktnummer, r);
+    }
+  }
+  return { tilstand, lagtTil };
+}
+
+// Oppskriften «Dørbeskyttere» for denne ordren: type ombygging, passer bilen, riktig navn og INGEN produktnummer (ingen fakturalinje).
+// Finnes den ikke, eller er det flere like (uklart hvilken som gjelder), skjer ingenting.
+function ev9DorbeskytterOppskrift(o) {
+  const alle = Array.isArray(S.lagerOppskrifter) ? S.lagerOppskrifter : [];
+  const treff = alle.filter(x => x && x.type === 'ombygging' && _norm(x.navn) === EV9_DORBESKYTTERE_NAVN
+    && oppskriftProduktnumre(x).length === 0 && typeof oppskriftMatcherOrdre === 'function' && oppskriftMatcherOrdre(x, o));
+  return treff.length === 1 ? treff[0] : null;
+}
+
+// Regelen for dørbeskyttere: bilen har en aktiv ombyggingsrad og INGEN aktiv rad er ekstra utstyr. En rad er ikke ekstra utstyr når den har
+// en rolle (ombygging/personbil/Lafinto) eller oppskriften har type «ombygging» (for en rad som deler oppskrift med en annen: oppskriften til den
+// som holder den). Alt annet, også en rad uten oppskrift, teller som ekstra utstyr: tvil hindrer dørbeskyttere (forsiktig).
+function ev9DorbeskyttereRegel(rader) {
+  const aktive = rader.filter(r => !r.fjernet && r.kilde !== 'deler');
+  if (!aktive.some(r => r.rolle === 'ombygging')) return false;
+  const erOmbygging = r => {
+    if (r.rolle) return true;
+    const holder = r.oppskriftViaNr ? rader.find(x => x.nr === r.oppskriftViaNr) : r;
+    return !!(holder && holder.oppskrift && holder.oppskrift.type === 'ombygging');
+  };
+  return aktive.every(erOmbygging);
+}
+
 // Modellens slug og produkter (fra portal_produkter). Lang ID. Buzz uten egne produkter faller tilbake på radens slug (som i trinn 2).
 function produktlisteModell(o) {
   const kan = kanoniskMerkeModell(o);
@@ -44,9 +96,9 @@ function produktlisteModell(o) {
   return { modell, slug: slug || (modell && modell.slug) || null, produkter };
 }
 
-// Selve lista. Ren: leser bare o og S. Gir { rader, varsler, bestilt }.
+// Selve lista. Ren: leser bare o og S. Gir { rader, varsler, bestilt, spm180 } (spm180: 180-spørsmålet for KIA EV9, ellers null).
 function beregnSkalPaaBilen(o) {
-  const { modell, produkter } = produktlisteModell(o);
+  const { modell, slug, produkter } = produktlisteModell(o);
   const finnProdukt = nr => produkter.find(p => p.fiken_nummer === nr) || null;
   const bestilt = Array.isArray(o.portalLinjer) && o.portalLinjer.length > 0;
   // «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17): aldri en ombyggingsrad (ombygging/personbil/Lafinto), verken fra boksene eller fra en
@@ -94,15 +146,11 @@ function beregnSkalPaaBilen(o) {
   }
 
   // Rettelsene, i rekkefølge: fjern / legg_til / angre (angre = tilbake til det appen selv valgte).
-  const tilstand = new Map();
-  for (const r of (Array.isArray(o.produktRettelser) ? o.produktRettelser : [])) {
-    if (!r || !r.produktnummer) continue;
-    if (r.handling === 'angre') { tilstand.delete(r.produktnummer); continue; }
-    if (r.handling === 'fjern' || r.handling === 'legg_til') tilstand.set(r.produktnummer, r);
-  }
+  const { tilstand, lagtTil } = rettelseTilstand(o);
   for (const [nr, r] of tilstand) {
+    if (!_erProduktnummer(nr)) continue; // en oppskrifts-id (dørbeskyttere) behandles under, aldri som et Fiken-produkt
     const rad = rader.find(x => x.nr === nr);
-    const dato = r.at ? new Date(r.at).toLocaleDateString('no-NO', { day: 'numeric', month: 'numeric' }) : '';
+    const dato = _rettelseDato(r);
     if (r.handling === 'fjern') {
       if (rad) Object.assign(rad, { fjernet: true, rettet: { av: r.av || '', dato } });
     } else if (!rad) {
@@ -110,11 +158,44 @@ function beregnSkalPaaBilen(o) {
     }
   }
   velgOppskrifter(o, rader.filter(r => !r.fjernet));
-  return { rader, varsler, bestilt };
+
+  // (A) KIA EV9: «180 eller ikke?». Spørsmålet gjelder bare når bestillingen ikke avgjør det (ingen portalbestilling), ordren har en
+  // ombygging, og tillegget 502 finnes i portalen. Svaret er en vanlig rettelse på 502 (legg_til = ja, fjern = nei) eller sjekklista
+  // («Tillegg for 180 graders stoler»); ubesvart gir standardombyggingen (trygg standard).
+  let spm180 = null;
+  const p180 = slug === EV9_SLUG ? finnProdukt(EV9_180_NR) : null;
+  if (p180 && p180.nummer_status === 'ok' && !bestilt && !kun && rader.some(r => !r.fjernet && r.rolle === 'ombygging')) {
+    const t = tilstand.get(EV9_180_NR);
+    const rad180 = rader.find(r => r.nr === EV9_180_NR);
+    spm180 = { svar: null, av: '', dato: '', kilde: null, nr: EV9_180_NR, navn: p180.navn || EV9_180_NR, portalId: p180.portal_id || '' };
+    if (t) Object.assign(spm180, { svar: t.handling === 'legg_til' ? 'ja' : 'nei', av: t.av || '', dato: _rettelseDato(t), kilde: 'rettelse' });
+    else if (rad180 && !rad180.fjernet) Object.assign(spm180, { svar: 'ja', kilde: 'sjekkliste' });
+  }
+
+  // (B) KIA EV9: «Dørbeskyttere» (bare deler, ingen fakturalinje). Regelen gir raden når ordren ikke har ekstra utstyr; en ansatt kan legge den
+  // til for hånd (legg_til gir raden uansett regelen) eller fjerne den (fjern gir en overstrøket rad så lenge regelen ellers ville gitt den
+  // eller den var lagt til for hånd).
+  const dor = slug === EV9_SLUG ? ev9DorbeskytterOppskrift(o) : null;
+  if (dor) {
+    const t = tilstand.get(dor.id);
+    const hand = lagtTil.get(dor.id);
+    const regel = ev9DorbeskyttereRegel(rader);
+    const leggTilDor = (grunn, extra = {}) => rader.push({ nr: dor.id, navn: dor.navn || 'Dørbeskyttere', kilde: 'deler', grunn, portalId: null, type: null, rolle: null, fjernet: false, oppskrift: dor, ...extra });
+    const lagtTilGrunn = x => `Lagt til av ${x.av || 'ukjent'}${_rettelseDato(x) ? ' ' + _rettelseDato(x) : ''}`;
+    if (t && t.handling === 'legg_til') {
+      leggTilDor(lagtTilGrunn(t), { manuell: true, rettet: { av: t.av || '', dato: _rettelseDato(t) } });
+    } else if (t && t.handling === 'fjern') {
+      if (regel || hand) leggTilDor(regel ? EV9_DORBESKYTTERE_GRUNN : lagtTilGrunn(hand), { fjernet: true, manuell: !regel && !!hand, rettet: { av: t.av || '', dato: _rettelseDato(t) } });
+    } else if (regel) {
+      leggTilDor(EV9_DORBESKYTTERE_GRUNN);
+    }
+  }
+  return { rader, varsler, bestilt, spm180 };
 }
 
 // Oppskrift per aktiv rad (setter rad.oppskrift og ev. rad.oppskriftDeltMed). Se toppen av fila for rekkefølgen.
 function velgOppskrifter(o, aktive) {
+  aktive = aktive.filter(r => r.kilde !== 'deler'); // en rad med bare deler har sin oppskrift satt direkte og skal aldri få den overskrevet
   const nrs = new Set(aktive.map(r => r.nr));
   const alle = Array.isArray(S.lagerOppskrifter) ? S.lagerOppskrifter : [];
   const passer = r => typeof oppskriftMatcherOrdre === 'function' && oppskriftMatcherOrdre(r, o);
@@ -157,6 +238,7 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
   const { produkter } = produktlisteModell(o);
   // 1) Fakturalinjer for det appen la til (sjekkliste) eller som er lagt til for hånd. Ombyggingen styres av synkroniserOmbyggingFikenLinjer,
   //    og bestilte linjer (med frosset rabatt) av Bekreft; en linje med rabatt fjernes aldri automatisk (oppdaterFikenLinjeForOppskrift).
+  //    En rad med bare deler (kilde 'deler', f.eks. dørbeskyttere) har ingen fakturalinje og går aldri hit.
   for (const r of rader) {
     if (r.kilde === 'sjekkliste' || r.kilde === 'manuell') await oppdaterFikenLinjeForOppskrift(r.nr, !r.fjernet, o.id);
   }
@@ -167,7 +249,7 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
     }
   }
   // Et produkt som ble lagt til for hånd og så angret, har ingen rad lenger: linjen det fikk skal også bort (funnet i nettlesertest 17.11).
-  const lagtTilForHand = new Set((Array.isArray(o.produktRettelser) ? o.produktRettelser : []).filter(r => r && r.handling === 'legg_til').map(r => r.produktnummer));
+  const lagtTilForHand = new Set((Array.isArray(o.produktRettelser) ? o.produktRettelser : []).filter(r => r && r.handling === 'legg_til' && _erProduktnummer(r.produktnummer)).map(r => r.produktnummer));
   for (const nr of lagtTilForHand) {
     if (!rader.some(r => r.nr === nr)) await oppdaterFikenLinjeForOppskrift(nr, false, o.id);
   }
@@ -225,7 +307,9 @@ async function produktRettelse(ordreId, handling, nr, navn, portalId) {
     const { data, error } = await db.rpc('legg_til_ordre_produkt_rettelse', { p_ordre_id: ordreId, p_rettelse: { handling, produktnummer: nr, navn: navn || null, portalId: portalId || null } });
     if (error) { visToast('Kunne ikke lagre rettelsen: ' + error.message); return; }
     o.produktRettelser = Array.isArray(data) ? data : o.produktRettelser;
-    const tekst = handling === 'fjern' ? `Fjernet ${nr} fra «Skal på bilen»` : handling === 'legg_til' ? `La til ${nr} på «Skal på bilen»` : `Angret rettelse på ${nr}`;
+    // En rad med bare deler har en oppskrifts-id som nøkkel: loggen bruker da navnet, aldri den rå nøkkelen.
+    const etikett = _erProduktnummer(nr) ? nr : (navn || ((Array.isArray(S.lagerOppskrifter) ? S.lagerOppskrifter : []).find(x => x.id === nr) || {}).navn || 'deler');
+    const tekst = handling === 'fjern' ? `Fjernet ${etikett} fra «Skal på bilen»` : handling === 'legg_til' ? `La til ${etikett} på «Skal på bilen»` : `Angret rettelse på ${etikett}`;
     if (typeof logChange === 'function') logChange(o, tekst);
     await synkProduktliste(o, { tillatAngre: true });
   } finally {
@@ -239,10 +323,11 @@ const _skalPaaBilenApneRett = new Set();
 let _skalPaaBilenSok = { ordreId: null, tekst: '' };
 
 function skalPaaBilenHTML(o) {
-  const { rader, varsler, bestilt } = beregnSkalPaaBilen(o);
-  const { produkter } = produktlisteModell(o);
+  const { rader, varsler, bestilt, spm180 } = beregnSkalPaaBilen(o);
+  const { slug, produkter } = produktlisteModell(o);
   const ankommet = erAnkommet(o);
   const idJs = esc(o.id).replace(/'/g, "\\'");
+  const arg = s => esc(s).replace(/'/g, "\\'"); // verdi i en JS-streng inni onclick: HTML-escapet og med apostrofer escapet
   const pill = (txt, farge) => {
     const f = { gron: ['rgba(34,197,94,.12)', '#86efac', 'rgba(34,197,94,.35)'], gul: ['rgba(245,158,11,.12)', '#fbbf24', 'rgba(245,158,11,.4)'], bla: ['rgba(59,130,246,.12)', '#93c5fd', 'rgba(59,130,246,.4)'], gra: ['#18181b', '#a1a1aa', '#27272a'] }[farge];
     return `<span style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;background:${f[0]};color:${f[1]};border:1px solid ${f[2]}">${esc(txt)}</span>`;
@@ -264,21 +349,26 @@ function skalPaaBilenHTML(o) {
       const v = (S.lagervarer || []).find(x => x.id === i.vareId);
       return v ? `${esc(v.navn)} ${fmtAntall(i.antall)}` : null;
     }).filter(Boolean).join(' · ') : '';
-    const typeTekst = r.rolle === 'personbil' ? 'Personbil' : r.rolle === 'lafinto' ? 'Lafinto' : r.rolle === 'ombygging' ? 'Ombygging' : r.type === 'variant' ? 'Variant' : r.type === 'losning' ? 'Løsning' : 'Tillegg';
+    const erDeler = r.kilde === 'deler';
+    const typeTekst = erDeler ? 'Deler' : r.rolle === 'personbil' ? 'Personbil' : r.rolle === 'lafinto' ? 'Lafinto' : r.rolle === 'ombygging' ? 'Ombygging' : r.type === 'variant' ? 'Variant' : r.type === 'losning' ? 'Løsning' : 'Tillegg';
     const apen = _skalPaaBilenApneRett.has(o.id + '|' + r.nr);
+    // En rad med bare deler har en oppskrifts-id som nøkkel og sender navnet med (til logglinjen). Er den lagt til for hånd og så fjernet, legges
+    // den tilbake med legg_til (angre ville tatt den helt bort); er den regelens egen rad, er angre veien tilbake til regelen.
+    const navnArg = erDeler ? `,'${arg(r.navn)}'` : '';
+    const leggTilbake = erDeler && r.manuell ? 'legg_til' : 'angre';
     const meny = !apen ? '' : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
       ${r.kilde === 'ombygging'
         ? `<span class="small muted">Ombyggingen endres med Nytt/Brukt/Lafinto/Personbil-boksene over.</span>`
         : r.fjernet
-          ? `<button class="btn sm" onclick="produktRettelse('${idJs}','angre','${nrJs}')">Legg tilbake</button>`
-          : `<button class="btn sm red" onclick="produktRettelse('${idJs}','fjern','${nrJs}')">Fjern fra bilen</button>`}
-      ${r.kilde === 'manuell' ? `<button class="btn sm" onclick="produktRettelse('${idJs}','angre','${nrJs}')">Angre (ta bort igjen)</button>` : ''}
+          ? `<button class="btn sm" onclick="produktRettelse('${idJs}','${leggTilbake}','${nrJs}'${navnArg})">Legg tilbake</button>`
+          : `<button class="btn sm red" onclick="produktRettelse('${idJs}','fjern','${nrJs}'${navnArg})">Fjern fra bilen</button>`}
+      ${r.kilde === 'manuell' || r.manuell ? `<button class="btn sm" onclick="produktRettelse('${idJs}','angre','${nrJs}'${navnArg})">Angre (ta bort igjen)</button>` : ''}
       ${r.kilde === 'bestilling' && !r.fjernet ? `<span class="small muted">Linjen i Fakturering har bestillingens rabatt og fjernes der hvis den ikke skal faktureres.</span>` : ''}
     </div>`;
     return `<div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:10px 12px;border-radius:10px;background:#0f0f12;border:1px solid ${r.rettet ? 'rgba(245,158,11,.45)' : '#27272a'};${r.fjernet ? 'opacity:.6' : ''}">
       <div style="min-width:0;flex:1">
         <div style="font-weight:700;font-size:13.5px;${r.fjernet ? 'text-decoration:line-through' : ''}">${esc(r.navn)} ${r.rettet ? pill('Rettet', 'gul') : ''}</div>
-        <div style="font-family:ui-monospace,monospace;font-size:11px;color:#a1a1aa">${esc(r.nr)} · ${typeTekst}</div>
+        <div style="font-family:ui-monospace,monospace;font-size:11px;color:#a1a1aa">${erDeler ? 'Kun deler, ingen fakturalinje' : esc(r.nr)} · ${typeTekst}</div>
         <div style="font-size:11.5px;color:#a1a1aa;margin-top:2px">Valgt fordi: ${esc(r.fjernet && r.rettet ? `${r.grunn}. Fjernet av ${r.rettet.av} ${r.rettet.dato}` : r.grunn)}</div>
         ${deler ? `<div style="font-size:11.5px;color:#71717a;margin-top:2px">${deler}</div>` : ''}
         ${meny}
@@ -293,16 +383,48 @@ function skalPaaBilenHTML(o) {
     .filter(p => p.nummer_status === 'ok' && !aktiveNr.has(p.fiken_nummer))
     .filter(p => { const ord = _norm(sok).split(' ').filter(Boolean); const t = _norm(`${p.fiken_nummer} ${p.navn}`); return ord.every(w => t.includes(w)); })
     .slice(0, 8);
+  // KIA EV9: dørbeskyttere (bare deler) kan legges til for hånd også når ordren har ekstra utstyr. Tilbys bare når raden ikke er aktiv.
+  const dorOpp = slug === EV9_SLUG ? ev9DorbeskytterOppskrift(o) : null;
+  const dorTreff = sok !== null && dorOpp && !rader.some(r => r.kilde === 'deler' && !r.fjernet)
+    && _norm(sok).split(' ').filter(Boolean).every(w => _norm(`${dorOpp.navn} (bare deler)`).includes(w));
+  const dorKnapp = dorTreff
+    ? `<button class="btn sm" style="text-align:left;justify-content:flex-start" onclick="produktRettelse('${idJs}','legg_til','${arg(dorOpp.id)}','${arg(dorOpp.navn)}','');skalPaaBilenLukkSok()">${esc(dorOpp.navn)} (bare deler)</button>`
+    : '';
   const sokHTML = sok === null
     ? `<button class="btn sm" onclick="skalPaaBilenApneSok('${idJs}')">+ Legg til utstyr</button>`
     : `<div style="display:grid;gap:6px">
         <input id="skalPaaBilenSok_${esc(o.id)}" value="${esc(sok)}" placeholder="Søk på navn eller produktnummer (${produkter.length} produkter for modellen)" oninput="skalPaaBilenSok('${idJs}',this.value)" autocomplete="off">
         ${treff.map(p => `<button class="btn sm" style="text-align:left;justify-content:flex-start" onclick="produktRettelse('${idJs}','legg_til','${esc(p.fiken_nummer).replace(/'/g, "\\'")}','${esc(p.navn).replace(/'/g, "\\'")}','${esc(p.portal_id).replace(/'/g, "\\'")}');skalPaaBilenLukkSok()">${esc(p.fiken_nummer)} ${esc(p.navn)}</button>`).join('')}
+        ${dorKnapp}
         ${produkter.length ? '' : '<div class="small muted">Fant ingen produkter for denne modellen i portalen. Trykk «Hent produkter fra portalen» under Kontakter (admin).</div>'}
         <button class="btn sm" onclick="skalPaaBilenLukkSok()">Lukk søk</button>
       </div>`;
+  // KIA EV9: «180 eller ikke?». Ubesvart: en ravgul boks med to knapper. Besvart: en kompakt linje med «Endre», som bytter svaret
+  // (ja = legg_til 502, nei = fjern 502; produktRettelse kjører synkProduktliste med tillatAngre, så delene byttes hvis bilen er ankommet).
+  let spmHTML = '';
+  if (spm180) {
+    const args = `'${arg(spm180.nr)}','${arg(spm180.navn)}','${arg(spm180.portalId)}'`;
+    if (spm180.svar === null) {
+      spmHTML = `<div id="spm180_${esc(o.id)}" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.5);border-radius:12px;padding:10px 12px;display:grid;gap:8px">
+        <div style="font-weight:700;font-size:13px;color:#fbbf24">Er dette en 180-bil? (${esc(spm180.navn)}, ${esc(spm180.nr)})</div>
+        <div style="font-size:11.5px;color:#a1a1aa">Svaret avgjør om ombyggingen bruker standarddelene eller 180-delene. Uten svar brukes standard.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn sm" onclick="produktRettelse('${idJs}','legg_til',${args})">Ja, 180</button>
+          <button class="btn sm" onclick="produktRettelse('${idJs}','fjern',${args})">Nei, standard</button>
+        </div>
+      </div>`;
+    } else {
+      const ja = spm180.svar === 'ja';
+      const hvem = spm180.kilde === 'sjekkliste' ? 'fra sjekklista' : `svart av ${spm180.av || 'ukjent'}${spm180.dato ? ' ' + spm180.dato : ''}`;
+      spmHTML = `<div id="spm180_${esc(o.id)}" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12px;color:#a1a1aa;padding:2px 2px">
+        <span>180 graders stoler: <b style="color:#e4e4e7">${ja ? 'Ja' : 'Nei'}</b>, ${esc(hvem)}</span>
+        <button class="btn sm" title="Bytt svaret til ${ja ? 'Nei' : 'Ja'}" onclick="produktRettelse('${idJs}','${ja ? 'fjern' : 'legg_til'}',${args})">Endre</button>
+      </div>`;
+    }
+  }
   return `<div class="card" style="display:grid;gap:8px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="card-title" style="margin:0">Skal på bilen</div>${bestilt ? pill('Fra portalen', 'bla') : ''}</div>
+    ${spmHTML}
     ${varsler.map(v => `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:8px 10px;font-size:12px;color:#fbbf24">⚠ ${esc(v)}</div>`).join('')}
     ${rader.length ? rader.map(radHTML).join('') : '<div class="small muted">Ingenting valgt ennå. Huk av Nytt/Brukt kjøretøy, fyll ut «Har ved ankomst», eller legg til utstyr.</div>'}
     ${sokHTML}
