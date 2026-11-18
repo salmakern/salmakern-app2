@@ -802,6 +802,11 @@ function fakturaSjekk(o) {
   });
   if (utenFrossetPris.length) leggTil('uten_frosset_pris', `${utenFrossetPris.length} linje(r) uten frosset pris - Fiken sin pris akkurat nå blir brukt`, 'gul');
 
+  // En oppskrifts-id (oppskrift_<ms>) er aldri et Fiken-produktnummer: en slik linje kan bare komme fra en gammel klient som leste en dørbeskyttere-rettelse
+  // som et vanlig produkt, og fiken-fakturer ville svart «Fant ikke Fiken-produkt». Rød, så kladden ikke lages før linjen er borte (appen rydder den selv ved neste synk).
+  const medOppskriftId = (o.fikenLinjer || []).map(l => String(l && l.produktnummer || '')).filter(nr => nr.startsWith('oppskrift_'));
+  if (medOppskriftId.length) leggTil('oppskrift_id_paa_faktura', `Fakturalinje med en oppskrifts-id i stedet for et produktnummer (${medOppskriftId.join(', ')}) - fjern den før fakturering`, 'rod');
+
   // S.fikenKundeAlias/S.fikenKundeRabatt lastes i loadFromSupabase() (kun lesbare for admin via
   // RLS - uendret for andre roller, de kan ikke fakturere uansett). Kan være udefinert/tomt
   // (f.eks. gammel PWA-cache uten denne lastingen ennå) - da hoppes denne delen bare over,
@@ -835,7 +840,8 @@ function fakturaSjekk(o) {
   if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) {
     const { rader } = beregnSkalPaaBilen(o);
     const kjente = new Set(produktlisteModell(o).produkter.map(p => p.fiken_nummer).filter(Boolean));
-    const aktive = new Set(rader.filter(r => !r.fjernet).map(r => r.nr));
+    // Rader med bare deler (kilde 'deler', f.eks. dørbeskyttere på EV9) har ingen fakturalinje og en oppskrifts-id som nøkkel: de er aldri med her.
+    const aktive = new Set(rader.filter(r => !r.fjernet && r.kilde !== 'deler').map(r => r.nr));
     const paaFaktura = new Set((o.fikenLinjer || []).map(l => String(l.produktnummer || '')));
     const mangler = [...aktive].filter(nr => !paaFaktura.has(nr));
     const ekstra = [...paaFaktura].filter(nr => kjente.has(nr) && !aktive.has(nr));
@@ -855,7 +861,7 @@ async function fakturerViaFiken(id) {
   // fakturering"-lista viser, se kommentaren der for hvorfor dette er delt (funnet 2026-10-14,
   // rettet til å bruke kanoniskMerkeModell 5.11).
   const sjekk = fakturaSjekk(o);
-  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde');
+  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde' || g.kode === 'oppskrift_id_paa_faktura');
   if (stopper) {
     visToast(stopper.tekst + (stopper.kode === 'ukjent_modell' ? ' - legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.' : '.'));
     return;
