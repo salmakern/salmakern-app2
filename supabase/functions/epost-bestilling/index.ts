@@ -4,7 +4,7 @@
 //  * Døra: Resend signerer varselet (Svix). RESEND_INBOUND_WEBHOOK_SECRET (whsec_…) kontrolleres i konstant tid, og tidsstempelet må være innen 5 minutter.
 //    Funksjonen rulles ut med --no-verify-jwt (Resend sender ingen Supabase-JWT); signaturen er eneste nøkkel.
 //  * Bare e-post til EPOST_BESTILLING_ADRESSE behandles (annet på underdomenet ignoreres).
-//  * Innholdet hentes fra Resend (varselet har bare metadata) med RESEND_API_KEY, tolkes og vurderes (flyt.ts, tolk.ts, logikk.ts), og lagres med
+//  * Innholdet hentes fra Resend (varselet har bare metadata) med RESEND_INBOUND_API_KEY (egen nøkkel med lesetilgang; den felles RESEND_API_KEY kan bare sende), tolkes og vurderes (flyt.ts, tolk.ts, logikk.ts), og lagres med
 //    rpc('epost_bestilling_lagre') (service_role). Selve e-posten lagres aldri.
 //  * Svar: 200 når e-posten er behandlet eller bevisst ignorert; 5xx ved midlertidig feil, så Resend prøver igjen (lagringen er idempotent per e-post og rad).
 //  * Logger én JSON-linje per kall uten verdier (ingen adresser, chassis, navn eller hemmeligheter). Ingen Fiken, ingen e-post ut, ingen push.
@@ -28,7 +28,8 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== 'POST') { logg('metode', start, { http: 405 }); return svar({ kode: 'metode_ikke_tillatt' }, 405) }
     const hemmelighet = (Deno.env.get('RESEND_INBOUND_WEBHOOK_SECRET') ?? '').trim()
-    const apiNokkel = (Deno.env.get('RESEND_API_KEY') ?? '').trim()
+    // Egen nøkkel med lesetilgang (Full access): den felles RESEND_API_KEY er en ren sendenøkkel og gir 401 på /emails/receiving (sett 18.11).
+    const apiNokkel = (Deno.env.get('RESEND_INBOUND_API_KEY') ?? '').trim()
     const adresse = (Deno.env.get('EPOST_BESTILLING_ADRESSE') ?? '').trim().toLowerCase()
     if (!hemmelighet || !apiNokkel || !adresse) { logg('ikke_konfigurert', start, { http: 500 }); return svar({ kode: 'ikke_konfigurert' }, 500) }
     const lengde = Number(req.headers.get('content-length') ?? '0')

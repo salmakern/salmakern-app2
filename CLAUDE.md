@@ -844,8 +844,8 @@ Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
 
 **Status 18.11**: SQL-testen 16/16 mot prod i rullet-tilbake transaksjon (rest bekreftet borte), migrasjonen kjørt (tabell, 3 kolonner, 12 funksjoner, cron-jobb;
 tilganger kontrollert), appen ute (v92, ingen konsollfeil), `epost-bestilling` deployet med `--no-verify-jwt` (GET 405, POST «ikke_konfigurert» 500 til
-`RESEND_INBOUND_WEBHOOK_SECRET` er satt). `EPOST_BESTILLING_ADRESSE` = bestilling@inn.salmaker.as. `RESEND_API_KEY` fantes fra før (sept.): er den en ren
-sendenøkkel, kan den ikke lese mottatt e-post (feiler som 502 `resend_401/403` i loggen) og må byttes. Henrik: prisene i innkjøpsportalen er de samme som i Fiken.
+`RESEND_INBOUND_WEBHOOK_SECRET` er satt). `EPOST_BESTILLING_ADRESSE` = bestilling@inn.salmaker.as. `RESEND_API_KEY` er en ren sendenøkkel (ga `resend_401` på
+lesing 18.11), så funksjonen bruker en egen `RESEND_INBOUND_API_KEY` (Full access). Henrik: prisene i innkjøpsportalen er de samme som i Fiken.
 Gjenstår: domenet `inn.salmaker.as` i Resend + DNS hos Domeneshop, webhooken, og prøving med Henriks ekte e-poster.
 
 Henrik 18.11: SELGEREN videresender bestillingen fra innkjøpsportalen; forhandleren finnes fra avsenderens e-post blant selgerne (kontaktpersoner i

@@ -355,8 +355,8 @@ eller legger raden i «Innkommende» (`epost_bestillinger`, status `innkommende`
 - **Resend**: slå på mottak for underdomenet, og lag en webhook til `https://qoqpenbfdxeduylxirwk.supabase.co/functions/v1/epost-bestilling` med hendelsen
   `email.received`. Varselet har bare metadata; funksjonen henter innholdet med `GET /emails/receiving/{id}`, som også gir `authentication` ({spf, dkim,
   dmarc}): DMARC fail, eller verken SPF eller DKIM pass, gir Innkommende (Henrik 18.11).
-- **Hemmeligheter** (`npx supabase secrets set …`): `RESEND_INBOUND_WEBHOOK_SECRET` (whsec_… fra webhooken), `RESEND_API_KEY` (en nøkkel som kan lese mottatt
-  e-post; finnes kanskje allerede for portalen, i Vercel) og `EPOST_BESTILLING_ADRESSE` (f.eks. `bestilling@inn.salmaker.as`; annen post ignoreres).
+- **Hemmeligheter** (`npx supabase secrets set …`): `RESEND_INBOUND_WEBHOOK_SECRET` (whsec_… fra webhooken), `RESEND_INBOUND_API_KEY` (egen Resend-nøkkel med
+  Full access, bare for denne funksjonen; den felles `RESEND_API_KEY` er en ren sendenøkkel og gir 401 på lesing, sett 18.11) og `EPOST_BESTILLING_ADRESSE` (f.eks. `bestilling@inn.salmaker.as`; annen post ignoreres).
 - **Utrulling av funksjonen**: `npx supabase functions deploy epost-bestilling --project-ref qoqpenbfdxeduylxirwk --use-api --no-verify-jwt` (Resend sender
   ingen Supabase-JWT; Svix-signaturen er nøkkelen). Røyktest: POST uten signatur gir 401, GET gir 405.
 - **Sikkert treff** (alt må stemme, ellers Innkommende): avsenderen er en kontaktperson (e-post) hos nøyaktig én forhandler i Kontakter; ingen feilet
