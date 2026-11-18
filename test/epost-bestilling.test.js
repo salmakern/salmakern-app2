@@ -196,9 +196,17 @@ describe('flyt: hele e-posten fra Resend til lagring (falske avhengigheter)', as
     expect(autentiseringFeil([{ name: 'authentication-results', value: 'mx; spf=fail; dkim=none' }])).toMatch(/SPF/);
     expect(autentiseringFeil({ 'authentication-results': 'mx; spf=pass; dkim=pass; dmarc=pass' })).toBe(null);
     expect(autentiseringFeil({})).toBe(null);
+    // Resend sitt authentication-felt går foran headeren
+    expect(autentiseringFeil({}, { spf: 'pass', dkim: 'pass', dmarc: 'pass' })).toBe(null);
+    expect(autentiseringFeil({}, { spf: 'pass', dkim: 'pass', dmarc: 'fail' })).toMatch(/DMARC/);
+    expect(autentiseringFeil({}, { spf: 'gray', dkim: 'pass', dmarc: 'unknown' })).toBe(null);
+    expect(autentiseringFeil({ 'authentication-results': 'dmarc=pass' }, { spf: 'fail', dkim: 'fail', dmarc: 'unknown' })).toMatch(/SPF: fail, DKIM: fail/);
+    expect(autentiseringFeil({}, { spf: 'unknown', dkim: 'processing_failed', dmarc: 'unknown' })).toMatch(/ikke bekreftet/);
     expect(header([{ name: 'X-A', value: '1' }], 'x-a')).toBe('1');
     const { r } = await kjør({ from: 'selger@example.no', html: HTML, headers: { 'authentication-results': 'dmarc=fail' } });
     expect(r.sikre).toBe(0);
+    expect((await kjør({ from: 'selger@example.no', html: HTML, authentication: { spf: 'fail', dkim: 'fail', dmarc: 'fail' } })).r.sikre).toBe(0);
+    expect((await kjør({ from: 'selger@example.no', html: HTML, authentication: { spf: 'pass', dkim: 'pass', dmarc: 'pass' } })).r.sikre).toBe(2);
   });
   it('ugyldig id eller e-post som ikke finnes: ingenting lagres', async () => {
     const lagret = [];

@@ -3,7 +3,8 @@
 import { htmlTilTekst, tolkEpost } from './tolk.ts'
 import { avsenderAdresse, finnSelger, vurderRad, type FikenPris, type Kontakt, type Produkt } from './logikk.ts'
 
-export type MottattEpost = { from?: string | null; to?: unknown; html?: string | null; text?: string | null; headers?: unknown }
+export type Autentisering = { spf?: string; dkim?: string; dmarc?: string } | null
+export type MottattEpost = { from?: string | null; to?: unknown; html?: string | null; text?: string | null; headers?: unknown; authentication?: Autentisering }
 export type Avhengigheter = {
   hentEpost: (id: string) => Promise<MottattEpost | null>
   hentData: () => Promise<{ produkter: Produkt[]; fikenPriser: FikenPris[]; kontakter: Kontakt[] }>
@@ -22,9 +23,17 @@ export function header(headers: unknown, navn: string): string {
   return ''
 }
 
-// Avsenderen kan forfalskes. Sier mottakerens kontroll (Authentication-Results) at DMARC, SPF eller DKIM FEILET, går alt til Innkommende.
-// Mangler headeren, stoppes ikke e-posten (det er ikke sett hva Resend gir ennå); en ny ordre er uansett «ikke bekreftet».
-export function autentiseringFeil(headers: unknown): string | null {
+// Avsenderen kan forfalskes. Resend gir resultatet av kontrollen i `authentication` ({spf, dkim, dmarc}: pass/fail/gray/processing_failed/unknown).
+// Henrik 18.11: feilet kontroll går alltid til Innkommende. Regelen: DMARC fail stopper; DMARC pass slipper; ellers må SPF eller DKIM være pass.
+// Mangler feltet (eldre e-post), brukes Authentication-Results-headeren som reserve; mangler begge, stoppes ikke e-posten (en ny ordre er uansett ikke bekreftet).
+export function autentiseringFeil(headers: unknown, auth?: Autentisering): string | null {
+  if (auth && typeof auth === 'object') {
+    const v = (x: unknown) => String(x ?? '').toLowerCase()
+    if (v(auth.dmarc) === 'fail') return 'Avsenderen er ikke bekreftet (DMARC feilet)'
+    if (v(auth.dmarc) === 'pass') return null
+    if (v(auth.spf) === 'pass' || v(auth.dkim) === 'pass') return null
+    return `Avsenderen er ikke bekreftet (SPF: ${v(auth.spf) || 'ukjent'}, DKIM: ${v(auth.dkim) || 'ukjent'})`
+  }
   const ar = header(headers, 'authentication-results').toLowerCase()
   if (!ar) return null
   if (/\bdmarc=(fail|reject|quarantine)\b/.test(ar)) return 'Avsenderen er ikke bekreftet (DMARC feilet)'
@@ -43,7 +52,7 @@ export async function behandleEpost(emailId: string, dep: Avhengigheter): Promis
   const data = await dep.hentData()
   const selger = finnSelger(avsender, data.kontakter)
   const avsenderFeil = 'feil' in selger ? selger.feil : null
-  const authFeil = autentiseringFeil(e.headers)
+  const authFeil = autentiseringFeil(e.headers, e.authentication)
   // HTML-en har tabellen; tekstversjonen er reserve.
   const tekst = e.html ? htmlTilTekst(e.html) : String(e.text ?? '')
   const { rader, feil } = tolkEpost(tekst)

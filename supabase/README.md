@@ -345,10 +345,16 @@ eller legger raden i «Innkommende» (`epost_bestillinger`, status `innkommende`
 
 - **Rekkefølge ved utrulling** (hvert steg bare etter Henriks ja): (1) SQL-testen i rullet-tilbake transaksjon, (2) migrasjonen, (3) appen (sw.js v90; uten
   migrasjonen viser appen bare ingen «Innkommende»), (4) hemmelighetene og funksjonen, (5) DNS + Resend, (6) én test-e-post fra en TEST-selger.
-- **DNS (varsle Henrik FØR)**: én MX-post på et underdomene (f.eks. `inn.salmaker.as`) til Resend, verdien står i Resend-dashbordet (Domains → Receiving).
-  Rører ikke `salmaker.as` selv, Microsoft 365-posten, nettsiden eller appen (se CLAUDE.md om domeneendringer).
+- **DNS (Henrik valgte Resend 18.11 og er varslet; hver post legges inn først etter et eget ja)**: alt ligger under underdomenet `inn.salmaker.as`, ingenting
+  på `salmaker.as` selv (Microsoft 365-posten, nettsiden og appen røres ikke). Resend krever at domenet er lagt til og bekreftet FØR mottak slås på:
+  (1) Resend → Domains → Add domain `inn.salmaker.as` (region eu-west-1). Resend viser da postene for bekreftelse (DKIM-TXT `resend._domainkey.inn`, og MX + SPF-TXT
+  på `send.inn`). Verdiene er unike per domene og kopieres fra dashbordet, aldri fra denne fila. (2) Når domenet er bekreftet: slå på «Receiving» på domenets
+  side; Resend viser MX-posten for `inn` (vertsnavn `inn`, f.eks. `receive-euw1.forge.rmta.net` eller `inbound-smtp.<region>.amazonaws.com`, laveste
+  prioritet, f.eks. 10). (3) Legg den inn hos Domeneshop og trykk «I've added the record». IKKE bruk `forhandler.salmaker.as`: den peker til Vercel, og en
+  MX der kan komme i konflikt med den.
 - **Resend**: slå på mottak for underdomenet, og lag en webhook til `https://qoqpenbfdxeduylxirwk.supabase.co/functions/v1/epost-bestilling` med hendelsen
-  `email.received`. Varselet har bare metadata; funksjonen henter innholdet med `GET /emails/receiving/{id}`.
+  `email.received`. Varselet har bare metadata; funksjonen henter innholdet med `GET /emails/receiving/{id}`, som også gir `authentication` ({spf, dkim,
+  dmarc}): DMARC fail, eller verken SPF eller DKIM pass, gir Innkommende (Henrik 18.11).
 - **Hemmeligheter** (`npx supabase secrets set …`): `RESEND_INBOUND_WEBHOOK_SECRET` (whsec_… fra webhooken), `RESEND_API_KEY` (en nøkkel som kan lese mottatt
   e-post; finnes kanskje allerede for portalen, i Vercel) og `EPOST_BESTILLING_ADRESSE` (f.eks. `bestilling@inn.salmaker.as`; annen post ignoreres).
 - **Utrulling av funksjonen**: `npx supabase functions deploy epost-bestilling --project-ref qoqpenbfdxeduylxirwk --use-api --no-verify-jwt` (Resend sender
