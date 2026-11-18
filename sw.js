@@ -96,7 +96,8 @@
 // v88 - «Kun ekstrautstyr (ingen ombygging)» på bil-ordrer: ingen tvangsflyt/utstyrsmal, bare Ekstra utstyr i Varer fra lager, ikke i Admin-ark
 // v89 - trinn 4: egen side «Fakturering» (admin) og kortere Oversikt-kort «Klar til fakturering»
 // v90 - «Hent selgere fra portalen» viser navn og grunn for forhandlere som trenger et manuelt blikk
-const CACHE = 'salmakern-v90';
+// v91 - fiks: S.nextId forgiftet av timer-ID-stripping, blokkerte ny ansatt-oppretting
+const CACHE = 'salmakern-v91';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

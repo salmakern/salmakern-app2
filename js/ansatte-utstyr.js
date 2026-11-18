@@ -2046,7 +2046,10 @@ async function adminLagreTimer() {
   } else {
     const ansattId = ansattIdFelt;
     const a = S.ansatte.find(x=>String(x.id)===ansattId); if(!a) return;
-    const nyId = 't'+(++S.nextId);
+    // Samme kollisjonsfrie skjema som nyTimerId() (timer.js) bruker for alle andre timer-rader
+    // siden 2026-10-22 - 't'+(++S.nextId) var sårbart for akkurat den kollisjonen OG (funnet
+    // 2026-11-18) for å forgifte S.nextId selv når ID-en senere ble digit-strippet ved innlasting.
+    const nyId = nyTimerId('t');
     const timerEntry = { id:nyId, ansattId:a.id, ansatt:a.navn, dato, type, start, stopp, mins, _localAt:Date.now() };
     S.timer.push(timerEntry);
     if(db) db.from('timer_entries').insert({id:nyId, ansatt_id:a.id, ansatt:a.navn, dato, type, start, stopp, mins})
