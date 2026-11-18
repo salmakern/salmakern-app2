@@ -687,6 +687,20 @@ function renderKontakter() {
 // resultatet. S.kontakter oppdateres IKKE herfra - skrivingen kommer fra serveren via
 // edge-funksjonen, så den vanlige Realtime-hendelsen for innstillinger plukker den opp og
 // rendrer på nytt selv, akkurat som når en annen ansatt redigerer en kontaktperson.
+// Leser rapporten fra portal_selgere_synk og lager én linje per forhandler som ble hoppet over eller har en konflikt.
+// Statusene settes i databasefunksjonen (migrasjon 20261105120000_portal_selgere_synk.sql).
+const SELGER_SYNK_GRUNN = {
+  ukjent_kontakt_id: 'finnes i portalen, men er ikke koblet til en kontakt i appen',
+  navn_stemmer_ikke: 'navnet i portalen er ulikt navnet i Kontakter',
+  flere_navnekandidater: 'flere kontaktpersoner kan passe til en selger',
+  samme_navn_annen_epost: 'en selger har samme navn, men annen e-post i appen',
+};
+function selgerSynkAvvik(rader) {
+  return (rader || [])
+    .filter(r => r && r.status && SELGER_SYNK_GRUNN[r.status])
+    .map(r => `${r.forhandler || '(uten navn)'}: ${SELGER_SYNK_GRUNN[r.status]}`);
+}
+
 async function hentSelgereFraPortalen() {
   if (!me || me.rolle !== 'admin') return;
   const btn = document.getElementById('hentSelgereBtn');
@@ -704,7 +718,14 @@ async function hentSelgereFraPortalen() {
     if (sum('konflikt') || svar.ukjentKontaktId || svar.navnMismatch) {
       deler.push(`${sum('konflikt') + (svar.ukjentKontaktId||0) + (svar.navnMismatch||0)} trenger et manuelt blikk`);
     }
-    visToast(deler.join(', '), 'ok');
+    // Navn og grunn for hver forhandler som trenger et blikk (2026-11-18, Henrik: «vis navnet»).
+    const avvik = selgerSynkAvvik(rader);
+    if (avvik.length) {
+      visToast(deler.join(', ') + ':\n' + avvik.join('\n'), 'ok', 20000);
+      console.info('Hent selgere fra portalen, trenger et manuelt blikk:\n' + avvik.join('\n'));
+    } else {
+      visToast(deler.join(', '), 'ok');
+    }
   } catch (e) {
     visToast('Henting av selgere feilet: ' + e.message);
   } finally {

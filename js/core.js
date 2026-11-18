@@ -121,12 +121,12 @@ function fmtDatoKort(iso) {
   return `${dag}.${mnd}.${aar}`;
 }
 
-function visToast(melding, type='feil') {
+function visToast(melding, type='feil', varighetMs=8000) {
   let el = document.getElementById('globalToast');
   if (!el) {
     el = document.createElement('div');
     el.id = 'globalToast';
-    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.5);transition:opacity 0.3s;pointer-events:none';
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;white-space:pre-line;box-shadow:0 4px 12px rgba(0,0,0,0.5);transition:opacity 0.3s;pointer-events:none';
     document.body.appendChild(el);
   }
   if (type === 'ok') {
@@ -137,7 +137,7 @@ function visToast(melding, type='feil') {
   el.textContent = melding;
   el.style.opacity = '1'; el.style.display = 'block';
   clearTimeout(el._tid);
-  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 8000);
+  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, varighetMs);
 }
 
 // ════════════════════════════════════════════════════
