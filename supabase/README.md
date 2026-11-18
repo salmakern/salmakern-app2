@@ -337,7 +337,7 @@ SQL-testen (`tester/portal_timer_fakta_TEST_body.sql`, 76 sjekker S1-S20) er kj�
 Funksjonen er også kjørt som en ren SELECT (`--read-only`) mot de ekte radene: 34 rader, alle garantiene holder (alle 15 felt, alle statuskoder blant de åtte, alle datoer er ekte datoer, `hentet_dato` er satt for alle 20 hentede og aldri for de andre).
 **IKKE testet:** edge-funksjonen mot ekte Deno og ekte Supabase-gateway (bare falsk Deno i Vitest, som for `portal-import-fakta`); et ekte kall fra portalen (krever hemmeligheten og at portalen henter); at portalen faktisk tar imot svaret (portalens egen test); en enhet med annen tidssone enn norsk i loggen (`hentet_dato` fra logglinjen er enhetens lokale dato).
 
-## Bestilling på e-post (trinn 5 av «Én produktliste», 2026-11-18, BYGGET PÅ GREN, IKKE kjørt og IKKE utrullet)
+## Bestilling på e-post (trinn 5 av «Én produktliste», 2026-11-18: migrasjon kjørt, app og funksjon utrullet; Resend/DNS gjenstår)
 
 Selgeren videresender bestillingen fra forhandlerens innkjøpsportal til en egen adresse. Edge-funksjonen `epost-bestilling` (Resend inbound) leser den, og
 `epost_bestilling_lagre` legger produktene rett på ordren ved sikkert treff, lager ordren («På vei», ikke bekreftet) når ingen aktiv bil-ordre har chassis.nr,

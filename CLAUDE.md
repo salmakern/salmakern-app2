@@ -840,7 +840,13 @@ Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
 - `sw.js` CACHE v89. Vakt: `test/fakturering.test.js` (10) og `test/klar-til-fakturering.test.js`. Kontrollert etter utrulling: salmaker.as serverer v89 og `js/fakturering.js`, fanen og funksjonene finnes, ingen konsollfeil.
   **Ikke testet:** en ekte kladd fra siden (Fiken-kladder kan ikke slettes) og siden med data i en innlogget økt.
 
-## Én produktliste, trinn 5: bestilling på e-post (2026-11-18, BYGGET PÅ GREN `trinn5/epost-bestilling`, IKKE kjørt og IKKE utrullet)
+## Én produktliste, trinn 5: bestilling på e-post (2026-11-18, UTRULLET samme dag med Henriks ja: migrasjon kjørt, app main 6de5c87 sw v92, funksjonen deployet; VENTER på Resend-domene/DNS og webhook-hemmelighet)
+
+**Status 18.11**: SQL-testen 16/16 mot prod i rullet-tilbake transaksjon (rest bekreftet borte), migrasjonen kjørt (tabell, 3 kolonner, 12 funksjoner, cron-jobb;
+tilganger kontrollert), appen ute (v92, ingen konsollfeil), `epost-bestilling` deployet med `--no-verify-jwt` (GET 405, POST «ikke_konfigurert» 500 til
+`RESEND_INBOUND_WEBHOOK_SECRET` er satt). `EPOST_BESTILLING_ADRESSE` = bestilling@inn.salmaker.as. `RESEND_API_KEY` fantes fra før (sept.): er den en ren
+sendenøkkel, kan den ikke lese mottatt e-post (feiler som 502 `resend_401/403` i loggen) og må byttes. Henrik: prisene i innkjøpsportalen er de samme som i Fiken.
+Gjenstår: domenet `inn.salmaker.as` i Resend + DNS hos Domeneshop, webhooken, og prøving med Henriks ekte e-poster.
 
 Henrik 18.11: SELGEREN videresender bestillingen fra innkjøpsportalen; forhandleren finnes fra avsenderens e-post blant selgerne (kontaktpersoner i
 Kontakter); ukjent avsender går til «Innkommende»; «Mengde» kan være mer enn 1; datoene brukes ikke; finnes ikke ordren, lages den som «På vei», ikke
