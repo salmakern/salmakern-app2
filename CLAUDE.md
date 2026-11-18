@@ -853,7 +853,7 @@ bekreftet. Rett på ordren BARE ved sikkert treff. Ingenting går til Fiken. Opp
 - **App** (`js/epost-bestilling.js`, lastes sist): merket «E-POST · IKKE BEKREFTET» (i `portalBadgeHTML`), Bekreft-banneret (alle ansatte,
   `epost_bekreft_ordre`), og kortet «Innkommende bestillinger på e-post» på Oversikt (admin): Legg på ordren / Lag ny ordre / Avvis. «Skal på bilen» viser
   e-postlinjene som bestilling («Bestilt på e-post», × antall), og `synkProduktliste` legger fakturalinjene (med antall, uten rabatt) når ordren er bekreftet
-  (en ordre som fantes fra før: med en gang). `sw.js` CACHE v90 på grenen.
+  (en ordre som fantes fra før: med en gang). `sw.js` CACHE v92.
 - **Kjente begrensninger**: lagertrekket tar oppskriften én gang uansett antall; formatet for antall på et tilvalg er ikke sett (tolkeren godtar «x 2», «2 stk»
   og «(2)»); prisene kontrolleres mot `fiken_priser` (stemmer innkjøpsportalens priser ikke med Fiken, havner alt i Innkommende, som er trygt, men må justeres).
 - **Test**: `test/epost-bestilling.test.js` (23), `test/epost-bestilling-app.test.js` (14, mutasjonssjekket), SQL 22 kontroller mot PGlite (også

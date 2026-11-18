@@ -121,12 +121,12 @@ function fmtDatoKort(iso) {
   return `${dag}.${mnd}.${aar}`;
 }
 
-function visToast(melding, type='feil') {
+function visToast(melding, type='feil', varighetMs=8000) {
   let el = document.getElementById('globalToast');
   if (!el) {
     el = document.createElement('div');
     el.id = 'globalToast';
-    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.5);transition:opacity 0.3s;pointer-events:none';
+    el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;white-space:pre-line;box-shadow:0 4px 12px rgba(0,0,0,0.5);transition:opacity 0.3s;pointer-events:none';
     document.body.appendChild(el);
   }
   if (type === 'ok') {
@@ -137,7 +137,7 @@ function visToast(melding, type='feil') {
   el.textContent = melding;
   el.style.opacity = '1'; el.style.display = 'block';
   clearTimeout(el._tid);
-  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, 8000);
+  el._tid = setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.style.display='none',300); }, varighetMs);
 }
 
 // ════════════════════════════════════════════════════
@@ -605,6 +605,32 @@ async function hentAlleRader(lagSporring, sideStorrelse = 1000) {
   }
 }
 
+// Beregner S.nextId (det delte, rent lokale telleverket for nye ID-er - ansatt.id, 't'/'u'/'k'/
+// 'ds'/'br'-prefikser) ut fra høyeste kjente ID blant ansatte/timer/utstyrMaler. Timer-ID-er finnes
+// i to helt ulike former: det gamle, delte telleverket ('t'+tall, fortsatt brukt av
+// adminLagreTimer) og det uavhengige skjemaet fra nyTimerId() ('t'+Date.now()+'_'+tilfeldig,
+// timer.js). Å strippe bort ALT som ikke er siffer (den gamle måten) limer for sistnevnte sammen
+// tidsstempelet og sifrene i den tilfeldige suffiksen til ett meningsløst, astronomisk tall -
+// funnet i produksjon 2026-11-18: en ekte sykmelding (ansatt 347) fikk id "t17938042281525372"
+// slik, og det tallet ble deretter S.nextId og dermed forsøkt brukt som ny ansatt.id (en ekte
+// Postgres 'integer'-kolonne, som overflower langt under det - og blokkerte all oppretting av
+// nye ansatte). Derfor: bare rene 't<tall>'-ID-er (det gamle telleverket) teller med, og
+// resultatet kappes uansett til et fornuftig tak som vern mot enhver fremtidig tilsvarende
+// forgiftning.
+function tallEtterPrefiks(prefiks, id) {
+  const m = new RegExp('^' + prefiks + '(\\d+)$').exec(String(id));
+  return m ? Number(m[1]) : 0;
+}
+const NEXTID_TAK = 10000000; // godt over høyeste ekte ID (990033), godt under Postgres sin 'integer'-grense
+function beregnNextId(ansatte, timer, utstyrMaler) {
+  const alleIds = [
+    ...(ansatte||[]).map(a=>Number(a.id)||0),
+    ...(timer||[]).map(t=>tallEtterPrefiks('t', t.id)),
+    ...(utstyrMaler||[]).map(m=>tallEtterPrefiks('u', m.id))
+  ].filter(n => n <= NEXTID_TAK);
+  return Math.max(100, ...alleIds) + 1;
+}
+
 async function loadFromSupabase() {
   const lastStart = Date.now();
   const [aR,oR,tR,sR,pmkR,fkaR,fkrR,ppR] = await Promise.all([
@@ -744,13 +770,8 @@ async function loadFromSupabase() {
     S.standardtider  = sR.data?.standardtider   || {};
     S.timesatsKr     = sR.data?.timesats_kr     ?? null;
   }
-  // Sett nextId til høyere enn alle eksisterende ID-er
-  const alleIds = [
-    ...S.ansatte.map(a=>Number(a.id)||0),
-    ...S.timer.map(t=>Number(String(t.id).replace(/\D/g,''))||0),
-    ...(S.utstyrMaler||[]).map(m=>Number(String(m.id).replace(/\D/g,''))||0)
-  ];
-  S.nextId = Math.max(100, ...alleIds) + 1;
+  // Sett nextId til høyere enn alle eksisterende ID-er (se beregnNextId() over).
+  S.nextId = beregnNextId(S.ansatte, S.timer, S.utstyrMaler);
   if (!sR.error) {
     // Fiks duplikat-ID-er i utstyrMaler
     let malIdFikset = false;
