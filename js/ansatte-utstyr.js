@@ -922,6 +922,10 @@ function rapportNaviger(dir) {
   renderOrdreRapport();
 }
 
+// Ordrene som telles i Ordrerapport og den detaljerte rapporten. «Kun ekstrautstyr» (Henrik 2026-11-19) er ikke en bil som er bygget om, så den holdes utenfor
+// (som Bil-effektivitet). Inline-sjekk, ikke erKunEkstrautstyr(): filen lastes alene i enkelte tester.
+function rapportOrdrer() { return (S.ordrer||[]).filter(o => o.kunEkstrautstyr !== true); }
+
 // Kjøres per hele kalenderår (rapportOffset er antall år tilbake fra i år), med de 12
 // månedene som stolper og en sammenligning mot forrige år (antall + vekst i %).
 function renderOrdreRapport() {
@@ -935,7 +939,7 @@ function renderOrdreRapport() {
   const rapporter = [];
   for (let m=0; m<12; m++) {
     const prefix = `${visAar}-${String(m+1).padStart(2,'0')}`;
-    const ordrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(prefix));
+    const ordrer = rapportOrdrer().filter(o=>o.ankomstdato?.startsWith(prefix));
     const ferdig = ordrer.filter(o=>o.godkjent).length;
     rapporter.push({lbl:maanedNavn[m], tot:ordrer.length, ferdig});
   }
@@ -951,9 +955,9 @@ function renderOrdreRapport() {
       </div>
     </div>`).join('');
 
-  const aarOrdrer = S.ordrer.filter(o=>o.ankomstdato?.startsWith(`${visAar}-`));
+  const aarOrdrer = rapportOrdrer().filter(o=>o.ankomstdato?.startsWith(`${visAar}-`));
   const aarFerdig = aarOrdrer.filter(o=>o.godkjent).length;
-  const forrigeAntall = S.ordrer.filter(o=>o.ankomstdato?.startsWith(`${visAar-1}-`)).length;
+  const forrigeAntall = rapportOrdrer().filter(o=>o.ankomstdato?.startsWith(`${visAar-1}-`)).length;
   let veksttekst = '<div class="small muted" style="margin-top:8px">Ingen data for ' + (visAar-1) + ' å sammenligne med</div>';
   if (forrigeAntall > 0) {
     const veksProsent = Math.round((aarOrdrer.length - forrigeAntall) / forrigeAntall * 100);
@@ -1049,7 +1053,7 @@ function renderDetaljertOrdrerapport() {
   const data = [];
   for (let i = detRapportRange-1; i >= 0; i--) {
     const aar = naAar - i;
-    data.push({ aar, antall: S.ordrer.filter(o=>o.ankomstdato?.startsWith(String(aar))).length });
+    data.push({ aar, antall: rapportOrdrer().filter(o=>o.ankomstdato?.startsWith(String(aar))).length });
   }
   document.getElementById('detRapport5Btn')?.classList.toggle('red', detRapportRange===5);
   document.getElementById('detRapport10Btn')?.classList.toggle('red', detRapportRange===10);
@@ -1060,7 +1064,7 @@ function renderDetaljertOrdrerapport() {
   if (valgtAarEl) valgtAarEl.textContent = valgtAar;
 
   const forhandlerSok = (document.getElementById('detRapportForhandlerSok')?.value||'').toLowerCase().trim();
-  const ordrerIAar = S.ordrer
+  const ordrerIAar = rapportOrdrer()
     .filter(o=>o.ankomstdato?.startsWith(String(valgtAar)))
     .filter(o=>!forhandlerSok || (o.kunde||'').toLowerCase().includes(forhandlerSok));
   const perModell = {};

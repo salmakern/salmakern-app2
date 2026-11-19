@@ -12,7 +12,7 @@ import { byggRyddReferanser, tegnSteder, ryddRader, R_AKTIV, R_VENTER, R_ARKIVER
 //   - kalenderkortene i ukekalenderen og kalenderlinja på Oversikt-kortene og Ordre-kortene: biltilsynssted (kalenderdato og -tid står som før)
 //   - kundehistorikken (modalen bak «📋 Historikk»): type og variant (merke og modell står igjen)
 //   - PDF-rapporten (genPDFSkriv): variant, farge, type, versjon, flåte, COC, fullmakt, diagnose, time på biltilsyn, vekter, drivstoff, hengerfeste, sjekklista «Har ved ankomst»,
-//     ankomst-/skade-/manglende-deler-bildene og Tvangsflyt-merket
+//     ankomst-/skade-/manglende-deler-bildene (Tvangsflyt-merket står igjen som «Tvangsflyt 0/1», Henrik 2026-11-19)
 //
 // BEVIS for at vanlige bil-ordrer og leveranser er UENDRET: test/fixtures/kun-rydd-referanse-vanlig.json er HTML-en den ekte appen tegnet for de samme stedene FØR endringen
 // (origin/main 9fef219, git archive i en mappe utenfor arbeidstreet, klokka fryst, likt i Europe/Oslo, UTC og America/Los_Angeles). Testen bygger referansen mot dagens kode og krever
@@ -238,7 +238,7 @@ describe('PDF-rapporten (genPDFSkriv) for en kun-ordre', () => {
 
   it('har ikke Variant, Farge, Type, Versjon, flåte, COC, fullmakt, diagnose, time på biltilsyn, vekter, drivstoff, hengerfeste, sjekklista «Har ved ankomst» eller ankomst-/skade-/manglende-deler-bildene', () => {
     for (const s of ['>Type<', '>Variant<', '>Versjon<', '>Farge<', 'Flåte', '>COC<', '>Fullmakt<', '>Diagnose<', 'Time biltilsyn', 'Vekter (kg)', 'Ved ankomst', '>Drivstoff<', 'Totalpris', 'Kundepris', 'Hengerfeste', 'Utstyr — har ved ankomst', 'Ingen mal valgt',
-      'Bilder — ankomst', 'Bilder — avstand / skader', 'Bilder — manglende deler', 'Rødt tall = endret', 'Kunde og dokumenter', 'Tvangsflyt']) expect(pdf, s).not.toContain(s);
+      'Bilder — ankomst', 'Bilder — avstand / skader', 'Bilder — manglende deler', 'Rødt tall = endret', 'Kunde og dokumenter']) expect(pdf, s).not.toContain(s);
     for (const side of ['a', 's', 'm']) expect(pdf, side).not.toContain(`KUN_A_${side}0.jpg`);
   });
   it('kontroll: den samme ordren uten kun-flagget har alt dette i PDF-en', () => {
@@ -250,10 +250,12 @@ describe('PDF-rapporten (genPDFSkriv) for en kun-ordre', () => {
       'Utstyr — skal ha etter visning', sent('A').skalHa, 'Bilder — levering', 'KUN_A_l0.jpg', 'Ansatte på ordren', 'TEST - Admin', '08:00', '>Notater<', sent('A').notat, 'Utført av', 'Mottatt av forhandler', 'Merknader ved overlevering',
       'Status: Påbegynt', 'Ikke godkjent', 'Kun ekstrautstyr (ingen ombygging)']) expect(pdf, s).toContain(s);
   });
-  it('merket «Kun ekstrautstyr» står i stedet for Tvangsflyt-merket (kravet «Status er Hentet» sier det samme som Status-merket)', () => {
-    expect(pdf).toContain('>Kun ekstrautstyr</span>');
-    expect(pdf).not.toMatch(/Tvangsflyt \d+\/\d+/);
-    expect(kontrollPdf).toMatch(/Tvangsflyt \d+\/\d+/);
+  it('toppmerket er «Tvangsflyt 0/1» for en kun-ordre som ikke er Hentet og «Tvangsflyt 1/1» når den er Hentet (Henrik 2026-11-19), og en vanlig bil har sine 7 krav', () => {
+    expect(pdf).toContain('>Tvangsflyt 0/1<'); // R_AKTIV: Påbegynt
+    expect(pdfAv(kun.ut, R_VENTER)).toContain('>Tvangsflyt 0/1<'); // Ikke påbegynt
+    expect(pdfAv(kun.ut, R_ARKIVERT)).toContain('>Tvangsflyt 1/1<'); // Hentet
+    expect(pdf).not.toContain('>Kun ekstrautstyr</span>'); // det gamle toppmerket er borte (kun-linja i ombyggingsdelen står)
+    expect(kontrollPdf).toMatch(/>Tvangsflyt \d+\/7</);
     expect(kontrollPdf).not.toContain('>Kun ekstrautstyr</span>');
   });
   it('Ombygging-boksene (som aldri kan være huket av i en kun-ordre) er erstattet av én linje', () => {
@@ -309,7 +311,7 @@ describe('PDF-rapporten (genPDFSkriv) for en kun-ordre', () => {
     const p = tegnSteder(app, { pdf: ['ord_1700000000200'] })['pdf_ord_1700000000200'];
     expect(p).toContain('TESTWXYZ0000000T1');
     expect(p).toMatch(KUN_LINJE);
-    for (const s of ['>Variant<', '>Farge<', 'Vekter (kg)', 'Utstyr — har ved ankomst', 'Bilder — ankomst', 'Tvangsflyt']) expect(p, s).not.toContain(s); // feiler mot koden FØR rydningen (da tegnet PDF-en alt dette også for en tom ordre)
+    for (const s of ['>Variant<', '>Farge<', 'Vekter (kg)', 'Utstyr — har ved ankomst', 'Bilder — ankomst']) expect(p, s).not.toContain(s); // feiler mot koden FØR rydningen (da tegnet PDF-en alt dette også for en tom ordre)
     expect(p).toContain('Ingen tilvalg');
     expect(p).toContain('Ingen meldt på');
     expect((p.match(/<div\b/g) || []).length).toBe((p.match(/<\/div>/g) || []).length);
@@ -378,5 +380,78 @@ describe('sw.js og dokumentasjonen følger endringen', () => {
     expect(avsnitt, 'CLAUDE.md har avsnittet «Ryddet i de andre stedene»').not.toBeNull();
     expect(avsnitt[0]).toContain(`\`sw.js\` CACHE v${dennesVersjon}`);
     expect(avsnitt[0]).toContain('IKKE utrullet');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Vedtak-avkrysningen og ordrerapportene (Henrik 2026-11-19: «Vedtak-avkrysningen, Ordrerapportene og PDF: vis Tvangsflyt 0/1»)
+describe('Vedtak-avkrysningen og ordrerapportene holder en kun-ordre utenfor', () => {
+  const ordre = (id, kun, over = {}) => sandbox.dbToOrdre(radMedSentinel(vanligRad({ id, regnr: 'AB2' + id.slice(-4), chassis: 'TESTWXYZ000V' + id.slice(-5), ordre_status: 'paabegynt', ankomstdato: '2026-11-10', godkjent: false, ...over }), 'A', kun));
+  const KUN = 'ord_1700000000301', VANLIG = 'ord_1700000000302';
+  const sett = (...rader) => { frysTid(app); settOppTilstand(app); S.flater = []; S.ordrer = rader; app.consoleFeil.length = 0; };
+  const detaljAv = (o, rolle = 'admin') => { app.settMe({ id: 1, navn: 'TEST - ' + rolle, rolle }); S.ordrer = [o]; app.settAktivOrdre(o.id); sandbox.buildOrdreDetail(); const h = String(sandbox.document.getElementById('ordreDetail').innerHTML); app.settAktivOrdre(null); return h; };
+
+  it('Vedtak-kortet (admin) vises ikke for en kun-ordre, men for en vanlig bil; ansatte ser det aldri', () => {
+    sett(ordre(KUN, true), ordre(VANLIG, false));
+    app.settMe({ id: 1, navn: 'TEST - admin', rolle: 'admin' });
+    expect(sandbox.godkjentKortHTML(S.ordrer[0])).toBe('');
+    expect(sandbox.godkjentKortHTML(S.ordrer[1])).toContain('toggleGodkjentBiltilsyn');
+    app.settMe({ id: 2, navn: 'TEST - ansatt', rolle: 'ansatt' });
+    expect(sandbox.godkjentKortHTML(S.ordrer[1])).toBe('');
+  });
+  it('Vedtak-avkrysningen øverst i ordren vises ikke for en kun-ordre, men for en vanlig bil', () => {
+    sett(ordre(KUN, true), ordre(VANLIG, false));
+    const kun = S.ordrer[0], vanlig = S.ordrer[1];
+    expect(detaljAv(kun)).not.toContain('toggleGodkjentBiltilsyn');
+    expect(detaljAv(vanlig)).toContain(`toggleGodkjentBiltilsyn('${VANLIG}')`);
+    expect(app.consoleFeil).toEqual([]);
+  });
+  it('Ordre-lista og Oversikt har ingen Vedtak-avkrysning på en kun-ordre (vanlig bil har den)', () => {
+    sett(ordre(KUN, true, { ordre_status: 'paabegynt' }), ordre(VANLIG, false, { ordre_status: 'paabegynt' }));
+    const ut = tegnSteder(app, {});
+    const liste = String(del(ut, 'ordreListe_admin.ordreListeResultat'));
+    expect(liste).toContain(`toggleGodkjentBiltilsyn('${VANLIG}')`);
+    expect(liste).not.toContain(`toggleGodkjentBiltilsyn('${KUN}')`);
+  });
+
+  describe('Ordrerapport og detaljert ordrerapport', () => {
+    const aarsTotal = () => { app.kjor('rapportOffset = 0'); app.kjor('renderOrdreRapport()'); return String(sandbox.document.getElementById('ordreRapportAarTotal').innerHTML); };
+    const antallBiler = (html) => Number(/(\d+)<\/span><div class="small muted">biler totalt/.exec(html)[1]);
+    const detaljert = () => { app.kjor('detRapportValgtAar = 2026'); app.kjor('renderDetaljertOrdrerapport()'); return String(sandbox.document.getElementById('detRapportModellOversikt').innerHTML); };
+    it('årstotalen teller bare vanlige biler: en kun-ordre alene gir 0, sammen med en vanlig bil gir 1', () => {
+      sett(ordre(KUN, true));
+      expect(antallBiler(aarsTotal())).toBe(0);
+      sett(ordre(KUN, true), ordre(VANLIG, false));
+      expect(antallBiler(aarsTotal())).toBe(1);
+      sett(ordre(VANLIG, false));
+      expect(antallBiler(aarsTotal())).toBe(1); // kontroll: uten kun-flagget teller samme ordre
+      expect(app.consoleFeil).toEqual([]);
+    });
+    it('sammenligningen med forrige år og månedsstolpene teller heller ikke kun-ordrer', () => {
+      const i2025 = (id, kun) => ordre(id, kun, { ankomstdato: '2025-06-10' });
+      sett(i2025('ord_1700000000311', true), i2025('ord_1700000000312', true), ordre(VANLIG, false));
+      expect(aarsTotal()).toContain('Ingen data for 2025 å sammenligne med');
+      sett(i2025('ord_1700000000311', false), ordre(VANLIG, false));
+      expect(aarsTotal()).toContain('1 biler)'); // kontroll: en vanlig bil i 2025 gir sammenligning
+      sett(ordre(KUN, true, { ankomstdato: '2026-03-05' }));
+      app.kjor('rapportOffset = 0'); app.kjor('renderOrdreRapport()');
+      expect(String(sandbox.document.getElementById('ordreRapportInnhold').innerHTML)).not.toContain('1 biler');
+    });
+    it('grafen over år i den detaljerte rapporten teller ikke en kun-ordre (siste punkt er inneværende år)', () => {
+      const grafAntall = () => { app.kjor('detRapportValgtAar = 2026'); app.kjor('renderDetaljertOrdrerapport()'); const h = String(sandbox.document.getElementById('detRapportGraf').innerHTML); return [...h.matchAll(/fill="#e4e4e7">(\d+)<\/text>/g)].map((m) => Number(m[1])); };
+      sett(ordre(KUN, true));
+      expect(grafAntall().at(-1)).toBe(0);
+      sett(ordre(KUN, true), ordre(VANLIG, false));
+      expect(grafAntall().at(-1)).toBe(1);
+      sett(ordre(KUN, false), ordre(VANLIG, false));
+      expect(grafAntall().at(-1)).toBe(2); // kontroll: uten kun-flagget teller begge
+    });
+    it('den detaljerte rapporten (modeller, forhandlere og kryss-tabell) teller ikke en kun-ordre', () => {
+      sett(ordre(KUN, true));
+      expect(detaljert()).toContain('Ingen ordre registrert i 2026');
+      sett(ordre(KUN, true), ordre(VANLIG, false));
+      expect(detaljert()).toContain('1 stk');
+      expect(detaljert()).not.toContain('2 stk');
+    });
   });
 });

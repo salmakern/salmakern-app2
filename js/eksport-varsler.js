@@ -231,7 +231,7 @@ function genPDFSkriv(o, printVindu) {
     </div>
     <div class="merker">
       ${merke('Status: '+si.lbl, ['Klar for henting','Bestilt frakt','Hentet'].includes(si.lbl))}
-      ${kun ? '<span class="badge" style="border-color:#767676;background:#f3f3f3;color:#444">Kun ekstrautstyr</span>' : merke('Tvangsflyt '+tfOk+'/'+tf.length, tfOk===tf.length)}
+      ${merke('Tvangsflyt '+tfOk+'/'+tf.length, tfOk===tf.length)}
       ${merke(o.godkjent?'Godkjent / lukket':'Ikke godkjent', !!o.godkjent)}
     </div>
   </div>

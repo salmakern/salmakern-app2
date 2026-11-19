@@ -947,6 +947,7 @@ function tvangsflytBarHTML(o) {
 // fakturertKortHTML rett under.
 function godkjentKortHTML(o) {
   if (!me || me.rolle !== 'admin') return '';
+  if (o.kunEkstrautstyr === true) return ''; // «Kun ekstrautstyr» (Henrik 2026-11-19): ingen biltilsyn, så ingen Vedtak-avkrysning (inline: funksjonen lastes alene i enkelte tester)
   return `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${o.godkjentBiltilsyn?'#86efac':'#a1a1aa'};cursor:pointer;flex-shrink:0">
     Vedtak
     <input type="checkbox" ${o.godkjentBiltilsyn?'checked':''} onchange="toggleGodkjentBiltilsyn('${o.id}')" style="width:14px;height:14px;accent-color:#22c55e;cursor:pointer">
