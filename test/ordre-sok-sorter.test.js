@@ -17,8 +17,8 @@ const resultat = () => String(el('ordreListeResultat').innerHTML);
 const tegn = () => { app.kjor('renderOrdreList()'); return resultat(); };
 
 const UTSTYR = { har: '', skalHa: '', hengerfeste: 'ikke_hengerfeste', hengerfesteMontert: 'ikke_montert', hengerfesteBestilt: 'ikke_bestilt', skalHaBekreftet: false };
-const bil = (id, chassis, ankomst, utstyr = {}) => sandbox.dbToOrdre({
-  id, status: 'aktiv', ordre_status: 'ikke_paabegynt', chassis, regnr: '', kunde: 'TEST Kunde AS', ankomstdato: ankomst, utstyr: { ...UTSTYR, ...utstyr },
+const bil = (id, chassis, ankomst, utstyr = {}, ekstra = {}) => sandbox.dbToOrdre({
+  id, status: 'aktiv', ordre_status: 'ikke_paabegynt', chassis, regnr: '', kunde: 'TEST Kunde AS', ankomstdato: ankomst, utstyr: { ...UTSTYR, ...utstyr }, ...ekstra,
 });
 // Plasseringen i den tegnede lista, i rekkefølgen kortene står.
 const rekkefolge = (h, chassisListe) => chassisListe.map((c) => [c, h.indexOf(c)]).filter(([, i]) => i >= 0).sort((a, b) => a[1] - b[1]).map(([c]) => c);
@@ -80,6 +80,32 @@ describe('Ordre-siden: sortering «Hengerfeste først»', () => {
     expect(rekkefolge(tegn(), [A, B, C, D])).toEqual([B, D, A, C]);
     el('ordreSok').value = 'testsortc';
     expect(rekkefolge(tegn(), [A, B, C, D])).toEqual([C]);
+  });
+
+  it('en «kun ekstrautstyr»-ordre regnes ikke med hengerfeste (hengerfeste vises ikke for den): den står i vanlig rekkefølge blant dem uten, ikke øverst', () => {
+    // K er merket «kun ekstrautstyr» etter at hengerfeste var valgt: verdien står igjen i dataene, men kortet og ordredetaljen skjuler den (funnet i den uavhengige gjennomgangen 19.11).
+    const K = 'TESTSORTK0000000K';
+    S.ordrer = [
+      bil('ord_TSORT1', A, '2026-11-01'),
+      bil('ord_TSORT2', B, '2026-11-02', { hengerfeste: 'hengerfeste' }),
+      bil('ord_TSORT6', K, '2026-11-03', { hengerfeste: 'hengerfeste' }, { kun_ekstrautstyr: true }),
+    ];
+    expect(sandbox.hengerfesteKortHTML(S.ordrer[2])).toBe(''); // ikke vist for en kun-ordre
+    el('ordreSorterValg').value = '';
+    expect(rekkefolge(tegn(), [A, B, K])).toEqual([A, B, K]);
+    el('ordreSorterValg').value = 'hengerfeste';
+    expect(rekkefolge(tegn(), [A, B, K])).toEqual([B, A, K]);
+  });
+
+  it('kontroll: den samme ordren uten kun-flagget og med hengerfeste står blant dem med hengerfeste', () => {
+    const K = 'TESTSORTK0000000K';
+    S.ordrer = [
+      bil('ord_TSORT1', A, '2026-11-01'),
+      bil('ord_TSORT2', B, '2026-11-02', { hengerfeste: 'hengerfeste' }),
+      bil('ord_TSORT6', K, '2026-11-03', { hengerfeste: 'hengerfeste' }),
+    ];
+    el('ordreSorterValg').value = 'hengerfeste';
+    expect(rekkefolge(tegn(), [A, B, K])).toEqual([B, K, A]);
   });
 
   it('valget finnes i nedtrekket i salmakern.html', () => {

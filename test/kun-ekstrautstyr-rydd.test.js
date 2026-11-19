@@ -74,6 +74,8 @@ const del = (ut, sti) => sti.split('.').reduce((x, k) => x?.[k], ut); // 'oversi
 const med = (ut, sti, tekst) => String(del(ut, sti) ?? '').includes(tekst);
 const alt = (ut) => JSON.stringify(ut);
 const pdfAv = (ut, id) => ut['pdf_' + id];
+// «Kun ekstrautstyr (ingen ombygging)»-linja i PDF-en: en avkrysset boks (chip-på, ✓), ikke bare teksten.
+const KUN_LINJE = /<span class="chip chip-på"><span class="boks" style="border-color:[^"]+;background:[^"]+">✓<\/span>Kun ekstrautstyr \(ingen ombygging\)<\/span>/;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 describe('en vanlig bil-ordre og en leveranse er BYTE-LIKE som før (referanse fra origin/main 9fef219)', () => {
@@ -114,15 +116,30 @@ describe('«kun ekstrautstyr»: ingen av de skjulte verdiene vises noe sted', ()
   });
 
   const TAGGER = ['A', 'V', 'X', 'S'];
+  // Alle sentinelverdiene (navn:ordre) i én liste. Bare verdier som faktisk tegnes noe sted UTEN kun-flagget (kontrollen) kan bevise noe: «står ikke» er tomt for en verdi som aldri tegnes uansett.
+  const VERDIER = () => TAGGER.flatMap((t) => [
+    ...SKJULTE.map((felt) => ({ navn: `${felt}:${t}`, verdi: sent(t)[felt] })),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => ({ navn: `vekt${n}:${t}`, verdi: sent(t).vekt(n) })),
+    ...['a', 's', 'm'].map((side) => ({ navn: `bilde_${side}:${t}`, verdi: sent(t).bilde(side) })),
+  ]);
+  // Verdier som ikke tegnes noe sted i de dekkede stedene, heller ikke for en vanlig ordre: org.nr, typegodkjenning, egenvekt (COC), dokumentnavn og «har ved ankomst» leses bare i ordredetaljen, og PDF-en
+  // tegner vogntog.v som «—». Ingen av de ryddede kodestedene leser dem, så «står ikke» er for disse bare en vakt mot en NY visning (de kan ikke bevise at en regel virker): de står her i en eksplisitt liste i
+  // stedet for å late som de er dekket av kontrollen.
+  const IKKE_TEGNET_UANSETT = [...TAGGER.flatMap((t) => ['dokument', 'egenvekt', 'har', 'orgnr', 'typegodkjenning', 'vekt6'].map((f) => `${f}:${t}`)), 'forhandlerNr:X'].sort();
   it('ingen av de skjulte verdiene til en kun-ordre står i NOEN av stedene (Ordre-lista, Oversikt, kalenderen, Arkiv, kundehistorikken, PDF; admin og ansatt)', () => {
-    const tekst = alt(kun.ut);
-    for (const t of TAGGER) {
-      for (const felt of SKJULTE) expect(tekst, `${felt} for ${t}`).not.toContain(sent(t)[felt]);
-      for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) expect(tekst, `vekt ${n} for ${t}`).not.toContain(sent(t).vekt(n));
-      expect(tekst, `kundepris for ${t}`).not.toContain(kun.kundepris[t]);
-      for (const side of ['a', 's', 'm']) expect(tekst, `bilde ${side} for ${t}`).not.toContain(sent(t).bilde(side));
-    }
-    expect(tekst).not.toContain('TEST-FLÅTE-1'); // flåten til kun-ordren A
+    const kunTekst = alt(kun.ut);
+    for (const { navn, verdi } of VERDIER()) expect(kunTekst, navn).not.toContain(verdi);
+    for (const t of TAGGER) expect(kunTekst, `kundepris for ${t}`).not.toContain(kun.kundepris[t]);
+    expect(kunTekst).not.toContain('TEST-FLÅTE-1'); // flåten til kun-ordren A
+  });
+  it('kalibrering: hvilke av verdiene kontrollen (uten kun-flagget) faktisk tegner, og hvilke som aldri tegnes noe sted (en ny visning av dem må flyttes ut av den eksplisitte listen)', () => {
+    const kontrollTekst = alt(kontroll.ut);
+    const tegnet = VERDIER().filter(({ verdi }) => kontrollTekst.includes(verdi));
+    expect(VERDIER().filter(({ verdi }) => !kontrollTekst.includes(verdi)).map(({ navn }) => navn).sort()).toEqual(IKKE_TEGNET_UANSETT);
+    expect(tegnet.length).toBe(VERDIER().length - IKKE_TEGNET_UANSETT.length);
+    // Disse feltene BEVISES av testen over: en regel som skjuler dem kan feile fordi kontrollen viser dem.
+    expect([...new Set(tegnet.map(({ navn }) => navn.split(':')[0].replace(/^(vekt)\d+$/, '$1').replace(/^(bilde)_.$/, '$1')))].sort())
+      .toEqual(['bilde', 'diagnoseAv', 'farge', 'forhandlerNr', 'mal', 'sjekkpunkt', 'sted', 'totalpris', 'type', 'variant', 'vekt', 'versjon']);
   });
   it('kontroll: de samme dataene UTEN kun-flagget vises (så testen over ikke er vacuous)', () => {
     const tekst = alt(kontroll.ut);
@@ -165,8 +182,12 @@ describe('«kun ekstrautstyr»: ingen av de skjulte verdiene vises noe sted', ()
   }
 
   it('kalenderdato og -tid står som før for en kun-ordre (bare stedet er borte): kalenderkortet, Oversikt-kortet og Ordre-kortet', () => {
-    expect(med(kun.ut, 'oversikt_admin.weekCal', '10:00 - ')).toBe(true);
-    expect(med(kun.ut, 'oversikt_admin.weekCal', '11:00 - ')).toBe(true);
+    // Eksakt avslutning: «10:00 - » alene finnes også i «10:00 -  - Påbegynt» (en tom sted-del med to skilletegn), som en ødelagt betingelse ga uten at noen test så det.
+    expect(med(kun.ut, 'oversikt_admin.weekCal', '>10:00 - Påbegynt</div>')).toBe(true);
+    expect(med(kun.ut, 'oversikt_admin.weekCal', '>11:00 - Ikke påbegynt</div>')).toBe(true);
+    expect(med(kun.ut, 'oversikt_admin.weekCal', '>14:00 - Påbegynt</div>')).toBe(true); // de to smale kortene (14:00): aldri sted
+    expect(del(kun.ut, 'oversikt_admin.weekCal')).not.toMatch(/-\s+-/); // ingen hengende skilletegn noe sted på kalenderkortene
+    expect(del(kun.ut, 'oversikt_ansatt.weekCal')).not.toMatch(/-\s+-/);
     expect(med(kun.ut, 'oversikt_admin.activeList', '📅 2026-11-19 10:00</div>')).toBe(true);
     expect(med(kun.ut, 'ordreListe_admin.ordreListeResultat', '2026-11-19 10:00</span>')).toBe(true);
     expect(med(kun.ut, 'ordreListe_admin.ordreListeResultat', '2026-11-18 11:00</span>')).toBe(true);
@@ -239,6 +260,20 @@ describe('PDF-rapporten (genPDFSkriv) for en kun-ordre', () => {
     for (const s of ['Nytt Kjøretøy', 'Brukt Kjøretøy', 'Lafinto', 'Personbil']) expect(pdf, s).not.toContain(s);
     for (const s of ['Nytt Kjøretøy', 'Brukt Kjøretøy', 'Lafinto', 'Personbil']) expect(kontrollPdf, s).toContain(s);
   });
+  // Linja må tegnes som en AVKRYSSET boks (chip-på: rød kant og rosa bakgrunn, avkrysning) og som gyldig HTML: bare teksten finnes også i en linje uten klassen, uten ✓ eller med en uavsluttet <span>.
+  it('«Kun ekstrautstyr (ingen ombygging)» tegnes som en avkrysset boks (chip-på med ✓), for alle fire kun-ordrene, og vanlige ordrer har den ikke', () => {
+    for (const id of [R_AKTIV, R_VENTER, R_ARKIVERT, R_SMALT_1]) expect(pdfAv(kun.ut, id), id).toMatch(KUN_LINJE);
+    for (const id of [R_AKTIV, R_VENTER, R_ARKIVERT, R_SMALT_1, R_LEVERANSE]) expect(pdfAv(kontroll.ut, id), 'kontroll ' + id).not.toContain('Kun ekstrautstyr (ingen ombygging)');
+    expect(pdf.match(/class="chip chip-på"/g)).toHaveLength(1); // bare den ene linja (ingen andre avkryssede bokser i en kun-ordre)
+  });
+  it('alle <span i PDF-en er avsluttet (like mange <span som </span>), for kun, kontroll og leveransen', () => {
+    const spanBalanse = (x) => (x.match(/<span\b/g) || []).length - (x.match(/<\/span>/g) || []).length;
+    for (const id of [R_AKTIV, R_VENTER, R_ARKIVERT, R_SMALT_1]) {
+      expect(spanBalanse(pdfAv(kun.ut, id)), 'kun ' + id).toBe(0);
+      expect(spanBalanse(pdfAv(kontroll.ut, id)), 'kontroll ' + id).toBe(0);
+    }
+    expect(spanBalanse(pdfAv(kun.ut, R_LEVERANSE))).toBe(0);
+  });
   it('identlinja har merke og modell, ikke type, variant eller farge', () => {
     expect(pdf).toContain('<div class="ident-sub">KIA · EV9</div>');
     expect(kontrollPdf).toContain('KIA · KUNTYPE_A · EV9 · KUNVARIANT_A · KUNFARGE_A');
@@ -273,6 +308,8 @@ describe('PDF-rapporten (genPDFSkriv) for en kun-ordre', () => {
     app.consoleFeil.length = 0;
     const p = tegnSteder(app, { pdf: ['ord_1700000000200'] })['pdf_ord_1700000000200'];
     expect(p).toContain('TESTWXYZ0000000T1');
+    expect(p).toMatch(KUN_LINJE);
+    for (const s of ['>Variant<', '>Farge<', 'Vekter (kg)', 'Utstyr — har ved ankomst', 'Bilder — ankomst', 'Tvangsflyt']) expect(p, s).not.toContain(s); // feiler mot koden FØR rydningen (da tegnet PDF-en alt dette også for en tom ordre)
     expect(p).toContain('Ingen tilvalg');
     expect(p).toContain('Ingen meldt på');
     expect((p.match(/<div\b/g) || []).length).toBe((p.match(/<\/div>/g) || []).length);
@@ -302,13 +339,14 @@ describe('det som BEVISST står igjen for en kun-ordre (Henrik avgjør)', () => 
     expect(med(kun.ut, 'ordreListe_admin.ordreListeResultat', 'Vedtak')).toBe(true);
     expect(med(kun.ut, 'ordreListe_ansatt.ordreListeResultat', 'Vedtak')).toBe(false); // bare admin
   });
-  it('søket i Ordre-lista treffer fortsatt type og «har ved ankomst» (felter som ikke vises for en kun-ordre)', () => {
+  it('søket i Ordre-lista treffer fortsatt type, forhandler.nr og «har ved ankomst» (felter som ikke vises for en kun-ordre)', () => {
     frysTid(app); settOppTilstand(app);
     S.ordrer = kunRader(true).map((r) => sandbox.dbToOrdre(r));
     const sok = (tekst) => { sandbox.document.getElementById('ordreSok').value = tekst; sandbox.renderOrdreList(); return sandbox.document.getElementById('ordreListeResultat').innerHTML; };
     try {
       expect(sok('KUNTYPE_A')).toContain('AB10001');
       expect(sok('KUNHAR_V')).toContain('AB10002');
+      expect(sok('KUNFNR_A')).toContain('AB10001'); // forhandler.nr (søkbart siden 19.11) vises heller ikke for en kun-ordre
     } finally { sandbox.document.getElementById('ordreSok').value = ''; }
   });
   it('Mer → «Til godkjenning» og ordrelabelen (reg.nr, chassis, kunde, merke, modell, ankomst) er uendret for en kun-ordre', () => {

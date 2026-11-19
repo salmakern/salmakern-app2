@@ -76,7 +76,8 @@ function renderOrdreList() {
   const statusFilter = document.getElementById('ordreStatusFilter')?.value || '';
   const sorterValg = document.getElementById('ordreSorterValg')?.value || '';
   // «Hengerfeste først» (Henrik 2026-11-19): biler der hengerfeste er valgt øverst, resten under; innenfor hver gruppe den vanlige rekkefølgen (sorterOrdre).
-  const medHengerfeste = o => (o.utstyr?.hengerfeste === 'hengerfeste' ? 1 : 0);
+  // En «kun ekstrautstyr»-ordre har ikke hengerfeste i visningen (kortet og ordredetaljen skjuler det), så en gammel verdi i dataene teller ikke her (en ordre som ble merket kun etter at hengerfeste var valgt).
+  const medHengerfeste = o => (!erKunEkstrautstyr(o) && o.utstyr?.hengerfeste === 'hengerfeste' ? 1 : 0);
   const sorterFn = sorterValg === 'nyest' ? (a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||'')
     : sorterValg === 'eldst' ? (a,b) => (a.ankomstdato||'').localeCompare(b.ankomstdato||'')
     : sorterValg === 'hengerfeste' ? (a,b) => (medHengerfeste(b) - medHengerfeste(a)) || sorterOrdre(a,b)
@@ -766,7 +767,8 @@ async function endreStatus(id, nyStatus) {
   // Henrik 2026-10-28, med et klart forbehold gitt: dette betyr at grønn IKKE lenger
   // garantert betyr "kunden er faktisk varslet" - admin må fortsatt huske å trykke den ekte
   // Hentet-knappen i Admin-ark for selve e-posten, se adminArkVarsleHentet()).
-  if (nyStatus === 'hentet' && o.chassis && typeof adminArkLagreFelter === 'function') {
+  // En «kun ekstrautstyr»-ordre er ikke i Admin-ark (adminArkByggRader hopper over den, og chassis.nr kan være samme som en bil som alt står der): her skal ingen rad opprettes eller merkes.
+  if (nyStatus === 'hentet' && o.chassis && !erKunEkstrautstyr(o) && typeof adminArkLagreFelter === 'function') {
     const eksisterende = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, o.chassis) && !r.arkivert);
     if (!eksisterende?.hentetVarslet) {
       await adminArkLagreFelter({ _arkId: eksisterende?.id||null, chassisNr: o.chassis, _erOrdre: true }, { hentetVarslet: true });

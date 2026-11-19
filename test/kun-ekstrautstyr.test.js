@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { lastApp } from './helpers/app-harness.js';
 
 // «Kun ekstrautstyr (ingen ombygging)» på en vanlig bil-ordre (Henrik 2026-11-17): en bil som ble bygget om for lenge siden og bare skal ha montert litt
@@ -222,6 +222,66 @@ describe('kalenderen rører aldri Admin-ark', () => {
     await sandbox.fjernFraKalender(o.id);
     expect(metodeArg(kall, 'update').filter((u) => 'kalender_dato' in u)).toEqual([{ kalender_dato: null, kalender_tid: '' }]);
     expect(r.admin).toEqual([]);
+  });
+});
+
+describe('Hentet: en kun-ordre skriver aldri til Admin-ark (hentetVarslet), en vanlig bil gjør det som før', () => {
+  // Funnet i den uavhengige gjennomgangen 19.11: endreStatus(..., 'hentet') merket «hentetVarslet» i Admin-ark på ordrens chassis uten å se på «kun ekstrautstyr». Uten en Admin-ark-rad ble en NY rad opprettet
+  // (en ukoblet rad som Helsesjekk meldte som mulig skrivefeil), og fantes det en rad fra bilens opprinnelige ombygging, fikk den grønn Hentet-knapp uten at kunden var varslet.
+  const CHASSIS = 'TESTWXYZ0000000H1';
+  const ORIG = { adminArkLagreFelter: sandbox.adminArkLagreFelter, renderAll: sandbox.renderAll, buildOrdreDetail: sandbox.buildOrdreDetail, visToast: sandbox.visToast, effektivOrdreTidPerAnsattMs: sandbox.effektivOrdreTidPerAnsattMs };
+  beforeEach(() => {
+    // Den ekte adminArkLagreFelter (en annen describe i denne fila bytter den ut med en spion uten å sette den tilbake).
+    sandbox.adminArkLagreFelter = ORIG.adminArkLagreFelter;
+    sandbox.renderAll = () => {}; sandbox.buildOrdreDetail = () => {}; sandbox.visToast = () => {};
+    sandbox.effektivOrdreTidPerAnsattMs = async () => ({ totalMs: 0, perAnsatt: [] });
+  });
+  afterEach(() => { Object.assign(sandbox, ORIG); });
+  const arkKall = (kall) => kall.filter((k) => k.tabell === 'admin_ark');
+  const arkSkriv = (kall, metode) => arkKall(kall).flatMap((k) => k.kall.filter(([m]) => m === metode).map(([, a]) => a[0]));
+  async function settHentet({ kun, medArkRad }) {
+    const { db, kall } = lagDb(); app.settDb(db);
+    const o = bil({ chassis: CHASSIS, ordre_status: 'klar_henting', kun_ekstrautstyr: kun }); S.ordrer = [o];
+    // _db: raden finnes i databasen (som en rad fra dbToAdminArkRad), så skrivingen er en update av bare det endrede feltet.
+    S.adminArk = medArkRad ? [{ id: 'ark_TEST_H1', chassisNr: CHASSIS, aar: AAR, arkivert: false, hentetVarslet: false, _db: true }] : [];
+    await sandbox.endreStatus(o.id, 'hentet');
+    return { o, kall };
+  }
+  it('kun-ordre uten Admin-ark-rad: statusen settes, men ingen rad opprettes, ingen skriving til admin_ark og ingen ukoblet rad i Helsesjekk', async () => {
+    const { o, kall } = await settHentet({ kun: true, medArkRad: false });
+    expect(o.ordreStatus).toBe('hentet'); // endreStatus gikk hele veien
+    expect(metodeArg(kall, 'update').some((u) => u.ordre_status === 'hentet')).toBe(true);
+    expect(arkKall(kall)).toEqual([]);
+    expect(S.adminArk).toEqual([]);
+    expect(sandbox.finnUkobledeAdminArkRader()).toEqual([]);
+  });
+  it('kun-ordre med en eksisterende rad på samme chassis (bilens opprinnelige ombygging): raden røres ikke og får ikke grønn Hentet-knapp', async () => {
+    const { o, kall } = await settHentet({ kun: true, medArkRad: true });
+    expect(o.ordreStatus).toBe('hentet');
+    expect(arkKall(kall)).toEqual([]);
+    expect(S.adminArk).toHaveLength(1);
+    expect(S.adminArk[0].hentetVarslet).toBe(false);
+  });
+  it('kontroll: en vanlig bil uten rad får en ny Admin-ark-rad med hentet_varslet (som før)', async () => {
+    const { kall } = await settHentet({ kun: false, medArkRad: false });
+    const upsert = arkSkriv(kall, 'upsert');
+    expect(upsert).toHaveLength(1);
+    expect(upsert[0]).toMatchObject({ chassis_nr: CHASSIS, hentet_varslet: true });
+    expect(S.adminArk).toHaveLength(1);
+    expect(S.adminArk[0].hentetVarslet).toBe(true);
+  });
+  it('kontroll: en vanlig bil med en eksisterende rad får bare hentet_varslet oppdatert på den raden (som før)', async () => {
+    const { kall } = await settHentet({ kun: false, medArkRad: true });
+    expect(arkSkriv(kall, 'update')).toEqual([{ hentet_varslet: true }]);
+    expect(arkSkriv(kall, 'upsert')).toEqual([]);
+    expect(S.adminArk[0].hentetVarslet).toBe(true);
+  });
+  it('en kun-ordre uten chassis.nr (bare reg.nr) skriver heller ikke til Admin-ark', async () => {
+    const { db, kall } = lagDb(); app.settDb(db);
+    const o = bil({ chassis: '', regnr: 'TE12345', ordre_status: 'klar_henting', kun_ekstrautstyr: true }); S.ordrer = [o]; S.adminArk = [];
+    await sandbox.endreStatus(o.id, 'hentet');
+    expect(o.ordreStatus).toBe('hentet');
+    expect(arkKall(kall)).toEqual([]);
   });
 });
 

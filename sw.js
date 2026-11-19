@@ -104,7 +104,7 @@
 // v98 - «På jobb nå» er nå admin-only (var synlig for alle roller)
 // v100 - «Kun ekstrautstyr»: enklere ordre (uten vekter, drivstoff, dokumenter, biltilsyn m.m.) og bare statusene På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet (Hentet kreves for å lukke)
 // v101 - Ordre-siden: «Hengerfeste først» i sorteringen og søk på forhandler.nr
-// v102 - «Kun ekstrautstyr»: rydder de andre stedene (Arkiv, kalenderkort og -linjer, kundehistorikk og PDF-rapport viser ikke lenger det som er skjult i ordren)
+// v102 - «Kun ekstrautstyr»: rydder de andre stedene (Arkiv, kalenderkort og -linjer, kundehistorikk og PDF-rapport viser ikke lenger det som er skjult i ordren); Hentet skriver ikke til Admin-ark for en kun-ordre, og «Hengerfeste først» regner ikke en kun-ordre som hengerfeste
 const CACHE = 'salmakern-v102';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
