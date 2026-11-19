@@ -619,9 +619,9 @@ function apneHurtigOppgaveInput(el) {
 async function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (erLeveranse(o)) return endreLeveranseStatus(id, nyStatus); // egen løype og regler, se js/leveranse.js
-  // «Kun ekstrautstyr» (Henrik 2026-11-19) har bare fire statuser. Alt annet avvises FØR noe endres eller skrives (ingen logglinje, ingen databasekall).
+  // «Kun ekstrautstyr» (Henrik 2026-11-19) har bare fem statuser. Alt annet avvises FØR noe endres eller skrives (ingen logglinje, ingen databasekall).
   if (!statusTillattForOrdre(o, nyStatus)) {
-    visToast('En ordre med «Kun ekstrautstyr» kan bare ha statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting.');
+    visToast('En ordre med «Kun ekstrautstyr» kan bare ha statusene På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet.');
     if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
     renderAll();
     if (activeOrdreId===id) buildOrdreDetail();
@@ -690,14 +690,12 @@ async function endreStatus(id, nyStatus) {
   // som en kostnad (timesats × tid) uten en ny DB-spørring hver gang ordren åpnes (s09-020,
   // Henrik "ja legg det til" 2026-11-04). Flyttes bilen bort fra Hentet igjen, nullstilles
   // frysingen - den er da ikke lenger "ferdig", og badgen skal vise levende tall igjen.
-  // «Kun ekstrautstyr» (Henrik 2026-11-19) kan ikke bli «Hentet» (bare fire statuser), så der fryses tallet når ordren er Klar for henting (siste status før den arkiveres).
-  const frysStatus = erKunEkstrautstyr(o) ? 'klar_henting' : 'hentet';
-  if (nyStatus === frysStatus) {
+  if (nyStatus === 'hentet') {
     try {
       const { totalMs, perAnsatt } = await effektivOrdreTidPerAnsattMs(o);
       o.effektivTidFrossen = { totalMs, perAnsatt, frossetVed: new Date().toISOString() };
     } catch (e) { console.warn('Kunne ikke fryse effektiv tid:', e); }
-  } else if (forrigeStatus === 'hentet' || forrigeStatus === frysStatus) {
+  } else if (forrigeStatus === 'hentet') {
     o.effektivTidFrossen = null;
   }
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
@@ -793,7 +791,7 @@ function statusDropdown(ordreId, currentStatus, extraStyle='', extraClass='') {
   // siden en <select> ellers ikke krymper under sin egen tekstbredde i en flex-rad.
   const pilStil = `appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url('${statusDropdownPilSvg(si.txt)}');background-repeat:no-repeat;background-position:right 7px center;background-size:10px;padding-right:22px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
   const ordre = S.ordrer.find(x=>x.id===ordreId);
-  // «Kun ekstrautstyr» (Henrik 2026-11-19): bare På vei, Ikke påbegynt, Påbegynt og Klar for henting. Står ordren alt i en annen status, vises den også (valgt, men ikke valgbar tilbake),
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): bare På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet. Står ordren alt i en annen status, vises den også (valgt, men ikke valgbar tilbake),
   // så ingenting forsvinner stille.
   const kun = erKunEkstrautstyr(ordre);
   const liste = erLeveranse(ordre) ? LEVERANSE_STATUSER : kun ? STATUSER.filter(s => KUN_EKSTRAUTSTYR_STATUSER.includes(s.id) || s.id === currentStatus) : STATUSER;

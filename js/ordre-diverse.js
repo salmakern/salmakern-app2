@@ -644,7 +644,7 @@ function bilEffektivitetVurdering(ratio) {
 // migrasjonen 20261023140000 om hvorfor standardtiden ikke deles per hode.
 async function beregnBilEffektivitetPerAnsatt(fraDato, tilDato) {
   const relevante = (S.ordrer||[]).filter(o =>
-    o.datoKlarHenting && o.datoKlarHenting>=fraDato && o.datoKlarHenting<=tilDato && ordreStandardMs(o)!=null
+    o.datoKlarHenting && o.datoKlarHenting>=fraDato && o.datoKlarHenting<=tilDato && o.kunEkstrautstyr !== true && ordreStandardMs(o)!=null // «Kun ekstrautstyr» (Henrik 2026-11-19) holdes utenfor: ingen standardtid å sammenligne med
   );
   if (!relevante.length) return [];
   const alleSesjoner = relevante.flatMap(o => o.ordreTimerSessions||[]);
@@ -681,33 +681,41 @@ async function beregnBilEffektivitetPerAnsatt(fraDato, tilDato) {
 // DB-spørring, og det endrer seg ikke lenger selv om en timeføring rettes i ettertid (s09-020).
 async function renderBilEffektivitetBadge(o) {
   const el = document.getElementById('bilEffektivitetBadge_'+o.id); if (!el) return;
-  const standardMs = ordreStandardMs(o);
-  if (standardMs == null) { el.innerHTML = `<div class="small muted">Ingen standardtid satt for "${esc(o.modell||'ukjent modell')}" (sett under Mer → Standardtider)</div>`; return; }
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): ingen sammenligning mot modellens standardtid for en hel ombygging (timer for f.eks. gummimatter ville alltid sett «lave» ut),
+  // bare brukt tid og kostnad. Inline (ikke erKunEkstrautstyr): funksjonen lastes alene i enkelte tester.
+  const kun = o.kunEkstrautstyr === true;
+  const standardMs = kun ? null : ordreStandardMs(o);
+  if (!kun && standardMs == null) { el.innerHTML = `<div class="small muted">Ingen standardtid satt for "${esc(o.modell||'ukjent modell')}" (sett under Mer → Standardtider)</div>`; return; }
   const frossen = o.effektivTidFrossen;
   const { totalMs: bruktMs, perAnsatt } = frossen ? frossen : await effektivOrdreTidPerAnsattMs(o);
   const elNa = document.getElementById('bilEffektivitetBadge_'+o.id); if (!elNa) return; // kan ha forsvunnet mens vi ventet (byttet ordre)
-  const vurdering = bilEffektivitetVurdering(bruktMs/standardMs);
+  const vurdering = kun ? null : bilEffektivitetVurdering(bruktMs/standardMs);
   const nedbrytning = perAnsatt.length > 1 ? `<div style="margin-top:8px;display:flex;flex-direction:column;gap:3px">
       ${perAnsatt.map(r => `<div class="small" style="display:flex;justify-content:space-between"><span class="muted">${esc(r.navn)}</span><span>${fmtTime(r.ms)}</span></div>`).join('')}
     </div>` : '';
   const kostnadHTML = (S.timesatsKr != null && S.timesatsKr > 0)
     ? `<div class="small" style="margin-top:4px">Kostnad: ${Math.round((bruktMs/3600000)*S.timesatsKr).toLocaleString('nb-NO')} kr <span class="muted">(${S.timesatsKr} kr/t)</span></div>`
     : '';
-  elNa.innerHTML = `<div class="h">Bil-effektivitet</div>
+  elNa.innerHTML = kun ? `<div class="h">Brukt tid</div>
+    <div style="font-size:22px;font-weight:800;margin-top:4px">${fmtTime(bruktMs)}</div>
+    ${nedbrytning}
+    ${kostnadHTML}
+    <div class="small muted" style="margin-top:4px">${frossen ? 'Tiden er frosset (bilen er hentet) og endrer seg ikke lenger' : 'Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka'}</div>`
+  : `<div class="h">Bil-effektivitet</div>
     <div style="font-size:22px;font-weight:800;margin-top:4px;color:${vurdering.farge}">
       Brukt tid ${fmtTime(bruktMs)} <span style="font-size:15px;font-weight:600;color:#a1a1aa">(standard ${fmtTime(standardMs)})</span>
     </div>
     <div class="small" style="color:${vurdering.farge};margin-top:2px">${vurdering.label}</div>
     ${nedbrytning}
     ${kostnadHTML}
-    <div class="small muted" style="margin-top:4px">${frossen ? `Tiden er frosset (${o.kunEkstrautstyr === true ? 'ordren er klar for henting' : 'bilen er hentet'}) og endrer seg ikke lenger` : 'Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka'}</div>`;
+    <div class="small muted" style="margin-top:4px">${frossen ? 'Tiden er frosset (bilen er hentet) og endrer seg ikke lenger' : 'Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka'}</div>`;
 }
 // Historisk snitt per modell (alle ferdigstilte biler, ikke bare denne måneden) - til hjelp
 // når admin skal avgjøre/justere standardtiden for en modell under Mer → Standardtider
 // (bedt om av Henrik 2026-10-26: "gjennomsnitt tid på modellene"). Henter arbeidsintervaller
 // ÉN gang for ALLE relevante ansatte/datoer, samme mønster som beregnBilEffektivitetPerAnsatt().
 async function beregnGjennomsnittTidPerModell() {
-  const relevante = (S.ordrer||[]).filter(o => o.modell && o.datoKlarHenting && (o.ordreTimerSessions||[]).length);
+  const relevante = (S.ordrer||[]).filter(o => o.modell && o.datoKlarHenting && o.kunEkstrautstyr !== true && (o.ordreTimerSessions||[]).length); // «Kun ekstrautstyr» (Henrik 2026-11-19) holdes utenfor snittet per modell
   if (!relevante.length) return {};
   const alleSesjoner = relevante.flatMap(o => o.ordreTimerSessions||[]);
   const ansattIder = [...new Set(alleSesjoner.map(s=>s.ansattId).filter(x=>x!=null))];

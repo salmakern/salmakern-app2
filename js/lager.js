@@ -1105,8 +1105,8 @@ function visMaterialbehov() {
 // (oppskriftMatcherOrdre), siden valgfritt tilleggsutstyr ikke nødvendigvis blir valgt.
 function renderMaterialbehov() {
   const el = document.getElementById('materialbehovListe'); if (!el) return;
-  // En lukket (arkivert) ordre er ferdig uansett status: en «kun ekstrautstyr»-ordre kan ikke bli Hentet og ender i Klar for henting, og en leveranse har andre statuser, så uten
-  // arkiv-sjekken ble delene til hver lukket slik ordre telt som «bundet opp i aktive ordrer» for alltid (funnet 2026-11-19).
+  // En lukket (arkivert) ordre er ferdig uansett status: en leveranse har andre statuser enn Hentet, og en admin kan lukke en ordre i en annen status (overstyring), så uten
+  // arkiv-sjekken ble delene til hver slik lukket ordre telt som «bundet opp i aktive ordrer» for alltid (funnet 2026-11-19).
   const aktiveOrdreIder = new Set((S.ordrer||[]).filter(o => o.status !== 'arkivert' && o.ordreStatus !== 'hentet').map(o => o.id));
   const behovPerVare = {};
   (S.lagerhistorikk||[]).forEach(h => {

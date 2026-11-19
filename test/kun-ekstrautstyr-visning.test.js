@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -7,7 +7,7 @@ import { byggReferanser, vanligRad, medOpptak, ID_VANLIG } from './helpers/kun-v
 
 // «Kun ekstrautstyr (ingen ombygging)»: enklere ordre (Henrik 2026-11-19). Ordren skal ikke ha vekter, drivstoff, time på biltilsynet, diagnose, dokumenter,
 // «Utstyr - Har ved ankomst», forhandler.nr, hengerfeste, manglende deler, ankomst- og skadebilder, og i kundekortet ikke Type, Variant, Versjon, Farge, org.nr,
-// COC/Fullmakt/Typegodkjenning/Egenvekt, serienummer og flåte. Statusene er bare På vei, Ikke påbegynt, Påbegynt og Klar for henting. Alt annet er som før.
+// COC/Fullmakt/Typegodkjenning/Egenvekt, serienummer og flåte. Statusene er bare På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet (Hentet kreves for å lukke ordren). Alt annet er som før.
 //
 // BEVIS for at vanlige ordrer og leveranser er UENDRET: test/fixtures/kun-visning-referanse-vanlig.json er HTML-en den ekte appen tegnet for en vanlig bil-ordre
 // (som admin, ansatt og godkjenner, ordre uten data, ordre etter «Skal på bilen»-porten), en leveranse, hvert statusnedtrekk, Ordre-lista og Oversikt, laget av
@@ -176,8 +176,10 @@ describe('ordredetaljen for «kun ekstrautstyr»: hva som ikke tegnes', () => {
   });
   it('Ombygging-kortet sier hva som gjelder, uten å nevne sjekklista', () => {
     const boks = sandbox.ombyggingBoksHTML(lagOrdre(kunRad()));
-    expect(boks).toContain('Bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting');
+    expect(boks).toContain('Bare statusene På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet');
+    expect(boks).toContain('kan bare lukkes når den er Hentet');
     expect(boks).not.toContain('sjekklista');
+    expect(boks).not.toContain('ingen tvangsflyt');
   });
   it('en arkivert kun-ordre og en godkjent kun-ordre tegnes uten feil', () => {
     expect(detalj(lagOrdre(kunRad({ status: 'arkivert' })))).toContain('Arkivert ordre');
@@ -424,22 +426,22 @@ describe('«Skal på bilen»: sjekklista styrer ikke radene for en kun-ordre', (
 });
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting', () => {
-  const FIRE = [['paa_vei', 'På vei'], ['ikke_paabegynt', 'Ikke påbegynt'], ['paabegynt', 'Påbegynt'], ['klar_henting', 'Klar for henting']];
+describe('statuser: bare På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet', () => {
+  const FIRE = [['paa_vei', 'På vei'], ['ikke_paabegynt', 'Ikke påbegynt'], ['paabegynt', 'Påbegynt'], ['klar_henting', 'Klar for henting'], ['hentet', 'Hentet']]; // (navnet FIRE er historisk: Hentet ble lagt til 2026-11-19)
   const dropdown = (status, id = KUN_ID, over = {}) => { const o = lagOrdre(kunRad({ ordre_status: status, ...over })); S.ordrer = [o]; return sandbox.statusDropdown(o.id, status); };
 
   for (const [status] of FIRE) {
-    it(`nedtrekket (nåværende ${status}) har nøyaktig de fire statusene i den rekkefølgen, og ingen er utilgjengelig`, () => {
+    it(`nedtrekket (nåværende ${status}) har nøyaktig de fem statusene i den rekkefølgen, og ingen er utilgjengelig`, () => {
       const v = statusValg(dropdown(status), KUN_ID);
       expect(v.map((x) => [x.id, x.tekst])).toEqual(FIRE);
       expect(v.filter((x) => x.valgt).map((x) => x.id)).toEqual([status]);
       expect(v.some((x) => x.utilgjengelig)).toBe(false);
     });
   }
-  for (const status of ['ikke_veid', 'klar_visning', 'vist_biltilsyn', 'hentet']) {
-    it(`står ordren alt i ${status}, vises den i tillegg (valgt, men ikke valgbar tilbake), og de fire er der`, () => {
+  for (const status of ['ikke_veid', 'klar_visning', 'vist_biltilsyn']) {
+    it(`står ordren alt i ${status}, vises den i tillegg (valgt, men ikke valgbar tilbake), og de fem er der`, () => {
       const v = statusValg(dropdown(status), KUN_ID);
-      expect(v.length).toBe(5);
+      expect(v.length).toBe(6);
       expect(FIRE.every(([id]) => v.some((x) => x.id === id))).toBe(true);
       const ekstra = v.find((x) => x.id === status);
       expect(ekstra.valgt).toBe(true);
@@ -447,9 +449,9 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting'
       expect(v.filter((x) => x.utilgjengelig).length).toBe(1);
     });
   }
-  it('rekkefølgen med en ekstra nåværende status er fortsatt appens (hentet sist, Klar for visning mellom Påbegynt og Klar for henting)', () => {
-    expect(statusValg(dropdown('hentet'), KUN_ID).map((x) => x.id)).toEqual(['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting', 'hentet']);
-    expect(statusValg(dropdown('klar_visning'), KUN_ID).map((x) => x.id)).toEqual(['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_visning', 'klar_henting']);
+  it('rekkefølgen med en ekstra nåværende status er fortsatt appens (Klar for visning mellom Påbegynt og Klar for henting, Hentet sist)', () => {
+    expect(statusValg(dropdown('klar_visning'), KUN_ID).map((x) => x.id)).toEqual(['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_visning', 'klar_henting', 'hentet']);
+    expect(statusValg(dropdown('ikke_veid'), KUN_ID).map((x) => x.id)).toEqual(['paa_vei', 'ikke_paabegynt', 'paabegynt', 'ikke_veid', 'klar_henting', 'hentet']);
   });
   it('en vanlig bil har fortsatt alle åtte, og en leveranse sine tre (se også referansen)', () => {
     const o = lagOrdre(kunRad({ kun_ekstrautstyr: false })); S.ordrer = [o];
@@ -466,17 +468,17 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting'
     const liste = medOpptak(app, () => sandbox.renderOrdreList());
     const oversikt = medOpptak(app, () => sandbox.renderOversikt());
     const alleListe = liste.ordreListeResultat;
-    for (const [o, forventet] of [[kunPaabegynt, 4], [kunIkke, 4], [kunHentet, 5]]) {
+    for (const [o, forventet] of [[kunPaabegynt, 5], [kunIkke, 5], [kunHentet, 6]]) {
       expect(statusValg(alleListe, o.id).length, 'Ordre-lista ' + o.id).toBe(forventet);
     }
     const oversiktHtml = Object.values(oversikt).join('\n');
-    for (const o of [kunPaabegynt, kunIkke]) expect(statusValg(oversiktHtml, o.id).length, 'Oversikt ' + o.id).toBe(4);
+    for (const o of [kunPaabegynt, kunIkke]) expect(statusValg(oversiktHtml, o.id).length, 'Oversikt ' + o.id).toBe(5);
     // ordredetaljen
     const d = detalj(lagOrdre(kunRad({ ordre_status: 'ikke_paabegynt' })));
     expect(statusValg(d, KUN_ID).map((x) => x.id)).toEqual(FIRE.map(([id]) => id));
   });
 
-  describe('endreStatus avviser alt utenfor de fire (ingen skriving, ingen logglinje)', () => {
+  describe('endreStatus avviser alt utenfor de fem (ingen skriving, ingen logglinje)', () => {
     const oppsett = (status = 'ikke_paabegynt', over = {}) => {
       const o = lagOrdre(kunRad({ ordre_status: status, ...over })); S.ordrer = [o];
       const { db, kall } = lagDb(); app.settDb(db);
@@ -484,7 +486,7 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting'
       const rend = []; sandbox.renderAll = () => rend.push('renderAll'); sandbox.buildOrdreDetail = () => rend.push('buildOrdreDetail');
       return { o, kall, toast, rend };
     };
-    for (const status of ['ikke_veid', 'klar_visning', 'vist_biltilsyn', 'hentet']) {
+    for (const status of ['ikke_veid', 'klar_visning', 'vist_biltilsyn']) {
       it(`${status}: avvist med forklaring, ordren og loggen er uendret, ingen databasekall, og skjermen tegnes på nytt (nedtrekket mister fokus og nullstilles)`, async () => {
         const { o, kall, toast, rend } = oppsett('paabegynt');
         app.settAktivOrdre(o.id);
@@ -498,11 +500,11 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting'
         expect(o.status).toBe('aktiv');
         expect(o.endringer.length).toBe(logg);
         expect(kall).toEqual([]);
-        expect(toast.join('|')).toContain('Klar for henting');
+        expect(toast.join('|')).toContain('Klar for henting og Hentet');
         expect(rend).toEqual(['renderAll', 'buildOrdreDetail']);
       });
     }
-    for (const status of ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting']) {
+    for (const status of ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting', 'hentet']) {
       it(`${status}: godtatt (én målrettet oppdatering av ordre_status, logglinje, ingen avvisning)`, async () => {
         const { o, kall, toast } = oppsett(status === 'ikke_paabegynt' ? 'paa_vei' : 'ikke_paabegynt');
         await sandbox.endreStatus(o.id, status);
@@ -532,15 +534,18 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting'
       await sandbox.endreStatus(b.o.id, 'klar_visning');
       expect(b.o.ordreStatus).toBe('klar_visning');
     });
-    it('en kun-ordre som står i Hentet kan flyttes tilbake til en av de fire', async () => {
-      const { o } = oppsett('hentet');
+    it('en kun-ordre som står i en status utenfor de fem (Klar for visning) kan flyttes til en av de fem, og en i Hentet kan flyttes tilbake til Klar for henting', async () => {
+      const { o } = oppsett('klar_visning');
       await sandbox.endreStatus(o.id, 'klar_henting');
       expect(o.ordreStatus).toBe('klar_henting');
+      const h = oppsett('hentet');
+      await sandbox.endreStatus(h.o.id, 'klar_henting');
+      expect(h.o.ordreStatus).toBe('klar_henting');
     });
     it('statusTillattForOrdre: bare kun-ordrer er begrenset; vanlige biler, leveranser og ukjente ordrer er det ikke', () => {
       const kun = lagOrdre(kunRad()), vanlig = lagOrdre(kunRad({ kun_ekstrautstyr: false })), lev = lagOrdre({ id: 'l', ordretype: 'leveranse', kun_ekstrautstyr: true, leveranse: {} });
-      expect(sandbox.statusTillattForOrdre(kun, 'hentet')).toBe(false);
-      expect(sandbox.statusTillattForOrdre(kun, 'klar_henting')).toBe(true);
+      for (const s of ['ikke_veid', 'klar_visning', 'vist_biltilsyn']) expect(sandbox.statusTillattForOrdre(kun, s), s).toBe(false);
+      for (const s of ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting', 'hentet']) expect(sandbox.statusTillattForOrdre(kun, s), s).toBe(true);
       expect(sandbox.statusTillattForOrdre(vanlig, 'hentet')).toBe(true);
       expect(sandbox.statusTillattForOrdre(lev, 'sendt')).toBe(true);
       expect(sandbox.statusTillattForOrdre(undefined, 'hentet')).toBe(true);
@@ -559,11 +564,15 @@ describe('Fakturering, godkjenning og arkivering virker som før for en kun-ordr
     const rod = sandbox.fakturaSjekk(o).grunner.filter((g) => g.niva === 'rod' || ['ukjent_modell', 'ingen_kunde', 'ingen_linjer'].includes(g.kode));
     expect(rod).toEqual([]);
   });
-  it('Tvangsflyt-boksen: ingen krav, «Godkjenn og lukk» er mulig for godkjenner, og en godkjent ordre har «Arkiver ordre»', () => {
+  it('Tvangsflyt-boksen: kravet er status Hentet (Henrik 2026-11-19), «Godkjenn og lukk» er mulig for godkjenner først da, og en godkjent ordre har «Arkiver ordre»', () => {
     app.settMe({ id: 1, navn: 'TEST - Godkjenner', rolle: 'godkjenner' });
-    const o = lagOrdre(kunRad({ ordre_status: 'klar_henting' }));
+    const ikkeHentet = sandbox.tvangsflytBoksHTML(lagOrdre(kunRad({ ordre_status: 'klar_henting' })));
+    expect(ikkeHentet).toContain('Status er Hentet');
+    expect(ikkeHentet).not.toContain('Ingen krav');
+    expect(ikkeHentet).toMatch(/<button class="btn red" style="width:100%" +disabled onclick="openModal\('godkjenn'\)">Ufullstendig<\/button>/);
+    const o = lagOrdre(kunRad({ ordre_status: 'hentet' }));
     const boks = sandbox.tvangsflytBoksHTML(o);
-    expect(boks).toContain('Ingen krav');
+    expect(boks).toContain('1 av 1 krav');
     expect(boks).toMatch(/<button class="btn red" style="width:100%" +onclick="openModal\('godkjenn'\)">Godkjenn og lukk<\/button>/);
     expect(detalj(lagOrdre(kunRad({ ordre_status: 'klar_henting', godkjent: true, godkjenner_navn: 'X' })), 'godkjenner')).toContain(`arkiver('${KUN_ID}')`);
   });
@@ -654,7 +663,7 @@ describe('avkrysningen «Kun ekstrautstyr» tegner detaljen på nytt selv når d
       await sandbox.settKunEkstrautstyr(o.id, true);
       expect(el.innerHTML).not.toContain('Vekter (kg)');
       expect(el.innerHTML).toContain('KUN EKSTRAUTSTYR');
-      expect(statusValg(el.innerHTML, o.id).length).toBe(4);
+      expect(statusValg(el.innerHTML, o.id).length).toBe(5);
     });
     expect(knapp.blurKall).toBe(1);
   });
@@ -877,7 +886,7 @@ describe('«+ Ny ordre» med «Kun ekstrautstyr»: Type, Variant, Versjon og Far
     }
     for (const felt of ['n_merke', 'n_modell']) expect(HTML).not.toMatch(new RegExp(`id="n_felt_[a-z]+"[^>]*>\\s*<label>[^<]*</label>\\s*<input id="${felt}"`));
     expect(HTML).toMatch(/<input type="checkbox" id="n_kunEkstrautstyr" onchange="oppdaterNyOrdreKunFelt\(\)"/);
-    expect(HTML).toContain('Enklere ordre med bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting, uten Type, Variant, Versjon og Farge.');
+    expect(HTML).toContain('Enklere ordre med bare statusene På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet, uten Type, Variant, Versjon og Farge. Ordren kan bare lukkes når den er Hentet.');
   });
   it('apneNyOrdreModal og tilbakestillingen etter opprettelse viser feltene igjen', () => {
     const { db } = lagDb(); app.settDb(db);
@@ -986,7 +995,7 @@ describe('gjenopprett bilder fra Storage for en kun-ordre: bare Levering (ankoms
   });
 });
 
-describe('effektiv tid (Bil-effektivitet) fryses for en kun-ordre når den er Klar for henting (den kan ikke bli Hentet)', () => {
+describe('effektiv tid (Bil-effektivitet): en kun-ordre fryses ved Hentet som en vanlig bil, og holdes utenfor effektivitetstallene', () => {
   const FROSSET = { totalMs: 3600000, perAnsatt: [{ navn: 'TEST - Admin', ms: 3600000 }] };
   const oppsett = (over = {}) => {
     const o = lagOrdre(kunRad({ ordre_status: 'paabegynt', flate_id: null, ...over })); S.ordrer = [o];
@@ -995,12 +1004,14 @@ describe('effektiv tid (Bil-effektivitet) fryses for en kun-ordre når den er Kl
     sandbox.effektivOrdreTidPerAnsattMs = async () => FROSSET;
     return { o, kall };
   };
-  it('kun-ordre: Klar for henting fryser tallet (og skriver det), og flyttes den tilbake nullstilles frysingen', async () => {
+  it('kun-ordre: Hentet fryser tallet (og skriver det), Klar for henting fryser ikke, og flyttes den tilbake fra Hentet nullstilles frysingen', async () => {
     const { o, kall } = oppsett();
     await sandbox.endreStatus(o.id, 'klar_henting');
+    expect(o.effektivTidFrossen).toBeNull();
+    await sandbox.endreStatus(o.id, 'hentet');
     expect(o.effektivTidFrossen).toMatchObject({ totalMs: 3600000 });
-    expect(oppdateringer(kall).find((u) => 'ordre_status' in u).effektiv_tid_frossen).toMatchObject({ totalMs: 3600000 });
-    await sandbox.endreStatus(o.id, 'paabegynt');
+    expect(oppdateringer(kall).filter((u) => 'ordre_status' in u).pop().effektiv_tid_frossen).toMatchObject({ totalMs: 3600000 });
+    await sandbox.endreStatus(o.id, 'klar_henting');
     expect(o.effektivTidFrossen).toBeNull();
   });
   it('kun-ordre: andre statuser fryser ikke', async () => {
@@ -1015,15 +1026,63 @@ describe('effektiv tid (Bil-effektivitet) fryses for en kun-ordre når den er Kl
     await sandbox.endreStatus(o.id, 'hentet');
     expect(o.effektivTidFrossen).toMatchObject({ totalMs: 3600000 });
   });
-  it('badgen sier «ordren er klar for henting» for en kun-ordre og «bilen er hentet» for en vanlig bil', async () => {
+  it('badgen: en kun-ordre viser bare «Brukt tid» og kostnad (ingen standardtid, ingen vurdering), en vanlig bil sammenligner med standard; begge sier «bilen er hentet» når tiden er frosset', async () => {
     S.standardtider = { EV9: { ombygging: 600 } };
     try {
-      for (const [kun, tekst] of [[true, 'Tiden er frosset (ordren er klar for henting)'], [false, 'Tiden er frosset (bilen er hentet)']]) {
-        const o = lagOrdre(kunRad({ kun_ekstrautstyr: kun, ordre_status: kun ? 'klar_henting' : 'hentet', flate_id: null })); o.effektivTidFrossen = { ...FROSSET, frossetVed: '2026-11-19T10:00:00Z' }; S.ordrer = [o];
+      for (const kun of [true, false]) {
+        const o = lagOrdre(kunRad({ kun_ekstrautstyr: kun, ordre_status: 'hentet', flate_id: null })); o.effektivTidFrossen = { ...FROSSET, frossetVed: '2026-11-19T10:00:00Z' }; S.ordrer = [o];
         await sandbox.renderBilEffektivitetBadge(o);
-        expect(sandbox.document.getElementById('bilEffektivitetBadge_' + o.id).innerHTML, `kun=${kun}`).toContain(tekst);
+        const h = sandbox.document.getElementById('bilEffektivitetBadge_' + o.id).innerHTML;
+        expect(h, `kun=${kun}`).toContain('Tiden er frosset (bilen er hentet)');
+        if (kun) {
+          expect(h).toContain('Brukt tid');
+          expect(h).toContain(sandbox.fmtTime(3600000));
+          for (const s of ['Bil-effektivitet', 'standard', 'God', 'Bør følges opp']) expect(h, s).not.toContain(s);
+        } else {
+          expect(h).toContain('Bil-effektivitet');
+          expect(h).toContain('(standard');
+        }
       }
     } finally { delete S.standardtider; }
+  });
+  it('en kun-ordre uten standardtid for modellen gir fortsatt brukt tid (ingen «Ingen standardtid satt»-melding)', async () => {
+    S.standardtider = {};
+    try {
+      const o = lagOrdre(kunRad({ ordre_status: 'klar_henting', flate_id: null })); S.ordrer = [o];
+      sandbox.effektivOrdreTidPerAnsattMs = async () => FROSSET;
+      await sandbox.renderBilEffektivitetBadge(o);
+      const h = sandbox.document.getElementById('bilEffektivitetBadge_' + o.id).innerHTML;
+      expect(h).toContain('Brukt tid');
+      expect(h).not.toContain('Ingen standardtid');
+    } finally { delete S.standardtider; }
+  });
+
+  describe('Mer → Bil-effektivitet holder en kun-ordre utenfor (per ansatt og snitt per modell)', () => {
+    const SESJON = [{ ansattId: 1, ansatt: 'TEST - Admin', start: 1700000000000, stopp: 1700003600000 }];
+    const ordre = (id, chassis, kun) => { const o = lagOrdre(kunRad({ id, chassis, kun_ekstrautstyr: kun, ordre_status: 'klar_henting', flate_id: null })); o.datoKlarHenting = '2026-11-10'; o.ordreTimerSessions = SESJON; return o; };
+    const EKTE = { hentArbeidsintervaller: sandbox.hentArbeidsintervaller, beregnOverlappMs: sandbox.beregnOverlappMs };
+    beforeEach(() => {
+      S.standardtider = { EV9: { ombygging: 600 } };
+      sandbox.hentArbeidsintervaller = async () => ({});
+      sandbox.beregnOverlappMs = () => 3600000;
+    });
+    afterEach(() => { delete S.standardtider; Object.assign(sandbox, EKTE); });
+    it('bare en kun-ordre: ingen rad per ansatt og ingen modell i snittet', async () => {
+      S.ordrer = [ordre('ord_1700000000070', 'TESTWXYZ0000000Q1', true)];
+      expect(await sandbox.beregnBilEffektivitetPerAnsatt('2026-11-01', '2026-11-30')).toEqual([]);
+      expect(await sandbox.beregnGjennomsnittTidPerModell()).toEqual({});
+    });
+    it('kontroll: samme ordre uten «Kun ekstrautstyr» teller (så testen kan feile)', async () => {
+      S.ordrer = [ordre('ord_1700000000071', 'TESTWXYZ0000000Q2', false)];
+      const perAnsatt = await sandbox.beregnBilEffektivitetPerAnsatt('2026-11-01', '2026-11-30');
+      expect(perAnsatt.map((r) => r.antallBiler)).toEqual([1]);
+      expect((await sandbox.beregnGjennomsnittTidPerModell()).EV9.antallBiler).toBe(1);
+    });
+    it('en kun-ordre og en vanlig bil sammen: bare den vanlige telles', async () => {
+      S.ordrer = [ordre('ord_1700000000072', 'TESTWXYZ0000000Q3', true), ordre('ord_1700000000073', 'TESTWXYZ0000000Q4', false)];
+      expect((await sandbox.beregnBilEffektivitetPerAnsatt('2026-11-01', '2026-11-30')).map((r) => r.antallBiler)).toEqual([1]);
+      expect((await sandbox.beregnGjennomsnittTidPerModell()).EV9.antallBiler).toBe(1);
+    });
   });
 });
 

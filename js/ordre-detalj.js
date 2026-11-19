@@ -1067,7 +1067,8 @@ async function bekreftAdminMeldPaa() {
 
 function tvangsflyt(o) {
   if (erLeveranse(o)) return []; // en leveranse har ingen tvangsflyt (ingen bil, biltilsyn eller godkjenning)
-  if (o.kunEkstrautstyr) return []; // «kun ekstrautstyr» (ingen ombygging, Henrik 2026-11-17): ingen tvangsflyt
+  // «kun ekstrautstyr» (ingen ombygging): ingen av de sju kravene under (Henrik 2026-11-17), men ordren kan bare lukkes når den er Hentet (Henrik 2026-11-19: «krev hentet som status»).
+  if (o.kunEkstrautstyr) return [{lbl:'Status er Hentet', ok: o.ordreStatus === 'hentet'}];
   // "Ansatt meldt på" fjernet herfra 2026-11-14 (Henrik): sjekket CURRENT ansatteSignert.length,
   // ikke historikk - en ordre der alle har meldt seg av igjen (f.eks. ved endt skift) ville
   // aldri oppfylt kravet uten at noen ble stående "meldt på" kunstig, selv om bilen faktisk var
@@ -1115,7 +1116,7 @@ function tvangsflytBoksHTML(o) {
         <span style="flex-shrink:0;width:19px;height:19px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;background:${t.ok?'rgba(34,197,94,.12)':'rgba(239,68,68,.14)'};border:1px solid ${t.ok?'rgba(34,197,94,.35)':'rgba(239,68,68,.4)'};color:${t.ok?'#4ade80':'#f87171'}">${t.ok?'✓':'!'}</span>
         <span style="font-size:13.5px;color:${t.ok?'#a1a1aa':'#f4f4f5'}">${esc(t.lbl)}</span>
       </div>`).join('')}
-    </div>` : '<div class="small muted" style="margin-top:8px">Kun ekstrautstyr (ingen ombygging): ingen tvangsflyt.</div>'}
+    </div>` : '<div class="small muted" style="margin-top:8px">Ingen krav.</div>'}
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
       ${o.godkjent?`<span class="pill ok">Godkjent av ${esc(o.godkjennerNavn)}</span>`:`
         ${!tvangsflytOk?`<div class="muted small" style="margin-bottom:8px">${erAdmin?'Tvangsflyt ikke fullført - du kan overstyre som admin.':'Fullfør tvangsflyt først.'}</div>`:''}
@@ -1168,7 +1169,7 @@ function ombyggingBoksHTML(o) {
       <input type="checkbox" id="kunEkstrautstyr_${o.id}" ${kun?'checked':''} onchange="settKunEkstrautstyr('${o.id}',this.checked)" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
       <span style="font-size:13.5px;font-weight:${kun?'700':'400'};color:${kun?'#f4f4f5':'#a1a1aa'}">Kun ekstrautstyr (ingen ombygging)</span>
     </label>`;
-  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen. Bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting. Legg til utstyret i kortet under.</div>';
+  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ikke i Admin-ark og ikke med i portalen. Bare statusene På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet, og ordren kan bare lukkes når den er Hentet. Legg til utstyret i kortet under.</div>';
   return kunHTML + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
       <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">

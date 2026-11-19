@@ -923,10 +923,10 @@ function erLeveranse(o) { return !!o && o.ordretype === 'leveranse'; }
 function erKunEkstrautstyr(o) { return !!o && !erLeveranse(o) && o.kunEkstrautstyr === true; }
 // Kalenderplasseringen skrives målrettet (leveranseSettKalender) og aldri via Admin-ark/Time på biltilsynet: leveranser og kun-ekstrautstyr-ordrer.
 function kalenderUtenAdminArk(o) { return erLeveranse(o) || erKunEkstrautstyr(o); }
-// «Kun ekstrautstyr» har bare fire statuser (Henrik 2026-11-19): På vei, Ikke påbegynt, Påbegynt og Klar for henting (rekkefølgen er STATUSER sin). Ingen visning, biltilsyn
-// eller «Hentet»: en slik ordre godkjennes og arkiveres med «Arkiver ordre». statusDropdown() viser bare disse (pluss en eventuell annen nåværende status, ikke valgbar),
-// og endreStatus() avviser alt annet (se statusTillattForOrdre).
-const KUN_EKSTRAUTSTYR_STATUSER = ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting'];
+// «Kun ekstrautstyr» har bare fem statuser (Henrik 2026-11-19): På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet (rekkefølgen er STATUSER sin). Ingen Ikke veid, visning
+// eller biltilsyn. «Hentet» ble lagt til samme dag, da Henrik ba om at ordren må være Hentet før den kan lukkes (tvangsflyt() har det som eneste krav). statusDropdown() viser bare disse
+// (pluss en eventuell annen nåværende status, ikke valgbar), og endreStatus() avviser alt annet (se statusTillattForOrdre).
+const KUN_EKSTRAUTSTYR_STATUSER = ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting', 'hentet'];
 function statusTillattForOrdre(o, status) { return !erKunEkstrautstyr(o) || KUN_EKSTRAUTSTYR_STATUSER.includes(status); }
 function kunEkstrautstyrBadgeHTML(o) {
   if (!erKunEkstrautstyr(o)) return '';

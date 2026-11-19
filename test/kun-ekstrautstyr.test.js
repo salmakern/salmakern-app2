@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { lastApp } from './helpers/app-harness.js';
 
 // «Kun ekstrautstyr (ingen ombygging)» på en vanlig bil-ordre (Henrik 2026-11-17): en bil som ble bygget om for lenge siden og bare skal ha montert litt
-// ekstrautstyr. Ingen tvangsflyt, ingen automatisk utstyrsmal, «Varer fra lager» med bare Ekstra utstyr (ikke «Skal på bilen»), ikke i Admin-ark, kalenderen
+// ekstrautstyr. Ingen av de vanlige tvangsflyt-kravene (bare «Status er Hentet», 2026-11-19), ingen automatisk utstyrsmal, «Varer fra lager» med bare Ekstra utstyr (ikke «Skal på bilen»), ikke i Admin-ark, kalenderen
 // skrives målrettet (rører aldri Admin-ark), ordre-lapp som vanlig, og kolonnen skrives aldri av save()/ordreToDb.
 
 const app = lastApp();
@@ -83,17 +83,26 @@ describe('lesing og skriving av kun_ekstrautstyr', () => {
 });
 
 describe('tvangsflyt', () => {
-  it('ingen krav for «kun ekstrautstyr»; en vanlig bil har fortsatt sine 7', () => {
-    expect(sandbox.tvangsflyt(bil({ kun_ekstrautstyr: true }))).toEqual([]);
+  it('«kun ekstrautstyr» har ett eneste krav (status Hentet, Henrik 2026-11-19); en vanlig bil har fortsatt sine 7', () => {
+    expect(sandbox.tvangsflyt(bil({ kun_ekstrautstyr: true, ordre_status: 'klar_henting' }))).toEqual([{ lbl: 'Status er Hentet', ok: false }]);
+    expect(sandbox.tvangsflyt(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }))).toEqual([{ lbl: 'Status er Hentet', ok: true }]);
     expect(sandbox.tvangsflyt(bil()).length).toBe(7);
   });
-  it('Tvangsflyt-boksen sier «Ingen krav» og godkjenning er mulig; kortets stolpe er byttet med merket', () => {
-    const o = bil({ kun_ekstrautstyr: true });
-    const boks = sandbox.tvangsflytBoksHTML(o);
-    expect(boks).toContain('Ingen krav');
-    expect(boks).not.toContain('0 av 0');
-    expect(boks).toContain('Godkjenn og lukk');
-    expect(sandbox.tvangsflytBarHTML(o)).toContain('KUN EKSTRAUTSTYR');
+  it('Tvangsflyt-boksen viser kravet: ikke Hentet gir «0 av 1 krav» (godkjenner kan ikke lukke, admin kan overstyre), Hentet gir «1 av 1 krav» og «Godkjenn og lukk»; kortets stolpe er byttet med merket', () => {
+    const ikkeHentet = bil({ kun_ekstrautstyr: true, ordre_status: 'klar_henting' });
+    app.settMe({ id: 1, navn: 'TEST - Godkjenner', rolle: 'godkjenner' });
+    let boks = sandbox.tvangsflytBoksHTML(ikkeHentet);
+    expect(boks).toContain('Status er Hentet');
+    expect(boks).toContain('0 av 1 krav');
+    expect(boks).toContain('Ufullstendig');
+    expect(boks).not.toContain('Ingen krav');
+    app.settMe({ id: 2, navn: 'TEST - Admin', rolle: 'admin' });
+    expect(sandbox.tvangsflytBoksHTML(ikkeHentet)).toContain('⚠ Godkjenn og lukk (overstyr)');
+    app.settMe({ id: 1, navn: 'TEST - Godkjenner', rolle: 'godkjenner' });
+    boks = sandbox.tvangsflytBoksHTML(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }));
+    expect(boks).toContain('1 av 1 krav');
+    expect(boks).toMatch(/>Godkjenn og lukk<\/button>/);
+    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).toContain('KUN EKSTRAUTSTYR');
     expect(sandbox.tvangsflytBarHTML(bil())).toContain('av 7 krav');
   });
 });
