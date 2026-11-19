@@ -110,7 +110,7 @@ function renderArkiv() {
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
             <div style="flex:1">
               <b style="font-size:15px">${ordreLabelFull(o)}</b>
-              ${o.farge?`<div class="small muted" style="margin-top:2px">${esc(o.farge)}</div>`:''}
+              ${(o.farge && !erKunEkstrautstyr(o))?`<div class="small muted" style="margin-top:2px">${esc(o.farge)}</div>`:''}
             </div>
             ${o.fakturert
               ?`<span class="pill ok" style="margin:0;font-size:11px;padding:4px 11px;flex-shrink:0">✔ Fakturert</span>`
@@ -121,7 +121,7 @@ function renderArkiv() {
             <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Forhandler</span><span>${esc(o.kunde)||'—'}</span></div>
             <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Ankomst</span><span>${o.ankomstdato||'—'}</span></div>
             <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Utstyr</span><span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</span></div>
-            ${drivstoffKundeprisTekst(o)?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
+            ${(!erKunEkstrautstyr(o) && drivstoffKundeprisTekst(o))?`<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px"><span class="muted" style="min-width:74px">Drivstoff</span><span>${drivstoffKundeprisTekst(o)}</span></div>`:''}
           </div>
 
           <div style="margin-top:12px;padding-top:11px;border-top:1px solid #27272a;display:flex;gap:8px;flex-wrap:wrap">
@@ -165,7 +165,7 @@ function visKundeHistorikk(kunde) {
         <b>${ordreLabel(o)}</b>
         <span style="background:${si.bg};color:${si.txt};border:1px solid ${si.border};border-radius:999px;padding:3px 9px;font-size:11px;font-weight:700">${si.lbl}</span>
       </div>
-      <div class="small muted" style="margin-top:4px">${esc(o.merke)} ${esc(o.type)} ${esc(o.variant)}</div>
+      <div class="small muted" style="margin-top:4px">${erKunEkstrautstyr(o) ? esc(o.merke) + ' ' + esc(o.modell) : esc(o.merke) + ' ' + esc(o.type) + ' ' + esc(o.variant)}</div>
       <div class="small muted">${o.ankomstdato||'Ingen dato'} · ${o.status==='arkivert'?'Arkivert':'Aktiv'}</div>
     </div>`;
   }).join('') : '<div class="muted small">Ingen ordrer funnet for denne kunden.</div>';

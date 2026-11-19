@@ -65,9 +65,12 @@ function genPDFSkriv(o, printVindu) {
   const tf = tvangsflyt(o);
   const tfOk = tf.filter(t=>t.ok).length;
   const si = statusInfo(o.ordreStatus);
+  // «Kun ekstrautstyr» (Henrik 2026-11-19, «rydd alle»): rapporten viser det samme som ordredetaljen, altså ikke variant, farge, vekter, drivstoff, dokumenter, hengerfeste, time på biltilsynet,
+  // sjekklista «Har ved ankomst» eller ankomst-/skade-/manglende-deler-bildene. Vanlige ordrer og leveranser gir nøyaktig samme HTML som før.
+  const kun = erKunEkstrautstyr(o);
 
   const OK = '#1a7f37', NEI = '#c0392b';
-  const merkeLinje = [o.merke, o.type, o.modell, o.variant, o.farge].filter(Boolean).join(' · ');
+  const merkeLinje = (kun ? [o.merke, o.modell] : [o.merke, o.type, o.modell, o.variant, o.farge]).filter(Boolean).join(' · ');
 
   // Toppmerkene: status, tvangsflyt og godkjent - det man vil se uten å lese hele arket
   const merke = (tekst, ok) =>
@@ -228,7 +231,7 @@ function genPDFSkriv(o, printVindu) {
     </div>
     <div class="merker">
       ${merke('Status: '+si.lbl, ['Klar for henting','Bestilt frakt','Hentet'].includes(si.lbl))}
-      ${merke('Tvangsflyt '+tfOk+'/'+tf.length, tfOk===tf.length)}
+      ${kun ? '<span class="badge" style="border-color:#767676;background:#f3f3f3;color:#444">Kun ekstrautstyr</span>' : merke('Tvangsflyt '+tfOk+'/'+tf.length, tfOk===tf.length)}
       ${merke(o.godkjent?'Godkjent / lukket':'Ikke godkjent', !!o.godkjent)}
     </div>
   </div>
@@ -237,23 +240,23 @@ function genPDFSkriv(o, printVindu) {
     <div class="seksjon">
       <div class="s-hode"><span class="s-tittel">Kjøretøy</span></div>
       ${infoRad('Merke', esc(o.merke))}
-      ${infoRad('Type', esc(o.type))}
+      ${kun ? '' : infoRad('Type', esc(o.type))}
       ${infoRad('Modell', esc(o.modell))}
-      ${infoRad('Variant', esc(o.variant))}
-      ${infoRad('Versjon', esc(o.versjon))}
-      ${infoRad('Farge', esc(o.farge))}
+      ${kun ? '' : infoRad('Variant', esc(o.variant))}
+      ${kun ? '' : infoRad('Versjon', esc(o.versjon))}
+      ${kun ? '' : infoRad('Farge', esc(o.farge))}
       ${infoRad('Reg.nr', esc(o.regnr))}
       ${infoRad('Ankomstdato', o.ankomstdato?fmtDatoKort(o.ankomstdato):'')}
     </div>
     <div class="seksjon">
-      <div class="s-hode"><span class="s-tittel">Kunde og dokumenter</span></div>
+      <div class="s-hode"><span class="s-tittel">${kun ? 'Kunde' : 'Kunde og dokumenter'}</span></div>
       ${infoRad('Forhandler', esc(o.kunde))}
       ${infoRad('Kontaktperson', esc(o.eier))}
-      ${infoRad('Flåte', esc(((S.flater||[]).find(f=>f.id===o.flateId)||{}).flatenummer||''))}
-      ${infoRad('COC', esc(o.coc), o.coc==='Har'?OK:NEI)}
-      ${infoRad('Fullmakt', esc(o.fullmakt), o.fullmakt==='Har'?OK:NEI)}
-      ${infoRad('Diagnose', o.diagnose?'Utført av '+esc(o.diagnoseAv):'Ikke utført', o.diagnose?OK:NEI)}
-      ${infoRad('Time biltilsyn', o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet)+' '+(o.tidBiltilsynetTid||'')+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'')}
+      ${kun ? '' : infoRad('Flåte', esc(((S.flater||[]).find(f=>f.id===o.flateId)||{}).flatenummer||''))}
+      ${kun ? '' : infoRad('COC', esc(o.coc), o.coc==='Har'?OK:NEI)}
+      ${kun ? '' : infoRad('Fullmakt', esc(o.fullmakt), o.fullmakt==='Har'?OK:NEI)}
+      ${kun ? '' : infoRad('Diagnose', o.diagnose?'Utført av '+esc(o.diagnoseAv):'Ikke utført', o.diagnose?OK:NEI)}
+      ${kun ? '' : infoRad('Time biltilsyn', o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet)+' '+(o.tidBiltilsynetTid||'')+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'')}
       ${infoRad('Fakturert', o.fakturert?'Ja':'Ikke fakturert', o.fakturert?OK:NEI)}
     </div>
   </div>
@@ -261,7 +264,7 @@ function genPDFSkriv(o, printVindu) {
   <div class="seksjon">
     <div class="s-hode"><span class="s-tittel">Ombygging</span></div>
     <div class="chips">
-      ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']]
+      ${kun ? `<span class="chip chip-på"><span class="boks" style="border-color:${NEI};background:${NEI}">✓</span>Kun ekstrautstyr (ingen ombygging)</span>` : [['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']]
         .map(([k,lbl])=>{
           const på = !!o.ombygging?.[k];
           return `<span class="chip${på?' chip-på':''}">
@@ -270,8 +273,8 @@ function genPDFSkriv(o, printVindu) {
     </div>
   </div>
 
-  <div class="kol2">
-    <div class="seksjon">
+  <div class="kol2"${kun ? ' style="grid-template-columns:1fr"' : ''}>
+    ${kun ? '' : `<div class="seksjon">
       <div class="s-hode">
         <span class="s-tittel">Utstyr — har ved ankomst</span>
         ${(o.utstyrSjekkliste||[]).length
@@ -283,7 +286,7 @@ function genPDFSkriv(o, printVindu) {
           ? o.utstyrSjekkliste.map(p=>avkryss(esc(p.punkt), p.ok)).join('')
           : '<div class="tom" style="font-size:13px">Ingen mal valgt</div>'}
       </div>
-    </div>
+    </div>`}
     <div class="seksjon">
       <div class="s-hode"><span class="s-tittel">Utstyr — skal ha etter visning</span></div>
       <div style="margin-top:9px;font-size:13px">
@@ -294,16 +297,16 @@ function genPDFSkriv(o, printVindu) {
                  <span>${l}</span></div>`).join('')
           : '<div class="tom">Ingen tilvalg</div>'}
       </div>
-      <div class="s-hode" style="margin-top:20px"><span class="s-tittel">Hengerfeste</span></div>
+      ${kun ? '' : `<div class="s-hode" style="margin-top:20px"><span class="s-tittel">Hengerfeste</span></div>
       <div style="font-size:13px;margin-top:8px">${
         o.utstyr?.hengerfeste==='hengerfeste'
           ? 'Hengerfeste (' + (HENGERFESTE_MONTERT_LBL[o.utstyr?.hengerfesteMontert]||'Ikke montert').toLowerCase() + ')'
-          : 'Ikke hengerfeste'}</div>
+          : 'Ikke hengerfeste'}</div>`}
     </div>
   </div>
 
-  <div class="kol2" style="grid-template-columns:1.35fr 1fr">
-    <div class="seksjon">
+  <div class="kol2" style="grid-template-columns:${kun ? '1fr' : '1.35fr 1fr'}">
+    ${kun ? '' : `<div class="seksjon">
       <div class="s-hode"><span class="s-tittel">Vekter (kg)</span></div>
       <div class="vekt">
         <div class="vekt-hode"><span></span><span>Ved ankomst</span><span>Endring</span><span>Før visning</span></div>
@@ -319,15 +322,15 @@ function genPDFSkriv(o, printVindu) {
         }).join('')}
       </div>
       <div class="fotnote">Rødt tall = endret fra vekten ved ankomst.</div>
-    </div>
+    </div>`}
     <div class="seksjon">
-      <div class="s-hode"><span class="s-tittel">Drivstoff</span></div>
+      ${kun ? '' : `<div class="s-hode"><span class="s-tittel">Drivstoff</span></div>
       <div style="margin-top:9px">
         ${infoRad('Totalpris', o.drivstoff?.totalpris ? esc(String(o.drivstoff.totalpris))+' kr' : '')}
         ${infoRad('Sats', esc(((S.drivstoffSatser||[]).find(s=>s.id===(o.drivstoff?.satsId||''))||{}).navn||''))}
         ${infoRad('Kundepris', drivstoffKundeprisTekst(o))}
-      </div>
-      <div class="s-hode" style="margin-top:20px"><span class="s-tittel">Ansatte på ordren</span></div>
+      </div>`}
+      <div class="s-hode"${kun ? '' : ' style="margin-top:20px"'}><span class="s-tittel">Ansatte på ordren</span></div>
       <div style="margin-top:8px;font-size:13px">
         ${o.ansatteSignert.length
           ? o.ansatteSignert.map(a=>`<div style="padding:3px 0">${esc(a.navn)} <span style="color:#8a8a8a;font-size:11.5px">· ${a.tid}</span></div>`).join('')
@@ -361,10 +364,10 @@ function genPDFSkriv(o, printVindu) {
       <div class="mono" style="font-size:11.5px;color:#767676">${esc(o.chassis)||esc(o.regnr)}</div>
     </div>
 
-    ${fotoSeksjon('a','Bilder — ankomst')}
-    ${fotoSeksjon('s','Bilder — avstand / skader')}
+    ${kun ? '' : fotoSeksjon('a','Bilder — ankomst')}
+    ${kun ? '' : fotoSeksjon('s','Bilder — avstand / skader')}
     ${fotoSeksjon('l','Bilder — levering')}
-    ${manglendeDelerSeksjon(o)}
+    ${kun ? '' : manglendeDelerSeksjon(o)}
 
     <div class="merknad">
       <div>

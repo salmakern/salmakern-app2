@@ -159,7 +159,7 @@ function renderOrdreList() {
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <span onclick="openOrdre('${o.id}')" style="cursor:pointer;display:flex;align-items:center;gap:7px;min-width:0">
           <span style="width:7px;height:7px;border-radius:999px;background:${o.kalenderDato?'#3f3f46':'#ef4444'};flex-shrink:0"></span>
-          <span class="small" style="color:${o.kalenderDato?'#f4f4f5':'#fca5a5'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):'') : 'Ikke i kalender'}</span>
+          <span class="small" style="color:${o.kalenderDato?'#f4f4f5':'#fca5a5'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.kalenderDato ? o.kalenderDato+' '+o.kalenderTid+(biltilsynStedVisning(o)?' · '+esc(biltilsynStedVisning(o)):'') : 'Ikke i kalender'}</span>
         </span>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
           ${godkjentKortHTML(o)}
@@ -231,7 +231,7 @@ function renderOversikt(q) {
           ${(o.farge && !erKunEkstrautstyr(o))?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
-          <div class="small" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
+          <div class="small" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(biltilsynStedVisning(o)?' · '+esc(biltilsynStedVisning(o)):''):'Ikke i kalender'}</div>
         </div>`;
         } catch (e) { return ordreKortFeilHTML(o, e); }
       }).join('')
@@ -515,7 +515,7 @@ function renderWeek() {
           <div style="display:flex;justify-content:space-between;align-items:flex-start;height:100%">
             <div onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer;flex:1;min-width:0;overflow:hidden;height:100%">
               <div class="cal-event-regnr" style="color:${si.txt}">${erLeveranse(o) ? '🚚 ' : ''}${tittel}</div>
-              <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${(!smalt&&o.tidBiltilsynetSted)?' - '+esc(o.tidBiltilsynetSted):''} - ${statusInfo(o.ordreStatus).lbl}</div>
+              <div class="cal-event-info" style="color:${si.txt};opacity:0.8">${o.kalenderTid}${(!smalt&&biltilsynStedVisning(o))?' - '+esc(biltilsynStedVisning(o)):''} - ${statusInfo(o.ordreStatus).lbl}</div>
             </div>
             <div style="position:relative;flex-shrink:0">
               <button onclick="event.stopPropagation();toggleCalMenu('${o.id}')" style="background:none;border:none;color:${si.txt};font-size:18px;line-height:1;padding:0 2px;cursor:pointer" title="Valg">⋯</button>
@@ -918,6 +918,9 @@ function dokStatusKortHTML(o) {
   if (erKunEkstrautstyr(o)) return '';
   return `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}${flateKortHTML(o)}</div>`;
 }
+// Biltilsynssted på kalenderlinjen (Ordre-lista og Oversikt-kortene) og kalenderkortene i ukekalenderen. «Kun ekstrautstyr» (Henrik 2026-11-19, «rydd alle»): Time på biltilsynet er ikke med i
+// ordren, så et sted som står igjen i dataene skal ikke vises. Kalenderdato og -tid (der ordren ligger i kalenderen) vises som før.
+function biltilsynStedVisning(o) { return erKunEkstrautstyr(o) ? '' : (o.tidBiltilsynetSted || ''); }
 // Kompakt fremdriftsindikator for tvangsflyt-kravene på ordrekortene - samme
 // krav som tvangsflyt(o) i ordre-detalj.js, bare vist som en rad segmenter i
 // stedet for en full ✔/✕-liste, siden kortene har begrenset plass.
