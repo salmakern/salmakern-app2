@@ -25,12 +25,23 @@ beforeEach(() => {
 afterEach(() => { Object.assign(sandbox, EKTE); app.settMe(null); });
 
 const ordre = (over = {}) => sandbox.dbToOrdre({ id: 'ord_TEST_F' + Math.random().toString(36).slice(2, 6), status: 'aktiv', ordre_status: 'klar_henting', merke: 'KIA', modell: 'EV9', kunde: 'TEST Kunde AS', chassis: 'TESTWXYZ0000000F1', fiken_linjer: [{ produktnummer: '500', antall: 1 }], ...over });
+const leveranse = (over = {}) => sandbox.dbToOrdre({ id: 'ord_TEST_FL' + Math.random().toString(36).slice(2, 6), status: 'aktiv', ordretype: 'leveranse', ordre_status: 'under_arbeid', kunde: 'TEST Kunde AS', fiken_linjer: [{ produktnummer: '500', antall: 1 }], ...over });
 
 describe('utvalg og sum', () => {
-  it('samme utvalg som «Klar til fakturering»: bare aktive, ikke fakturerte bil-ordrer i de tre statusene', () => {
-    const a = ordre(), b = ordre({ ordre_status: 'paabegynt' }), c = ordre({ fakturert: true }), d = ordre({ ordre_status: 'hentet' });
-    S.ordrer = [a, b, c, d];
+  it('biler: bare aktive, ikke fakturerte, i Klar for henting eller Hentet - Vist på biltilsynet er IKKE med (19.11, Henrik: «kun biler som er klar for henting»)', () => {
+    const a = ordre(), b = ordre({ ordre_status: 'paabegynt' }), c = ordre({ fakturert: true }), d = ordre({ ordre_status: 'hentet' }), e = ordre({ ordre_status: 'vist_biltilsyn' });
+    S.ordrer = [a, b, c, d, e];
     expect(sandbox.faktureringKandidater().map((o) => o.id)).toEqual([a.id, d.id]);
+  });
+  it('leveranser: bare Sendt gir plass (19.11, Henrik: «leveranser som har blitt sendt») - Under arbeid og Klar til sending er IKKE med', () => {
+    const a = leveranse({ ordre_status: 'sendt' }), b = leveranse({ ordre_status: 'under_arbeid' }), c = leveranse({ ordre_status: 'klar_sending' }), d = leveranse({ ordre_status: 'sendt', fakturert: true });
+    S.ordrer = [a, b, c, d];
+    expect(sandbox.faktureringKandidater().map((o) => o.id)).toEqual([a.id]);
+  });
+  it('en blanding av biler og leveranser gir begge typer i lista', () => {
+    const bil = ordre({ ordre_status: 'klar_henting' }), lev = leveranse({ ordre_status: 'sendt' });
+    S.ordrer = [bil, lev];
+    expect(sandbox.faktureringKandidater().map((o) => o.id).sort()).toEqual([bil.id, lev.id].sort());
   });
   it('pris per linje: overstyrt beløp, så frosset pris, så Fiken-pris; ukjent telles', () => {
     const o = ordre({ fiken_linjer: [{ produktnummer: '500', antall: 1 }, { produktnummer: '512', antall: 2, pris: 13000 }, { produktnummer: '21', antall: 1, belop: 1500 }, { produktnummer: '999', antall: 1 }] });
@@ -64,6 +75,15 @@ describe('siden', () => {
     S.ordrer = [ordre()];
     sandbox.renderFakturering();
     expect(innhold.innerHTML).toContain('Bare admin');
+  });
+  it('en sendt leveranse vises på linje med bilene, uten feil', () => {
+    const lev = leveranse({ ordre_status: 'sendt' });
+    S.ordrer = [ordre(), lev];
+    sandbox.renderFakturering();
+    const html = innhold.innerHTML;
+    expect(html).toContain('Alle (2)');
+    expect(html).not.toContain('Kunne ikke vise faktureringen');
+    expect(html).not.toContain('Feilet');
   });
 });
 
