@@ -129,17 +129,57 @@ describe('ordre-lapp: utskriftsstasjon', () => {
     S.ordrer = [o];
     sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
     expect(utskrifter).toHaveLength(0);
-    o.ordreStatus = 'ikke_paabegynt'; o.ankomstdato = '2026-11-13'; // som endreStatus gjør
+    o.ordreStatus = 'ikke_paabegynt'; o.ankomstdato = iDag(); // som endreStatus gjør (dagens dato: en fast dato ville falt utenfor 7-dagersgrensen)
     sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
     expect(utskrifter).toHaveLength(0); // forhandleren mangler ennå
     o.kunde = 'TEST - Forhandler AS';
     sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
     expect(utskrifter).toHaveLength(1);
     expect(utskrifter[0]).toContain('TESTWXYZ000000020');
-    expect(utskrifter[0]).toContain('13.11.2026');
+    expect(utskrifter[0]).toContain(iDag().split('-').reverse().join('.'));
     o.ordreStatus = 'under_arbeid';
     sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
     expect(utskrifter).toHaveLength(1); // aldri to ganger
+  });
+  // Henrik 2026-11-19: to biler som sto «På vei» da stasjonen ble slått på fikk aldri lapp av seg selv da de kom (alle ordrer ble merket som sett).
+  it('En bil som står «På vei» når stasjonen slås på, får lapp av seg selv når den kommer; biler som alt er kommet gjør det ikke', async () => {
+    const paaVei = ordre(Date.now() - 5000, { chassis: 'TESTWXYZ000000030', ordreStatus: 'paa_vei', ankomstdato: '' });
+    const kommet = ordre(Date.now() - 4000, { chassis: 'TESTWXYZ000000031' });
+    S.ordrer = [paaVei, kommet];
+    sandbox.settOrdreLappStasjon(true);
+    expect(sandbox.ordreLappUtskrevne()).toEqual([kommet.id]);
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(0);
+    paaVei.ordreStatus = 'ikke_paabegynt'; paaVei.ankomstdato = iDag();
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('TESTWXYZ000000030');
+    expect(utskrifter[0]).not.toContain('TESTWXYZ000000031');
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1); // aldri to ganger
+  });
+  it('En gammel merking på en «På vei»-bil (fra før rettelsen) fjernes, så bilen får lapp når den kommer; andre merkinger står', async () => {
+    const paaVei = ordre(Date.now() - 5000, { chassis: 'TESTWXYZ000000032', ordreStatus: 'paa_vei', ankomstdato: '' });
+    const kommet = ordre(Date.now() - 4000, { chassis: 'TESTWXYZ000000033' });
+    const leveranse = ordre(Date.now() - 3000, { ordretype: 'leveranse', ordreStatus: 'paa_vei' });
+    S.ordrer = [paaVei, kommet, leveranse];
+    sandbox.settOrdreLappStasjon(true);
+    sandbox.ordreLappMerk([paaVei.id, 'ord_finnes_ikke_lenger']); // slik lista så ut etter den gamle koden
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(0);
+    expect(sandbox.ordreLappUtskrevne()).toEqual([kommet.id, leveranse.id, 'ord_finnes_ikke_lenger']);
+    paaVei.ordreStatus = 'ikke_paabegynt'; paaVei.ankomstdato = iDag();
+    sandbox.ordreLappTaIgjen(); sandbox.ordreLappTomKo(); await vent();
+    expect(utskrifter).toHaveLength(1);
+    expect(utskrifter[0]).toContain('TESTWXYZ000000032');
+  });
+  it('Tilbake til «Automatisk» merker ikke «På vei»-biler som sett', () => {
+    sandbox.settOrdreLappStasjon(true);
+    const paaVei = ordre(Date.now() + 50, { ordreStatus: 'paa_vei', ankomstdato: '' });
+    const kommet = ordre(Date.now() + 60);
+    S.ordrer = [paaVei, kommet];
+    sandbox.settOrdreLappAuto(false); sandbox.settOrdreLappAuto(true);
+    expect(sandbox.ordreLappUtskrevne()).toEqual([kommet.id]);
   });
   it('datoen på lappen er ankomstdatoen, ikke opprettelsen; ingen ankomstdato gir ingen dato', () => {
     expect(sandbox.ordreLappTekster(ordre(1762851234567, { ankomstdato: '2026-11-20' })).info).toBe('Mercedes Vito · 20.11.2026');
