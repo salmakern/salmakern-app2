@@ -731,6 +731,13 @@ Se kritisk på visuelle endringer ved faktisk visningsstørrelse/bakgrunn før d
 ferdige. Ved subjektive designvalg (f.eks. hvilken logofil/størrelse) - vis flere reelle
 alternativer side ved side og la Henrik velge, ikke bestem selv.
 
+## Ordre-siden: «Hengerfeste først» og søk på forhandler.nr (2026-11-19, gren `henger/ordre-sort-hengerfeste`, slått sammen med «Kun ekstrautstyr» i `rullut/19-11`)
+
+Henrik 19.11: «det må være mulig å sortere etter hengerfeste på ordre siden og det må være mulig å søke etter forhandler.nr». Begge deler ligger i `renderOrdreList()` (`js/oversikt-kalender.js`), ingen databaseendring.
+- **Sortering:** nytt valg «Hengerfeste først» (`value="hengerfeste"`) i `#ordreSorterValg` (`salmakern.html`): biler der `utstyr.hengerfeste === 'hengerfeste'` øverst, resten under, og innenfor hver gruppe den vanlige rekkefølgen (`sorterOrdre`: prioritert, henteklar-dato, status, ankomst). Det skiller IKKE på bestilt/montert (`hengerfesteBestilt`/`hengerfesteMontert`); vil Henrik ha «ikke montert først», er det en tilføyelse i samme sammenligning. Bare Ordre-fanen: Oversikt-listene har ingen sortering å velge.
+- **Søk:** `#ordreSok` treffer nå også `utstyr.forhandlerNr` (del av nummeret, uavhengig av store/små bokstaver; teksten i feltet nevner det). `String(... ?? '')` rundt verdien: `utstyr` er rå JSON fra databasen, og et tall der skal aldri kaste og blanke lista for alle (samme lærdom som i «Ordre i uventet radform»). **Oversikt-søket (`#sokInput`) er IKKE endret** (det søker bare på ordrelabel, chassis, kunde og kontaktperson).
+- Vakt: `test/ordre-sok-sorter.test.js` (hele appen i testriggen). `sw.js` CACHE v101 (kun-ekstrautstyr-grenen har v100; sammenslått og lagt ut samtidig 2026-11-19).
+
 ## Én produktliste, trinn 0: rydding av produktavvik (2026-11-17)
 
 - **502 («Tillegg for 180 graders stoler», Fikens navn er fasit) kom aldri med fra EV9-sjekklisten**: dagens mal har punktet «180 svingbare», koden lyttet bare på «4-seter bak 180» (gammel tekst, står i eldre ordrer). `erPunkt180Stoler()` i `js/ansatte-utstyr.js` godtar nå alle tre tekstene (også Fikens navn, så malen kan døpes om uten kodeendring). Ingen ordre har noen gang fått 502 automatisk.

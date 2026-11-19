@@ -552,7 +552,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             </div>
           </div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, biltype, utstyr..." oninput="renderOrdreList()" style="flex:1;min-width:180px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
+            <input id="ordreSok" type="search" placeholder="Søk på regnr, kunde, forhandler.nr, biltype, utstyr..." oninput="renderOrdreList()" style="flex:1;min-width:180px;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
             <select id="ordreStatusFilter" onchange="renderOrdreList()" style="width:auto;flex-shrink:0;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
               <option value="">Alle statuser</option>
               <option value="portal_ubekreftet">Fra portal, ikke bekreftet (0)</option>
@@ -574,6 +574,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
               <option value="">Standard rekkefølge</option>
               <option value="nyest">Ankomst - nyeste først</option>
               <option value="eldst">Ankomst - eldste først</option>
+              <option value="hengerfeste">Hengerfeste først</option>
             </select>
           </div>
           <div class="grid g3" id="ordreListeResultat" style="margin-top:12px"></div>

@@ -370,6 +370,7 @@ describe('Filter og oppsett (kildetekst)', () => {
 
   it('sw.js har fått ny CACHE-versjon (åpne PWA-er henter den nye koden)', () => {
     const sw = readFileSync(path.resolve(__dirname, '../sw.js'), 'utf8');
+    // v15 eller høyere, også tresifret (v100 var den første som brøt det gamle mønsteret `[2-9]\d`, 2026-11-19).
     expect(sw).toMatch(/const CACHE = 'salmakern-v(1[5-9]|[2-9]\d|\d{3,})'/);
   });
 });

@@ -75,8 +75,11 @@ function renderOrdreList() {
   const sokTekst = gammelSok.toLowerCase().trim();
   const statusFilter = document.getElementById('ordreStatusFilter')?.value || '';
   const sorterValg = document.getElementById('ordreSorterValg')?.value || '';
+  // «Hengerfeste først» (Henrik 2026-11-19): biler der hengerfeste er valgt øverst, resten under; innenfor hver gruppe den vanlige rekkefølgen (sorterOrdre).
+  const medHengerfeste = o => (o.utstyr?.hengerfeste === 'hengerfeste' ? 1 : 0);
   const sorterFn = sorterValg === 'nyest' ? (a,b) => (b.ankomstdato||'').localeCompare(a.ankomstdato||'')
     : sorterValg === 'eldst' ? (a,b) => (a.ankomstdato||'').localeCompare(b.ankomstdato||'')
+    : sorterValg === 'hengerfeste' ? (a,b) => (medHengerfeste(b) - medHengerfeste(a)) || sorterOrdre(a,b)
     : sorterOrdre;
   // «Fra portal, ikke bekreftet (N)»: ordre som Forhandlerportalen har opprettet og som en ansatt ennå ikke har bekreftet. Tallet i valget holdes oppdatert her
   // (bare når teksten faktisk endres, så et åpent nedtrekk ikke forstyrres).
@@ -100,6 +103,8 @@ function renderOrdreList() {
            (o.merke||'').toLowerCase().includes(sokTekst) ||
            (o.modell||'').toLowerCase().includes(sokTekst) ||
            (o.chassis||'').toLowerCase().includes(sokTekst) ||
+           // Forhandler.nr (Henrik 2026-11-19). String(): utstyr er rå JSON fra databasen, og et tall her skal aldri kaste og blanke lista.
+           String(o.utstyr?.forhandlerNr ?? '').toLowerCase().includes(sokTekst) ||
            (o.utstyr?.skalHa||'').toLowerCase().includes(sokTekst) ||
            (o.utstyr?.har||'').toLowerCase().includes(sokTekst) ||
            (erLeveranse(o) && ((o.leveranse.merking||'').toLowerCase().includes(sokTekst) || (o.leveranse.adresse||'').toLowerCase().includes(sokTekst) || (o.leveranse.sted||'').toLowerCase().includes(sokTekst) || (o.leveranse.fraktselskap||'').toLowerCase().includes(sokTekst)));

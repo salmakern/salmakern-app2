@@ -102,8 +102,9 @@
 // v94 - Oversikt: «Klar til fakturering»-kortet fjernet, «Innkommende» flyttet til en knapp på Ordre-siden, «På jobb nå»/«Stemplet inn nå» side om side
 // v97 - Fakturering-siden: biler kun Klar for henting/Hentet (ikke lenger Vist på biltilsynet), leveranser med status Sendt lagt til
 // v98 - «På jobb nå» er nå admin-only (var synlig for alle roller)
-// v100 - «Kun ekstrautstyr»: enklere ordre (uten vekter, drivstoff, dokumenter, biltilsyn m.m.) og bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting
-const CACHE = 'salmakern-v100';
+// v100 - «Kun ekstrautstyr»: enklere ordre (uten vekter, drivstoff, dokumenter, biltilsyn m.m.) og bare statusene På vei, Ikke påbegynt, Påbegynt, Klar for henting og Hentet (Hentet kreves for å lukke)
+// v101 - Ordre-siden: «Hengerfeste først» i sorteringen og søk på forhandler.nr
+const CACHE = 'salmakern-v101';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
