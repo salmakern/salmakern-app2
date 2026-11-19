@@ -834,10 +834,14 @@ Henrik: en kunde skal bare ha montert litt ekstrautstyr (gummimatte, kasse) på 
 
 Henriks valg: «begge» (Fakturering-kortet i ordren som før, pluss en egen side), «Lag kladd» som knapp på siden, og alternativ A på Oversikt.
 Alt i `js/fakturering.js` (lastes etter `skal-paa-bilen.js`).
-- **Siden** (fane «Fakturering», `#faktureringTab`, bare admin; `showPage('fakturering')` kaller `renderFakturering()`): samme utvalg som før
-  (`faktureringKandidater`: aktive bil-ordrer, ikke fakturert, status klar_henting/vist_biltilsyn/hentet) og samme `fakturaSjekk` som stopper
-  knappen i ordren. Per ordre: fakturalinjene, en VEILEDENDE sum FØR rabatt (overstyrt `belop`, ellers frosset `pris`, ellers `fiken_priser.pris_kr`,
-  hentet én gang når siden åpnes) og grunnene. Filter Alle/Klare/Sjekk selv/Stopper.
+- **Siden** (fane «Fakturering», `#faktureringTab`, bare admin; `showPage('fakturering')` kaller `renderFakturering()`): per ordre fakturalinjene,
+  en VEILEDENDE sum FØR rabatt (overstyrt `belop`, ellers frosset `pris`, ellers `fiken_priser.pris_kr`, hentet én gang når siden åpnes) og grunnene
+  fra `fakturaSjekk` (samme sjekk som stopper knappen i ordren). Filter Alle/Klare/Sjekk selv/Stopper.
+  **Utvalg (`faktureringKandidater`, utvidet 2026-11-19, Henrik: «alle ordene skal inn dit, men det skal kun være biler som er klar for henting og
+  leveranser som har blitt sendt»)**: aktive, ikke fakturerte ordrer av BEGGE typer - biler med status Klar for henting ELLER Hentet (IKKE lenger
+  Vist på biltilsynet, som sto med frem til denne datoen), og leveranser med status Sendt (Under arbeid/Klar til sending er ikke med). `fakturaSjekk`
+  trengte ingen endring for leveranser: «Skal på bilen»-sammenligningen (trinn 4 under) og ombyggingssjekken er allerede bil-only via `erNyProduktliste`/
+  `o.ombygging`. `sw.js` CACHE v97.
 - **«Lag kladd i Fiken»** (`faktureringLagKladd`): sperret når noe stopper (rødt), mens en kladd lages, og uten linjer. Bekreftelse med kunde,
   antall linjer og sum, så den VANLIGE `fakturerViaFiken` (samme kontroller, edge-funksjon og avtalte rabatt). Ingen egen Fiken-vei.
 - **Oversikt-kortet «Klar til fakturering» er FJERNET (2026-11-18, Henrik: «klar til fakturering må vekk kun faktorering siden»)**: antallene
