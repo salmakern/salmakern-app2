@@ -3,20 +3,22 @@
 // ════════════════════════════════════════════════════
 // Egen side i menyen (bare admin) som samler alle ordrer som venter på fakturering, med fakturalinjene, en veiledende sum og hva som
 // stopper. Fakturering-kortet inne i ordren er uendret (det fylles allerede av «Skal på bilen», ombyggingen, bestillingen og drivstoff).
-//  * Hvilke ordrer: samme utvalg som «Klar til fakturering» (faktureringKandidater), og samme sjekk (fakturaSjekk i ordre-detalj.js) som
-//    faktisk stopper knappen i ordren, så siden og knappen aldri er uenige.
+//  * Hvilke ordrer (Henrik 19.11: «alle ordene skal inn dit, men det skal kun være biler som er klar for henting og leveranser som har
+//    blitt sendt»): biler med status Klar for henting ELLER Hentet, og leveranser med status Sendt - begge bare uten faktura ennå.
+//    Samme sjekk (fakturaSjekk i ordre-detalj.js) som faktisk stopper knappen i ordren, så siden og knappen aldri er uenige.
 //  * «Lag kladd i Fiken» (Henriks valg): bare når ingenting stopper, etter en bekreftelse med kunde, linjer og veiledende sum; selve
 //    kladden lages av den vanlige fakturerViaFiken (samme kontroller, samme edge-funksjon, kundens avtalte rabatt).
 //  * Summen er VEILEDENDE og FØR kundens rabatt: overstyrt beløp, ellers frosset pris på linjen, ellers Fiken-prisen (fiken_priser).
 //    Rabatten regnes av fiken-fakturer når kladden lages.
 
-const FAKTURERING_STATUSER = ['klar_henting', 'vist_biltilsyn', 'hentet'];
+const FAKTURERING_STATUSER_BIL = ['klar_henting', 'hentet'];
 let faktureringFilter = 'alle';
 let _faktureringPriserHentet = false;
 const _faktureringIGang = new Set();
 
 function faktureringKandidater() {
-  return (S.ordrer || []).filter(o => !erLeveranse(o) && o.status === 'aktiv' && !o.fakturert && FAKTURERING_STATUSER.includes(o.ordreStatus));
+  return (S.ordrer || []).filter(o => o.status === 'aktiv' && !o.fakturert &&
+    (erLeveranse(o) ? o.ordreStatus === 'sendt' : FAKTURERING_STATUSER_BIL.includes(o.ordreStatus)));
 }
 
 function faktureringSjekk(o) {

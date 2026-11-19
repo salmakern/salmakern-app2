@@ -139,6 +139,18 @@ function ordreLappSkriv(nokkel, verdi) { try { if (verdi == null) localStorage.r
 function ordreLappStasjonFra() { const v = Number(ordreLappLes(ORDRE_LAPP_STASJON_NOKKEL)); return v > 0 ? v : 0; }
 function ordreLappUtskrevne() { try { const l = JSON.parse(ordreLappLes(ORDRE_LAPP_UTSKREVET_NOKKEL) || '[]'); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
 // Merker id-ene som utskrevet og gir tilbake de som IKKE var merket fra før (leses på nytt rett før skriving, så to åpne faner ikke skriver ut samme ordre).
+// En bil som står «På vei» er aldri ferdig med lappen (Henrik 2026-11-19): lappen skal komme med ankomstdato når bilen kommer. Da stasjonen ble slått på,
+// ble ALLE ordrer merket som sett, også «På vei»-bilene, og de fikk aldri lapp av seg selv da de kom. Derfor merkes de ikke lenger når stasjonen slås på,
+// og en merking som alt ligger der fjernes så lenge bilen står «På vei» (kalles fra ordreLappTaIgjen, altså etter hver rendering på stasjons-PC-en).
+function ordreLappErPaaVei(o) { return !!o && (o.ordreStatus || 'ikke_paabegynt') === 'paa_vei'; }
+function ordreLappIderSett() { return (S.ordrer || []).filter(o => !(ordreLappSkalHa(o) && ordreLappErPaaVei(o))).map(o => o.id); }
+function ordreLappGlemPaaVei() {
+  const paaVei = (S.ordrer || []).filter(o => ordreLappSkalHa(o) && ordreLappErPaaVei(o)).map(o => o.id);
+  if (!paaVei.length) return;
+  const fra = ordreLappUtskrevne();
+  const igjen = fra.filter(id => !paaVei.includes(id));
+  if (igjen.length !== fra.length) ordreLappSkriv(ORDRE_LAPP_UTSKREVET_NOKKEL, JSON.stringify(igjen));
+}
 function ordreLappMerk(ider) {
   const fra = ordreLappUtskrevne();
   const nye = ider.filter((id, i) => !fra.includes(id) && ider.indexOf(id) === i);
@@ -254,6 +266,7 @@ function ordreLappTomKo() {
 // og fanger opp det stasjonen gikk glipp av mens den sov. Bare ordrer som ikke er skrevet ut (eller merket som sett) fra før, maks 20 om gangen.
 function ordreLappTaIgjen() {
   if (!ordreLappStasjonFra() || !me || !ordreLappAuto()) return;
+  ordreLappGlemPaaVei();
   const naa = Date.now();
   const utskrevne = ordreLappUtskrevne();
   const mangler = (S.ordrer || []).filter(o => ordreLappKlarForAuto(o, naa) && !utskrevne.includes(o.id))
@@ -264,8 +277,8 @@ function ordreLappTaIgjen() {
 // ─── Innstilling i Mer ─────────────────────────────────────────────────────────────────────────────────────────────────
 function settOrdreLappStasjon(paa) {
   if (paa) {
-    // Merk eksisterende ordrer som «sett», så ingenting gammelt skrives ut når stasjonen slås på.
-    ordreLappMerk((S.ordrer || []).map(o => o.id));
+    // Merk eksisterende ordrer som «sett», så ingenting gammelt skrives ut når stasjonen slås på. Ikke «På vei»-bilene: de skal få lapp når de kommer.
+    ordreLappMerk(ordreLappIderSett());
     if (!ordreLappSkriv(ORDRE_LAPP_STASJON_NOKKEL, String(Date.now()))) { visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)'); renderOrdreLappKort(); return; }
     visToast(ordreLappAuto() ? 'Denne PC-en skriver nå ut en lapp for hver nye ordre' : 'Denne PC-en har nå «🖨 Lapp»-knappen på ordrene', 'ok');
   } else {
@@ -281,7 +294,7 @@ function skrivUtTestOrdreLapp() {
 }
 function settOrdreLappAuto(auto) {
   // Fra «bare knapp» til automatisk: ordrer som kom i mellomtiden skal ikke plutselig skrives ut i en klump.
-  if (auto) ordreLappMerk((S.ordrer || []).map(o => o.id));
+  if (auto) ordreLappMerk(ordreLappIderSett());
   if (!ordreLappSkriv(ORDRE_LAPP_AUTO_NOKKEL, auto ? null : 'manuell')) visToast('Nettleseren lar ikke appen lagre innstillingen på denne PC-en (sjekk sporingsforebygging i Edge)');
   renderOrdreLappKort();
 }

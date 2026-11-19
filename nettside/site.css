@@ -132,7 +132,7 @@ h3 { font-size: 20px; letter-spacing: -0.01em; text-transform: none; margin-bott
 
 /* ─── TICKER ────────────────────────────────────────────── */
 .ticker { background: var(--red); color: #fff; overflow: hidden; border-top: 1px solid var(--border); }
-.ticker-track { display: flex; width: max-content; animation: ticker 59s linear infinite; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; padding: 11px 0; }
+.ticker-track { display: flex; width: max-content; animation: ticker 63s linear infinite; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.18em; padding: 11px 0; }
 .ticker-track span, .ticker-track a { padding-right: 28px; white-space: nowrap; }
 .ticker-track .ticker-kopi { display: flex; padding-right: 0; } /* andre halvdel av løkka (hele gruppen, skjult for skjermlesere): må være NØYAKTIG like bred som første halvdel, ellers hopper rulleteksten ved omstart (animasjonen flytter -50 %) */
 /* Navnene i rulleteksten er lenker til modellsiden (2026-11-09). Rulleteksten stopper når musa står over den, så et navn går an å treffe. */
