@@ -163,13 +163,32 @@ function ordreLappMerk(ider) {
 // Et lite program på PC-en med del-lapp-skriveren lytter på localhost og skriver ut med riktig papir (180 eller 230 mm). Svarer det ikke på 1,5 s,
 // brukes vanlig utskrift. Med hjelperen følger lengden ALLTID navnet (det koster ingenting), så lenge papiret finnes på skriveren.
 const LAPP_HJELPER_URL = 'http://localhost:47811';
-async function lappHjelperStatus() {
+async function lappHjelperStatus(fristMs = 1500) {
   try {
-    const r = await fetch(LAPP_HJELPER_URL + '/status', { cache: 'no-store', signal: AbortSignal.timeout(1500) });
+    const r = await fetch(LAPP_HJELPER_URL + '/status', { cache: 'no-store', signal: AbortSignal.timeout(fristMs) });
     if (!r.ok) return null;
     const j = await r.json();
     return j && j.ok ? j : null;
   } catch (e) { return null; }
+}
+// Tålmodig spørring før en UTSKRIFT (2026-11-19): på stasjons-PC-en (8 GB minne, ofte fullt) brukte hjelperen innimellom 3-20 s på å svare, appen ga
+// opp etter 1,5 s og sendte lappen til vanlig nettleserutskrift, og da kom det ingen lapp av seg selv. Har hjelperen tatt denne lapptypen på denne
+// enheten før (huskes i localStorage), prøves det derfor tre ganger til med 10 s frist før vanlig utskrift brukes. En PC uten hjelper venter som før.
+const LAPP_HJELPER_SETT_NOKKEL = 'ordreLappHjelperSett';
+var LAPP_HJELPER_PAUSE_MS = 2000;
+function lappHjelperTar(s) { return ordreLappType() === 'del' ? lappHjelperTarDel(s) : lappHjelperTarOrdre(s); }
+function lappHjelperHusk(s) { if (lappHjelperTar(s) && ordreLappLes(LAPP_HJELPER_SETT_NOKKEL) !== ordreLappType()) ordreLappSkriv(LAPP_HJELPER_SETT_NOKKEL, ordreLappType()); }
+async function lappHjelperStatusTalmodig() {
+  let s = await lappHjelperStatus();
+  if (!s && ordreLappLes(LAPP_HJELPER_SETT_NOKKEL) === ordreLappType()) {
+    for (let i = 0; i < 3 && !s; i++) {
+      if (LAPP_HJELPER_PAUSE_MS > 0) await new Promise(r => setTimeout(r, LAPP_HJELPER_PAUSE_MS));
+      s = await lappHjelperStatus(10000);
+    }
+    if (!s) visToast('Lappskriver-hjelperen svarer ikke. Bruker vanlig utskrift.');
+  }
+  lappHjelperHusk(s);
+  return s;
 }
 function lappHjelperLengde(o, status) {
   const papir = Array.isArray(status && status.papir) ? status.papir : [];
@@ -211,7 +230,7 @@ async function skrivUtOrdreLapper(ordrer) {
   if (ordreLappType() === 'del') {
     // Lappskriver-hjelperen på denne PC-en (Leitz-oppsett\lappskriver-hjelper.ps1) velger papiret selv og skriver ut uten vindu. Lappene den ikke
     // tok (ikke installert, avslått, mangler papir) går videre til vanlig utskrift under, så man står aldri uten lapp.
-    const hjelper = await lappHjelperStatus();
+    const hjelper = await lappHjelperStatusTalmodig();
     if (lappHjelperTarDel(hjelper)) {
       const rest = [];
       for (const o of ordrer) {
@@ -230,7 +249,7 @@ async function skrivUtOrdreLapper(ordrer) {
     return true;
   }
   try { await sikreQrBibliotek(); } catch (e) { visToast('Kunne ikke laste QR-biblioteket: ' + e.message); return false; }
-  const hjelper = await lappHjelperStatus();
+  const hjelper = await lappHjelperStatusTalmodig();
   if (lappHjelperTarOrdre(hjelper)) {
     const rest = [];
     for (const o of ordrer) {
@@ -326,7 +345,8 @@ async function ordreLappVisHjelper() {
   const el = document.getElementById('ordreLappHjelperInfo');
   if (!ordreLappStasjonFra()) { if (el) el.textContent = ''; return; }
   const s = await lappHjelperStatus();
-  const tar = ordreLappType() === 'del' ? lappHjelperTarDel(s) : lappHjelperTarOrdre(s);
+  lappHjelperHusk(s);
+  const tar = lappHjelperTar(s);
   if (tar) { try { document.title = "Salmaker'n"; } catch (e) { /* test */ } }
   const el2 = document.getElementById('ordreLappHjelperInfo');
   if (!el2) return;

@@ -420,6 +420,7 @@ describe('del-lapp via Lappskriver-hjelperen', () => {
       if (url.endsWith('/status')) { if (!svarStatus) throw new Error('ECONNREFUSED'); return { ok: true, json: async () => svarStatus }; }
       const j = svarSkriv(JSON.parse(init.body)); return { ok: !!j.ok, status: j.ok ? 200 : 500, json: async () => j };
     };
+    sandbox.localStorage.removeItem('ordreLappHjelperSett'); sandbox.LAPP_HJELPER_PAUSE_MS = 0;
     sandbox.settOrdreLappStasjon(true); sandbox.settOrdreLappType('del');
   });
   afterEach(() => { delete sandbox.fetch; });
@@ -482,6 +483,30 @@ describe('del-lapp via Lappskriver-hjelperen', () => {
     const data = new Uint8ClampedArray(side * side * 4).fill(255);
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (post.kropp.qr[r][c] === '1') for (let y = 0; y < px; y++) for (let x = 0; x < px; x++) { const i = (((r + sone) * px + y) * side + (c + sone) * px + x) * 4; data[i] = data[i + 1] = data[i + 2] = 0; }
     expect(sandbox.jsQR(data, side, side).data).toBe('https://salmaker.as/salmakern.html?ordre=ord_1793088915905');
+  });
+  // 2026-11-19: stasjons-PC-en hadde fullt minne, hjelperen svarte for sent, og lappen gikk stille til nettleserutskrift (ingen lapp av seg selv).
+  it('hjelperen har tatt ordre-lapper her før og svarer først på tredje forsøk: lappen går likevel til hjelperen', async () => {
+    const ekte = { ok: true, skriver: '', papir: [], ordre: { skriver: 'Leitz Icon (Kopier 2)', papir: true } };
+    sandbox.settOrdreLappType('ordre'); sandbox.LAPP_HJELPER_PAUSE_MS = 0;
+    svarStatus = ekte; await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);   // første gang: hjelperen huskes
+    kall = []; let n = 0; const orig = sandbox.fetch;
+    sandbox.fetch = async (url, init) => { if (url.endsWith('/status') && ++n <= 2) { kall.push({ url, metode: 'GET' }); throw new Error('TimeoutError'); } return orig(url, init); };
+    await sandbox.skrivUtOrdreLapper([bil('Toyota', 'Land Cruiser 250')]);
+    expect(kall.filter((k) => k.url.endsWith('/status'))).toHaveLength(3);
+    expect(kall.filter((k) => k.metode === 'POST')).toHaveLength(1);
+    expect(utskrifter).toHaveLength(0);
+  });
+  it('svarer en kjent hjelper aldri, brukes vanlig utskrift etter fire forsøk; en PC som aldri har hatt hjelper prøver bare én gang', async () => {
+    sandbox.settOrdreLappType('ordre'); sandbox.LAPP_HJELPER_PAUSE_MS = 0;
+    await new Promise((r) => setImmediate(r)); sandbox.localStorage.removeItem('ordreLappHjelperSett'); kall = [];   // visningen i Mer er ferdig: denne PC-en har aldri hatt hjelper
+    svarStatus = null; await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
+    expect(kall.filter((k) => k.url.endsWith('/status'))).toHaveLength(1);
+    expect(utskrifter).toHaveLength(1);
+    svarStatus = { ok: true, ordre: { skriver: 'Leitz Icon (Kopier 2)', papir: true } }; await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
+    kall = []; utskrifter.length = 0; svarStatus = null;
+    await sandbox.skrivUtOrdreLapper([bil('KIA', 'EV9')]);
+    expect(kall.filter((k) => k.url.endsWith('/status'))).toHaveLength(4);
+    expect(utskrifter).toHaveLength(1);
   });
   it('feiler hjelperen på ordre-lappen, skrives den ut på vanlig måte', async () => {
     svarStatus = { ok: true, ordre: { skriver: 'Leitz Icon (Kopier 2)', papir: true } };
