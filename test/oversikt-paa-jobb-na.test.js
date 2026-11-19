@@ -37,6 +37,14 @@ describe('renderPaaJobbNa', () => {
     expect(html).toBe('');
   });
 
+  it('admin-only (2026-11-18, Henrik: «ansatte på jobb skal kun admin se»): skjult for en vanlig ansatt selv med data', () => {
+    S.ordrer = [nyOrdre({ ansatteSignert: [{ id: 1, navn: 'Ola Nordmann', tid: '09:12' }] })];
+    app.settMe({ id: 2, navn: 'TEST Ansatt', rolle: 'ansatt' });
+    const { synlig, html } = kjor();
+    expect(synlig).toBe(false);
+    expect(html).toBe('');
+  });
+
   it('én ansatt meldt på en ordre: vises med bil, status og klokkeslett', () => {
     S.ordrer = [nyOrdre({ ansatteSignert: [{ id: 1, navn: 'Ola Nordmann', tid: '09:12' }] })];
     const { synlig, html } = kjor();

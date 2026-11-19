@@ -271,15 +271,17 @@ function renderOversikt(q) {
 // og hvilken fase - uten å måtte åpne hver ordre eller lete etter hvilke kort som lyser grønt.
 // Viser også ansatte som er stemplet inn (lønnsklokka) uten å ha meldt seg på noen ordre -
 // usynlig i dag utenfor det admin-only "Stemplet inn nå"-kortet, en enkel påminnelse om å melde
-// seg på. Synlig for ALLE roller (IKKE admin-only som "Stemplet inn nå"/"Ordreklokker som har
-// gått lenge" under - dette er ren arbeidsflyt-oversikt, ikke lønns-/sikkerhetsdata). Bygget
-// utelukkende på data appen allerede har (o.ansatteSignert, ansatte.stempletInnSiden) - ingen ny
-// tabell, ingen nye databasekall. Hver ordre hoppes over i try/catch (samme isolering som resten
-// av Oversikt) - én rar ordre skal aldri blanke hele lista.
+// seg på. Bygget utelukkende på data appen allerede har (o.ansatteSignert, ansatte.stempletInnSiden)
+// - ingen ny tabell, ingen nye databasekall. Hver ordre hoppes over i try/catch (samme isolering
+// som resten av Oversikt) - én rar ordre skal aldri blanke hele lista.
+// Admin-only (endret 2026-11-18, Henrik: «ansatte på jobb skal kun admin se» - var tidligere
+// synlig for alle roller, se historikken over).
 function renderPaaJobbNa() {
   const kort = document.getElementById('paaJobbNaKort');
   const liste = document.getElementById('paaJobbNaListe');
   if (!kort || !liste) return;
+  const erAdmin = me && me.rolle === 'admin';
+  if (!erAdmin) { kort.style.display = 'none'; liste.innerHTML = ''; return; }
   const paaOrdre = new Map();
   (S.ordrer||[]).forEach(o => {
     try {
