@@ -153,6 +153,10 @@ function buildOrdreDetail() {
   const vegvesenGjelderDenneOrdren = !!(vegvesenKilde?.nyttKjoretoy || vegvesenKilde?.bruktKjoretoy);
   const erAdmin = me && me.rolle==='admin';
   const erGodkjenner = me && (me.rolle==='godkjenner'||me.rolle==='admin');
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): en enklere ordre uten vekter, drivstoff, biltilsynstid, diagnose, dokumenter, «Har ved ankomst», forhandler.nr, hengerfeste,
+  // manglende deler, ankomst- og skadebilder, og uten Type/Variant/Versjon/Farge/org.nr/dokumentstatuser/serienummer/flåte i kundekortet. Data i de skjulte feltene
+  // rører vi ikke (de blir stående i databasen). Alt som ikke er skjult tegnes som for en vanlig ordre.
+  const kunEkstra = erKunEkstrautstyr(o);
   // "meldt på"/"meldt av"-hendelser vises i egen boks under Ansatte på ordren i stedet for
   // i den generelle Endringer-loggen - samme underliggende o.endringer, splittet ved visning.
   const erAnsattEndring = e => /meldt på$|meldt av$/.test(e.txt);
@@ -230,14 +234,14 @@ function buildOrdreDetail() {
               onfocus="visFeltDropdown('typeForslag_merke_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_merke_${o.id}'))">
             <div id="typeForslag_merke_${o.id}" class="felt-dropdown">${feltForslagHTML('merkeInput_'+o.id, merkeForslag())}</div>
           </div>
-          <div class="felt-wrap">
+          ${kunEkstra ? '' : `<div class="felt-wrap">
             <label>Type</label>
             <input id="typeInput_${o.id}" value="${esc(o.type||'')}" autocomplete="off"
               oninput="renderVariantForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','variantInput_${o.id}','typeForslag_var_${o.id}');renderVersjonForslag('merkeInput_${o.id}','modellInput_${o.id}','typeInput_${o.id}','versjonInput_${o.id}','typeForslag_ver_${o.id}')"
               onchange="sf('${o.id}','type',this.value)"
               onfocus="visFeltDropdown('typeForslag_type_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_type_${o.id}'))">
             <div id="typeForslag_type_${o.id}" class="felt-dropdown">${feltForslagHTML('typeInput_'+o.id, typeForslag(o.merke, o.modell))}</div>
-          </div>
+          </div>`}
           <div class="felt-wrap">
             <label>Modell</label>
             <input id="modellInput_${o.id}" value="${esc(o.modell||'')}" autocomplete="off"
@@ -246,29 +250,29 @@ function buildOrdreDetail() {
               onfocus="visFeltDropdown('typeForslag_modell_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_modell_${o.id}'))">
             <div id="typeForslag_modell_${o.id}" class="felt-dropdown">${feltForslagHTML('modellInput_'+o.id, modellForslag(o.merke))}</div>
           </div>
-          <div class="felt-wrap">
+          ${kunEkstra ? '' : `<div class="felt-wrap">
             <label>Variant</label>
             <input id="variantInput_${o.id}" value="${esc(o.variant||'')}" autocomplete="off" onchange="sf('${o.id}','variant',this.value)"
               onfocus="visFeltDropdown('typeForslag_var_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_var_${o.id}'))">
             <div id="typeForslag_var_${o.id}" class="felt-dropdown">${feltForslagHTML('variantInput_'+o.id, variantForslag(o.merke, o.modell, o.type))}</div>
-          </div>
-          <div><label>Farge</label><select onchange="sf('${o.id}','farge',this.value)">${fargeSelectOptions(o.farge)}</select></div>
-          <div class="felt-wrap">
+          </div>`}
+          ${kunEkstra ? '' : `<div><label>Farge</label><select onchange="sf('${o.id}','farge',this.value)">${fargeSelectOptions(o.farge)}</select></div>`}
+          ${kunEkstra ? '' : `<div class="felt-wrap">
             <label>Versjon</label>
             <input id="versjonInput_${o.id}" value="${esc(o.versjon||'')}" autocomplete="off" onchange="sf('${o.id}','versjon',this.value)"
               onfocus="visFeltDropdown('typeForslag_ver_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_ver_${o.id}'))">
             <div id="typeForslag_ver_${o.id}" class="felt-dropdown">${feltForslagHTML('versjonInput_'+o.id, versjonForslag(o.merke, o.modell, o.type))}</div>
-          </div>
+          </div>`}
           <div><label>Ankomstdato</label><input type="date" value="${o.ankomstdato}" onchange="sf('${o.id}','ankomstdato',this.value)"></div>
-          <div class="felt-wrap">
+          ${kunEkstra ? '' : `<div class="felt-wrap">
             <label>Forhandler org.nr</label>
             <input id="forhandlerOrgnrInput_${o.id}" value="${esc(vegvesenFormaterOrgnr(o.forhandlerOrgnr||''))}" autocomplete="off" onchange="sf('${o.id}','forhandlerOrgnr',this.value)" placeholder="9 siffer"
               onfocus="visFeltDropdown('typeForslag_forhandlerOrgnr_${o.id}')" onblur="skjulFeltDropdown(document.getElementById('typeForslag_forhandlerOrgnr_${o.id}'))">
             <div id="typeForslag_forhandlerOrgnr_${o.id}" class="felt-dropdown">${feltForslagHTML('forhandlerOrgnrInput_'+o.id, forhandlerOrgnrForslag(o.kunde))}</div>
-          </div>
+          </div>`}
         </div>
 
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+        ${kunEkstra ? '' : `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Dokumenter</div>
           <div class="grid g2" style="gap:8px">
             <div><label>COC</label>${dokStatusDropdown(o.id,'coc',o.coc)}</div>
@@ -281,7 +285,7 @@ function buildOrdreDetail() {
             </div>
             <div><label>Egenvekt (fra COC)</label><input type="number" value="${o.egenvektCoc||''}" onchange="sf('${o.id}','egenvektCoc',this.value)" placeholder="kg"></div>
           </div>
-        </div>
+        </div>`}
 
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           <div class="small muted" style="margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;font-size:10px">Identifikasjon</div>
@@ -299,20 +303,20 @@ function buildOrdreDetail() {
               <input value="${esc(o.chassis)}" maxlength="17" style="text-transform:uppercase;font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.02em" oninput="this.nextElementSibling.textContent=this.value.length+'/17';this.nextElementSibling.style.color=this.value.length===17?'#4ade80':'#71717a'" onchange="if(sf('${o.id}','chassis',this.value)){this.value=this.value.toUpperCase();}else{this.value='${esc(o.chassis)}';this.dispatchEvent(new Event('input'))}">
               <div class="small" style="margin-top:2px;text-align:right;color:${(o.chassis||'').length===17?'#4ade80':'#71717a'}">${(o.chassis||'').length}/17</div>
             </div>
-            <div>
+            ${kunEkstra ? '' : `<div>
               <label>Serienummer</label>
               <div class="small" style="padding:6px 0">${esc(adminArkFinnRadForVisning(o.chassis)?.serienummer||'') || '<span class="muted">Ikke registrert</span>'}</div>
-            </div>
+            </div>`}
           </div>
         </div>
 
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
+        ${kunEkstra ? '' : `<div style="margin-top:12px;padding-top:12px;border-top:1px solid #27272a">
           <label>Flåte</label>
           <div class="small" style="padding:6px 0">${(() => {
             const f = (S.flater||[]).find(x=>x.id===o.flateId);
             return f ? esc(f.flatenummer) : 'Ingen flåte';
           })()}</div>
-        </div>
+        </div>`}
       </div>
 
       <div class="card" style="${o.ansatteSignert.length?'animation:pulseGlow 3s ease-in-out infinite':''}">
@@ -345,7 +349,7 @@ function buildOrdreDetail() {
         <div id="ordreLagerbruk_${o.id}" style="margin-top:8px"></div>
       </div>
 
-      <div class="card">
+      ${kunEkstra ? '' : `<div class="card">
         <div class="h">Vekter (kg)</div>
         <table><thead><tr><th></th>
           <th style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#71717a;font-weight:400">Ved ankomst</th>
@@ -374,7 +378,7 @@ function buildOrdreDetail() {
         <div class="h">Utstyr – Har ved ankomst</div>
 ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrMalNavn||'')}
         <div id="utstyrSjekkliste_${o.id}">${utstyrSjekklisteHTML(o.utstyrSjekkliste||[], o.id, 'toggleUtstyrPunkt', o.utstyrMalNavn||'')}</div>
-      </div>
+      </div>`}
 
       <div class="card" style="${o.utstyr?.skalHaBekreftet?'border-color:#22c55e;background:rgba(34,197,94,.06)':''}">
         <div class="h">Utstyr – Skal ha etter visning</div>
@@ -386,7 +390,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </label>
       </div>
 
-      <div class="card">
+      ${kunEkstra ? '' : `<div class="card">
         <div class="h">Forhandler.nr</div>
         <div class="felt-wrap" style="margin-top:8px">
           <input id="forhandlerNrInput_${o.id}" value="${esc(o.utstyr?.forhandlerNr||'')}" autocomplete="off" onchange="su('${o.id}','forhandlerNr',this.value);oppdaterHengerfesteNrVisning('${o.id}')"
@@ -404,12 +408,12 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
           </select>
           <span id="hengerfesteNrVisning_${o.id}" style="font-size:13px;font-weight:700;color:#f4f4f5">${hengerfesteNrVisningHTML(o)}</span>
         </div>
-      </div>
+      </div>`}
 
-      ${fotoSeksjonHTML(o, 'a', 'Bilder – Ankomst')}
-      ${fotoSeksjonHTML(o, 's', 'Bilder – Avstand/skader')}
+      ${kunEkstra ? '' : fotoSeksjonHTML(o, 'a', 'Bilder – Ankomst')}
+      ${kunEkstra ? '' : fotoSeksjonHTML(o, 's', 'Bilder – Avstand/skader')}
       ${fotoSeksjonHTML(o, 'l', 'Bilder – Levering')}
-      ${manglendeDelerHTML(o)}
+      ${kunEkstra ? '' : manglendeDelerHTML(o)}
 
       <div class="card" id="ordretimerKort_ordreTimerSessions_${o.id}">
         ${ordreTimerKortHTML(o, 'ordreTimerSessions')}
@@ -444,7 +448,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
     <div>
       <div class="card" id="tvangsflytBoks_${o.id}">${tvangsflytBoksHTML(o)}</div>
 
-      <div class="card">
+      ${kunEkstra ? '' : `<div class="card">
         <div class="h">Time på biltilsynet</div>
         <div class="grid g3" style="margin-top:8px">
           <div><label>Dato</label><div class="box" style="padding:9px 12px;font-size:13px">${o.tidBiltilsynet?fmtDatoKort(o.tidBiltilsynet):'<span class="muted">Ikke satt</span>'}</div></div>
@@ -463,7 +467,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
             : `<div class="muted small" style="margin-bottom:8px">Ikke utført</div>
                <button class="btn sm red" style="width:100%" onclick="toggleDiagnose('${o.id}')">✔ Merk diagnose utført</button>`}
         </div>
-      </div>
+      </div>`}
 
       ${me&&me.rolle==='admin'?`
       <div class="card">
@@ -483,7 +487,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </div>
       </div>`:''}
 
-      <div class="card">
+      ${kunEkstra ? '' : `<div class="card">
         <div class="h">Dokumenter</div>
         <div id="dokumenterListe_${o.id}">${dokumenterListeHTML(o)}</div>
         ${me&&me.rolle==='admin'?`<label id="dokDropzone_${o.id}" class="dok-dropzone small muted" style="margin-top:8px;display:block" title="Samme filnavn erstatter forrige versjon"
@@ -493,7 +497,7 @@ ${utstyrMalDropdown(o.id,'uMalValgAnkomst','applyUtstyrMal',o.type||'',o.utstyrM
         </label>`:''}
         ${me&&me.rolle==='admin'?`<button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="genererVegvesenDokumenter('${o.id}')" title="${vegvesenGjelderDenneOrdren?'Vegvesen-dokumentene genereres automatisk så snart all nødvendig info er fylt ut - bruk denne kun for å tvinge fram en ny generering':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🔄 Regenerer Vegvesen-dokumenter</button>
         <button class="btn sm" style="margin-top:6px;width:100%" ${vegvesenGjelderDenneOrdren?'':'disabled'} onclick="vegvesenSkrivUt('${o.id}')" title="${vegvesenGjelderDenneOrdren?'':'Vegvesen-dokumenter gjelder kun Nytt Kjøretøy- eller Brukt Kjøretøy-ombygginger'}">🖨️ Skriv ut Vegvesen-dokumenter</button>`:''}
-      </div>
+      </div>`}
 
       ${(o.godkjent&&erGodkjenner)?`<div class="card"><button class="btn" onclick="arkiver('${o.id}')">Arkiver ordre</button></div>`:''}
       ${erGodkjenner?`<div class="card"><button class="btn sm" onclick="gjenopprettFotos('${o.id}')">🔄 Gjenopprett bilder fra Storage</button></div>`:''}
@@ -591,8 +595,8 @@ function fikenLinjerHTML(o) {
       </div>`).join('')}
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn sm" onclick="leggTilFikenLinje('${o.id}')">+ Legg til linje</button>
-      ${erLeveranse(o) ? '' : `<button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>
-      <button class="btn sm" onclick="leggTilFikenLinjeDrivstoff('${o.id}')">⛽ Hent drivstoff</button>`}
+      ${erLeveranse(o) ? '' : `<button class="btn sm" onclick="leggTilFikenLinjerFraUtstyr('${o.id}')">↺ Hent fra Utstyr-boksen</button>${o.kunEkstrautstyr === true ? '' : `
+      <button class="btn sm" onclick="leggTilFikenLinjeDrivstoff('${o.id}')">⛽ Hent drivstoff</button>`}`}
     </div>
   </div>`;
 }
@@ -683,6 +687,7 @@ async function fjernFikenLinje(id, linjeId) {
 const FIKEN_PRODUKTNUMMER_DRIVSTOFF = '21';
 async function leggTilFikenLinjeDrivstoff(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
+  if (o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): drivstoff er ikke med i ordren
   const belop = drivstoffKundepris(o);
   if (!belop) { visToast('Ingen drivstoffpris registrert på denne ordren'); return; }
   await oppdaterOrdreFikenLinje(o, FIKEN_PRODUKTNUMMER_DRIVSTOFF, {produktnummer:FIKEN_PRODUKTNUMMER_DRIVSTOFF, antall:1, belop});
@@ -1163,7 +1168,7 @@ function ombyggingBoksHTML(o) {
       <input type="checkbox" id="kunEkstrautstyr_${o.id}" ${kun?'checked':''} onchange="settKunEkstrautstyr('${o.id}',this.checked)" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
       <span style="font-size:13.5px;font-weight:${kun?'700':'400'};color:${kun?'#f4f4f5':'#a1a1aa'}">Kun ekstrautstyr (ingen ombygging)</span>
     </label>`;
-  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen. Legg til utstyret i kortet under (sjekklista eller «+ Legg til utstyr»).</div>';
+  if (kun) return kunHTML + '<div class="small muted" style="margin-top:8px">Ingen ombygging, ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen. Bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting. Legg til utstyret i kortet under.</div>';
   return kunHTML + `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
     ${[['nyttKjoretoy','Nytt Kjøretøy'],['bruktKjoretoy','Brukt Kjøretøy'],['lafinto','Lafinto'],['personbil','Personbil']].map(([k,lbl])=>`
       <label style="display:flex;align-items:center;gap:10px;background:${o.ombygging?.[k]?'rgba(239,68,68,.08)':'#0f0f12'};border:1px solid ${o.ombygging?.[k]?'rgba(239,68,68,.45)':'#27272a'};border-radius:14px;padding:12px 13px;cursor:pointer;min-width:0">
@@ -1306,6 +1311,7 @@ function synkroniserOmbyggingFikenLinjer(o) {
 // fleste ordre har rett og slett ingen drivstoffpris ennå, og det er ikke en feil. No-op
 // (ingen lagring) når linjen allerede stemmer, trygt å kalle på hvert render.
 async function synkroniserDrivstoffFikenLinje(o) {
+  if (o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): drivstoff er ikke med i ordren, så ingen drivstofflinje på fakturaen
   const belop = drivstoffKundepris(o);
   if (!belop) return;
   const eksisterende = (o.fikenLinjer||[]).find(l=>l.produktnummer===FIKEN_PRODUKTNUMMER_DRIVSTOFF);
@@ -1693,6 +1699,7 @@ function finnForhandlerNr(kundeNavn) {
 }
 function autoFyllForhandlerNr(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  if (o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): Forhandler.nr er ikke med i ordren (skjult felt skrives ikke)
   const nr = finnForhandlerNr(o.kunde);
   if (!nr) return;
   su(id, 'forhandlerNr', nr);
@@ -1711,6 +1718,12 @@ function finnForhandlerOrgnr(kundeNavn) {
 }
 function autoFyllForhandlerOrgnr(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  if (o.kunEkstrautstyr === true) {
+    // «Kun ekstrautstyr» (Henrik 2026-11-19): org.nr-feltet er ikke med i ordren og skrives ikke. Fakturering finner derimot kundens rabatt i portalen via
+    // forhandler_kontakt_id (en egen kolonne, aldri vist), så den settes fortsatt ut fra kundenavnet: samme entydige regler som ellers (se synkroniserForhandlerKontaktId).
+    synkroniserForhandlerKontaktId(id, finnForhandlerOrgnr(o.kunde), o.kunde);
+    return;
+  }
   const orgnr = finnForhandlerOrgnr(o.kunde);
   if (!orgnr) return;
   sf(id, 'forhandlerOrgnr', orgnr);
@@ -1731,6 +1744,7 @@ function finnForhandlerFullmakt(kundeNavn) {
 }
 function autoFyllForhandlerFullmakt(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o) return;
+  if (o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): ingen dokumenter og ingen Fullmakt-status i ordren, så fullmakten kopieres ikke inn
   const fullmakt = finnForhandlerFullmakt(o.kunde);
   if (!fullmakt) return;
   o.dokumenter = o.dokumenter || [];
@@ -1774,6 +1788,7 @@ function autoFyllForhandlerFullmakt(id) {
 // støy).
 function varsleHvisForhandlerDataMangler(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o || !(o.kunde||'').trim()) return;
+  if (o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): Forhandler.nr, org.nr og fullmakt er ikke med i ordren, så en advarsel om dem er meningsløs
   const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === o.kunde.trim().toLowerCase());
   if (!forhandlerKontakt) {
     visToast(`Fant ingen forhandler med navnet "${o.kunde}" i Kontakter - sjekk stavemåten, eller legg den til der. Forhandler.nr/org.nr/fullmakt fylles ikke ut automatisk.`);

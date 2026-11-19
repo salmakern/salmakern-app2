@@ -7,6 +7,7 @@
 //    varsler appen bare («bestillingen gjelder»).
 //  * Uten bestilling: ombyggingen ut fra Nytt/Brukt/Lafinto/Personbil-boksene (finnFikenOmbyggingModell, trinn 2) pluss hvert tillegg/
 //    variant i portalen der et «velges når»-punkt (portal_produkter.velges_nar) er huket av i sjekklista.
+//  * «Kun ekstrautstyr» (Henrik 19.11): «Har ved ankomst»-kortet finnes ikke i en slik ordre, så sjekklista styrer ikke radene (bare «+ Legg til utstyr» og «Rett»).
 //  * Rettelsene lagres som en logg på ordren (ordrer.produkt_rettelser, RPC legg_til_ordre_produkt_rettelse, aldri via save()).
 //  * Oppskrift per produkt: en oppskrift som dekker FLERE av produktene (f.eks. «500, 502» = ombygging med 180-stoler) velges før de
 //    enkelte, så delene aldri trekkes to ganger; ellers oppskriften koblet til portal-id (trinn 1), ellers ÉN ukoblet med akkurat det nummeret.
@@ -119,7 +120,9 @@ function beregnSkalPaaBilen(o) {
     const p = finnProdukt(nr);
     rader.push({ nr, navn: navn || (p && p.navn) || nr, kilde, grunn, portalId: p ? p.portal_id : null, type: p ? p.type : null, rolle: p ? (p.app_rolle || null) : null, fjernet: false, ...extra });
   };
-  const okPunkter = (o.utstyrSjekkliste || []).filter(p => p && p.ok).map(p => String(p.punkt || '').trim()).filter(Boolean);
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): «Har ved ankomst»-kortet er borte fra ordren, så sjekklista styrer ikke lenger radene. De kommer bare fra
+  // «+ Legg til utstyr» og «Rett». Hva som måtte stå i o.utstyrSjekkliste fra før (en eldre ordre) røres ikke, men teller ikke.
+  const okPunkter = kun ? [] : (o.utstyrSjekkliste || []).filter(p => p && p.ok).map(p => String(p.punkt || '').trim()).filter(Boolean);
   const okSett = new Map(okPunkter.map(p => [_norm(p), p]));
   const regelTreff = p => (Array.isArray(p.velges_nar) ? p.velges_nar : []).map(v => okSett.get(_norm(v))).find(Boolean) || null;
 
@@ -268,7 +271,9 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
       else await epostSikreFakturalinje(o, r.nr, r.antall || 1);
     }
   }
-  if (!bestilt) {
+  // Ikke for «Kun ekstrautstyr»: sjekklista styrer ikke radene der, så en fakturalinje som en eldre sjekkliste-avkrysning la inn skal ikke fjernes stille (den står i
+  // Fakturering, og fakturaSjekk sier fra hvis den ikke er på «Skal på bilen»).
+  if (!bestilt && o.kunEkstrautstyr !== true) {
     for (const p of produkter) {
       if (p.nummer_status !== 'ok' || !(p.velges_nar || []).length) continue;
       if (!rader.some(r => r.nr === p.fiken_nummer && !r.fjernet)) await oppdaterFikenLinjeForOppskrift(p.fiken_nummer, false, o.id);
@@ -452,7 +457,7 @@ function skalPaaBilenHTML(o) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div class="card-title" style="margin:0">Skal på bilen</div>${bestilt ? pill(o.portalLinjer.some(l => l && l.kilde === 'epost') ? 'Fra e-post' : 'Fra portalen', 'bla') : ''}</div>
     ${spmHTML}
     ${varsler.map(v => `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:8px 10px;font-size:12px;color:#fbbf24">⚠ ${esc(v)}</div>`).join('')}
-    ${rader.length ? rader.map(radHTML).join('') : '<div class="small muted">Ingenting valgt ennå. Huk av Nytt/Brukt kjøretøy, fyll ut «Har ved ankomst», eller legg til utstyr.</div>'}
+    ${rader.length ? rader.map(radHTML).join('') : (o.kunEkstrautstyr === true ? '<div class="small muted">Ingenting valgt ennå. Legg til utstyret med «+ Legg til utstyr».</div>' : '<div class="small muted">Ingenting valgt ennå. Huk av Nytt/Brukt kjøretøy, fyll ut «Har ved ankomst», eller legg til utstyr.</div>')}
     ${sokHTML}
     ${ankommet ? '' : '<div class="small muted">Delene trekkes fra lageret når bilen settes til «Ikke påbegynt» (ankommet).</div>'}
   </div>`;

@@ -923,6 +923,11 @@ function erLeveranse(o) { return !!o && o.ordretype === 'leveranse'; }
 function erKunEkstrautstyr(o) { return !!o && !erLeveranse(o) && o.kunEkstrautstyr === true; }
 // Kalenderplasseringen skrives målrettet (leveranseSettKalender) og aldri via Admin-ark/Time på biltilsynet: leveranser og kun-ekstrautstyr-ordrer.
 function kalenderUtenAdminArk(o) { return erLeveranse(o) || erKunEkstrautstyr(o); }
+// «Kun ekstrautstyr» har bare fire statuser (Henrik 2026-11-19): På vei, Ikke påbegynt, Påbegynt og Klar for henting (rekkefølgen er STATUSER sin). Ingen visning, biltilsyn
+// eller «Hentet»: en slik ordre godkjennes og arkiveres med «Arkiver ordre». statusDropdown() viser bare disse (pluss en eventuell annen nåværende status, ikke valgbar),
+// og endreStatus() avviser alt annet (se statusTillattForOrdre).
+const KUN_EKSTRAUTSTYR_STATUSER = ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'klar_henting'];
+function statusTillattForOrdre(o, status) { return !erKunEkstrautstyr(o) || KUN_EKSTRAUTSTYR_STATUSER.includes(status); }
 function kunEkstrautstyrBadgeHTML(o) {
   if (!erKunEkstrautstyr(o)) return '';
   return `<span title="Kun ekstrautstyr - ingen ombygging" style="display:inline-flex;align-items:center;background:#1e1b4b;border:1px solid #6366f1;color:#c7d2fe;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">KUN EKSTRAUTSTYR</span>`;

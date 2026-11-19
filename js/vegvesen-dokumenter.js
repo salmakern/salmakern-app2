@@ -1616,6 +1616,7 @@ const vegvesenGenererer = new Set();
 // Henrik 2026-09-21: automatikk fremfor manuell knapp, men brukeren må selv trykke
 // "Skriv ut" siden nettlesere ikke kan skrive ut helt stille uten et brukerklikk.
 async function vegvesenAutoGenererHvisKomplett(o) {
+  if (o && o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): ingen dokumenter i ordren, så ingenting genereres og legges på den
   // Sjekker kilde.ombygging (primær hvis flåte), IKKE o.ombygging direkte - flate.js
   // kopierer kun type/variant/versjon/vekter fra primær til resten av flåten, ikke
   // ombygging-flaggene, så et sekundærkjøretøy kan mangle nyttKjoretoy=true på seg

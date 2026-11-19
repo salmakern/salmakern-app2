@@ -619,6 +619,14 @@ function apneHurtigOppgaveInput(el) {
 async function endreStatus(id, nyStatus) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (erLeveranse(o)) return endreLeveranseStatus(id, nyStatus); // egen løype og regler, se js/leveranse.js
+  // «Kun ekstrautstyr» (Henrik 2026-11-19) har bare fire statuser. Alt annet avvises FØR noe endres eller skrives (ingen logglinje, ingen databasekall).
+  if (!statusTillattForOrdre(o, nyStatus)) {
+    visToast('En ordre med «Kun ekstrautstyr» kan bare ha statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting.');
+    if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
+    renderAll();
+    if (activeOrdreId===id) buildOrdreDetail();
+    return;
+  }
   const forrigeStatus = o.ordreStatus;
   const forrigeArkivStatus = o.status;
   const forrigeDatoKlarHenting = o.datoKlarHenting;
@@ -637,7 +645,8 @@ async function endreStatus(id, nyStatus) {
   // Samme prinsipp som ansatt-sjekken over: det skal ikke gå an å begynne å jobbe på
   // bilen før det finnes minst ett bilde fra ankomst (dokumentasjon av tilstand før
   // ombygging starter). Bedt om av Henrik 2026-09-14.
-  if (forrigeStatus === 'ikke_paabegynt' && nyStatus === 'paabegynt' && !(o.bilderAnkomst||[]).some(Boolean)) {
+  // «Kun ekstrautstyr» (Henrik 2026-11-19) har ikke ankomstbilder i ordren (kortet er borte), så kravet kan ikke oppfylles der.
+  if (forrigeStatus === 'ikke_paabegynt' && nyStatus === 'paabegynt' && !erKunEkstrautstyr(o) && !(o.bilderAnkomst||[]).some(Boolean)) {
     visToast('Minst ett bilde fra ankomst må tas før ordren kan settes til Påbegynt.');
     if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
     renderAll();
@@ -781,8 +790,13 @@ function statusDropdown(ordreId, currentStatus, extraStyle='', extraClass='') {
   // som pilen trenger plass) presse seg utenfor kortets egen ramme på smale telefonskjermer,
   // siden en <select> ellers ikke krymper under sin egen tekstbredde i en flex-rad.
   const pilStil = `appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url('${statusDropdownPilSvg(si.txt)}');background-repeat:no-repeat;background-position:right 7px center;background-size:10px;padding-right:22px;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
+  const ordre = S.ordrer.find(x=>x.id===ordreId);
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): bare På vei, Ikke påbegynt, Påbegynt og Klar for henting. Står ordren alt i en annen status, vises den også (valgt, men ikke valgbar tilbake),
+  // så ingenting forsvinner stille.
+  const kun = erKunEkstrautstyr(ordre);
+  const liste = erLeveranse(ordre) ? LEVERANSE_STATUSER : kun ? STATUSER.filter(s => KUN_EKSTRAUTSTYR_STATUSER.includes(s.id) || s.id === currentStatus) : STATUSER;
   return `<select class="${extraClass}" onchange="endreStatus('${ordreId}',this.value)" style="background:${si.bg};color:${si.txt};border:2px solid ${si.border};border-radius:10px;padding:5px 8px;font-size:12px;font-weight:700;cursor:pointer;width:auto;${extraStyle};${pilStil}">
-    ${(erLeveranse(S.ordrer.find(x=>x.id===ordreId)) ? LEVERANSE_STATUSER : STATUSER).map(s=>`<option value="${s.id}" ${s.id===currentStatus?'selected':''}>${s.lbl}</option>`).join('')}
+    ${liste.map(s=>`<option value="${s.id}" ${s.id===currentStatus?(kun && !KUN_EKSTRAUTSTYR_STATUSER.includes(s.id)?'selected disabled':'selected'):''}>${s.lbl}</option>`).join('')}
   </select>`;
 }
 

@@ -226,11 +226,13 @@ describe('«Skal på bilen» for en «kun ekstrautstyr»-ordre', () => {
     expect(EKTE_GATE(bil({ created_at: '2026-11-18T08:00:00Z', kun_ekstrautstyr: true }))).toBe(true);
     expect(EKTE_GATE(bil({ created_at: '2026-11-17T08:00:00Z', kun_ekstrautstyr: true }))).toBe(false);
   });
-  it('ingen ombyggingsrad fra boksene (heller ikke personbil), men sjekklista virker', () => {
+  it('ingen ombyggingsrad fra boksene (heller ikke personbil), og sjekklista styrer ikke radene (kortet «Har ved ankomst» finnes ikke i en slik ordre, 19.11)', () => {
     const o = bil({ kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true, personbil: true }, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] });
     const { rader } = sandbox.beregnSkalPaaBilen(o);
-    expect(nr(rader)).toEqual(['501']);
+    expect(nr(rader)).toEqual([]);
     expect(rader.some((r) => r.kilde === 'ombygging')).toBe(false);
+    // kontroll: samme data uten kun-flagget gir sjekkliste-raden som før
+    expect(nr(sandbox.beregnSkalPaaBilen(bil({ ombygging: { nyttKjoretoy: true }, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] })).rader)).toContain('501');
   });
   it('en bestilt ombygging tas ikke med (med varsel), bestilt ekstrautstyr gjør det', () => {
     const o = bil({ kun_ekstrautstyr: true, portal_linjer: [{ produktnummer: '500', navn: 'Standard ombygging' }, { produktnummer: '503', navn: 'Heldekkende gulv' }] });
@@ -243,10 +245,14 @@ describe('«Skal på bilen» for en «kun ekstrautstyr»-ordre', () => {
       produkt_rettelser: [{ handling: 'fjern', produktnummer: '501', av: 'TEST Ola', at: '2026-11-18T09:00:00Z' }, { handling: 'legg_til', produktnummer: '503', navn: 'Heldekkende gulv', av: 'TEST Kari', at: '2026-11-18T09:05:00Z' }] });
     const { rader } = sandbox.beregnSkalPaaBilen(o);
     expect(nr(rader)).toEqual(['503']);
-    expect(rader.find((r) => r.nr === '501').fjernet).toBe(true);
+    expect(rader.find((r) => r.nr === '501')).toBeUndefined(); // sjekklista (som ville gitt 501) teller ikke, så det er ingen rad å overstryke
+    // kontroll: en vanlig ordre med samme data har den overstrøkne sjekkliste-raden som før
+    const vanlig = sandbox.beregnSkalPaaBilen(bil({ utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }], produkt_rettelser: o.produktRettelser }));
+    expect(vanlig.rader.find((r) => r.nr === '501').fjernet).toBe(true);
   });
   it('lager: ingenting før ankomst; ved ankomst trekkes bare ekstrautstyret, aldri ombyggingsoppskriften', async () => {
-    const o = bil({ kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true }, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] });
+    // 501 kommer fra «+ Legg til utstyr» (en rettelse): sjekklista styrer ikke radene i en kun-ordre (19.11)
+    const o = bil({ kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true }, produkt_rettelser: [{ handling: 'legg_til', produktnummer: '501', navn: 'Takluke', av: 'TEST Kari', at: '2026-11-18T09:00:00Z' }] });
     await sandbox.synkProduktliste(o);
     expect(fake.rpc.filter((k) => k.navn === 'lager_trekk_oppskrift')).toEqual([]);
     expect(fake.rpc.filter((k) => k.navn === 'oppdater_ordre_fiken_linje').map((k) => [k.args.p_produktnummer, !!k.args.p_linje])).toEqual([['501', true]]);

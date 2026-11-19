@@ -826,16 +826,17 @@ function opprettOrdre() {
   // Samme oppslag som autoFyllForhandlerNr()/autoFyllForhandlerOrgnr() bruker på
   // detaljsiden - uten dette sto Forhandler.nr/Org.nr alltid tomt på en fersk ordre inntil
   // Forhandler-feltet ble rørt på nytt.
-  const forhandlerNr = finnForhandlerNr(ny.kunde);
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): Forhandler.nr, org.nr og fullmakt er ikke med i ordren, så de fylles ikke ut og ingen fullmakt legges ved.
+  const forhandlerNr = ny.kunEkstrautstyr ? '' : finnForhandlerNr(ny.kunde);
   if (forhandlerNr) ny.utstyr.forhandlerNr = forhandlerNr;
-  const forhandlerOrgnr = finnForhandlerOrgnr(ny.kunde);
+  const forhandlerOrgnr = ny.kunEkstrautstyr ? '' : finnForhandlerOrgnr(ny.kunde);
   if (forhandlerOrgnr) ny.forhandlerOrgnr = forhandlerOrgnr;
   // Samme auto-vedlegg som autoFyllForhandlerFullmakt() i ordre-detalj.js gjør for en
   // EKSISTERENDE ordre - her for en helt ny ordre i stedet. `dokumenter` inngår bevisst ikke
   // i ordreToDb() (se der), så dette MÅ skrives med et eget update-kall ETTER at selve
   // insert-en er bekreftet vellykket, ikke samtidig - ellers kan update-kallet nå frem før
   // raden faktisk finnes i databasen og forsvinne sporløst (0 rader truffet, ingen feil).
-  const fullmakt = finnForhandlerFullmakt(ny.kunde);
+  const fullmakt = ny.kunEkstrautstyr ? null : finnForhandlerFullmakt(ny.kunde);
   if (fullmakt) ny.dokumenter = [{ navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
   S.ordrer.push(ny);
   if (db) db.from('ordrer').insert({ ...ordreToDb(ny), ...(ny.kunEkstrautstyr ? { kun_ekstrautstyr: true } : {}) }).then(r=>{
