@@ -159,7 +159,8 @@ for (const type of TYPER) {
         }
       }
       expect(funn).toEqual([]);
-    }, 60000); // tungt regnestykke (kolonner x varianter x 4 visninger): knapt 5 s alene, og over standardgrensen når hele suiten går samtidig
+    }, 150000); // tungt regnestykke (kolonner x varianter x 4 visninger): knapt 5 s alene, men 60 s holdt ikke alltid når hele suiten gikk samtidig
+    // (målt 67-80 s under last 2026-11-18) - økt til 150 s for mer margin, samme beregning.
   });
 }
 
