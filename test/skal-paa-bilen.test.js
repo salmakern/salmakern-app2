@@ -250,6 +250,42 @@ describe('«Skal på bilen» for en «kun ekstrautstyr»-ordre', () => {
     const vanlig = sandbox.beregnSkalPaaBilen(bil({ utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }], produkt_rettelser: o.produktRettelser }));
     expect(vanlig.rader.find((r) => r.nr === '501').fjernet).toBe(true);
   });
+  describe('«Kun ekstrautstyr» slås PÅ mens sjekklista har gitt en rad som delene er trukket for (19.11)', () => {
+    const SJEKK = [{ punkt: 'Panorama glasstak', ok: true }];
+    const venter = () => new Promise((ok) => setTimeout(ok, 15));
+    const trukket = (o) => { S.lagerhistorikk = [{ id: 'h1', ordreId: o.id, oppskriftId: 'opp_501', vareId: 'vare_T3', endring: -2 }]; S.lagervarer.find((v) => v.id === 'vare_T3').antall = 1; };
+    const angreKall = () => fake.rpc.filter((k) => k.navn === 'lager_angre_oppskrift_trekk');
+    beforeEach(() => { sandbox.buildOrdreDetail = () => {}; sandbox.renderAll = () => {}; sandbox.renderSkalPaaBilen = () => {}; });
+    it('delene legges IKKE tilbake på lager (fakturalinjen står, og det er ikke et valg om å fjerne utstyret fra bilen)', async () => {
+      const o = bil({ ordre_status: 'paabegynt', utstyr_sjekkliste: SJEKK, fiken_linjer: [{ id: 'fl_1', produktnummer: '501', antall: 1 }] });
+      trukket(o);
+      expect(nr(sandbox.beregnSkalPaaBilen(o).rader)).toEqual(['501']); // før: sjekklista gir raden
+      await sandbox.settKunEkstrautstyr(o.id, true);
+      await venter();
+      expect(o.kunEkstrautstyr).toBe(true);
+      expect(nr(sandbox.beregnSkalPaaBilen(o).rader)).toEqual([]); // etter: sjekklista teller ikke
+      expect(angreKall()).toEqual([]);
+      expect(S.lagerhistorikk.length).toBe(1);
+      expect(S.lagervarer.find((v) => v.id === 'vare_T3').antall).toBe(1);
+      expect(o.fikenLinjer.map((l) => l.produktnummer)).toEqual(['501']);
+    });
+    it('«Rett → Fjern» på en rad lagt til for hånd legger derimot delene tilbake (en bevisst handling, som før)', async () => {
+      const o = bil({ kun_ekstrautstyr: true, ordre_status: 'paabegynt', produkt_rettelser: [rett('legg_til', '501', { navn: 'Takluke' })] });
+      trukket(o);
+      rettelseRpc(o);
+      fake.svar.legg_til_ordre_produkt_rettelse = (a) => ({ data: [...o.produktRettelser, { ...a.p_rettelse, av: 'TEST Ansatt', at: '2026-11-18T11:00:00Z' }], error: null });
+      await sandbox.produktRettelse(o.id, 'angre', '501', 'Takluke', 't501');
+      expect(angreKall().map((k) => k.args.p_oppskrift_id)).toEqual(['opp_501']);
+    });
+    it('å slå avkrysningen AV igjen er en bevisst handling og kan legge delene tilbake (en rad som sjekklista ikke lenger gir etter at den ble endret)', async () => {
+      const o = bil({ kun_ekstrautstyr: true, ordre_status: 'paabegynt', utstyr_sjekkliste: [] });
+      S.lagerhistorikk = [{ id: 'h2', ordreId: o.id, oppskriftId: 'opp_501', vareId: 'vare_T3', endring: -2 }]; // trekk uten noen rad som ber om det
+      await sandbox.settKunEkstrautstyr(o.id, false);
+      await venter();
+      expect(o.kunEkstrautstyr).toBe(false);
+      expect(angreKall().map((k) => k.args.p_oppskrift_id)).toEqual(['opp_501']);
+    });
+  });
   it('lager: ingenting før ankomst; ved ankomst trekkes bare ekstrautstyret, aldri ombyggingsoppskriften', async () => {
     // 501 kommer fra «+ Legg til utstyr» (en rettelse): sjekklista styrer ikke radene i en kun-ordre (19.11)
     const o = bil({ kun_ekstrautstyr: true, ombygging: { nyttKjoretoy: true }, produkt_rettelser: [{ handling: 'legg_til', produktnummer: '501', navn: 'Takluke', av: 'TEST Kari', at: '2026-11-18T09:00:00Z' }] });

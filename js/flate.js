@@ -56,11 +56,19 @@ function apneNyFlate() {
   openModal('nyFlateModal');
 }
 
+// «Kun ekstrautstyr» (Henrik 2026-11-19): en slik ordre har ikke vekter, type/variant/versjon, dokumenter eller ombygging, og skal derfor ikke i en flåte. leggOrdreIFlate() ville
+// kopiert type/variant/versjon/vekter/typegodkjenning fra primæren inn i de skjulte feltene og satt Nytt Kjøretøy (som legger ombyggingslinjen på fakturaen og gir Vegvesen-dokumenter).
+function kunEkstrautstyrIkkeIFlate(o) {
+  if (!erKunEkstrautstyr(o)) return false;
+  visToast('En ordre med «Kun ekstrautstyr» kan ikke legges i en flåte (den har ingen ombygging, vekter eller dokumenter).');
+  return true;
+}
+
 function renderNyFlatePrimaerSok(q) {
   const el = document.getElementById('nyFlatePrimaerResultat');
   q = q.trim().toLowerCase();
   if (!q) { el.innerHTML=''; return; }
-  const treff = (S.ordrer||[]).filter(o => !erLeveranse(o) && (
+  const treff = (S.ordrer||[]).filter(o => !erLeveranse(o) && !erKunEkstrautstyr(o) && ( // «Kun ekstrautstyr» (Henrik 2026-11-19) har ingen vekter/type/dokumenter og kan ikke være primær
     (o.regnr||'').toLowerCase().includes(q) ||
     (o.chassis||'').toLowerCase().includes(q) ||
     (o.kunde||'').toLowerCase().includes(q)
@@ -73,6 +81,7 @@ function renderNyFlatePrimaerSok(q) {
 
 function velgNyFlatePrimaer(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  if (kunEkstrautstyrIkkeIFlate(o)) return;
   document.getElementById('nyFlatePrimaerId').value = ordreId;
   document.getElementById('nyFlatePrimaerValgt').innerHTML = `Valgt: <b>${ordreLabel(o)}</b>`;
   document.getElementById('nyFlatePrimaerSok').value = '';
@@ -84,6 +93,8 @@ function lagreNyFlate() {
   const nr = document.getElementById('nyFlateNummer').value.trim();
   if (!nr) { alert('Skriv inn et flåtenummer'); return; }
   const primaerId = document.getElementById('nyFlatePrimaerId').value || null;
+  const primaerOrdre = primaerId ? S.ordrer.find(x=>x.id===primaerId) : null;
+  if (primaerOrdre && kunEkstrautstyrIkkeIFlate(primaerOrdre)) return;
   const id = 'flate_' + Date.now();
   const flate = { id, flatenummer:nr, status:'aktiv', primaerOrdreId:primaerId, createdAt:new Date().toISOString() };
   S.flater = S.flater || [];
@@ -151,7 +162,7 @@ function renderFlateSok(q) {
   const el = document.getElementById('flateSokResultat');
   q = q.trim().toLowerCase();
   if (!q) { el.innerHTML=''; return; }
-  const treff = (S.ordrer||[]).filter(o => !erLeveranse(o) && o.flateId !== aktivFlateId && (
+  const treff = (S.ordrer||[]).filter(o => !erLeveranse(o) && !erKunEkstrautstyr(o) && o.flateId !== aktivFlateId && (
     (o.regnr||'').toLowerCase().includes(q) ||
     (o.chassis||'').toLowerCase().includes(q) ||
     (o.kunde||'').toLowerCase().includes(q)
@@ -165,6 +176,7 @@ function renderFlateSok(q) {
 function leggOrdreIFlate(ordreId) {
   if (!flateKanEndre()) return;
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
+  if (kunEkstrautstyrIkkeIFlate(o)) return;
   o.flateId = aktivFlateId;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId);
   if (f && f.primaerOrdreId && f.primaerOrdreId !== ordreId) {
@@ -225,6 +237,8 @@ function toggleArkiverFlate() {
 function settFlatePrimaer(ordreId) {
   if (!flateKanEndre()) return;
   const f = (S.flater||[]).find(x=>x.id===aktivFlateId); if (!f) return;
+  const nyPrimaer = S.ordrer.find(x=>x.id===ordreId);
+  if (nyPrimaer && kunEkstrautstyrIkkeIFlate(nyPrimaer)) return;
   f.primaerOrdreId = ordreId;
   ignorerRealtimeFlate.add(f.id);
   setTimeout(()=>ignorerRealtimeFlate.delete(f.id), 10000);

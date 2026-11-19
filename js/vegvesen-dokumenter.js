@@ -1343,13 +1343,16 @@ function vegvesenFilnavn(dokumenttype, chassisEllerFlatenummer) {
 // av appen. medlemmer er ALLE ordre i flåten, inkl. primær, sortert stabilt på chassis.
 function vegvesenFlateKontext(o) {
   if (!o.flateId) return null;
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): ingen Vegvesen-dokumenter i en kun-ordre. Den er ikke del av en flåtekontekst (ingen kontekst for ordren selv), og en kun-ordre
+  // som står i en flåte er ikke medlem (medlemslista under) så flåtens dokumenter aldri legges på den.
+  if (o.kunEkstrautstyr === true) return null;
   const flate = (S.flater || []).find(f => f.id === o.flateId);
   if (!flate) return null;
   // Vanlig strengsammenligning (ikke localeCompare) med vilje - chassisnummer/VIN er
   // rent ASCII uten språkspesifikk betydning, og localeCompare() uten eksplisitt locale
   // ga overraskende ikke-alfabetisk rekkefølge for repeterte bokstaver under nb-NO
   // (f.eks. "AAA" > "BBB") - oppdaget i test 2026-09-21.
-  const medlemmer = (S.ordrer || []).filter(x => x.flateId === flate.id).sort((a, b) => {
+  const medlemmer = (S.ordrer || []).filter(x => x.flateId === flate.id && x.kunEkstrautstyr !== true).sort((a, b) => {
     const ca = (a.chassis || '').toUpperCase(), cb = (b.chassis || '').toUpperCase();
     return ca < cb ? -1 : ca > cb ? 1 : 0;
   });

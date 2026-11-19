@@ -1100,12 +1100,14 @@ function visMaterialbehov() {
 // Materialbehov (s09-003, del 2 - Henrik: "kun det som blir huket av") - summerer KUN
 // faktiske uttak gjort via en huket oppskrift (lagerhistorikk.oppskriftId satt, se
 // registrerLagerEndring/toggleOppskriftPaaOrdre) på ordrer som fortsatt er "i arbeid"
-// (alt unntatt status 'hentet'). Viser altså hvor mye av hver del som allerede er bundet
+// (ikke arkivert, og alt unntatt status 'hentet'). Viser altså hvor mye av hver del som allerede er bundet
 // opp i biler som står i verkstedet nå - bevisst IKKE alt som bare matcher modellen
 // (oppskriftMatcherOrdre), siden valgfritt tilleggsutstyr ikke nødvendigvis blir valgt.
 function renderMaterialbehov() {
   const el = document.getElementById('materialbehovListe'); if (!el) return;
-  const aktiveOrdreIder = new Set((S.ordrer||[]).filter(o => o.ordreStatus !== 'hentet').map(o => o.id));
+  // En lukket (arkivert) ordre er ferdig uansett status: en «kun ekstrautstyr»-ordre kan ikke bli Hentet og ender i Klar for henting, og en leveranse har andre statuser, så uten
+  // arkiv-sjekken ble delene til hver lukket slik ordre telt som «bundet opp i aktive ordrer» for alltid (funnet 2026-11-19).
+  const aktiveOrdreIder = new Set((S.ordrer||[]).filter(o => o.status !== 'arkivert' && o.ordreStatus !== 'hentet').map(o => o.id));
   const behovPerVare = {};
   (S.lagerhistorikk||[]).forEach(h => {
     if (!h.oppskriftId || !h.ordreId || !aktiveOrdreIder.has(h.ordreId) || h.endring >= 0) return;

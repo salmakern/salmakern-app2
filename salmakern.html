@@ -1336,7 +1336,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             onfocus="visFeltDropdown('n_merke_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_merke_forslag'))">
           <div id="n_merke_forslag" class="felt-dropdown"></div>
         </div>
-        <div class="felt-wrap">
+        <div class="felt-wrap" id="n_felt_type">
           <label>Type</label>
           <input id="n_type" autocomplete="off"
             oninput="renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag')"
@@ -1350,14 +1350,14 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             onfocus="visFeltDropdown('n_modell_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_modell_forslag'))">
           <div id="n_modell_forslag" class="felt-dropdown"></div>
         </div>
-        <div class="felt-wrap">
+        <div class="felt-wrap" id="n_felt_variant">
           <label>Variant</label>
           <input id="n_variant" autocomplete="off"
             onfocus="visFeltDropdown('n_variant_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_variant_forslag'))">
           <div id="n_variant_forslag" class="felt-dropdown"></div>
         </div>
-        <div><label>Farge</label><select id="n_farge"></select></div>
-        <div class="felt-wrap">
+        <div id="n_felt_farge"><label>Farge</label><select id="n_farge"></select></div>
+        <div class="felt-wrap" id="n_felt_versjon">
           <label>Versjon</label>
           <input id="n_versjon" autocomplete="off"
             onfocus="visFeltDropdown('n_versjon_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_versjon_forslag'))">
@@ -1406,10 +1406,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <div class="box" style="margin-top:10px">
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0">
-        <input type="checkbox" id="n_kunEkstrautstyr" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
+        <input type="checkbox" id="n_kunEkstrautstyr" onchange="oppdaterNyOrdreKunFelt()" style="width:18px;height:18px;accent-color:#6366f1;flex-shrink:0">
         <span style="font-size:13.5px;font-weight:600">Kun ekstrautstyr (ingen ombygging)</span>
       </label>
-      <div class="small muted" style="margin-top:6px">For en bil som bare skal ha montert ekstrautstyr (f.eks. gummimatte eller kasse). Enklere ordre med bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting. Ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen.</div>
+      <div class="small muted" style="margin-top:6px">For en bil som bare skal ha montert ekstrautstyr (f.eks. gummimatte eller kasse). Enklere ordre med bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting, uten Type, Variant, Versjon og Farge. Ingen tvangsflyt, ikke i Admin-ark og ikke med i portalen.</div>
     </div>
 
     <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">

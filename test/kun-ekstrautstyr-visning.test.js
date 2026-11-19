@@ -21,7 +21,7 @@ const REFERANSE = JSON.parse(readFileSync(path.join(__dirname, 'fixtures/kun-vis
 const app = lastApp();
 const { sandbox, S } = app;
 const ORIG = {};
-for (const n of ['visToast', 'renderAll', 'buildOrdreDetail', 'save', 'edgeFetch', 'oppdaterFikenLinjeForOppskrift', 'oppdaterOrdreFikenLinje', 'vegvesenFlateKontext', 'synkroniserForhandlerKontaktId', 'openOrdre', 'closeModal']) ORIG[n] = sandbox[n];
+for (const n of ['visToast', 'renderAll', 'buildOrdreDetail', 'save', 'edgeFetch', 'oppdaterFikenLinjeForOppskrift', 'oppdaterOrdreFikenLinje', 'vegvesenFlateKontext', 'synkroniserForhandlerKontaktId', 'openOrdre', 'closeModal', 'effektivOrdreTidPerAnsattMs', 'tilbakeOrdreList', 'Event']) ORIG[n] = sandbox[n];
 
 const KUN_ID = 'ord_1700000000010';
 const NY_KUN_ID = 'ord_' + Date.parse('2026-11-18T08:00:00Z');
@@ -76,14 +76,17 @@ const statusValg = (html, id) => {
 };
 
 // En «ekte» DOM for rendringen: et element med ordrens id i navnet finnes bare hvis det ligger i HTML-en som ble tegnet (testriggens stubber finnes ellers alltid).
-function medEkteDom(html, ordreId, fn) {
+// Fotoboksene (`foboks_a_0`, `fo_s_1`) har ikke ordre-id i navnet, men er like fullt bare der når kortet er tegnet.
+// MÅ vente på callbacken (async + await): uten det ble modellen gjenopprettet ved første `await` i callbacken, og alt etter den kjørte mot testriggens stubber som alltid finnes
+// (funnet 2026-11-19: 14 av 15 fjernede null-vern overlevde).
+async function medEkteDom(html, ordreId, fn) {
   const doc = sandbox.document;
   const finnes = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
   const origGet = doc.getElementById, origQ = doc.querySelector;
-  const borte = (id) => (String(id).includes(ordreId) || id === 'uMalValgAnkomst') && !finnes.has(id);
+  const borte = (id) => (String(id).includes(ordreId) || id === 'uMalValgAnkomst' || /^(foboks|fo)_[as]_/.test(String(id))) && !finnes.has(id);
   doc.getElementById = (id) => (borte(id) ? null : origGet(id));
   doc.querySelector = (sel) => (sel === '#ordreDetail table' && !/<table/.test(html) ? null : origQ(sel));
-  try { return fn(); } finally { doc.getElementById = origGet; doc.querySelector = origQ; }
+  try { return await fn(); } finally { doc.getElementById = origGet; doc.querySelector = origQ; }
 }
 
 function foersteForskjell(a, b) {
@@ -211,14 +214,16 @@ describe('skjulte felt skrives ikke, og skjulte elementer som mangler gir ingen 
     expect(kall.filter((k) => k.rpc === 'oppdater_ordre_dokument')).toEqual([]);
     expect(oppdateringer(kall).filter((u) => 'dokumenter' in u || 'forhandler_orgnr' in u)).toEqual([]);
   });
-  it('advarselen «Fant ingen forhandler / mangler Forhandler.nr og org.nr» vises ikke for en kun-ordre (de feltene er ikke med), men for en vanlig ordre som før', () => {
+  it('«mangler Forhandler.nr og org.nr» vises ikke for en kun-ordre (de feltene er ikke med), men stavekontrollen av kundenavnet («Fant ingen forhandler») gjelder, uten teksten om Forhandler.nr/org.nr/fullmakt; en vanlig ordre er som før', () => {
     const toast = []; sandbox.visToast = (m) => toast.push(m);
     const kun = lagOrdre(kunRad({ kunde: 'TEST Ukjent Forhandler AS' })); const vanlig = lagOrdre(kunRad({ kun_ekstrautstyr: false, id: 'ord_1700000000011', kunde: 'TEST Ukjent Forhandler AS' }));
     S.ordrer = [kun, vanlig];
     sandbox.varsleHvisForhandlerDataMangler(kun.id);
-    expect(toast).toEqual([]);
+    expect(toast).toEqual(['Fant ingen forhandler med navnet "TEST Ukjent Forhandler AS" i Kontakter - sjekk stavemåten, eller legg den til der.']);
+    toast.length = 0;
     sandbox.varsleHvisForhandlerDataMangler(vanlig.id);
     expect(toast.join('|')).toContain('Fant ingen forhandler');
+    expect(toast.join('|')).toContain('Forhandler.nr/org.nr/fullmakt fylles ikke ut automatisk');
     toast.length = 0;
     S.kontakter = [{ id: 'k2', type: 'Forhandler', navn: 'TEST Forhandler AS', kontaktpersoner: [] }]; // finnes, men uten Forhandler.nr og org.nr
     kun.kunde = vanlig.kunde = 'TEST Forhandler AS';
@@ -321,6 +326,7 @@ describe('skjulte felt skrives ikke, og skjulte elementer som mangler gir ingen 
         sandbox.sf(o.id, 'merke', 'KIA'); sandbox.sf(o.id, 'modell', 'EV9'); sandbox.sf(o.id, 'kunde', 'TEST Forhandler AS'); sandbox.sf(o.id, 'ankomstdato', '2026-11-11');
         sandbox.autoFyllForhandlerNr(o.id); sandbox.autoFyllForhandlerOrgnr(o.id); sandbox.autoFyllForhandlerFullmakt(o.id); sandbox.varsleHvisForhandlerDataMangler(o.id);
         await sandbox.sv(o.id, 'totalvekt', 'a', '3000');
+        await sandbox.sv(o.id, 'foraksel', 'a', '1500'); // grenen som leter etter vekt-tabellen
         sandbox.oppdaterVektFarge(o.id, 'totalvekt'); sandbox.oppdaterVektInputVerdierIDOM(o);
         sandbox.sd(o.id, 'totalpris', '500');
         sandbox.su(o.id, 'forhandlerNr', '99'); sandbox.settHengerfeste(o.id, 'hengerfeste'); sandbox.oppdaterHengerfesteNrVisning(o.id);
@@ -479,11 +485,15 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt og Klar for henting'
       return { o, kall, toast, rend };
     };
     for (const status of ['ikke_veid', 'klar_visning', 'vist_biltilsyn', 'hentet']) {
-      it(`${status}: avvist med forklaring, ordren og loggen er uendret, ingen databasekall, og skjermen tegnes på nytt (nedtrekket nullstilles)`, async () => {
+      it(`${status}: avvist med forklaring, ordren og loggen er uendret, ingen databasekall, og skjermen tegnes på nytt (nedtrekket mister fokus og nullstilles)`, async () => {
         const { o, kall, toast, rend } = oppsett('paabegynt');
         app.settAktivOrdre(o.id);
         const logg = o.endringer.length;
-        await sandbox.endreStatus(o.id, status);
+        // Nedtrekket har fokus (brukeren valgte nettopp en status): ellers hopper tegningen over det (buildOrdreDetail/renderOversikt) og valget blir stående på skjermen.
+        const aktivOrig = sandbox.document.activeElement; let blurret = 0;
+        sandbox.document.activeElement = { tagName: 'SELECT', blur() { blurret++; } };
+        try { await sandbox.endreStatus(o.id, status); } finally { sandbox.document.activeElement = aktivOrig; }
+        expect(blurret).toBe(1);
         expect(o.ordreStatus).toBe('paabegynt');
         expect(o.status).toBe('aktiv');
         expect(o.endringer.length).toBe(logg);
@@ -564,6 +574,502 @@ describe('Fakturering, godkjenning og arkivering virker som før for en kun-ordr
     await sandbox.arkiver(o.id);
     expect(o.status).toBe('arkivert');
     expect(oppdateringer(kall)).toContainEqual({ status: 'arkivert' });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// Rettelser etter den uavhengige gjennomgangen 19.11 (hvert funn har egne tester som feiler mot koden fra før rettelsen)
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// Fabrikker, ikke delte objekter: dbToOrdre beholder referansen, og appen skriver rett inn i dem (su(), leggOrdreIFlate()).
+const alleAv = () => ({ nyttKjoretoy: false, bruktKjoretoy: false, lafinto: false, personbil: false });
+const tomUtstyr = () => ({ har: '', skalHa: '', forhandlerNr: '', hengerfeste: 'ikke_hengerfeste', skalHaBekreftet: false });
+const ventLitt = () => new Promise((ok) => setTimeout(ok, 15));
+
+describe('«Kun ekstrautstyr» slått AV igjen: Forhandler.nr, org.nr og fullmakt fylles (bare det som er tomt)', () => {
+  const slaaAv = async (o) => {
+    S.ordrer = [o]; app.settAktivOrdre(o.id);
+    sandbox.buildOrdreDetail = () => {}; sandbox.renderAll = () => {}; sandbox.save = () => {}; sandbox.visToast = () => {};
+    const { db, kall } = lagDb(); app.settDb(db);
+    await sandbox.settKunEkstrautstyr(o.id, false);
+    await ventLitt();
+    return kall;
+  };
+  it('en ordre som ble laget som kun-ordre (felt aldri fylt) får Forhandler.nr, org.nr, fullmakt-fil og Fullmakt-status når avkrysningen tas av', async () => {
+    const o = lagOrdre(kunRad({ utstyr: tomUtstyr(), forhandler_orgnr: '', dokumenter: [], fullmakt: 'har_ikke', flate_id: null }));
+    const kall = await slaaAv(o);
+    expect(o.kunEkstrautstyr).toBe(false);
+    expect(o.utstyr.forhandlerNr).toBe('12345');
+    expect(o.forhandlerOrgnr).toBe('984993188');
+    expect(o.dokumenter.length).toBe(1);
+    expect(o.dokumenter[0].navn).toBe('Fullmakt.pdf');
+    expect(o.fullmakt).toBe('har');
+    expect(kall.filter((k) => k.rpc === 'oppdater_ordre_dokument').length).toBe(1);
+  });
+  it('en verdi noen har tastet inn overskrives aldri (Forhandler.nr og org.nr), men det som mangler fylles', async () => {
+    const o = lagOrdre(kunRad({ utstyr: { ...tomUtstyr(), forhandlerNr: '99' }, forhandler_orgnr: '111222333', dokumenter: [], fullmakt: 'har_ikke', flate_id: null }));
+    await slaaAv(o);
+    expect(o.utstyr.forhandlerNr).toBe('99');
+    expect(o.forhandlerOrgnr).toBe('111222333');
+    expect(o.dokumenter.length).toBe(1);
+  });
+  it('en fullmakt som alt er på plass legges ikke til en gang til', async () => {
+    const o = lagOrdre(kunRad({ utstyr: tomUtstyr(), forhandler_orgnr: '', fullmakt: 'har', flate_id: null,
+      dokumenter: [{ navn: 'Fullmakt.pdf', url: 'https://eksempel.test/F.pdf', lastetOppAv: 'TEST', dato: '2026-11-01T10:00:00Z' }] }));
+    const kall = await slaaAv(o);
+    expect(o.dokumenter.length).toBe(1);
+    expect(kall.filter((k) => k.rpc === 'oppdater_ordre_dokument')).toEqual([]);
+  });
+  it('uten kunde, eller med en kunde som ikke er en forhandler i Kontakter, skjer ingenting', async () => {
+    for (const kunde of ['', 'TEST Privatkunde']) {
+      const o = lagOrdre(kunRad({ kunde, utstyr: tomUtstyr(), forhandler_orgnr: '', dokumenter: [], fullmakt: 'har_ikke', flate_id: null }));
+      await slaaAv(o);
+      expect([o.utstyr.forhandlerNr, o.forhandlerOrgnr, o.dokumenter.length, o.fullmakt], kunde).toEqual(['', '', 0, 'har_ikke']);
+    }
+  });
+  it('å slå avkrysningen PÅ fyller ingenting', async () => {
+    const o = lagOrdre(kunRad({ kun_ekstrautstyr: false, utstyr: tomUtstyr(), forhandler_orgnr: '', dokumenter: [], fullmakt: 'har_ikke', flate_id: null }));
+    S.ordrer = [o]; sandbox.buildOrdreDetail = () => {}; sandbox.renderAll = () => {}; sandbox.save = () => {}; sandbox.visToast = () => {};
+    const { db } = lagDb(); app.settDb(db);
+    await sandbox.settKunEkstrautstyr(o.id, true); await ventLitt();
+    expect([o.kunEkstrautstyr, o.utstyr.forhandlerNr, o.forhandlerOrgnr, o.dokumenter.length, o.fullmakt]).toEqual([true, '', '', 0, 'har_ikke']);
+  });
+});
+
+describe('avkrysningen «Kun ekstrautstyr» tegner detaljen på nytt selv når den har fokus (Edge/Chrome gir den fokus ved museklikk)', () => {
+  const medFokus = async (utfoer) => {
+    const detaljEl = sandbox.document.getElementById('ordreDetail');
+    const aktivOrig = sandbox.document.activeElement;
+    const avkrysning = { tagName: 'INPUT', blurKall: 0, blur() { this.blurKall++; sandbox.document.activeElement = aktivOrig; } };
+    sandbox.document.activeElement = avkrysning;
+    detaljEl.contains = (el) => el === avkrysning; // som i en nettleser: avkrysningen ligger inne i #ordreDetail
+    try { await utfoer(detaljEl); } finally { sandbox.document.activeElement = aktivOrig; delete detaljEl.contains; }
+    return avkrysning;
+  };
+  it('PÅ: avkrysningen mister fokus og detaljen tegnes med kun-visningen (uten Vekter, med KUN EKSTRAUTSTYR)', async () => {
+    const o = lagOrdre(kunRad({ kun_ekstrautstyr: false, flate_id: null }));
+    expect(detalj(o)).toContain('Vekter (kg)');
+    const { db } = lagDb(); app.settDb(db);
+    sandbox.renderAll = () => {}; sandbox.visToast = () => {};
+    const knapp = await medFokus(async (el) => {
+      await sandbox.settKunEkstrautstyr(o.id, true);
+      expect(el.innerHTML).not.toContain('Vekter (kg)');
+      expect(el.innerHTML).toContain('KUN EKSTRAUTSTYR');
+      expect(statusValg(el.innerHTML, o.id).length).toBe(4);
+    });
+    expect(knapp.blurKall).toBe(1);
+  });
+  it('AV: detaljen tegnes med alle kortene og alle åtte statusene igjen', async () => {
+    const o = lagOrdre(kunRad({ flate_id: null }));
+    expect(detalj(o)).not.toContain('Vekter (kg)');
+    const { db } = lagDb(); app.settDb(db);
+    sandbox.renderAll = () => {}; sandbox.visToast = () => {}; sandbox.save = () => {};
+    await medFokus(async (el) => {
+      await sandbox.settKunEkstrautstyr(o.id, false);
+      expect(el.innerHTML).toContain('Vekter (kg)');
+      expect(statusValg(el.innerHTML, o.id).length).toBe(8);
+    });
+  });
+  it('avvist avkrysning (Ombygging er huket av): skjermen tegnes på nytt, så avkrysningen ikke blir stående krysset av', async () => {
+    const o = lagOrdre(kunRad({ kun_ekstrautstyr: false, flate_id: null, ombygging: { ...alleAv(), nyttKjoretoy: true } }));
+    const html0 = detalj(o);
+    const { db } = lagDb(); app.settDb(db);
+    sandbox.renderAll = () => {}; const toast = []; sandbox.visToast = (m) => toast.push(m);
+    // Nettleseren har alt krysset av boksen; en omtegning er det som setter den tilbake. «Gammel» innhold står som markør på om detaljen faktisk ble tegnet på nytt.
+    sandbox.document.getElementById('ordreDetail').innerHTML = 'MED-AVKRYSNINGEN-SOM-BLE-AVVIST';
+    await medFokus(async () => { await sandbox.settKunEkstrautstyr(o.id, true); });
+    expect(toast.join('|')).toContain('Fjern avkrysningen i Ombygging');
+    expect(o.kunEkstrautstyr).toBe(false);
+    expect(sandbox.document.getElementById('ordreDetail').innerHTML).toBe(html0);
+  });
+});
+
+describe('en kun-ordre kan ikke legges i en flåte, og tar ikke imot noe fra en flåte', () => {
+  const P_ID = 'ord_1700000000051', K_ID = 'ord_1700000000052', V_ID = 'ord_1700000000053';
+  const tomVekt = { totalvekt: { a: '', e: '', v: '' }, vogntog: { a: '', e: '', v: '' }, foraksel: { a: '', e: '', v: '' }, bakaksel: { a: '', e: '', v: '' } };
+  let primaer, kun, vanlig, flate;
+  const oppsett = (kunIFlaate = false) => {
+    primaer = lagOrdre(kunRad({ id: P_ID, chassis: 'TESTWXYZ0000000P1', kun_ekstrautstyr: false, flate_id: 'flate_P', ombygging: { ...alleAv(), nyttKjoretoy: true } }));
+    kun = lagOrdre(kunRad({ id: K_ID, chassis: 'TESTWXYZ0000000P2', flate_id: kunIFlaate ? 'flate_P' : null, type: '', variant: '', versjon: '', vekter: tomVekt, typegodkjenning: '', ombygging: alleAv(), dokumenter: [] }));
+    vanlig = lagOrdre(kunRad({ id: V_ID, chassis: 'TESTWXYZ0000000P3', kun_ekstrautstyr: false, flate_id: null, type: '', variant: '', versjon: '', vekter: tomVekt, typegodkjenning: '', ombygging: alleAv(), dokumenter: [] }));
+    flate = { id: 'flate_P', flatenummer: 'TEST-FLÅTE-P', primaerOrdreId: P_ID };
+    S.flater = [flate]; S.ordrer = [primaer, kun, vanlig];
+    sandbox.save = () => {}; sandbox.closeModal = () => {};
+    sandbox.visFlateDetalj('flate_P'); // setter aktivFlateId
+  };
+  let toast;
+  beforeEach(() => { toast = []; sandbox.visToast = (m) => toast.push(m); });
+
+  it('flåtesøkene (ny flåte og «+ Legg til») viser en vanlig ordre, men aldri en kun-ordre', () => {
+    oppsett();
+    sandbox.renderFlateSok('TESTWXYZ0000000P');
+    const liste = sandbox.document.getElementById('flateSokResultat').innerHTML;
+    expect(liste).toContain(`leggOrdreIFlate('${V_ID}')`);
+    expect(liste).not.toContain(K_ID);
+    sandbox.renderNyFlatePrimaerSok('TESTWXYZ0000000P');
+    const ny = sandbox.document.getElementById('nyFlatePrimaerResultat').innerHTML;
+    expect(ny).toContain(`velgNyFlatePrimaer('${V_ID}')`);
+    expect(ny).not.toContain(K_ID);
+  });
+  it('leggOrdreIFlate avviser en kun-ordre: ingen flåte, ingen kopiering av type/variant/versjon/vekter, ingen Nytt Kjøretøy (en vanlig ordre får alt som før)', () => {
+    oppsett();
+    sandbox.leggOrdreIFlate(K_ID);
+    expect([kun.flateId, kun.type, kun.vekter.totalvekt.a, kun.typegodkjenning, kun.ombygging.nyttKjoretoy]).toEqual([null, '', '', '', false]);
+    expect(toast.join('|')).toContain('kan ikke legges i en flåte');
+    toast.length = 0;
+    sandbox.leggOrdreIFlate(V_ID);
+    expect([vanlig.flateId, vanlig.type, vanlig.vekter.totalvekt.a, vanlig.ombygging.nyttKjoretoy]).toEqual(['flate_P', 'GT-Line', '3000', true]);
+    expect(toast).toEqual([]);
+  });
+  it('ny flåte med en kun-ordre som primær lagres ikke; med en vanlig ordre som primær lagres den som før', () => {
+    oppsett();
+    const felt = sandbox.document.getElementById('nyFlateNummer'); const primFelt = sandbox.document.getElementById('nyFlatePrimaerId');
+    felt.value = 'TEST-NY'; primFelt.value = K_ID;
+    const antall = S.flater.length;
+    sandbox.lagreNyFlate();
+    expect(S.flater.length).toBe(antall);
+    expect(kun.flateId).toBeNull();
+    expect(toast.join('|')).toContain('kan ikke legges i en flåte');
+    primFelt.value = V_ID;
+    sandbox.lagreNyFlate();
+    expect(S.flater.length).toBe(antall + 1);
+    expect(vanlig.flateId).toBe(S.flater[S.flater.length - 1].id);
+    felt.value = ''; primFelt.value = '';
+  });
+  it('velgNyFlatePrimaer tar ikke imot en kun-ordre (men en vanlig ordre)', () => {
+    oppsett();
+    const primFelt = sandbox.document.getElementById('nyFlatePrimaerId'); primFelt.value = '';
+    sandbox.velgNyFlatePrimaer(K_ID);
+    expect(primFelt.value).toBe('');
+    expect(toast.join('|')).toContain('kan ikke legges i en flåte');
+    sandbox.velgNyFlatePrimaer(V_ID);
+    expect(primFelt.value).toBe(V_ID);
+    primFelt.value = '';
+  });
+  it('en kun-ordre kan ikke gjøres til primær i en flåte', () => {
+    oppsett(true);
+    sandbox.settFlatePrimaer(K_ID);
+    expect(flate.primaerOrdreId).toBe(P_ID);
+    expect(toast.join('|')).toContain('kan ikke legges i en flåte');
+    sandbox.settFlatePrimaer(V_ID);
+    expect(flate.primaerOrdreId).toBe(V_ID);
+  });
+  it('en kun-ordre som alt står i en flåte får ikke type/variant/versjon/vekter/Nytt Kjøretøy fra primæren, og en vanlig sekundær får det som før', async () => {
+    oppsett(true);
+    vanlig.flateId = 'flate_P';
+    app.settDb(null);
+    await sandbox.synkroniserFraPrimaer(P_ID);
+    expect([kun.type, kun.variant, kun.versjon, kun.vekter.totalvekt.a, kun.typegodkjenning, kun.ombygging.nyttKjoretoy]).toEqual(['', '', '', '', '', false]);
+    expect([vanlig.type, vanlig.variant, vanlig.versjon, vanlig.vekter.totalvekt.a, vanlig.ombygging.nyttKjoretoy]).toEqual(['GT-Line', 'AWD', '7-seter', '3000', true]);
+  });
+  it('en kun-ordre som primær er aldri kilde: de andre bilene i flåten beholder sine verdier', async () => {
+    oppsett(true);
+    flate.primaerOrdreId = K_ID; vanlig.flateId = 'flate_P'; vanlig.type = 'BEHOLDES';
+    app.settDb(null);
+    await sandbox.synkroniserFraPrimaer(K_ID);
+    expect(vanlig.type).toBe('BEHOLDES');
+    expect(primaer.type).toBe('GT-Line');
+  });
+  it('flåtekonteksten for Vegvesen-dokumenter har ikke kun-ordren som medlem, og kun-ordren selv har ingen kontekst (en vanlig flåte er som før)', () => {
+    oppsett(true);
+    const k = sandbox.vegvesenFlateKontext(primaer);
+    expect(k.medlemmer.map((x) => x.id)).toEqual([P_ID]);
+    expect(sandbox.vegvesenFlateKontext(kun)).toBeNull();
+    vanlig.flateId = 'flate_P';
+    expect(sandbox.vegvesenFlateKontext(primaer).medlemmer.map((x) => x.id).sort()).toEqual([P_ID, V_ID]);
+  });
+  it('ombyggingslinjen legges aldri på fakturaen til en kun-ordre, selv om et Nytt Kjøretøy-flagg skulle stå der (en vanlig ordre får linjen som før)', () => {
+    oppsett(true);
+    const kall = []; sandbox.oppdaterFikenLinjeForOppskrift = (nr, aktiv, id) => { kall.push([nr, aktiv, id]); };
+    kun.ombygging = { ...alleAv(), nyttKjoretoy: true };
+    sandbox.synkroniserOmbyggingFikenLinjer(kun);
+    expect(kall).toEqual([]);
+    sandbox.synkroniserOmbyggingFikenLinjer(primaer);
+    expect(kall.some(([nr, aktiv]) => nr === '500' && aktiv === true)).toBe(true);
+  });
+  it('å åpne en kun-ordre med Nytt Kjøretøy-flagg legger ingen ombyggingslinje på den (buildOrdreDetail)', () => {
+    oppsett(true);
+    const kall = []; sandbox.oppdaterFikenLinjeForOppskrift = (nr, aktiv, id) => { kall.push([nr, aktiv, id]); };
+    kun.ombygging = { ...alleAv(), nyttKjoretoy: true };
+    detalj(kun);
+    expect(kall.filter(([, aktiv]) => aktiv)).toEqual([]);
+  });
+});
+
+describe('«🔍 Søk» (reg.nr-oppslag) på en kun-ordre skriver ikke til skjulte felt', () => {
+  const KJENT = { merke: 'KIA', modell: 'EV9', aar: '2024', chassis: 'TESTWXYZ0000000R1' };
+  const oppslag = (data = KJENT) => { sandbox.edgeFetch = async () => ({ ok: true, status: 200, json: async () => data }); };
+  const tom = (over = {}) => lagOrdre(kunRad({ merke: '', modell: '', type: '', versjon: '', variant: '', chassis: '', flate_id: null, ...over }));
+  beforeEach(() => { sandbox.save = () => {}; sandbox.buildOrdreDetail = () => {}; sandbox.visToast = () => {}; oppslag(); });
+
+  it('kun-ordre: Merke og Modell fylles (de vises), Type og Versjon røres ikke (de er skjult), chassis fylles', async () => {
+    const o = tom(); S.ordrer = [o];
+    await sandbox.slaOppRegnr(o.id);
+    expect([o.merke, o.modell, o.type, o.versjon, o.chassis]).toEqual(['KIA', 'EV9', '', '', 'TESTWXYZ0000000R1']);
+    expect(sandbox.ordreToDb(o)).toMatchObject({ type: '', versjon: '' }); // det som ville blitt skrevet til databasen
+  });
+  it('kun-ordre: et Merke/Modell noen har skrevet inn overskrives ikke, bare det som er tomt fylles', async () => {
+    const o = tom({ merke: 'Kia', modell: '' }); S.ordrer = [o];
+    await sandbox.slaOppRegnr(o.id);
+    expect([o.merke, o.modell]).toEqual(['Kia', 'EV9']);
+  });
+  it('vanlig ordre: Type og Versjon fylles som før, og Merke/Modell røres ikke', async () => {
+    const o = tom({ kun_ekstrautstyr: false }); S.ordrer = [o];
+    await sandbox.slaOppRegnr(o.id);
+    expect([o.merke, o.modell, o.type, o.versjon, o.chassis]).toEqual(['', '', 'KIA EV9', '2024', 'TESTWXYZ0000000R1']);
+  });
+  it('«Funnet»-meldingen skrives til elementet som finnes ETTER at detaljen er tegnet på nytt (det gamle sitter ikke lenger i siden)', async () => {
+    for (const kun of [true, false]) {
+      const o = tom({ kun_ekstrautstyr: kun }); S.ordrer = [o];
+      const gen = { n: 0 }; const elementer = {};
+      const origGet = sandbox.document.getElementById;
+      sandbox.buildOrdreDetail = () => { gen.n++; };
+      sandbox.document.getElementById = (id) => (String(id).startsWith('regnrStatus_') ? (elementer[gen.n] ??= { innerHTML: '' }) : origGet(id));
+      try { await sandbox.slaOppRegnr(o.id); } finally { sandbox.document.getElementById = origGet; }
+      expect(gen.n, 'omtegninger').toBe(1);
+      expect(elementer[1].innerHTML, `kun=${kun}`).toContain('Funnet: KIA EV9 2024');
+    }
+  });
+  it('ikke funnet: meldingen står i det eksisterende elementet, og ordren er uendret', async () => {
+    sandbox.edgeFetch = async () => ({ ok: false, status: 404, json: async () => ({ error: 'Ikke funnet' }) });
+    const o = tom(); S.ordrer = [o];
+    await sandbox.slaOppRegnr(o.id);
+    expect([o.merke, o.modell, o.type, o.versjon, o.chassis]).toEqual(['', '', '', '', '']);
+    expect(sandbox.document.getElementById('regnrStatus_' + o.id).innerHTML).toContain('Ikke funnet');
+  });
+});
+
+describe('«+ Ny ordre» med «Kun ekstrautstyr»: Type, Variant, Versjon og Farge er ikke med', () => {
+  const HTML = readFileSync(path.join(__dirname, '../salmakern.html'), 'utf8');
+  const verdier = { n_regnr: '', n_chassis: 'TESTWXYZ0000000F1', n_kunde: 'TEST Forhandler AS', n_eier: '', n_merke: 'KIA', n_type: 'GT-Line', n_modell: 'EV9', n_variant: 'AWD', n_farge: 'Hvit', n_versjon: '2024', n_dato: '', n_status: 'ikke_paabegynt' };
+  const fyllSkjema = (kun, chassis) => {
+    for (const [id, v] of Object.entries({ ...verdier, n_chassis: chassis })) sandbox.document.getElementById(id).value = v;
+    sandbox.document.getElementById('n_kunEkstrautstyr').checked = kun;
+  };
+  beforeEach(() => { sandbox.edgeFetch = async () => ({ ok: true, status: 200, text: async () => '{}', json: async () => ({}) }); sandbox.openOrdre = () => {}; sandbox.renderAll = () => {}; sandbox.closeModal = () => {}; });
+
+  it('opprettOrdre tar ikke med det som står i de skjulte feltene for en kun-ordre (Merke og Modell blir), men gjør det for en vanlig ordre', () => {
+    const { db, kall } = lagDb(); app.settDb(db);
+    fyllSkjema(true, 'TESTWXYZ0000000F1'); sandbox.opprettOrdre();
+    const kun = S.ordrer.find((x) => x.chassis === 'TESTWXYZ0000000F1');
+    expect(kun.kunEkstrautstyr).toBe(true);
+    expect([kun.merke, kun.modell]).toEqual(['KIA', 'EV9']);
+    expect([kun.type, kun.variant, kun.versjon, kun.farge]).toEqual(['', '', '', '']);
+    const ins = kall.filter((k) => k.tabell === 'ordrer' && k.kall.some(([m]) => m === 'insert')).map((k) => k.kall.find(([m]) => m === 'insert')[1][0]);
+    expect(ins[0]).toMatchObject({ type: '', variant: '', versjon: '', farge: '' });
+    fyllSkjema(false, 'TESTWXYZ0000000F2'); sandbox.opprettOrdre();
+    const vanlig = S.ordrer.find((x) => x.chassis === 'TESTWXYZ0000000F2');
+    expect([vanlig.type, vanlig.variant, vanlig.versjon, vanlig.farge]).toEqual(['GT-Line', 'AWD', '2024', 'Hvit']);
+  });
+  it('oppdaterNyOrdreKunFelt skjuler Type, Variant, Versjon og Farge når avkrysningen er på, og viser dem igjen når den tas av', () => {
+    const vis = () => ['n_felt_type', 'n_felt_variant', 'n_felt_farge', 'n_felt_versjon'].map((i) => sandbox.document.getElementById(i).style.display);
+    sandbox.document.getElementById('n_kunEkstrautstyr').checked = true;
+    sandbox.oppdaterNyOrdreKunFelt();
+    expect(vis()).toEqual(['none', 'none', 'none', 'none']);
+    sandbox.document.getElementById('n_kunEkstrautstyr').checked = false;
+    sandbox.oppdaterNyOrdreKunFelt();
+    expect(vis()).toEqual(['', '', '', '']);
+  });
+  it('skjemaet: feltene ligger i egne elementer som avkrysningen styrer, Merke og Modell står utenfor, og teksten under avkrysningen sier hva som er enklere', () => {
+    for (const [wrap, felt] of [['n_felt_type', 'n_type'], ['n_felt_variant', 'n_variant'], ['n_felt_farge', 'n_farge'], ['n_felt_versjon', 'n_versjon']]) {
+      const m = new RegExp(`<div[^>]*id="${wrap}"[^>]*>([\\s\\S]*?)</div>\\s*(?:<div class="felt-wrap"|</div>)`).exec(HTML);
+      expect(m, wrap).not.toBeNull();
+      expect(m[1], wrap).toContain(`id="${felt}"`);
+    }
+    for (const felt of ['n_merke', 'n_modell']) expect(HTML).not.toMatch(new RegExp(`id="n_felt_[a-z]+"[^>]*>\\s*<label>[^<]*</label>\\s*<input id="${felt}"`));
+    expect(HTML).toMatch(/<input type="checkbox" id="n_kunEkstrautstyr" onchange="oppdaterNyOrdreKunFelt\(\)"/);
+    expect(HTML).toContain('Enklere ordre med bare statusene På vei, Ikke påbegynt, Påbegynt og Klar for henting, uten Type, Variant, Versjon og Farge.');
+  });
+  it('apneNyOrdreModal og tilbakestillingen etter opprettelse viser feltene igjen', () => {
+    const { db } = lagDb(); app.settDb(db);
+    fyllSkjema(true, 'TESTWXYZ0000000F3'); sandbox.oppdaterNyOrdreKunFelt();
+    sandbox.opprettOrdre(); // nullstiller avkrysningen
+    expect(sandbox.document.getElementById('n_kunEkstrautstyr').checked).toBe(false);
+    expect(sandbox.document.getElementById('n_felt_type').style.display).toBe('');
+    sandbox.document.getElementById('n_kunEkstrautstyr').checked = true; sandbox.oppdaterNyOrdreKunFelt();
+    sandbox.document.getElementById('n_kunEkstrautstyr').checked = false; // Avbryt lar avkrysningen stå, men et nytt åpnet skjema skal alltid være konsistent
+    sandbox.apneNyOrdreModal();
+    expect(sandbox.document.getElementById('n_felt_versjon').style.display).toBe('');
+  });
+  it('reg.nr-oppslaget i skjemaet (🔍 Søk) fyller Merke og Modell (bare tomme) for en kun-ordre, og Type og Versjon for en vanlig ordre', async () => {
+    sandbox.Event = function Event() {};
+    sandbox.edgeFetch = async () => ({ ok: true, status: 200, json: async () => ({ merke: 'KIA', modell: 'EV9', aar: '2024', chassis: 'TESTWXYZ0000000F4' }) });
+    const sett = (kun, merke) => { for (const [id, v] of Object.entries({ n_regnr: 'AB12345', n_merke: merke, n_modell: '', n_type: '', n_versjon: '' })) sandbox.document.getElementById(id).value = v; sandbox.document.getElementById('n_kunEkstrautstyr').checked = kun; };
+    sett(true, '');
+    await sandbox.slaOppRegnrNyOrdre();
+    const v = (id) => sandbox.document.getElementById(id).value;
+    expect([v('n_merke'), v('n_modell'), v('n_type'), v('n_versjon'), v('n_chassis')]).toEqual(['KIA', 'EV9', '', '', 'TESTWXYZ0000000F4']);
+    sett(true, 'Kia');
+    await sandbox.slaOppRegnrNyOrdre();
+    expect([v('n_merke'), v('n_modell')]).toEqual(['Kia', 'EV9']);
+    sett(false, '');
+    await sandbox.slaOppRegnrNyOrdre();
+    expect([v('n_merke'), v('n_modell'), v('n_type'), v('n_versjon')]).toEqual(['', '', 'KIA EV9', '2024']);
+  });
+});
+
+describe('kun-ordre og lager/Admin-ark: lukkede ordrer er ikke «i arbeid», og sletting rører ikke bilens Admin-ark-rad', () => {
+  it('Materialbehov: delene til en lukket (arkivert) kun-ordre, en lukket leveranse og en lukket Hentet-bil telles ikke som bundet opp, men en aktiv ordre gjør det', () => {
+    S.lagervarer = ['A', 'B', 'C', 'D', 'E'].map((x) => ({ id: 'vare_' + x, navn: 'TEST Vare ' + x, antall: 5, enhet: 'stk' }));
+    const ordrer = [
+      lagOrdre(kunRad({ id: 'ord_1700000000061', chassis: 'TESTWXYZ0000000M1', kun_ekstrautstyr: false, ordre_status: 'paabegynt' })),
+      lagOrdre(kunRad({ id: 'ord_1700000000062', chassis: 'TESTWXYZ0000000M2', ordre_status: 'klar_henting', status: 'arkivert', godkjent: true })),
+      lagOrdre(kunRad({ id: 'ord_1700000000063', chassis: 'TESTWXYZ0000000M3', kun_ekstrautstyr: false, ordre_status: 'hentet', status: 'arkivert' })),
+      lagOrdre({ id: 'ord_1700000000064', ordretype: 'leveranse', status: 'arkivert', ordre_status: 'sendt', leveranse: { merking: 'TEST' } }),
+      lagOrdre(kunRad({ id: 'ord_1700000000065', chassis: 'TESTWXYZ0000000M5', ordre_status: 'klar_henting' })), // aktiv kun-ordre: teller (den er ikke lukket)
+    ];
+    S.ordrer = ordrer;
+    S.lagerhistorikk = ordrer.map((o, i) => ({ id: 'h' + i, ordreId: o.id, oppskriftId: 'opp_' + i, vareId: 'vare_' + 'ABCDE'[i], endring: -(i + 1) }));
+    sandbox.renderMaterialbehov();
+    const html = sandbox.document.getElementById('materialbehovListe').innerHTML;
+    expect(html).toContain('TEST Vare A');
+    expect(html).toContain('TEST Vare E');
+    for (const v of ['B', 'C', 'D']) expect(html, v).not.toContain('TEST Vare ' + v);
+  });
+
+  describe('slettOrdre', () => {
+    const AAR = new Date().getFullYear();
+    const CH = 'TESTWXYZ0000000S1';
+    const oppsett = () => {
+      const bil = lagOrdre(kunRad({ id: 'ord_1700000000071', chassis: CH, kun_ekstrautstyr: false, flate_id: null, ankomstdato: `${AAR}-03-01` }));
+      const kun = lagOrdre(kunRad({ id: 'ord_1700000000072', chassis: CH, flate_id: null, ankomstdato: `${AAR}-11-10` }));
+      const lev = lagOrdre({ id: 'ord_1700000000073', ordretype: 'leveranse', status: 'aktiv', ordre_status: 'under_arbeid', chassis: CH, ankomstdato: `${AAR}-11-10`, leveranse: { merking: 'TEST' } });
+      S.ordrer = [bil, kun, lev]; S.timer = [];
+      S.adminArk = [{ id: 'ark_1', aar: AAR, chassisNr: CH }];
+      sandbox.renderAll = () => {}; sandbox.tilbakeOrdreList = () => {};
+      const { db, kall } = lagDb(); db.storage.from = () => ({ remove: async () => ({ error: null }), list: async () => ({ data: [], error: null }) }); app.settDb(db);
+      return { bil, kun, lev, kall };
+    };
+    const adminArkSlettet = (kall) => kall.filter((k) => k.tabell === 'admin_ark' && k.kall.some(([m]) => m === 'delete')).length;
+    it('å slette en kun-ordre med samme chassis.nr og år som en bil sletter ikke bilens Admin-ark-rad', () => {
+      const { kun, kall } = oppsett();
+      sandbox.slettOrdre(kun.id);
+      expect(S.ordrer.some((o) => o.id === kun.id)).toBe(false);
+      expect(S.adminArk.length).toBe(1);
+      expect(adminArkSlettet(kall)).toBe(0);
+    });
+    it('det samme gjelder en leveranse', () => {
+      const { lev, kall } = oppsett();
+      sandbox.slettOrdre(lev.id);
+      expect(S.adminArk.length).toBe(1);
+      expect(adminArkSlettet(kall)).toBe(0);
+    });
+    it('kontroll: å slette selve bil-ordren tar Admin-ark-raden med seg som før', () => {
+      const { bil, kall } = oppsett();
+      sandbox.slettOrdre(bil.id);
+      expect(S.adminArk.length).toBe(0);
+      expect(adminArkSlettet(kall)).toBe(1);
+    });
+  });
+});
+
+describe('gjenopprett bilder fra Storage for en kun-ordre: bare Levering (ankomst, skader og manglende deler er ikke med i ordren)', () => {
+  const fotoDb = () => {
+    const { db, kall } = lagDb();
+    db.storage.from = () => ({ list: async () => ({ data: [{ name: 'a_0.jpg' }, { name: 's_1.jpg' }, { name: 'l_2.jpg' }], error: null }), getPublicUrl: (sti) => ({ data: { publicUrl: 'https://eksempel.test/' + sti } }) });
+    app.settDb(db);
+    return kall;
+  };
+  const tomme = { bilder_ankomst: [null, null, null, null, null, null], bilder_levering: [null, null, null, null, null, null], bilder_avstand_skader: [null, null, null] };
+  it('kun-ordre: Levering gjenopprettes, ankomst og avstand/skader røres ikke', async () => {
+    sandbox.save = () => {}; sandbox.buildOrdreDetail = () => {}; sandbox.visToast = () => {};
+    const o = lagOrdre(kunRad({ ...tomme })); S.ordrer = [o]; fotoDb();
+    await sandbox.gjenopprettFotos(o.id);
+    expect(o.bilderLevering[2]).toBe(`https://eksempel.test/${o.id}/l_2.jpg`);
+    expect(o.bilderAnkomst.some(Boolean)).toBe(false);
+    expect(o.bilderAvstandSkader.some(Boolean)).toBe(false);
+  });
+  it('kontroll: en vanlig ordre får alle tre gjenopprettet som før', async () => {
+    sandbox.save = () => {}; sandbox.buildOrdreDetail = () => {}; sandbox.visToast = () => {};
+    const o = lagOrdre(kunRad({ ...tomme, kun_ekstrautstyr: false })); S.ordrer = [o]; fotoDb();
+    await sandbox.gjenopprettFotos(o.id);
+    expect([!!o.bilderAnkomst[0], !!o.bilderAvstandSkader[1], !!o.bilderLevering[2]]).toEqual([true, true, true]);
+  });
+});
+
+describe('effektiv tid (Bil-effektivitet) fryses for en kun-ordre når den er Klar for henting (den kan ikke bli Hentet)', () => {
+  const FROSSET = { totalMs: 3600000, perAnsatt: [{ navn: 'TEST - Admin', ms: 3600000 }] };
+  const oppsett = (over = {}) => {
+    const o = lagOrdre(kunRad({ ordre_status: 'paabegynt', flate_id: null, ...over })); S.ordrer = [o];
+    const { db, kall } = lagDb(); app.settDb(db);
+    sandbox.visToast = () => {}; sandbox.renderAll = () => {}; sandbox.buildOrdreDetail = () => {};
+    sandbox.effektivOrdreTidPerAnsattMs = async () => FROSSET;
+    return { o, kall };
+  };
+  it('kun-ordre: Klar for henting fryser tallet (og skriver det), og flyttes den tilbake nullstilles frysingen', async () => {
+    const { o, kall } = oppsett();
+    await sandbox.endreStatus(o.id, 'klar_henting');
+    expect(o.effektivTidFrossen).toMatchObject({ totalMs: 3600000 });
+    expect(oppdateringer(kall).find((u) => 'ordre_status' in u).effektiv_tid_frossen).toMatchObject({ totalMs: 3600000 });
+    await sandbox.endreStatus(o.id, 'paabegynt');
+    expect(o.effektivTidFrossen).toBeNull();
+  });
+  it('kun-ordre: andre statuser fryser ikke', async () => {
+    const { o } = oppsett({ ordre_status: 'paa_vei' });
+    await sandbox.endreStatus(o.id, 'ikke_paabegynt');
+    expect(o.effektivTidFrossen).toBeNull();
+  });
+  it('kontroll: en vanlig bil fryses ved Hentet som før, ikke ved Klar for henting', async () => {
+    const { o } = oppsett({ kun_ekstrautstyr: false });
+    await sandbox.endreStatus(o.id, 'klar_henting');
+    expect(o.effektivTidFrossen).toBeNull();
+    await sandbox.endreStatus(o.id, 'hentet');
+    expect(o.effektivTidFrossen).toMatchObject({ totalMs: 3600000 });
+  });
+  it('badgen sier «ordren er klar for henting» for en kun-ordre og «bilen er hentet» for en vanlig bil', async () => {
+    S.standardtider = { EV9: { ombygging: 600 } };
+    try {
+      for (const [kun, tekst] of [[true, 'Tiden er frosset (ordren er klar for henting)'], [false, 'Tiden er frosset (bilen er hentet)']]) {
+        const o = lagOrdre(kunRad({ kun_ekstrautstyr: kun, ordre_status: kun ? 'klar_henting' : 'hentet', flate_id: null })); o.effektivTidFrossen = { ...FROSSET, frossetVed: '2026-11-19T10:00:00Z' }; S.ordrer = [o];
+        await sandbox.renderBilEffektivitetBadge(o);
+        expect(sandbox.document.getElementById('bilEffektivitetBadge_' + o.id).innerHTML, `kun=${kun}`).toContain(tekst);
+      }
+    } finally { delete S.standardtider; }
+  });
+});
+
+describe('ordrekortene i Ordre-lista og på Oversikt viser ikke det som ikke er med i en kun-ordre', () => {
+  const html = () => {
+    app.settAktivOrdre(null);
+    const liste = medOpptak(app, () => sandbox.renderOrdreList()).ordreListeResultat;
+    const oversikt = Object.values(medOpptak(app, () => sandbox.renderOversikt())).join('\n');
+    return { liste, oversikt };
+  };
+  it('kun-ordre (med gamle data i de skjulte feltene): ingen COC/Fullmakt/flåte, ingen Drivstoff-rad, ingen hengerfeste, ingen variant/farge', () => {
+    S.ordrer = [lagOrdre(kunRad({ ordre_status: 'paabegynt', coc: 'har_ikke', fullmakt: 'har_ikke' }))];
+    const { liste, oversikt } = html();
+    expect(liste).toContain('KUN EKSTRAUTSTYR');
+    for (const s of ['COC:', 'Fullmakt:', 'Flåte', 'flåte', 'Drivstoff', 'Hengerfeste', 'AWD', 'Hvit']) expect(liste, 'Ordre-lista: ' + s).not.toContain(s);
+    expect(liste).toContain('Tilvalg'); // resten av kortet er som før
+    expect(oversikt).toContain('KUN EKSTRAUTSTYR');
+    for (const s of ['Flåte', 'flåte', 'Farge:', 'Hvit']) expect(oversikt, 'Oversikt: ' + s).not.toContain(s);
+  });
+  it('Oversikt (ventende): ingen flåte og ingen farge for en kun-ordre', () => {
+    S.ordrer = [lagOrdre(kunRad({ ordre_status: 'ikke_paabegynt' }))];
+    const { oversikt } = html();
+    expect(oversikt).toContain('KUN EKSTRAUTSTYR');
+    for (const s of ['Flåte', 'flåte', 'Farge:']) expect(oversikt, s).not.toContain(s);
+  });
+  it('kontroll: den samme ordren uten kun-flagget har alt dette på kortene', () => {
+    S.ordrer = [lagOrdre(kunRad({ kun_ekstrautstyr: false, ordre_status: 'paabegynt', coc: 'har_ikke', fullmakt: 'har_ikke' }))];
+    const { liste, oversikt } = html();
+    for (const s of ['COC: Mangler', 'Fullmakt: Mangler', 'TEST-FLÅTE-1', 'Drivstoff', 'Hengerfeste', 'AWD · Hvit']) expect(liste, 'Ordre-lista: ' + s).toContain(s);
+    for (const s of ['TEST-FLÅTE-1', 'Farge: Hvit']) expect(oversikt, 'Oversikt: ' + s).toContain(s);
+  });
+});
+
+describe('sw.js og dokumentasjonen følger endringen', () => {
+  const SW = readFileSync(path.join(__dirname, '../sw.js'), 'utf8');
+  const CLAUDE = readFileSync(path.join(__dirname, '../CLAUDE.md'), 'utf8');
+  it('CACHE er bumpet med en kommentar for denne endringen (v100 eller nyere), og CLAUDE.md nevner samme versjon', () => {
+    const cache = Number(/const CACHE = 'salmakern-v(\d+)'/.exec(SW)[1]);
+    const kommentar = /\/\/ v(\d+) - «Kun ekstrautstyr»/.exec(SW);
+    expect(kommentar, 'sw.js har en kommentarlinje «// vN - «Kun ekstrautstyr»...»').not.toBeNull();
+    const dennesVersjon = Number(kommentar[1]);
+    expect(dennesVersjon).toBeGreaterThanOrEqual(100); // origin/main sto på v99 da denne endringen ble klargjort
+    expect(cache).toBeGreaterThanOrEqual(dennesVersjon);
+    const avsnitt = /\*\*Enklere ordre \(2026-11-19[\s\S]*?\*\*Test\*\*[^\n]*/.exec(CLAUDE);
+    expect(avsnitt, 'CLAUDE.md har avsnittet «Enklere ordre»').not.toBeNull();
+    expect(avsnitt[0]).toContain(`\`sw.js\` CACHE v${dennesVersjon}`);
   });
 });
 

@@ -180,7 +180,9 @@ function slettOrdre(id) {
   // aldri finner tilbake til noen ordre (og dukker opp i Helsesjekk som om det var en
   // skrivefeil, når det egentlig bare er rester etter en slettet ordre).
   const aar = o.ankomstdato ? Number(String(o.ankomstdato).slice(0,4)) : null;
-  const arkRad = o.chassis ? (S.adminArk||[]).find(r => r.aar === aar && samsvarerChassis(r.chassisNr, o.chassis)) : null;
+  // En «kun ekstrautstyr»-ordre og en leveranse har aldri en Admin-ark-rad (de er utelatt der), men kan ha samme chassis.nr som en bil som har det: da ville raden til BILEN
+  // blitt slettet sammen med dem (funnet 2026-11-19).
+  const arkRad = (o.chassis && !erLeveranse(o) && !erKunEkstrautstyr(o)) ? (S.adminArk||[]).find(r => r.aar === aar && samsvarerChassis(r.chassisNr, o.chassis)) : null;
 
   // Var denne ordren PRIMÆR i en flåte, gjør den som ligger rett under den i samme
   // sorterte rekkefølge som vises i flåte-detaljen til ny primær - fins ingen "under",

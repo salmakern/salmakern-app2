@@ -124,7 +124,7 @@ function renderOrdreList() {
                <div style="margin-top:1px">${o.chassis?`<span style="${CHASSIS_HEL_STIL};font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:15px;font-weight:800;letter-spacing:-.2px">${esc(o.chassis)}</span>`:'<b style="font-size:15px">Uten reg.nr</b>'}</div>`}
           ${o.kunde?`<div class="small muted" style="margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:0;min-width:100%">${esc(o.kunde)}</div>`:''}
           ${o.portalBestillingId?`<div style="margin-top:5px">${portalBadgeHTML(o)}</div>`:''}
-          ${(o.variant||o.farge)?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
+          ${(!erKunEkstrautstyr(o) && (o.variant||o.farge))?`<div class="small muted" style="margin-top:3px">${esc(o.variant||'')}${o.farge?' · '+esc(o.farge):''}</div>`:''}
         </div>
         ${statusDropdown(o.id, o.ordreStatus, 'border-width:1px;border-radius:999px;padding:5px 10px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', 'ordre-status-dropdown')}
       </div>
@@ -144,10 +144,10 @@ function renderOrdreList() {
             <span class="muted" style="min-width:54px">Tilvalg</span>
             <span style="color:${o.utstyr?.skalHa?'#f4f4f5':'#71717a'}">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</span>
           </div>
-          <div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
+          ${erKunEkstrautstyr(o) ? '' : `<div style="display:flex;align-items:baseline;gap:8px;font-size:12.5px">
             <span class="muted" style="min-width:54px">Drivstoff</span>
             <span style="color:${drivstoffTekst?'#f4f4f5':'#71717a'}">${drivstoffTekst||'—'}</span>
-          </div>
+          </div>`}
         </div>
       </div>
 
@@ -223,7 +223,7 @@ function renderOversikt(q) {
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}${kunEkstrautstyrBadgeHTML(o)}</div>
           ${ansatteSignertChipHTML(o)}
           ${meldPaaKnappHTML(o)}
-          ${o.farge?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
+          ${(o.farge && !erKunEkstrautstyr(o))?`<div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Farge: ${esc(o.farge)}</div>`:''}
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">Ankomst: ${o.ankomstdato||'—'}</div>
           <div class="small muted" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.utstyr?.skalHa?esc(o.utstyr.skalHa).replace(/\n/g,', '):'Ingen tilvalg'}</div>
           <div class="small" onclick="openOrdre('${o.id}',false,true)" style="cursor:pointer">${o.kalenderDato?'📅 '+o.kalenderDato+' '+o.kalenderTid+(o.tidBiltilsynetSted?' · '+esc(o.tidBiltilsynetSted):''):'Ikke i kalender'}</div>
@@ -248,7 +248,7 @@ function renderOversikt(q) {
           <div style="display:flex;justify-content:flex-start;align-items:center;gap:8px;flex-wrap:wrap">${flateKortHTML(o)}${skalHaBadgeHTML(o)}${portalBadgeHTML(o)}${kunEkstrautstyrBadgeHTML(o)}</div>
           ${ansatteSignertChipHTML(o)}
           ${meldPaaKnappHTML(o)}
-          ${o.farge?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
+          ${(o.farge && !erKunEkstrautstyr(o))?`<div class="small muted">Farge: ${esc(o.farge)}</div>`:''}
           ${o.ankomstdato?`<div class="small muted">Ankomst: ${o.ankomstdato}</div>`:''}
           ${o.utstyr?.skalHa?`<div class="small muted" style="margin-top:2px">${esc(o.utstyr.skalHa).replace(/\n/g,', ')}</div>`:''}
           <div style="margin-top:8px;display:flex;gap:6px">
@@ -690,12 +690,14 @@ async function endreStatus(id, nyStatus) {
   // som en kostnad (timesats × tid) uten en ny DB-spørring hver gang ordren åpnes (s09-020,
   // Henrik "ja legg det til" 2026-11-04). Flyttes bilen bort fra Hentet igjen, nullstilles
   // frysingen - den er da ikke lenger "ferdig", og badgen skal vise levende tall igjen.
-  if (nyStatus === 'hentet') {
+  // «Kun ekstrautstyr» (Henrik 2026-11-19) kan ikke bli «Hentet» (bare fire statuser), så der fryses tallet når ordren er Klar for henting (siste status før den arkiveres).
+  const frysStatus = erKunEkstrautstyr(o) ? 'klar_henting' : 'hentet';
+  if (nyStatus === frysStatus) {
     try {
       const { totalMs, perAnsatt } = await effektivOrdreTidPerAnsattMs(o);
       o.effektivTidFrossen = { totalMs, perAnsatt, frossetVed: new Date().toISOString() };
     } catch (e) { console.warn('Kunne ikke fryse effektiv tid:', e); }
-  } else if (forrigeStatus === 'hentet') {
+  } else if (forrigeStatus === 'hentet' || forrigeStatus === frysStatus) {
     o.effektivTidFrossen = null;
   }
   logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
@@ -842,6 +844,7 @@ function settHengerfesteBestilt(id, val) {
   save(id); renderAll();
 }
 function hengerfesteKortHTML(o) {
+  if (erKunEkstrautstyr(o)) return ''; // «Kun ekstrautstyr» (Henrik 2026-11-19): hengerfeste er ikke med i ordren
   if (o.utstyr?.hengerfeste !== 'hengerfeste') return '';
   // Kun selve nummeret fra "Forhandler.nr"-feltet (ordre-detalj.js) vises her, rett ved
   // siden av Hengerfeste-pillen - og KUN når hengerfeste faktisk er huket av (bedt om av
@@ -877,6 +880,7 @@ function skalHaBadgeHTML(o) {
 // Viser om ordren står i en flåte eller ikke, og hvilken - på selve ordrekortet (ikke
 // bare inne i ordredetaljen), bedt om av Henrik 2026-09-17 for bedre oversikt i listene.
 function flateKortHTML(o) {
+  if (erKunEkstrautstyr(o)) return ''; // «Kun ekstrautstyr» (Henrik 2026-11-19): flåte er ikke med i ordren
   const f = o.flateId ? (S.flater||[]).find(x=>x.id===o.flateId) : null;
   return f
     ? `<span class="pill info" style="font-size:11px;margin:0;white-space:nowrap">Flåte ${esc(f.flatenummer)}</span>`
@@ -907,6 +911,8 @@ function dokStatusPillHTML(label, verdi) {
 // tidligere egen rad sammen med Hengerfeste) - naturlig plassering siden alle tre er
 // kompakte status-piller for ordren, ikke fordi Flåte er en "dokumentstatus" i seg selv.
 function dokStatusKortHTML(o) {
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): COC og Fullmakt er ikke med i ordren (nedtrekkene er borte), så en rød «Mangler»-pille som ikke kan rettes skal heller ikke stå på kortet.
+  if (erKunEkstrautstyr(o)) return '';
   return `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:2px">${dokStatusPillHTML('COC', o.coc)}${dokStatusPillHTML('Fullmakt', o.fullmakt)}${flateKortHTML(o)}</div>`;
 }
 // Kompakt fremdriftsindikator for tvangsflyt-kravene på ordrekortene - samme

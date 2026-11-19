@@ -1289,6 +1289,9 @@ function kanoniskMerkeModell(o) {
 // kalle på hvert eneste render uten å skape unødvendige lagringer.
 function synkroniserOmbyggingFikenLinjer(o) {
   if (!o.ombygging) return;
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): ingen ombygging. Et ombyggingsflagg kan likevel komme fra en flåte (leggOrdreIFlate/synkroniserFraPrimaer setter nyttKjoretoy),
+  // og da skal ombyggingslinjen aldri havne på fakturaen til en kun-ordre.
+  if (o.kunEkstrautstyr === true) return;
   const erOmbyggingValgt = !!(o.ombygging.nyttKjoretoy || o.ombygging.bruktKjoretoy);
   const kan = kanoniskMerkeModell(o);
   const modell = finnFikenOmbyggingModell(kan.merke, kan.modell, o.portalModellSlug);
@@ -1346,7 +1349,9 @@ function sfOmbygging(id, felt, val) {
 const _kunEkstrautstyrPagar = new Set();
 async function settKunEkstrautstyr(id, val) {
   const o = S.ordrer.find(x => x.id === id); if (!o || erLeveranse(o)) return;
-  const tegnPaaNytt = () => { if (activeOrdreId === id) buildOrdreDetail(); renderAll(); };
+  // Avkrysningen er en INPUT inne i #ordreDetail og beholder fokus etter et museklikk i Edge/Chrome, og buildOrdreDetail() hopper over omtegningen mens et INPUT/SELECT/
+  // TEXTAREA i detaljen har fokus: de kortene som skal skjules/vises og statusnedtrekket ble da stående som før. Samme grunn som blur() i endreStatus().
+  const tegnPaaNytt = () => { if (document.activeElement?.tagName === 'INPUT') document.activeElement.blur(); if (activeOrdreId === id) buildOrdreDetail(); renderAll(); };
   if (_kunEkstrautstyrPagar.has(id)) { visToast('Vent litt, forrige endring lagres fortsatt.'); tegnPaaNytt(); return; }
   val = !!val;
   if (val === !!o.kunEkstrautstyr) return;
@@ -1372,10 +1377,21 @@ async function settKunEkstrautstyr(id, val) {
     }
     logChange(o, val ? 'Merket som kun ekstrautstyr (ingen ombygging)' : 'Ikke lenger kun ekstrautstyr');
   } finally { _kunEkstrautstyrPagar.delete(id); }
+  if (!val) fyllInnForhandlerDataHvisTomt(id); // FØR omtegningen, så Forhandler.nr, org.nr og fullmakt står i skjermbildet
   tegnPaaNytt();
-  // «Skal på bilen»: ombyggingsraden forsvinner/kommer tilbake. Bevisst handling, så et allerede trukket ombyggingsoppsett kan legges tilbake (tillatAngre).
-  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) synkProduktliste(o, { tillatAngre: true }).then(() => { if (activeOrdreId === id) renderSkalPaaBilen(id); }).catch(e => console.error('synkProduktliste:', e));
+  // «Skal på bilen»: ombyggingsraden forsvinner/kommer tilbake. Slås avkrysningen AV, er det en bevisst handling og delene kan legges tilbake (tillatAngre). Slås den PÅ, legges
+  // ingenting tilbake: sjekklista styrer ikke lenger radene, så en rad den ga (og som delene alt er trukket for, og fakturalinjen står på) forsvinner, men det er ikke
+  // et valg om å fjerne utstyret fra bilen. Uten dette ble delene lagt tilbake på lager mens fakturalinjen ble stående (funnet 2026-11-19).
+  if (typeof erNyProduktliste === 'function' && erNyProduktliste(o)) synkProduktliste(o, { tillatAngre: !val }).then(() => { if (activeOrdreId === id) renderSkalPaaBilen(id); }).catch(e => console.error('synkProduktliste:', e));
   if (!val) autoVelgUtstyrMal(id); // tilbake til vanlig ordre: samme automatiske utstyrsmal som en ny ordre får (gjør ingenting hvis en mal alt er valgt)
+}
+// «Kun ekstrautstyr» slått AV igjen (Henrik 2026-11-19): en ordre som ble laget som kun-ordre fikk aldri Forhandler.nr, org.nr og fullmakt (autoFyllForhandler* hopper over
+// en kun-ordre), og ingenting retter det før Forhandler-feltet endres på nytt. Fyller derfor bare det som er TOMT: en verdi noen har tastet inn overskrives aldri.
+function fyllInnForhandlerDataHvisTomt(id) {
+  const o = S.ordrer.find(x=>x.id===id); if (!o || o.kunEkstrautstyr === true || !(o.kunde||'').trim()) return;
+  if (!(o.utstyr?.forhandlerNr||'').trim()) autoFyllForhandlerNr(id);
+  if (!(o.forhandlerOrgnr||'').trim()) autoFyllForhandlerOrgnr(id);
+  if (o.fullmakt !== 'har') autoFyllForhandlerFullmakt(id); // legger bare til en fullmakt som ikke alt er der, og nedgraderer aldri
 }
 
 // ════════════════════════════════════════════════════
@@ -1788,12 +1804,15 @@ function autoFyllForhandlerFullmakt(id) {
 // støy).
 function varsleHvisForhandlerDataMangler(id) {
   const o = S.ordrer.find(x=>x.id===id); if (!o || !(o.kunde||'').trim()) return;
-  if (o.kunEkstrautstyr === true) return; // «Kun ekstrautstyr» (Henrik 2026-11-19): Forhandler.nr, org.nr og fullmakt er ikke med i ordren, så en advarsel om dem er meningsløs
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): Forhandler.nr, org.nr og fullmakt er ikke med i ordren, så en advarsel om dem er meningsløs og «mangler»-grenen hoppes over.
+  // Kunden BLIR derimot i kundekortet og brukes til fakturering (kundens rabatt hentes via Kontakter), så stavekontrollen av navnet gjelder fortsatt.
+  const kun = o.kunEkstrautstyr === true;
   const forhandlerKontakt = (S.kontakter||[]).find(k => k.type==='Forhandler' && (k.navn||'').trim().toLowerCase() === o.kunde.trim().toLowerCase());
   if (!forhandlerKontakt) {
-    visToast(`Fant ingen forhandler med navnet "${o.kunde}" i Kontakter - sjekk stavemåten, eller legg den til der. Forhandler.nr/org.nr/fullmakt fylles ikke ut automatisk.`);
+    visToast(`Fant ingen forhandler med navnet "${o.kunde}" i Kontakter - sjekk stavemåten, eller legg den til der.${kun ? '' : ' Forhandler.nr/org.nr/fullmakt fylles ikke ut automatisk.'}`);
     return;
   }
+  if (kun) return;
   const mangler = [];
   if (!forhandlerKontakt.forhandlerNr) mangler.push('Forhandler.nr');
   if (!forhandlerKontakt.orgnr) mangler.push('org.nr');
@@ -1994,10 +2013,13 @@ async function sv(id,k,col,val) {
 // (samme fire-and-forget-mønster som før), bare selve funksjonen er nå async.
 async function synkroniserFraPrimaer(id) {
   const primaer = S.ordrer.find(x=>x.id===id); if (!primaer) return;
+  // «Kun ekstrautstyr» (Henrik 2026-11-19): type/variant/versjon/vekter/typegodkjenning er ikke med i en kun-ordre. Den skal verken være kilde (tomme felt ville overskrevet de andre
+  // bilene i flåten) eller mottaker (skjulte felt skrives ikke).
+  if (erKunEkstrautstyr(primaer)) return;
   const flater = (S.flater||[]).filter(f => f.primaerOrdreId === id);
   if (!flater.length) return;
   for (const f of flater) {
-    for (const o of (S.ordrer||[]).filter(x => x.flateId===f.id && x.id!==id)) {
+    for (const o of (S.ordrer||[]).filter(x => x.flateId===f.id && x.id!==id && !erKunEkstrautstyr(x))) {
       // En flåte er alltid Nytt Kjøretøy, og typegodkjenningsnummeret er likt for alle
       // bilene i den (bekreftet av Henrik 2026-10-15) - uten dette måtte Nytt Kjøretøy
       // krysses av for hånd på hver enkelt sekundærbil for at DENS EGEN Fiken-fakturalinje

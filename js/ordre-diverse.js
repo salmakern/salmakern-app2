@@ -700,7 +700,7 @@ async function renderBilEffektivitetBadge(o) {
     <div class="small" style="color:${vurdering.farge};margin-top:2px">${vurdering.label}</div>
     ${nedbrytning}
     ${kostnadHTML}
-    <div class="small muted" style="margin-top:4px">${frossen ? 'Tiden er frosset (bilen er hentet) og endrer seg ikke lenger' : 'Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka'}</div>`;
+    <div class="small muted" style="margin-top:4px">${frossen ? `Tiden er frosset (${o.kunEkstrautstyr === true ? 'ordren er klar for henting' : 'bilen er hentet'}) og endrer seg ikke lenger` : 'Brukt tid er faktisk tid stemplet inn, ikke rå kalendertid på klokka'}</div>`;
 }
 // Historisk snitt per modell (alle ferdigstilte biler, ikke bare denne måneden) - til hjelp
 // når admin skal avgjøre/justere standardtiden for en modell under Mer → Standardtider
@@ -762,6 +762,7 @@ function apneNyOrdreModal() {
   const statusFelt = document.getElementById('n_status');
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
   oppdaterNyOrdreStatusFelt();
+  oppdaterNyOrdreKunFelt();
   document.getElementById('n_farge').innerHTML = fargeSelectOptions('');
   document.getElementById('n_merke_forslag').innerHTML = feltForslagHTML('n_merke', merkeForslag());
   renderModellForslag('n_merke','n_modell','n_modell_forslag');
@@ -808,21 +809,24 @@ function opprettOrdre() {
   const ankomstdato = startStatus === 'paa_vei' ? '' : (document.getElementById('n_dato').value||new Date().toISOString().split('T')[0]);
 
   const id='ord_'+Date.now();
+  // «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17): ordreToDb skriver aldri kolonnen, så den legges til i insert-en under (bare når den er på).
+  // Henrik 2026-11-19: Type, Variant, Versjon og Farge er ikke med i en slik ordre (feltene skjules i skjemaet), så det som står der (skjult) tas ikke med.
+  const kunNy = !!document.getElementById('n_kunEkstrautstyr')?.checked;
+  const nyVerdi = f => kunNy ? '' : document.getElementById(f).value.trim();
   const ny=mkOrdre(id,regnr,
     document.getElementById('n_kunde').value.trim(),
     document.getElementById('n_eier').value.trim(),
-    document.getElementById('n_type').value.trim(),
-    document.getElementById('n_variant').value.trim(),
+    nyVerdi('n_type'),
+    nyVerdi('n_variant'),
     ankomstdato,'','','','',startStatus);
   ny.merke   = document.getElementById('n_merke').value.trim();
-  ny.type    = document.getElementById('n_type').value.trim();
+  ny.type    = nyVerdi('n_type');
   ny.modell  = document.getElementById('n_modell').value.trim();
-  ny.versjon = document.getElementById('n_versjon').value.trim();
-  ny.farge   = document.getElementById('n_farge').value.trim();
+  ny.versjon = nyVerdi('n_versjon');
+  ny.farge   = nyVerdi('n_farge');
   ny.chassis = chassis;
   ny._localAt = Date.now();
-  // «Kun ekstrautstyr (ingen ombygging)» (Henrik 2026-11-17): ordreToDb skriver aldri kolonnen, så den legges til i insert-en under (bare når den er på).
-  ny.kunEkstrautstyr = !!document.getElementById('n_kunEkstrautstyr')?.checked;
+  ny.kunEkstrautstyr = kunNy;
   // Samme oppslag som autoFyllForhandlerNr()/autoFyllForhandlerOrgnr() bruker på
   // detaljsiden - uten dette sto Forhandler.nr/Org.nr alltid tomt på en fersk ordre inntil
   // Forhandler-feltet ble rørt på nytt.
@@ -863,6 +867,7 @@ function opprettOrdre() {
   const kunFelt = document.getElementById('n_kunEkstrautstyr');
   if (kunFelt) kunFelt.checked = false;
   oppdaterNyOrdreStatusFelt();
+  oppdaterNyOrdreKunFelt();
   openOrdre(id);
   autoVelgUtstyrMal(id); // gjør ingenting for en «kun ekstrautstyr»-ordre (se autoVelgUtstyrMal)
 }
@@ -873,6 +878,12 @@ function oppdaterNyOrdreStatusFelt() {
   const paaVei = document.getElementById('n_status')?.value === 'paa_vei';
   const wrap = document.getElementById('n_dato_wrap');
   if (wrap) wrap.style.display = paaVei ? 'none' : '';
+}
+// «Kun ekstrautstyr» (Henrik 2026-11-19): Type, Variant, Versjon og Farge er ikke med i en slik ordre, så de skjules i skjemaet når avkrysningen er på (opprettOrdre() tar dem
+// uansett ikke med). Verdiene blir stående i feltene, så de er tilbake hvis avkrysningen tas av igjen.
+function oppdaterNyOrdreKunFelt() {
+  const kun = !!document.getElementById('n_kunEkstrautstyr')?.checked;
+  ['n_felt_type', 'n_felt_variant', 'n_felt_farge', 'n_felt_versjon'].forEach(i => { const el = document.getElementById(i); if (el) el.style.display = kun ? 'none' : ''; });
 }
 
 // ════════════════════════════════════════════════════
@@ -1071,8 +1082,15 @@ async function slaOppRegnr(ordreId) {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Ikke funnet');
     const { merke, modell, aar, chassis } = data;
-    if (merke)   { o.type    = merke+(modell?' '+modell:''); }
-    if (aar)     { o.versjon = aar; }
+    if (erKunEkstrautstyr(o)) {
+      // «Kun ekstrautstyr» (Henrik 2026-11-19): Type og Versjon er ikke med i ordren (skjulte felt skrives ikke). Det som vises er Merke og Modell, så de fylles ut (bare hvis tomme:
+      // et navn noen har skrevet inn overskrives ikke, siden appen slår opp utstyr og priser på akkurat det).
+      if (merke && !(o.merke||'').trim()) o.merke = merke;
+      if (modell && !(o.modell||'').trim()) o.modell = modell;
+    } else {
+      if (merke)   { o.type    = merke+(modell?' '+modell:''); }
+      if (aar)     { o.versjon = aar; }
+    }
     // Chassis-nr skal alltid være nøyaktig 17 tegn i denne appen (se sf()) - Statens
     // vegvesen sitt understellsnummer-felt kan i sjeldne tilfeller være kortere/lengre
     // (eldre/spesialkjøretøy), så vi lar heller det eksisterende feltet stå enn å bryte
@@ -1080,7 +1098,9 @@ async function slaOppRegnr(ordreId) {
     if (chassis && chassis.length === 17) { o.chassis = chassis; }
     logChange(o, 'Bilinfo hentet fra Statens vegvesen: '+merke+' '+modell);
     save(ordreId); buildOrdreDetail();
-    if(statusEl) statusEl.innerHTML=`<span style="color:#86efac">✔ Funnet: ${esc(merke)} ${esc(modell)} ${esc(aar)}</span>`;
+    // buildOrdreDetail() bytter ut hele detaljen, så meldingen må skrives til det NYE elementet (det gamle sitter ikke lenger i siden).
+    const statusElNa = document.getElementById('regnrStatus_'+ordreId) || statusEl;
+    if(statusElNa) statusElNa.innerHTML=`<span style="color:#86efac">✔ Funnet: ${esc(merke)} ${esc(modell)} ${esc(aar)}</span>`;
   } catch(e) {
     if(statusEl) statusEl.innerHTML='<span style="color:#fca5a5">Ikke funnet – fyll inn manuelt</span>';
   }
@@ -1101,15 +1121,22 @@ async function slaOppRegnrNyOrdre() {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Ikke funnet');
     const { merke, modell, aar, chassis } = data;
-    const typeInput = document.getElementById('n_type');
-    if (merke && typeInput) {
-      typeInput.value = merke+(modell?' '+modell:'');
-      // Trigger samme oninput-kjede som når man skriver selv, slik at Variant/Versjon
-      // sine forslagslister oppdaterer seg til det som faktisk hører til denne typen.
-      typeInput.dispatchEvent(new Event('input', {bubbles:true}));
+    if (document.getElementById('n_kunEkstrautstyr')?.checked) {
+      // «Kun ekstrautstyr» (Henrik 2026-11-19): Type og Versjon er skjult og ikke med i ordren, så oppslaget fyller Merke og Modell (bare hvis tomme).
+      const merkeInput = document.getElementById('n_merke'), modellInput = document.getElementById('n_modell');
+      if (merke && merkeInput && !merkeInput.value.trim()) merkeInput.value = merke;
+      if (modell && modellInput && !modellInput.value.trim()) modellInput.value = modell;
+    } else {
+      const typeInput = document.getElementById('n_type');
+      if (merke && typeInput) {
+        typeInput.value = merke+(modell?' '+modell:'');
+        // Trigger samme oninput-kjede som når man skriver selv, slik at Variant/Versjon
+        // sine forslagslister oppdaterer seg til det som faktisk hører til denne typen.
+        typeInput.dispatchEvent(new Event('input', {bubbles:true}));
+      }
+      const versjonInput = document.getElementById('n_versjon');
+      if (aar && versjonInput) versjonInput.value = aar;
     }
-    const versjonInput = document.getElementById('n_versjon');
-    if (aar && versjonInput) versjonInput.value = aar;
     if (chassis && chassis.length === 17) {
       const chassisInput = document.getElementById('n_chassis');
       if (chassisInput) chassisInput.value = chassis;
@@ -1237,6 +1264,8 @@ async function gjenopprettFotos(id) {
     const side = deler[0];
     const idx = parseInt(deler[1]);
     if (isNaN(idx) || idx < 0 || idx > 5 || !FOTO_SIDER[side]) return;
+    // «Kun ekstrautstyr» (Henrik 2026-11-19): ankomst- og skadebilder (og manglende deler) er ikke med i ordren, så bare Levering gjenopprettes.
+    if (erKunEkstrautstyr(o) && side !== 'l') return;
     const { data } = db.storage.from('bilder').getPublicUrl(`${id}/${fil.name}`);
     const url = data.publicUrl;
     const felt = FOTO_SIDER[side].felt;
