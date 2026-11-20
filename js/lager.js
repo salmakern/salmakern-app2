@@ -1685,9 +1685,17 @@ async function leggTilPortalUtstyrLinjer(ordreId) {
     oppdaterSkalHaForOppskrift(linje.navn, true, ordreId);
     const finnes = (o.fikenLinjer||[]).some(l=>l.produktnummer===linje.produktnummer);
     if (finnes || !db) continue;
+    // Pengefelle rettet 20.11: en portal-linje UTEN rabatt_prosent (feltet mangler helt) fikk
+    // tidligere rabatt:0 sendt eksplisitt - det LÅSER linjen til 0 % i fiken-fakturer (samme
+    // sjekk som l.rabatt frosset av en ekte avtalt rabatt, se erLaastRabatt der), i stedet for
+    // å bli behandlet som "ingen frosset rabatt" og falle tilbake til kundens vanlige
+    // kategori-sats (portal_kunde_rabatt/fiken_kunde_rabatt, med NULL-sjekken intakt). Nøkkelen
+    // utelates derfor helt når feltet ikke er et tall - linjen blir da IKKE "frosset".
+    const pLinje = { produktnummer: linje.produktnummer, antall: 1 };
+    if (typeof linje.rabatt_prosent === 'number') pLinje.rabatt = linje.rabatt_prosent;
     const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', {
       p_ordre_id: o.id, p_produktnummer: linje.produktnummer,
-      p_linje: { produktnummer: linje.produktnummer, antall: 1, rabatt: typeof linje.rabatt_prosent === 'number' ? linje.rabatt_prosent : 0 }
+      p_linje: pLinje
     });
     if (error) {
       console.error('Kunne ikke legge til fakturalinje fra portal-bestilling:', error.message);

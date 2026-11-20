@@ -68,11 +68,12 @@ describe('leggTilPortalUtstyrLinjer', () => {
     expect(o.fikenLinjer.map((l) => l.produktnummer)).toEqual(['501', '502']);
   });
 
-  it('mangler rabatt_prosent: sendes som 0, ikke undefined/NaN', async () => {
+  it('mangler rabatt_prosent: rabatt-nøkkelen utelates helt (IKKE sendt som 0) - rettet 20.11, en eksplisitt 0 låste linjen til 0% rabatt i fiken-fakturer i stedet for kundens vanlige sats', async () => {
     const o = nyOrdre({ portalLinjer: [{ produktnummer: '503', navn: 'Heldekkende gulv' }] });
     const { sandbox, rpcKall } = nyttMiljo(o);
     await sandbox.leggTilPortalUtstyrLinjer('ord_1');
-    expect(rpcKall[0][1].p_linje.rabatt).toBe(0);
+    expect(rpcKall[0][1].p_linje).toEqual({ produktnummer: '503', antall: 1 });
+    expect('rabatt' in rpcKall[0][1].p_linje).toBe(false);
   });
 
   it('linje uten produktnummer eller uten navn: hoppes helt over (ingen RPC, ingen skalHa-tekst)', async () => {

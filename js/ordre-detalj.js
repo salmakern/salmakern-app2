@@ -807,16 +807,36 @@ function fakturaSjekk(o) {
   const medOppskriftId = (o.fikenLinjer || []).map(l => String(l && l.produktnummer || '')).filter(nr => nr.startsWith('oppskrift_'));
   if (medOppskriftId.length) leggTil('oppskrift_id_paa_faktura', `Fakturalinje med en oppskrifts-id i stedet for et produktnummer (${medOppskriftId.join(', ')}) - fjern den før fakturering`, 'rod');
 
-  // S.fikenKundeAlias/S.fikenKundeRabatt lastes i loadFromSupabase() (kun lesbare for admin via
-  // RLS - uendret for andre roller, de kan ikke fakturere uansett). Kan være udefinert/tomt
-  // (f.eks. gammel PWA-cache uten denne lastingen ennå) - da hoppes denne delen bare over,
-  // akkurat som portalModellKobling allerede gjør ved feilende lasting.
+  // S.fikenKundeAlias/S.fikenKundeRabatt/S.portalKundeRabatt lastes i loadFromSupabase() (kun
+  // lesbare for admin via RLS - uendret for andre roller, de kan ikke fakturere uansett). Kan
+  // være udefinert/tomt (f.eks. gammel PWA-cache uten denne lastingen ennå) - da hoppes denne
+  // delen bare over, akkurat som portalModellKobling allerede gjør ved feilende lasting.
   const alias = o.kunde ? (S.fikenKundeAlias||[]).find(a => a.alias === o.kunde) : null;
   if (o.kunde && (S.fikenKundeAlias||[]).length && !alias) {
     leggTil('ukjent_fiken_kunde', 'Ukjent kunde i Fiken ennå - må velges manuelt ved fakturering', 'gul');
-  } else if (alias) {
+  }
+  // Rabattkilde: Forhandlerportalen (via o.forhandlerKontaktId, s08-004) er FØRSTE kilde - speiler
+  // nøyaktig fiken-fakturer/index.ts sin egen rekkefølge siden 13.11 (s08-063 fase 2), som denne
+  // lampe-sjekken tidligere IKKE så i det hele tatt (så den kunne vise feil farge begge veier).
+  // Samme kontakt_id kan stå på flere portal_forhandler_id-rader (delt Kontakter-kontakt, f.eks.
+  // BOS-gruppen) - server-kallet sitt .maybeSingle() ville da feilet stille og falt tilbake til
+  // lokal rabatt, så "nøyaktig ett treff" her speiler akkurat det (ikke "minst ett").
+  let rabattRad = null;
+  let rabattKilde = 'lokal';
+  if (o.forhandlerKontaktId) {
+    const portalTreff = (S.portalKundeRabatt||[]).filter(r => r.kontakt_id === o.forhandlerKontaktId);
+    if (portalTreff.length === 1) {
+      rabattRad = { rabatt_ombygging: portalTreff[0].rabatt_standard, rabatt_ekstra_utstyr: portalTreff[0].rabatt_ekstrautstyr };
+      rabattKilde = 'portal';
+    }
+  }
+  if (!rabattRad && alias) {
+    rabattRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id) || null;
+  }
+  // Uten portaltreff og uten kjent Fiken-alias er det ingenting å sjekke fullstendigheten av
+  // (uendret: samme vilkår - "kjenner vi i det hele tatt en rabattkilde for denne kunden" - som før).
+  if (rabattKilde === 'portal' || alias) {
     const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
-    const rabattRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
     if (manglerFrossetRabatt && !rabattRad) {
       leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
     } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
@@ -826,7 +846,8 @@ function fakturaSjekk(o) {
       // i slik serveren gjør (klienten har ikke nødvendigvis Fiken sitt produktnavn
       // tilgjengelig), så den kan varsle noen ordre som i praksis ikke rammes - det er en
       // bevisst avveining: heller varsle for mye enn å vise et falskt grønt lys.
-      leggTil('rabatt_kategori_mangler', 'Kundens rabatt er ikke fullstendig satt i Fiken-rabatt (minst én kategori står tomt, ikke 0 %) - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist', 'rod');
+      const settStedet = rabattKilde === 'portal' ? 'i Forhandlerportalen for denne forhandleren' : 'i Fiken-rabatt';
+      leggTil('rabatt_kategori_mangler', `Kundens rabatt er ikke fullstendig satt ${settStedet} (minst én kategori står tomt, ikke 0 %) - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist`, 'rod');
     }
   }
 

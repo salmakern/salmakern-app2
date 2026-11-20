@@ -469,6 +469,101 @@ describe('fakturaSjekk', () => {
   });
 });
 
+// Rettet 2026-11-20 (bug 1 fra en uavhengig lese-økt): fakturaSjekk() så FØR dette ALDRI på
+// o.forhandlerKontaktId/portal_kunde_rabatt - bare S.fikenKundeAlias/S.fikenKundeRabatt (den
+// gamle, hånd-vedlikeholdte tabellen). Selve faktureringen (fiken-fakturer/index.ts) har siden
+// 13.11 brukt portal_kunde_rabatt som FØRSTE kilde når ordren har en forhandler-kontakt - lampa
+// kunne derfor vise feil farge begge veier. Disse testene speiler «rabatt fra Forhandlerportalen»-
+// beskrivelsen i test/fiken-fakturer-rabatt.test.js, men på klientsiden.
+describe('fakturaSjekk: rabattkilde - Forhandlerportalen (portal_kunde_rabatt) er FØRSTE kilde når forhandlerKontaktId er satt', () => {
+  function basisOrdre(overrides = {}) {
+    return {
+      id: 'ord_1', merke: 'KIA', modell: 'EV9', kunde: 'Test Kunde AS', ordreStatus: 'klar_henting',
+      ombygging: { nyttKjoretoy: false, bruktKjoretoy: false },
+      // Ingen frosset rabatt på linjen - "manglerFrossetRabatt" skal være sann, slik at
+      // rabattkilde-logikken faktisk blir prøvd (speiler mønsteret i beskrivelsen over).
+      fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high' }],
+      ...overrides,
+    };
+  }
+
+  it('forhandlerKontaktId + nøyaktig ett treff i portal_kunde_rabatt: bruker portalens rabatt_standard/rabatt_ekstrautstyr, IKKE fiken_kunde_rabatt (selv om den finnes og ville gitt et annet svar)', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    // Lokal rabatt har BEGGE kategorier NULL (ville gitt rød hvis den var blitt brukt).
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: null }];
+    env.S.portalKundeRabatt = [{ kontakt_id: 'k18', rabatt_standard: 30, rabatt_ekstrautstyr: 15 }];
+    const o = basisOrdre({ forhandlerKontaktId: 'k18' });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk).toEqual({ niva: 'gronn', grunner: [] });
+  });
+
+  it('forhandlerKontaktId satt, men INGEN rad i portal_kunde_rabatt: faller tilbake til fiken_kunde_rabatt-via-alias som før', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
+    env.S.portalKundeRabatt = [];
+    const o = basisOrdre({ forhandlerKontaktId: 'k18' });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk).toEqual({ niva: 'gronn', grunner: [] });
+  });
+
+  it('forhandlerKontaktId deles av FLERE rader i portal_kunde_rabatt (f.eks. BOS-gruppen): regnes som «ingen entydig treff», faller tilbake til fiken_kunde_rabatt (speiler at .maybeSingle() ville feilet server-side)', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
+    env.S.portalKundeRabatt = [
+      { kontakt_id: 'k18', rabatt_standard: 30, rabatt_ekstrautstyr: 15 },
+      { kontakt_id: 'k18', rabatt_standard: 0, rabatt_ekstrautstyr: 0 },
+    ];
+    const o = basisOrdre({ forhandlerKontaktId: 'k18' });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk).toEqual({ niva: 'gronn', grunner: [] });
+  });
+
+  it('ordre UTEN forhandlerKontaktId: helt uendret - ser aldri på S.portalKundeRabatt, selv om en rad der ville matchet på annet grunnlag', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+    env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: 10 }];
+    env.S.portalKundeRabatt = [{ kontakt_id: 'k18', rabatt_standard: 30, rabatt_ekstrautstyr: 15 }];
+    const o = basisOrdre(); // ingen forhandlerKontaktId
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.niva).toBe('rod');
+    expect(sjekk.grunner.find((g) => g.kode === 'rabatt_kategori_mangler').tekst).toContain('i Fiken-rabatt');
+  });
+
+  it('portal-raden har én kategori NULL: rød, teksten sier tydelig «i Forhandlerportalen for denne forhandleren» (ikke «i Fiken-rabatt»)', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [];
+    env.S.fikenKundeRabatt = [];
+    env.S.portalKundeRabatt = [{ kontakt_id: 'k18', rabatt_standard: null, rabatt_ekstrautstyr: 15 }];
+    const o = basisOrdre({ forhandlerKontaktId: 'k18' });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.niva).toBe('rod');
+    const grunn = sjekk.grunner.find((g) => g.kode === 'rabatt_kategori_mangler');
+    expect(grunn.tekst).toContain('i Forhandlerportalen for denne forhandleren');
+    expect(grunn.tekst).not.toContain('i Fiken-rabatt');
+  });
+
+  it('forhandlerKontaktId + portal-rad finnes, men linjen har en FROSSET rabatt: ingen advarsel (trenger ikke portalsatsen uansett)', () => {
+    const env = nyEnvironment();
+    env.S.portalKundeRabatt = [{ kontakt_id: 'k18', rabatt_standard: null, rabatt_ekstrautstyr: null }];
+    const o = basisOrdre({ forhandlerKontaktId: 'k18', fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high', rabatt: 20 }] });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(false);
+  });
+
+  it('forhandlerKontaktId satt, ingen portal-rad og ingen kjent Fiken-alias: ingen rabatt-sjekk kjøres (ingenting å sjekke fullstendigheten av, uendret fra før)', () => {
+    const env = nyEnvironment();
+    env.S.fikenKundeAlias = [];
+    env.S.fikenKundeRabatt = [];
+    env.S.portalKundeRabatt = [];
+    const o = basisOrdre({ forhandlerKontaktId: 'k18' });
+    const sjekk = env.fakturaSjekk(o);
+    expect(sjekk.grunner.some((g) => g.kode === 'ingen_avtalt_rabatt' || g.kode === 'rabatt_kategori_mangler')).toBe(false);
+  });
+});
+
 // fakturerViaFiken bruker nå fakturaSjekk() for selve blokkeringen (samme funksjon som "Klar
 // til fakturering"-lista viser) - dekker at den faktiske GATEN er rettet, ikke bare at
 // fakturaSjekk() i isolasjon er riktig (se testene over).

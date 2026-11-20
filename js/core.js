@@ -560,6 +560,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.hmsStoffkartotek     = S.hmsStoffkartotek     || [];
     S.fikenKundeAlias      = S.fikenKundeAlias      || [];
     S.fikenKundeRabatt     = S.fikenKundeRabatt     || [];
+    S.portalKundeRabatt    = S.portalKundeRabatt    || [];
     S.hmsVernerunder       = S.hmsVernerunder       || [];
     S.hmsVernerundeMal     = S.hmsVernerundeMal     || null;
     S.hmsHandbok           = S.hmsHandbok           || null;
@@ -633,7 +634,7 @@ function beregnNextId(ansatte, timer, utstyrMaler) {
 
 async function loadFromSupabase() {
   const lastStart = Date.now();
-  const [aR,oR,tR,sR,pmkR,fkaR,fkrR,ppR] = await Promise.all([
+  const [aR,oR,tR,sR,pmkR,fkaR,fkrR,ppR,pkrR] = await Promise.all([
     db.from('ansatte').select('*').order('id'),
     hentAlleRader(() => db.from('ordrer').select('*').order('created_at').order('id')),
     hentAlleRader(() => db.from('timer_entries').select('*').order('created_at',{ascending:false}).order('id')),
@@ -645,7 +646,12 @@ async function loadFromSupabase() {
     db.from('fiken_kunde_alias').select('alias, fiken_contact_id'),
     db.from('fiken_kunde_rabatt').select('fiken_contact_id, rabatt_ombygging, rabatt_ekstra_utstyr'),
     // Trinn 2 «Én produktliste»: ombyggingsnumrene per modell fra Forhandlerportalen (bare radene med en rolle, ca. 20).
-    db.from('portal_produkter').select('portal_id, type, modell_slug, variant_portal_id, fiken_nummer, nummer_status, navn, app_rolle, velges_nar, hentet_at')
+    db.from('portal_produkter').select('portal_id, type, modell_slug, variant_portal_id, fiken_nummer, nummer_status, navn, app_rolle, velges_nar, hentet_at'),
+    // Portalens forhandlerrabatter (hent-rabatter-fra-portalen, 5.11) - samme kilde fiken-fakturer har
+    // brukt som FØRSTE kilde siden 13.11 (via ordrer.forhandler_kontakt_id). fakturaSjekk() må se den
+    // samme kilden, ellers kan «Klar til fakturering»-lampa vise feil farge begge veier (s08-063, rettet 2026-11-20).
+    // Kun lesbar for admin (RLS), samme begrunnelse som fiken_kunde_alias/fiken_kunde_rabatt over.
+    db.from('portal_kunde_rabatt').select('kontakt_id, rabatt_standard, rabatt_ekstrautstyr')
   ]);
   // VIKTIG: må sjekkes for ALLE spørringer, ikke bare ansatte - hvis f.eks. ordre-
   // spørringen feiler forbigående (nettverksglipp, sesjonsfornyelse etter lang pause
@@ -674,6 +680,8 @@ async function loadFromSupabase() {
   S.fikenKundeAlias = fkaR.data || [];
   if (fkrR.error) console.error('Henting av fiken_kunde_rabatt feilet:', fkrR.error.message);
   S.fikenKundeRabatt = fkrR.data || [];
+  if (pkrR.error) console.error('Henting av portal_kunde_rabatt feilet:', pkrR.error.message);
+  S.portalKundeRabatt = pkrR.data || [];
   S.ansatte   = (aR.data||[]).map(a=>({...a, kanForeLonn: a.kan_fore_lonn !== false, stempletInnSiden: a.stemplet_inn_siden||null}));
   const prevOrdrer = S.ordrer ? [...S.ordrer] : [];
   const prevTimer  = S.timer  ? [...S.timer]  : [];
