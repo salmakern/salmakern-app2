@@ -1062,3 +1062,50 @@ describe('fiken-fakturer: atomisk reservasjon hindrer dobbel kladd ved to (neste
     expect(draftKall).toHaveLength(0); // aldri en kladd mot en allerede fastlåst sentinel
   });
 });
+
+// KGM Rexton: 2400 (standard) og 2401 (Lafinto) er to varianter av SAMME ombygging og skal aldri stå på samme faktura
+// (Henrik 2026-11-20). Serveren avviser før kunde-oppslag, reservasjon og Fiken-kallet.
+describe('fiken-fakturer: to varianter av samme ombygging (Rexton 2400/2401) avvises', () => {
+  const REXTON_STANDARD = { productId: 2400, productNumber: '2400', name: 'Varebilombygging av Rexton', incomeAccount: '3010' };
+  const REXTON_LAFINTO = { productId: 2401, productNumber: '2401', name: 'Varebilombyyging av KGM Rexton - Lafinto', incomeAccount: '3010' };
+  const produkter = [...ALLE_PRODUKTER, REXTON_STANDARD, REXTON_LAFINTO];
+  function svarMed(linjer) {
+    return {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 10, rabatt_ekstra_utstyr: 10 }, error: null },
+      ordrer: { data: { fiken_kladd_url: null, fiken_linjer: linjer }, error: null },
+    };
+  }
+
+  it('begge numrene på ordren: 400 med tydelig feil, ingen reservasjon, ingen kladd, ordren urørt', async () => {
+    const svar = svarMed([linje('2400', { rabatt: 10 }), linje('2401')]);
+    const api = await last({ svar, produkter });
+    const res = await api.kall(standardBody([]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toBe('Både 2400 og 2401 står i fakturagrunnlaget - de er to varianter av samme ombygging. Fjern den ene før fakturering.');
+    expect(api.draftKall).toHaveLength(0);
+    expect(api.eqKall.filter((k) => k.type === 'claim')).toHaveLength(0);
+    // Ingen oppslag etter ordre-lesingen (kunde, rabatt): avvist før noe annet skjer.
+    expect(api.eqKall.map((k) => k.tabell)).toEqual(['ordrer']);
+    expect(svar.ordrer.data.fiken_kladd_url).toBeNull();
+  });
+
+  it('numre lagret som tall (2400/2401) avvises også', async () => {
+    const svar = svarMed([linje(2400), linje(2401)]);
+    const api = await last({ svar, produkter });
+    const res = await api.kall(standardBody([]));
+    expect(res.status).toBe(400);
+    expect(api.draftKall).toHaveLength(0);
+  });
+
+  it.each([['2400'], ['2401']])('bare %s: faktureres som vanlig', async (nr) => {
+    const svar = svarMed([linje(nr)]);
+    const api = await last({ svar, produkter });
+    const res = await api.kall(standardBody([]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201);
+    expect(api.draftKall).toHaveLength(1);
+  });
+});

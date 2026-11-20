@@ -227,6 +227,140 @@ describe('synkroniserOmbyggingFikenLinjer - KGM Rexton "Lafinto" (2401) erstatte
   });
 });
 
+// Henrik 2026-11-20: portalens variant med frosset (avtalt) rabatt vinner ALLTID over Nytt/Brukt/Lafinto-avkrysningen. Står
+// 2400 eller 2401 med frosset rabatt (leggTilPortalUtstyrLinjer), legges den andre varianten aldri til ved siden av.
+describe('synkroniserOmbyggingFikenLinjer - Rexton: en variant med frosset rabatt vinner over avkrysningen', () => {
+  function rexton(env, ombygging, fikenLinjer) {
+    const o = { id: 'ord_rex', merke: 'KGM', modell: 'Rexton', ombygging: { nyttKjoretoy: false, bruktKjoretoy: false, lafinto: false, personbil: false, ...ombygging }, fikenLinjer };
+    // En ANNEN ordre er den aktive: synken må bruke ordrens egen id, ikke activeOrdreId.
+    env.S.ordrer = [o, { id: 'ord_annen', fikenLinjer: [] }];
+    env.activeOrdreId = 'ord_annen';
+    return o;
+  }
+  const numre = o => o.fikenLinjer.map(l => l.produktnummer).sort();
+
+  it('2401 frosset fra portalen, Nytt huket av (ikke Lafinto): 2400 legges IKKE til, 2401 står urørt', () => {
+    const env = nyEnvironment();
+    const o = rexton(env, { nyttKjoretoy: true }, [{ produktnummer: '2401', antall: 1, rabatt: 15, pris: 100000 }]);
+    env.synkroniserOmbyggingFikenLinjer(o);
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2401']);
+    expect(o.fikenLinjer[0]).toEqual({ produktnummer: '2401', antall: 1, rabatt: 15, pris: 100000 });
+    expect(env.S.ordrer[1].fikenLinjer).toEqual([]);
+    expect(env.fakturaSjekk({ ...o, kunde: 'X' }).grunner.some(g => g.kode === 'dobbel_ombygging')).toBe(false);
+  });
+
+  it('2400 frosset fra portalen, Lafinto huket av: 2401 legges IKKE til, 2400 står urørt', () => {
+    const env = nyEnvironment();
+    const o = rexton(env, { bruktKjoretoy: true, lafinto: true }, [{ produktnummer: '2400', antall: 1, rabatt: 0 }]);
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2400']);
+    expect(o.fikenLinjer[0].rabatt).toBe(0); // 0 % er også en frosset rabatt
+    expect(env.S.ordrer[1].fikenLinjer).toEqual([]); // ingenting havnet på den aktive (andre) ordren
+  });
+
+  it('2400 frosset, Lafinto huket av, og DENNE ordren er den aktive: 2401 legges fortsatt ikke til', () => {
+    const env = nyEnvironment();
+    const o = rexton(env, { nyttKjoretoy: true, lafinto: true }, [{ produktnummer: '2400', antall: 1, rabatt: 10 }]);
+    env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2400']);
+  });
+
+  it('2401 frosset og en ufrosset 2400 står fra før: 2400 fjernes, portalvarianten blir alene', () => {
+    const env = nyEnvironment();
+    const o = rexton(env, { nyttKjoretoy: true }, [{ produktnummer: '2400', antall: 1 }, { produktnummer: '2401', antall: 1, rabatt: 15 }]);
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2401']);
+  });
+
+  it('samme sperre når numrene kommer fra portalens roller (S.portalProduktRoller)', () => {
+    const env = nyEnvironment();
+    env.S.portalProduktRoller = [
+      { modell_slug: 'kgm-rexton', app_rolle: 'ombygging', fiken_nummer: '2400' },
+      { modell_slug: 'kgm-rexton', app_rolle: 'lafinto', fiken_nummer: '2401' },
+    ];
+    const o = rexton(env, { nyttKjoretoy: true }, [{ produktnummer: '2401', antall: 1, rabatt: 15 }]);
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2401']);
+  });
+
+  it('ingen frosset rabatt: bytter fritt mellom 2400 og 2401 etter avkrysningen, som før', () => {
+    const env = nyEnvironment();
+    const o = rexton(env, { nyttKjoretoy: true }, [{ produktnummer: '2401', antall: 1 }]);
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2400']);
+    o.ombygging.lafinto = true;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2401']);
+    o.ombygging.lafinto = false;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(numre(o)).toEqual(['2400']);
+  });
+
+  it('en frosset ombyggingslinje på en modell UTEN Lafinto (EV9) hindrer ikke noe: personbil legges til som før', () => {
+    const env = nyEnvironment();
+    const o = { id: 'ord_ev9', merke: 'KIA', modell: 'EV9', ombygging: { nyttKjoretoy: true, personbil: true }, fikenLinjer: [{ produktnummer: '500', antall: 1, rabatt: 20 }] };
+    env.S.ordrer = [o]; env.activeOrdreId = o.id;
+    env.synkroniserOmbyggingFikenLinjer(o);
+    expect(o.fikenLinjer.map(l => l.produktnummer).sort()).toEqual(['500', '524']);
+  });
+});
+
+// Rexton: 2400 og 2401 på samme faktura er alltid feil (to varianter av samme ombygging). fakturaSjekk gir rødt, og
+// fakturerViaFiken stopper før edge-funksjonen kalles (som selv avviser det samme).
+describe('fakturaSjekk / fakturerViaFiken: dobbel ombygging (Rexton 2400 + 2401)', () => {
+  const ordre = (linjer, ekstra = {}) => ({
+    id: 'ord_rex', merke: 'KGM', modell: 'Rexton', kunde: 'Test Kunde AS', ordreStatus: 'klar_henting',
+    ombygging: { nyttKjoretoy: true }, fikenLinjer: linjer, ...ekstra,
+  });
+
+  it('begge numrene: rød med koden dobbel_ombygging og begge numrene i teksten', () => {
+    const env = nyEnvironment();
+    const sjekk = env.fakturaSjekk(ordre([{ produktnummer: '2400', antall: 1, pris: 1, rabatt: 10 }, { produktnummer: '2401', antall: 1, pris: 1, rabatt: 10 }]));
+    expect(sjekk.niva).toBe('rod');
+    const g = sjekk.grunner.find(x => x.kode === 'dobbel_ombygging');
+    expect(g.tekst).toContain('2400');
+    expect(g.tekst).toContain('2401');
+  });
+
+  it('numre lagret som tall fanges også', () => {
+    const env = nyEnvironment();
+    expect(env.dobbelOmbyggingNumre(ordre([{ produktnummer: 2400 }, { produktnummer: 2401 }]))).toEqual(['2400', '2401']);
+  });
+
+  it('par fra portalens roller fanges selv om det ikke står i den hardkodede lista', () => {
+    const env = nyEnvironment();
+    env.S.portalProduktRoller = [
+      { modell_slug: 'ny-modell', app_rolle: 'ombygging', fiken_nummer: '3100' },
+      { modell_slug: 'ny-modell', app_rolle: 'lafinto', fiken_nummer: '3101' },
+    ];
+    expect(env.dobbelOmbyggingNumre(ordre([{ produktnummer: '3100' }, { produktnummer: '3101' }]))).toEqual(['3100', '3101']);
+  });
+
+  it('bare én av dem, eller to ulike modellers ombygginger: ingen dobbel_ombygging', () => {
+    const env = nyEnvironment();
+    expect(env.fakturaSjekk(ordre([{ produktnummer: '2401', antall: 1, pris: 1, rabatt: 10 }])).grunner.some(g => g.kode === 'dobbel_ombygging')).toBe(false);
+    expect(env.dobbelOmbyggingNumre(ordre([{ produktnummer: '2400' }, { produktnummer: '500' }]))).toBeNull();
+    expect(env.dobbelOmbyggingNumre(ordre([]))).toBeNull();
+  });
+
+  it('fakturerViaFiken stopper med en toast og kaller aldri Fiken', async () => {
+    const env = nyEnvironment();
+    const o = ordre([{ produktnummer: '2400', antall: 1, pris: 1, rabatt: 10 }, { produktnummer: '2401', antall: 1, pris: 1, rabatt: 10 }]);
+    env.S.ordrer = [o];
+    env.me = { id: 1, navn: 'Test Admin', rolle: 'admin' };
+    const toaster = [];
+    env.visToast = (m) => toaster.push(m);
+    env.document.getElementById = () => null;
+    let kalt = false;
+    env.kallFikenFakturer = async () => { kalt = true; return 'ok'; };
+    await env.fakturerViaFiken('ord_rex');
+    expect(kalt).toBe(false);
+    expect(toaster.some(m => /Både 2400 og 2401/.test(m))).toBe(true);
+  });
+});
+
 // s09-012 steg 2 (2026-10-31): modell-nøkkelen fra en portal-bestilling (o.portalModellSlug,
 // slått opp i S.portalModellKobling) skal nå faktisk BRUKES i Fiken-matchingen i stedet for
 // ordrens egen fritekst merke/modell - en ansatt som retter en skrivefeil i Merke/Modell i

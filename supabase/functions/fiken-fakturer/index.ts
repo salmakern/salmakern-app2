@@ -24,6 +24,10 @@ const FIKEN_BASE = 'https://api.fiken.no/api/v2'
 // lagret uten mellomrom/punktum siden Fiken sitt eget bankAccountNumber-felt (bekreftet
 // mot en ekte utstedt faktura) er en ren 11-sifret streng uten formattering.
 const FIKEN_DRIFTSKONTO = '28015652790'
+// Produktnumre som er ALTERNATIVE varianter av SAMME ombygging og aldri skal stå på samme
+// faktura (Rexton: 2400 standard / 2401 Lafinto, bekreftet av Henrik). Holdes lik
+// ombygging/lafinto i FIKEN_OMBYGGING_MODELLER (js/ordre-detalj.js).
+const ALTERNATIVE_OMBYGGINGER: [string, string][] = [['2400', '2401']]
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -272,6 +276,13 @@ Deno.serve(async (req) => {
     }
     const linjer = sorterServerFikenLinjer(eksisterendeOrdre.fiken_linjer)
     if (!Array.isArray(linjer) || !linjer.length) return jsonSvar({ error: 'Ordren har ingen fakturalinjer' }, 400)
+    // To varianter av SAMME ombygging (f.eks. Rexton 2400/2401) skal aldri faktureres sammen. Sjekkes her, før
+    // kunde-oppslag, rabatt og den atomiske reservasjonen, så en avvisning aldri rekker å reservere eller opprette noe i Fiken.
+    const nrPaaOrdren = new Set(linjer.map((l: any) => String(l?.produktnummer ?? '')))
+    const dobbel = ALTERNATIVE_OMBYGGINGER.find(([a, b]) => nrPaaOrdren.has(a) && nrPaaOrdren.has(b))
+    if (dobbel) {
+      return jsonSvar({ error: `Både ${dobbel[0]} og ${dobbel[1]} står i fakturagrunnlaget - de er to varianter av samme ombygging. Fjern den ene før fakturering.` }, 400)
+    }
 
     let contactId: number | null = null
 

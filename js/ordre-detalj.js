@@ -800,6 +800,8 @@ function fakturaSjekk(o) {
   }
 
   if (!o.kunde) leggTil('ingen_kunde', 'Kunde mangler på ordren', 'rod');
+  const dobbel = dobbelOmbyggingNumre(o);
+  if (dobbel) leggTil('dobbel_ombygging', `Både ${dobbel[0]} og ${dobbel[1]} står i fakturagrunnlaget - de er to varianter av SAMME ombygging, fjern den ene`, 'rod');
 
   const utenFrossetPris = (o.fikenLinjer||[]).filter(l => {
     const erOverstyrtBelop = l.belop !== undefined && l.belop !== null;
@@ -857,6 +859,21 @@ function fakturaSjekk(o) {
   return { niva, grunner };
 }
 
+// Produktnumre som er ALTERNATIVE varianter av samme ombygging (aldri begge på én faktura), f.eks. Rexton 2400/2401.
+// Utledes av FIKEN_OMBYGGING_MODELLER (ombygging + lafinto) og av portalens roller (S.portalProduktRoller), så en ny variant følger med.
+// Ser bare på numrene som faktisk STÅR på fakturaen. Edge-funksjonen fiken-fakturer har samme sperre (ALTERNATIVE_OMBYGGINGER).
+function dobbelOmbyggingNumre(o) {
+  const nr = new Set((o.fikenLinjer || []).map(l => String(l && l.produktnummer)));
+  const par = FIKEN_OMBYGGING_MODELLER.filter(m => m.lafinto).map(m => [m.ombygging, m.lafinto]);
+  const roller = Array.isArray(S.portalProduktRoller) ? S.portalProduktRoller : [];
+  for (const slug of new Set(roller.map(r => r.modell_slug))) {
+    const a = portalRolleNummer(slug, 'ombygging'), b = portalRolleNummer(slug, 'lafinto');
+    if (a && b) par.push([a, b]);
+  }
+  for (const [a, b] of par) if (nr.has(String(a)) && nr.has(String(b))) return [String(a), String(b)];
+  return null;
+}
+
 async function fakturerViaFiken(id) {
   if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
@@ -866,7 +883,7 @@ async function fakturerViaFiken(id) {
   // fakturering"-lista viser, se kommentaren der for hvorfor dette er delt (funnet 2026-10-14,
   // rettet til å bruke kanoniskMerkeModell 5.11).
   const sjekk = fakturaSjekk(o);
-  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde' || g.kode === 'oppskrift_id_paa_faktura');
+  const stopper = sjekk.grunner.find(g => g.kode === 'ukjent_modell' || g.kode === 'ingen_kunde' || g.kode === 'oppskrift_id_paa_faktura' || g.kode === 'dobbel_ombygging');
   if (stopper) {
     visToast(stopper.tekst + (stopper.kode === 'ukjent_modell' ? ' - legg til modellen i FIKEN_OMBYGGING_MODELLER, eller sjekk Merke/Modell for skrivefeil, før fakturering.' : '.'));
     return;
@@ -1301,9 +1318,15 @@ function synkroniserOmbyggingFikenLinjer(o) {
   // "lafinto" (kun Rexton per nå) er en ALTERNATIV variant av samme ombygging, ikke et
   // tillegg - de to fakturalinjene er derfor gjensidig utelukkende.
   const erLafinto = !!(nr('lafinto') && o.ombygging.lafinto);
-  if (nr('ombygging')) oppdaterFikenLinjeForOppskrift(nr('ombygging'), erOmbyggingValgt && !erLafinto);
-  if (nr('lafinto')) oppdaterFikenLinjeForOppskrift(nr('lafinto'), erOmbyggingValgt && erLafinto);
-  if (nr('personbil')) oppdaterFikenLinjeForOppskrift(nr('personbil'), !!o.ombygging.personbil);
+  // Står den ene varianten allerede med FROSSET rabatt (fra en portal-bestilling, leggTilPortalUtstyrLinjer), vinner den over
+  // avkrysningen (Henrik 2026-11-20): den andre varianten legges aldri til ved siden av. Samme prinsipp som at
+  // oppdaterFikenLinjeForOppskrift aldri FJERNER en linje med frosset rabatt.
+  const frosset = n => !!n && (o.fikenLinjer || []).some(l => String(l.produktnummer) === String(n) && typeof l.rabatt === 'number');
+  const lafintoLaast = !!nr('lafinto') && frosset(nr('lafinto'));
+  const standardLaast = !!nr('lafinto') && frosset(nr('ombygging'));
+  if (nr('ombygging')) oppdaterFikenLinjeForOppskrift(nr('ombygging'), erOmbyggingValgt && !erLafinto && !lafintoLaast, o.id);
+  if (nr('lafinto')) oppdaterFikenLinjeForOppskrift(nr('lafinto'), erOmbyggingValgt && erLafinto && !standardLaast, o.id);
+  if (nr('personbil')) oppdaterFikenLinjeForOppskrift(nr('personbil'), !!o.ombygging.personbil, o.id);
 }
 
 // Holder Fiken-drivstofflinjen i synk med den faktiske kundeprisen på hvert render - i

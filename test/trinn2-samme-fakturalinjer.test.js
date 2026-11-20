@@ -54,17 +54,34 @@ function kjør(env, bil, bokser, start) {
   return JSON.stringify(o.fikenLinjer);
 }
 
+// Den ENESTE tilsiktede forskjellen etter trinn 2 (Henrik 2026-11-20, «Rexton dobbel ombygging»): står den ene Rexton-varianten
+// (2400/2401) med FROSSET rabatt, legges den andre aldri til ved siden av. Den gamle koden la den til (to varianter av samme
+// ombygging på én faktura). Et avvik godtas bare når den nye lista er nøyaktig den gamle UTEN den ufrosne andre varianten.
+function tilsiktetRextonAvvik(gammelJson, nyJson) {
+  const g = JSON.parse(gammelJson), n = JSON.parse(nyJson);
+  const nr = (l) => String(l.produktnummer);
+  const frosset = (x) => g.some((l) => nr(l) === x && typeof l.rabatt === 'number');
+  if (!g.some((l) => nr(l) === '2400') || !g.some((l) => nr(l) === '2401')) return false;
+  const vinner = frosset('2400') ? '2400' : frosset('2401') ? '2401' : null;
+  if (!vinner) return false;
+  const taper = vinner === '2400' ? '2401' : '2400';
+  return JSON.stringify(g.filter((l) => !(nr(l) === taper && typeof l.rabatt !== 'number'))) === nyJson && !n.some((l) => nr(l) === taper);
+}
+
 describe('trinn 2: samme fakturalinjer som før for alle ordre', () => {
   it(`${BILER.length} biler x ${BOKSER.length} avkrysninger x ${START.length} utgangstilstander gir identiske linjer`, () => {
-    let antall = 0;
+    let antall = 0, tilsiktet = 0;
     const avvik = [];
     for (const bil of BILER) for (const b of BOKSER) for (const s of START) {
       antall++;
       const a = kjør(gammel, bil, b, s), n = kjør(ny, bil, b, s);
-      if (a !== n) avvik.push({ bil, b, s, gammel: a, ny: n });
+      if (a === n) continue;
+      if (tilsiktetRextonAvvik(a, n)) { tilsiktet++; continue; }
+      avvik.push({ bil, b, s, gammel: a, ny: n });
     }
     expect(antall).toBeGreaterThan(2500);
     expect(avvik.slice(0, 3)).toEqual([]);
+    expect(tilsiktet).toBeGreaterThan(0); // Rexton med frosset 2400 og Lafinto huket av finnes i matrisen
   });
 
   it('og «mangler Fiken-modell»-varselet og faktura-sjekken gir samme svar', () => {
