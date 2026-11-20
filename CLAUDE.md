@@ -485,13 +485,15 @@ Henrik: en selger fra Forhandlerportalen (ny ELLER en av de ca. 270 eksisterende
 bare STILLE hoppet over av `fiken-fakturer` (se kommentaren ved `contactPersonId` der, før) - kladden ble opprettet uten
 kontaktperson, uten at noen fikk vite det. Løst i to deler:
 
-- **`fiken-fakturer` sin `needsKontaktperson`-gren**: finner ingen match på `kontaktpersonNavn` (o.eier) blant kundens
-  `contactPerson`-liste i Fiken, stoppes fakturering FØR den atomiske reservasjonen (samme runde-trip-mønster som den
-  eksisterende `needsBekreftelse` for en ukjent kunde) og svarer `{needsKontaktperson:true, ordreId, kundeNavn,
-  kontaktpersonNavn, contactId, fikenKundeNavn}` i stedet for å fakturere videre. `hoppOverKontaktpersonsjekk:true` er en
-  bevisst unnslippingsluke (admin kan velge å fakturere videre UTEN kontaktperson for akkurat DENNE fakturaen). Svikter selve
-  GET-kallet mot Fiken (Fiken nede), eller mangler `kontaktpersonNavn` helt: uendret oppførsel som før (fakturerer videre
-  uten å stoppe på noe vi ikke klarte å bekrefte).
+- **`fiken-fakturer` sin `needsKontaktperson`-gren er et HARDT STOPP** (Henriks eksplisitte svar på spørsmålet om dette:
+  ingen unnslippingsluke). Finner ingen match på `kontaktpersonNavn` (o.eier) blant kundens `contactPerson`-liste i Fiken,
+  stoppes fakturering FØR den atomiske reservasjonen (samme runde-trip-mønster som den eksisterende `needsBekreftelse` for
+  en ukjent kunde) og svarer `{needsKontaktperson:true, ordreId, kundeNavn, kontaktpersonNavn, contactId, fikenKundeNavn}`
+  i stedet for å fakturere videre - det finnes IKKE noe flagg klienten kan sende for å hoppe over sjekken (en tidligere
+  versjon hadde `hoppOverKontaktpersonsjekk:true` og en «Fortsett uten kontaktperson»-knapp; begge er fjernet). Svikter
+  selve GET-kallet mot Fiken (Fiken nede), eller mangler `kontaktpersonNavn` helt: uendret oppførsel som før (fakturerer
+  videre uten å stoppe på noe vi ikke klarte å bekrefte - dette gjelder bare når sjekken ikke kunne utføres i det hele
+  tatt, ikke når den FANT at kontaktpersonen mangler).
 - **Ny edge-funksjon `fiken-opprett-kontaktperson`**: oppretter kontaktpersonen hos RIKTIG Fiken-kunde. Resolver kunden SELV
   (stoler aldri på en contactId fra klienten): `fiken_kunde_alias` FØRST (samme tabell fiken-fakturer bruker), ellers
   organisasjonsnummer HVIS det gir NØYAKTIG ett treff blant Fiken sine kunder (0 eller flere treff: oppretter ingenting, gir
@@ -506,10 +508,11 @@ kontaktperson, uten at noen fikk vite det. Løst i to deler:
   rolle admin) - lagt til i `test/edge-auth-gate.test.js` sin byte-lik-sjekk.
 - **Klienten** (`js/ordre-detalj.js`): `visFikenKontaktpersonManglerModal()` viser modalen `fikenKontaktpersonMangler`
   (salmakern.html) med navn/kunde fra serveren og et e-post-forslag hentet LOKALT fra `S.kontakter` via den eksisterende
-  `adminArkFinnKontaktEpost()` (samme oppslag Admin-ark allerede bruker - ingen ny serverrundtur for forslaget). «Opprett
-  kontaktperson i Fiken» kaller den nye funksjonen og prøver fakturering på nytt ved suksess ELLER «finnes allerede»
-  (begge har en `contactPersonId`); «Fortsett uten kontaktperson» prøver på nytt med `hoppOverKontaktpersonsjekk:true`.
-  Gjelder uansett hvilken knapp som startet faktureringen (`fakturerViaFiken` i ordredetaljen OG «Lag kladd i Fiken» på
+  `adminArkFinnKontaktEpost()` (samme oppslag Admin-ark allerede bruker - ingen ny serverrundtur for forslaget). Modalen
+  har bare to knapper: «Opprett kontaktperson i Fiken» (kaller den nye funksjonen og prøver fakturering på nytt ved
+  suksess ELLER «finnes allerede» - begge har en `contactPersonId`) og «Avbryt» (lukker modalen uten å fakturere - IKKE en
+  unnslippingsluke, bare avbryter dette forsøket; fakturaen lages fortsatt ikke før kontaktpersonen finnes). Gjelder
+  uansett hvilken knapp som startet faktureringen (`fakturerViaFiken` i ordredetaljen OG «Lag kladd i Fiken» på
   Fakturering-siden - begge går via samme `kallFikenFakturer`), og uansett om selgeren er ny eller en av de ca. 270
   eksisterende (sjekken kjører på HVER fakturering, ikke bare ved opprettelse).
 - **Ingen migrasjon**: ingen ny tabell/kolonne trengs - `fiken_kunde_alias` eksisterer fra før, og Fiken selv er
@@ -520,7 +523,7 @@ kontaktperson, uten at noen fikk vite det. Løst i to deler:
   suiten og lint grønt. **IKKE live-testet mot ekte Fiken** (samme forbehold som `fiken-opprett-produkt`: en ekte
   kontaktperson kan ikke angres/slettes trygt herfra) - selve `POST .../contactPerson`-kontrakten (name+email påkrevd,
   Location-header med den nye id-en) er bekreftet mot Fiken sin offentlige OpenAPI-spec (tredjeparts-speil, ikke live), ikke
-  mot et ekte kall. `sw.js` CACHE bumpet til v99 i SAMME commit som klientendringen (vanlig rutine) - selve utrullingen er
+  mot et ekte kall. `sw.js` CACHE bumpet til v100 i SAMME commit som klientendringen (vanlig rutine) - selve utrullingen er
   **IKKE gjort ennå**: venter på Henriks eksplisitte ja før `functions deploy fiken-opprett-kontaktperson` og push til main.
 
 ## Importerte biler til portalen (aktive biler i selgernes «Mine bestillinger», etappe 1, skrevet 2026-11-10, UTRULLET 2026-11-16 - portalsiden står på «kun foreslå» (KUN_FORESLA) siden 16.11, ingenting synlig for forhandlere, se under)

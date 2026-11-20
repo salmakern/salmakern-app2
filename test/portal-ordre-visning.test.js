@@ -370,6 +370,9 @@ describe('Filter og oppsett (kildetekst)', () => {
 
   it('sw.js har fått ny CACHE-versjon (åpne PWA-er henter den nye koden)', () => {
     const sw = readFileSync(path.resolve(__dirname, '../sw.js'), 'utf8');
-    expect(sw).toMatch(/const CACHE = 'salmakern-v(1[5-9]|[2-9]\d)'/);
+    // Minst v15 (regexen fanger bare en sanity-floor, ikke et eksakt tall) - utvidet til å tåle
+    // 3+ sifre også (CACHE passerte v100 2026-11-20), ellers feiler denne testen hver gang
+    // versjonen får en ny sifferlengde selv om selve bumpen er helt riktig gjort.
+    expect(sw).toMatch(/const CACHE = 'salmakern-v(1[5-9]|[2-9]\d|\d{3,})'/);
   });
 });

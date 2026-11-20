@@ -983,12 +983,6 @@ async function opprettFikenKontaktperson() {
   }
 }
 
-function fortsettUtenFikenKontaktperson() {
-  const data = fikenKontaktpersonData; if (!data) return;
-  closeModal('fikenKontaktpersonMangler');
-  kallFikenFakturer(data.ordreId, { hoppOverKontaktpersonsjekk: true });
-}
-
 function toggleFakturert(id) {
   if (!me || me.rolle !== 'admin') return;
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;

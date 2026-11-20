@@ -175,12 +175,13 @@ describe('fiken-fakturer: needsKontaktperson (ny gren)', () => {
     expect(draftKall[0].contactPersonId).toBe(77);
   });
 
-  it('hoppOverKontaktpersonsjekk:true: fakturerer videre UTEN kontaktperson, selv om ingen match finnes', async () => {
-    const { kall, draftKall } = await last({ svar: { ...ALIAS_FUNNET, ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [linje('100')] }, error: null } } });
+  it('hardt stopp (Henriks eksplisitte svar, ingen unnslippingsluke): et gammelt/forsøkt hoppOverKontaktpersonsjekk-flagg i body ignoreres - stopper likevel', async () => {
+    const { kall, draftKall, eqKall } = await last({ svar: { ...ALIAS_FUNNET, ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [linje('100')] }, error: null } } });
     const res = await kall(standardBody([linje('100')], { hoppOverKontaktpersonsjekk: true }));
-    expect(res.status).toBe(201);
-    expect(draftKall).toHaveLength(1);
-    expect(draftKall[0].contactPersonId).toBeUndefined();
+    expect(res.status).toBe(200);
+    expect((await res.json()).needsKontaktperson).toBe(true);
+    expect(draftKall).toHaveLength(0);
+    expect(eqKall.some((e) => e.type === 'claim')).toBe(false);
   });
 
   it('ingen kontaktpersonNavn i det hele tatt: hopper over hele sjekken, fakturerer som før (ingen GET mot /contacts/:id)', async () => {

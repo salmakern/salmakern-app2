@@ -103,7 +103,8 @@
 // v97 - Fakturering-siden: biler kun Klar for henting/Hentet (ikke lenger Vist på biltilsynet), leveranser med status Sendt lagt til
 // v98 - «På jobb nå» er nå admin-only (var synlig for alle roller)
 // v99 - manglende Fiken-kontaktperson oppdages og løses ved fakturering (needsKontaktperson, ny modal)
-const CACHE = 'salmakern-v99';
+// v100 - fiken-kontaktperson: hardt stopp, ingen unnslippingsluke (Henriks ja, fjernet "Fortsett uten kontaktperson")
+const CACHE = 'salmakern-v100';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

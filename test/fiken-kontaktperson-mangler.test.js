@@ -1,9 +1,10 @@
 // Henrik: en selger fra Forhandlerportalen (ny ELLER en av de ca. 270 eksisterende) uten en
 // tilsvarende Fiken-kontaktperson skal oppdages og løses VED FAKTURERING, ikke stille hoppes
-// over. Dekker klientsiden av løsningen: kallFikenFakturer sin nye needsKontaktperson-gren,
-// e-post-forslaget fra S.kontakter (samme oppslag som Admin-ark), opprettFikenKontaktperson()
-// (kaller den nye edge-funksjonen fiken-opprett-kontaktperson og prøver fakturering på nytt) og
-// fortsettUtenFikenKontaktperson() (unnslippingsluken). Selve edge-funksjonene er dekket av
+// over - og Henrik svarte eksplisitt at dette skal være et HARDT STOPP, ingen unnslippingsluke
+// (ingen "fortsett uten kontaktperson"). Dekker klientsiden av løsningen: kallFikenFakturer sin
+// nye needsKontaktperson-gren, e-post-forslaget fra S.kontakter (samme oppslag som Admin-ark) og
+// opprettFikenKontaktperson() (kaller den nye edge-funksjonen fiken-opprett-kontaktperson og
+// prøver fakturering på nytt). Selve edge-funksjonene er dekket av
 // test/fiken-fakturer-kontaktperson.test.js og test/fiken-opprett-kontaktperson.test.js - her
 // er edgeFetch en ren spion (samme mønster som test/leveranse.test.js sin edgeFake()), så dette
 // er IKKE en ende-til-ende-test mot ekte Fiken.
@@ -138,17 +139,8 @@ describe('opprettFikenKontaktperson', () => {
   });
 });
 
-describe('fortsettUtenFikenKontaktperson', () => {
-  it('prøver fakturering på nytt med hoppOverKontaktpersonsjekk: true, uten å kalle fiken-opprett-kontaktperson', async () => {
-    const o = nyOrdre(); S.ordrer = [o];
-    edgeFake(() => ({ status: 200, json: { needsKontaktperson: true, ordreId: o.id, kundeNavn: 'TEST Kunde AS', kontaktpersonNavn: 'TEST Selger', contactId: 555 } }));
-    await sandbox.kallFikenFakturer(o.id, {});
-    const kall = edgeFake(() => ({ status: 201, json: { ok: true, draftUrl: 'https://fiken.test/kladd/1' } }));
-    sandbox.fortsettUtenFikenKontaktperson();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(kall).toHaveLength(1);
-    expect(kall[0].fn).toBe('fiken-fakturer');
-    expect(kall[0].body.hoppOverKontaktpersonsjekk).toBe(true);
-    expect(o.fakturert).toBe(true);
+describe('hardt stopp: ingen unnslippingsluke (Henriks eksplisitte svar)', () => {
+  it('fortsettUtenFikenKontaktperson finnes ikke lenger som global funksjon', () => {
+    expect(sandbox.fortsettUtenFikenKontaktperson).toBeUndefined();
   });
 });

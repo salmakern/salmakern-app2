@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
       return jsonSvar({ ok: true, contactId, navn }, 201)
     }
 
-    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, referanse, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv, hoppOverKontaktpersonsjekk } = body
+    const { ordreId, kundeNavn, kontaktpersonNavn, chassisNr, regnr, referanse, brukRabatt, bekreftetContactId, bekreftetFikenNavn, bekreftetAv } = body
     if (!kundeNavn) return jsonSvar({ error: 'Mangler kundeNavn' }, 400)
     // Pengefelle rettet 5.11 (sikkerhetsgjennomgang): fakturalinjene ble tidligere lest RÅTT fra
     // klientens request-body (body.linjer) - en hvilken som helst klient (en stale fane, eller
@@ -417,11 +417,10 @@ Deno.serve(async (req) => {
     // s90-...-fiken-kontaktperson (bedt om av Henrik): tidligere hoppet dette BARE stille over
     // uten kontaktperson når ingen match fantes - en selger fra Forhandlerportalen (ny ELLER en
     // av de ca. 270 eksisterende) uten en tilsvarende Fiken-kontaktperson ble aldri synlig for
-    // noen. Nå stoppes fakturering i stedet (samme runde-trip-mønster som needsBekreftelse over
-    // for en ukjent kunde) og klienten får en tydelig "Opprett kontaktperson i Fiken"-seksjon -
-    // admin oppretter den der og da (ny edge-funksjon fiken-opprett-kontaktperson) og prøver på
-    // nytt. hoppOverKontaktpersonsjekk er en bevisst unnslippingsluke (admin kan velge å
-    // fakturere videre UTEN kontaktperson for akkurat denne fakturaen, som før).
+    // noen. Nå er dette et HARDT STOPP (Henriks eksplisitte svar: ingen unnslippingsluke) -
+    // fakturering stanses (samme runde-trip-mønster som needsBekreftelse over for en ukjent
+    // kunde) til kontaktpersonen faktisk er opprettet i Fiken (ny edge-funksjon fiken-opprett-
+    // kontaktperson), og klienten prøver fakturering på nytt automatisk etterpå.
     let contactPersonId: number | undefined
     if (kontaktpersonNavn) {
       const kontaktRes = await fikenFetch(`/companies/${slug}/contacts/${contactId}`)
@@ -430,7 +429,7 @@ Deno.serve(async (req) => {
         const treff = (kontakt.contactPerson || []).find((p: any) => (p.name || '').toLowerCase() === kontaktpersonNavn.toLowerCase())
         if (treff) {
           contactPersonId = treff.contactPersonId
-        } else if (!hoppOverKontaktpersonsjekk) {
+        } else {
           return jsonSvar({
             needsKontaktperson: true,
             ordreId,
