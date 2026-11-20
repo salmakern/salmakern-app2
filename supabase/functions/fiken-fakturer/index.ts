@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
 
     const { data: eksisterendeOrdre, error: ordreFeil } = await supabase
       .from('ordrer')
-      .select('fiken_kladd_url, fiken_linjer, forhandler_kontakt_id, portal_bestilling_id')
+      .select('fiken_kladd_url, fiken_linjer, forhandler_kontakt_id, forhandler_orgnr')
       .eq('id', ordreId)
       .maybeSingle()
     if (ordreFeil) return jsonSvar({ error: 'Kunne ikke sjekke ordren: ' + ordreFeil.message }, 500)
@@ -360,10 +360,13 @@ Deno.serve(async (req) => {
     // forhandler-kontakt, eller finnes den forhandleren ikke (ennå) i portal_kunde_rabatt,
     // faller vi tilbake til fiken_kunde_rabatt som før - helt uendret for alt det gjelder.
     // Flere portal-avdelinger på samme Kontakter-kontakt (20.11, uavhengig gjennomgang av
-    // henger-igjen-punkt om nettopp dette): se blokken rett under - EKTE, uløst uenighet
-    // stopper fakturering i stedet for å falle stille til fiken_kunde_rabatt (produksjonsdata
-    // 20.11: 72 av 72 kontakter i portal_kunde_rabatt er i dag entydige, så dette er et
-    // forsvar mot en fremtidig tilstand, ikke en retting av en observert feilfakturering).
+    // henger-igjen-punkt om nettopp dette): se blokken rett under - entydig når avdelingene
+    // enten er enige om satsene eller ordrens eget org.nr peker ut én av dem, ellers faller
+    // vi tilbake til fiken_kunde_rabatt - AKKURAT SOM FØR denne hele portal-rabatt-funksjonen
+    // fantes (aldri en gjetning mellom flere rader, men heller ikke en ny, stoppende feiltype
+    // denne ordren ikke ville fått FØR portal_kunde_rabatt ble innført). Produksjonsdata 20.11:
+    // 72 av 72 kontakter i portal_kunde_rabatt er i dag entydige (nøyaktig én rad hver), så
+    // dette er et forsvar mot en fremtidig tilstand, ikke en retting av en observert feilfakturering.
     // rabatt_modulsystem (17.11): brukes BARE for linjer med fiken_priser.kategori =
     // 'modulsystem' (tillegg som bevisst ikke skal ha forhandlerrabatt). Den finnes bare i
     // portalen - fiken_kunde_rabatt har ingen tilsvarende kolonne - så når portal-raden mangler
@@ -377,20 +380,17 @@ Deno.serve(async (req) => {
     // 5.11, uavhengig sikkerhetsgjennomgang: 68 av 100 rader i fiken_kunde_rabatt hadde NULL i
     // minst én kolonne). Stopper fakturering HELT i stedet for å gjette - se sjekken rett under.
     let rabattRad: { rabatt_ombygging: number | null; rabatt_ekstra_utstyr: number | null; rabatt_modulsystem?: number | null } | null = null
-    // 'portal_tvetydig': kontakt_id traff FLERE rader i portal_kunde_rabatt med reelt ulike
-    // satser, og ingen av disambigueringene under ga nøyaktig én kandidat - se blokken rett
-    // under. ALDRI det samme som "lokal" (fiken_kunde_rabatt skal ikke brukes som stille
-    // reserve for en ekte uenighet i portalen - se stoppen lenger ned).
-    let rabattKilde: 'portal' | 'lokal' | 'portal_tvetydig' = 'lokal'
+    let rabattKilde: 'portal' | 'lokal' = 'lokal'
     const tilRabattRad = (r: { rabatt_standard: number | null; rabatt_ekstrautstyr: number | null; rabatt_modulsystem?: number | null }) =>
       // `?? null`: en rad uten feltet i det hele tatt (eldre testmock/skjema) regnes som NULL (ikke avtalt).
       ({ rabatt_ombygging: r.rabatt_standard, rabatt_ekstra_utstyr: r.rabatt_ekstrautstyr, rabatt_modulsystem: r.rabatt_modulsystem ?? null })
     if (eksisterendeOrdre.forhandler_kontakt_id) {
       // portal_kunde_rabatt sin unike nøkkel er portal_forhandler_id (portalens EGEN
       // avdelings-id), IKKE kontakt_id - samme kontakt_id (en Salmakern Kontakter-rad) kan stå
-      // på FLERE rader når flere portal-avdelinger er slått sammen til én kunde her (f.eks.
+      // på FLERE rader når flere portal-avdelinger er koblet til samme kunde her (f.eks.
       // BOS-gruppen). Henter derfor ALLE rader (ikke .maybeSingle(), som ville gitt en stille
-      // feil -> null ved mer enn én rad, og dermed et USYNLIG fall til fiken_kunde_rabatt).
+      // feil -> null ved mer enn én rad, og dermed et USYNLIG fall til fiken_kunde_rabatt uten
+      // engang å prøve disambigueringen under).
       const { data: portalRader } = await supabase
         .from('portal_kunde_rabatt')
         .select('orgnr, rabatt_standard, rabatt_ekstrautstyr, rabatt_modulsystem')
@@ -401,12 +401,12 @@ Deno.serve(async (req) => {
         rabattKilde = 'portal'
       } else if (rader.length > 1) {
         // Flere avdelinger deler denne kontakten. Entydig uten å gjette i to tilfeller:
-        //  (a) alle kandidatene er faktisk ENIGE om satsene (ingen reell uenighet å løse), eller
-        //  (b) ordren kom fra en portal-bestilling, og DEN bestillingens EGEN org.nr (sendt av
-        //      portalen akkurat for denne avdelingen, portal_bestillinger.forhandler_orgnr -
-        //      IKKE ordrer.forhandler_orgnr, som er den delte Kontakter-kontaktens org.nr,
-        //      se migrasjon 20261113090000) peker ut NØYAKTIG én kandidat sitt orgnr.
-        // Ellers er det en ekte, uløst uenighet: stoppes lenger ned, aldri et stille gjett.
+        //  (a) alle kandidatene er faktisk ENIGE om alle tre satsene (ingen reell uenighet å
+        //      løse - hvilken som helst av dem gir samme svar), eller
+        //  (b) ordrens EGET org.nr (ordrer.forhandler_orgnr - samme felt s08-004 bruker til å
+        //      finne forhandler_kontakt_id i utgangspunktet, uavhengig av om ordren kom fra en
+        //      portal-bestilling eller ble opprettet manuelt) peker ut NØYAKTIG én kandidat sitt orgnr.
+        // Ellers faller vi tilbake til fiken_kunde_rabatt under - aldri et gjett mellom radene.
         const forste = rader[0]
         const satserLike = (a: typeof forste, b: typeof forste) =>
           (a.rabatt_standard ?? null) === (b.rabatt_standard ?? null) &&
@@ -416,29 +416,23 @@ Deno.serve(async (req) => {
           rabattRad = tilRabattRad(forste)
           rabattKilde = 'portal'
         } else {
-          let valgt: typeof forste | null = null
-          if (eksisterendeOrdre.portal_bestilling_id) {
-            const { data: bestilling } = await supabase
-              .from('portal_bestillinger')
-              .select('forhandler_orgnr')
-              .eq('portal_bestilling_id', eksisterendeOrdre.portal_bestilling_id)
-              .maybeSingle()
-            const bestillingOrgnr = normaliserOrgnr(bestilling?.forhandler_orgnr)
-            if (bestillingOrgnr) {
-              const treff = rader.filter((r) => normaliserOrgnr(r.orgnr) === bestillingOrgnr)
-              if (treff.length === 1) valgt = treff[0]
-            }
-          }
-          if (valgt) {
-            rabattRad = tilRabattRad(valgt)
+          const ordreOrgnr = normaliserOrgnr(eksisterendeOrdre.forhandler_orgnr)
+          const treff = ordreOrgnr ? rader.filter((r) => normaliserOrgnr(r.orgnr) === ordreOrgnr) : []
+          if (treff.length === 1) {
+            rabattRad = tilRabattRad(treff[0])
             rabattKilde = 'portal'
           } else {
-            rabattKilde = 'portal_tvetydig'
+            // Fortsatt tvetydig: ingen stille gjett, men heller ingen ny, stoppende feiltype
+            // denne ordren ikke ville fått FØR portal_kunde_rabatt-oppslaget fantes - faller
+            // til fiken_kunde_rabatt under, akkurat som alltid når portal-raden ikke er brukbar.
+            // Loggraden er bare for å gjøre den (i dag ikke-observerte) tilstanden synlig i
+            // funksjonsloggene, uten å endre svaret til klienten.
+            console.log(JSON.stringify({ rabatt_portal_tvetydig: 1, ordre_id: ordreId, kontakt_id: eksisterendeOrdre.forhandler_kontakt_id, antall_avdelinger: rader.length }))
           }
         }
       }
     }
-    if (!rabattRad && rabattKilde !== 'portal_tvetydig') {
+    if (!rabattRad) {
       const { data: lokalRad } = await supabase
         .from('fiken_kunde_rabatt')
         .select('rabatt_ombygging, rabatt_ekstra_utstyr')
@@ -454,14 +448,6 @@ Deno.serve(async (req) => {
     // strid med det teksten "Bruk kundens avtalte rabatt" lover - se linjerMedIndeks under),
     // i stedet for å måtte fjerne dem per linje etterpå.
     const rabattSkalBrukes = brukRabatt !== false
-    // Ekte, uløst uenighet mellom portal-avdelinger (se blokken over) - stopp HELT i stedet
-    // for å falle tilbake til en (kanskje utdatert, kanskje rett og slett feil) lokal
-    // fiken_kunde_rabatt-sats, som ville vært et stille gjett nøyaktig der penger er involvert.
-    // Gjelder bare når rabatten faktisk skal brukes (brukRabatt===false nuller alt uansett,
-    // se under, og da er uenigheten uten betydning for DENNE fakturaen).
-    if (rabattSkalBrukes && rabattKilde === 'portal_tvetydig') {
-      return jsonSvar({ error: `Forhandleren har flere avdelinger i Forhandlerportalen med ulik rabatt knyttet til samme kontakt, og det er ikke mulig å avgjøre entydig hvilken som gjelder for denne ordren - avklar riktig avdeling/org.nr i Forhandlerportalen (eller huk av «Bruk kundens avtalte rabatt» for denne fakturaen) før fakturering.` }, 400)
-    }
     const rabattOmbygging = rabattSkalBrukes ? (rabattRad?.rabatt_ombygging ?? 0) : 0
     const rabattEkstraUtstyr = rabattSkalBrukes ? (rabattRad?.rabatt_ekstra_utstyr ?? 0) : 0
     // Bare portal-kilden har en modulsystem-sats; lokal kilde (fiken_kunde_rabatt) eller ingen rad = 0 %.

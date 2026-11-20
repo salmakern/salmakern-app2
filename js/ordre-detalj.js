@@ -828,18 +828,25 @@ function fakturaSjekk(o) {
   // sjekken så tidligere BARE på fiken_kunde_rabatt og kunne derfor vise feil farge for en
   // portal-ordre (grønt der serveren ville avvist, rødt der den ville godtatt).
   // kontakt_id er IKKE unik i portal_kunde_rabatt (delte Kontakter-kontakter, f.eks. BOS-
-  // gruppen) - serveren (fiken-fakturer) løser dette entydig (20.11) ved å bruke en felles
-  // sats når alle avdelingene faktisk er enige, ellers bestillingens EGEN org.nr mot
-  // portal_bestillinger (data denne klientsjekken ikke har lastet). Klienten her er derfor
-  // bevisst LITT strengere enn serveren: den kan vise rødt («tvetydig») i et tilfelle
-  // serveren faktisk klarer å løse via org.nr - aldri omvendt (viser aldri grønt der
-  // serveren ville avvist). Ingen reell forekomst i dag (72 av 72 kontakter er entydige).
-  let rabattRad = null, rabattKilde = null, rabattTvetydig = false;
+  // gruppen kan ha flere portal-avdelinger koblet til samme Kontakter-rad her). Server
+  // (fiken-fakturer) og klient løser dette likt og entydig (20.11), i rekkefølge: (1)
+  // nøyaktig én rad - bruk den, (2) flere rader som faktisk er ENIGE om alle tre satsene -
+  // ingen reell uenighet å løse, bruk den felles satsen, (3) flere rader med ULIKE satser,
+  // men ordrens EGET org.nr (o.forhandlerOrgnr - samme felt s08-004 bruker til å finne
+  // forhandler_kontakt_id i utgangspunktet, uavhengig av om ordren kom fra en
+  // portal-bestilling eller ble opprettet manuelt) treffer NØYAKTIG én av radene sin orgnr -
+  // bruk DEN. Er den fortsatt tvetydig etter dette, faller vi tilbake til fiken_kunde_rabatt
+  // under - AKKURAT SOM FØR denne portal-rabatt-funksjonen fantes i det hele tatt. Aldri en
+  // gjetning mellom flere rader. Ingen kjent forekomst i dag (produksjonsdata 20.11: 72 av 72
+  // kontakter i portal_kunde_rabatt har bare én rad), så dette er et forsvar mot en fremtidig
+  // tilstand (flere portal-avdelinger lagt til samme Kontakter-kontakt), ikke en retting av
+  // en observert feilfakturering.
+  let rabattRad = null, rabattKilde = null;
   if (o.forhandlerKontaktId) {
     const portalRader = (S.portalKundeRabatt||[]).filter(r => r.kontakt_id === o.forhandlerKontaktId);
+    const tilRabattRad = r => ({ rabatt_ombygging: r.rabatt_standard ?? null, rabatt_ekstra_utstyr: r.rabatt_ekstrautstyr ?? null });
     if (portalRader.length === 1) {
-      const portalRad = portalRader[0];
-      rabattRad = { rabatt_ombygging: portalRad.rabatt_standard ?? null, rabatt_ekstra_utstyr: portalRad.rabatt_ekstrautstyr ?? null };
+      rabattRad = tilRabattRad(portalRader[0]);
       rabattKilde = 'portal';
     } else if (portalRader.length > 1) {
       const forste = portalRader[0];
@@ -847,23 +854,25 @@ function fakturaSjekk(o) {
         && (r.rabatt_ekstrautstyr ?? null) === (forste.rabatt_ekstrautstyr ?? null)
         && (r.rabatt_modulsystem ?? null) === (forste.rabatt_modulsystem ?? null);
       if (portalRader.every(satserLike)) {
-        rabattRad = { rabatt_ombygging: forste.rabatt_standard ?? null, rabatt_ekstra_utstyr: forste.rabatt_ekstrautstyr ?? null };
+        rabattRad = tilRabattRad(forste);
         rabattKilde = 'portal';
       } else {
-        rabattTvetydig = true;
+        const ordreOrgnrSiffer = String(o.forhandlerOrgnr||'').replace(/\D/g,'') || null;
+        const treff = ordreOrgnrSiffer ? portalRader.filter(r => (String(r.orgnr||'').replace(/\D/g,'')||null) === ordreOrgnrSiffer) : [];
+        if (treff.length === 1) { rabattRad = tilRabattRad(treff[0]); rabattKilde = 'portal'; }
+        // Ellers fortsatt tvetydig - ingen portal-rad brukes, faller igjennom til
+        // fiken_kunde_rabatt rett under, helt uendret oppførsel.
       }
     }
   }
-  if (!rabattRad && !rabattTvetydig && alias) {
+  if (!rabattRad && alias) {
     const lokalRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
     if (lokalRad) { rabattRad = lokalRad; rabattKilde = 'lokal'; }
   }
   const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
-  if (manglerFrossetRabatt && rabattTvetydig) {
-    leggTil('rabatt_portal_tvetydig', 'Forhandleren har flere avdelinger i Forhandlerportalen med ulik rabatt knyttet til samme kontakt - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist til dette er avklart i portalen', 'rod');
   // Uten alias og uten forhandler-kontakt finnes det ingen kilde å slå opp i (gammel PWA uten
   // lastingen, eller ukjent kunde som alt er varslet over) - da hoppes rabattdelen over som før.
-  } else if (manglerFrossetRabatt && !rabattRad && (alias || o.forhandlerKontaktId)) {
+  if (manglerFrossetRabatt && !rabattRad && (alias || o.forhandlerKontaktId)) {
     leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
   } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
     // Rettet 5.11 (uavhengig gjennomgang fant at lista viste GRØNT for ordre serveren faktisk

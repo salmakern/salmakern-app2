@@ -667,34 +667,49 @@ describe('fakturaSjekk', () => {
 
     // Rettet 20.11 (flere portal-avdelinger på samme Kontakter-kontakt, f.eks. BOS-gruppen -
     // kontakt_id er IKKE unik i portal_kunde_rabatt). Tidligere falt klienten stille tilbake til
-    // fiken_kunde_rabatt her (samme bug som serverens .maybeSingle() hadde) - nå varsles en ekte
-    // uenighet mellom avdelingene i stedet for å late som Fiken-raden gjelder.
-    it('kontakt_id står på FLERE portalrader med ULIKE satser: rød "tvetydig"-advarsel, faller ALDRI stille tilbake til Fiken-raden', () => {
+    // fiken_kunde_rabatt her (samme bug som serverens .maybeSingle() hadde), uten noen måte å
+    // løse det entydig. Nå prøves to entydige regler først (enighet, så ordrens eget org.nr);
+    // lykkes ingen av dem, faller den tilbake til fiken_kunde_rabatt - AKKURAT SOM FØR denne
+    // portal-rabatt-funksjonen fantes i det hele tatt (oppgaven var eksplisitt: ikke gjett
+    // mellom radene, men heller ikke en ny, stoppende feiltype for et tilfelle som i dag ikke finnes).
+    it('kontakt_id står på FLERE portalrader, men ALLE er enige om satsene: ingen reell uenighet - bruker den felles satsen', () => {
       const env = nyEnvironment();
-      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
-      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
       env.S.portalKundeRabatt = [
-        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: null },
-        { kontakt_id: 'k1', rabatt_standard: 15, rabatt_ekstrautstyr: null },
+        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: null },
+        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: null },
       ];
       const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
-      expect(sjekk.niva).toBe('rod');
-      const g = sjekk.grunner.find((x) => x.kode === 'rabatt_portal_tvetydig');
-      expect(g).toBeTruthy();
-      expect(g.tekst).toMatch(/flere avdelinger i Forhandlerportalen/);
-      // Den gamle (feilaktige) oppførselen ville vist ingen av disse to kodene og late som alt var i orden.
       expect(rabattKoder(sjekk)).toEqual([]);
     });
 
-    it('kontakt_id står på FLERE portalrader, men ALLE er enige om satsene: ingen reell uenighet - ingen advarsel', () => {
+    it('kontakt_id står på FLERE portalrader med ULIKE satser, ordrens EGET org.nr treffer NØYAKTIG én avdeling: bruker DEN avdelingens sats (ikke den andre, ufullstendige)', () => {
       const env = nyEnvironment();
       env.S.portalKundeRabatt = [
-        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: null },
-        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: null },
+        { kontakt_id: 'k1', orgnr: '111111111', rabatt_standard: 20, rabatt_ekstrautstyr: null }, // ufullstendig - ville gitt rød hvis valgt
+        { kontakt_id: 'k1', orgnr: '222222222', rabatt_standard: 15, rabatt_ekstrautstyr: 5 }, // komplett
+      ];
+      const sjekk = env.fakturaSjekk(basisOrdre({
+        ...utenFrossetRabatt, forhandlerKontaktId: 'k1', forhandlerOrgnr: '222 222 222', // mellomrom - normaliseres likt begge veier
+      }));
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('kontakt_id står på FLERE portalrader med ULIKE satser, ordrens org.nr treffer INGEN avdeling (eller mangler): faller tilbake til Fiken-raden, ikke en gjetning mellom portalradene', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: 10 }];
+      env.S.portalKundeRabatt = [
+        { kontakt_id: 'k1', orgnr: '111111111', rabatt_standard: 20, rabatt_ekstrautstyr: null },
+        { kontakt_id: 'k1', orgnr: '222222222', rabatt_standard: 15, rabatt_ekstrautstyr: 5 },
       ];
       const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
-      expect(sjekk.grunner.some((g) => g.kode === 'rabatt_portal_tvetydig')).toBe(false);
-      expect(rabattKoder(sjekk)).toEqual([]);
+      expect(sjekk.niva).toBe('rod');
+      const g = sjekk.grunner.find((x) => x.kode === 'rabatt_kategori_mangler');
+      expect(g).toBeTruthy();
+      // Beviser at fiken_kunde_rabatt faktisk ble brukt (teksten sier Fiken-rabatt, ikke Forhandlerportalen) -
+      // en stille gjetning blant portalradene ville aldri gitt denne teksten/feilen (begge portalrader har en gyldig rabatt_ombygging).
+      expect(g.tekst).toMatch(/i Fiken-rabatt/);
+      expect(g.tekst).not.toMatch(/Forhandlerportalen/);
     });
 
     it('frosset rabatt på alle linjer: portalens NULL spiller ingen rolle', () => {
