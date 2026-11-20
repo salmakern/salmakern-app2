@@ -816,7 +816,8 @@ describe('selvhelIkkeStemplet: databasen sa at JEG ikke er stemplet inn, men min
   it('statusbytte til Påbegynt: ligger jeg selv i ikkeStemplet og er reparerbar, vises INGEN «ikke stemplet inn»-melding som motsier klokka på skjermen', async () => {
     app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt' });
     app.settTimerStart(Date.now() - 2 * 3600000); app.settAktivOrdre(null); sandbox.renderAll = () => {};
-    const o = nyOrdre('ord_B1', 'ikke_paabegynt'); o.ansatteSignert = [{ id: 2, navn: 'TEST - Ansatt' }]; o.bilderAnkomst = ['bilde']; S.ordrer = [o];
+    // ansatt/bilder/diagnose er egne, uavhengige krav i endreStatus() (2026-11-20) - fylt ut her for å isolere det ikkeStemplet-reparerer denne testen faktisk dekker.
+    const o = nyOrdre('ord_B1', 'ikke_paabegynt'); o.ansatteSignert = [{ id: 2, navn: 'TEST - Ansatt' }]; o.bilderAnkomst = Array(6).fill('bilde'); o.diagnose = true; S.ordrer = [o];
     const { db } = lagTabellDb(tabeller, { oppdater_ordre_timer_fase: () => ({ data: { sessions: [], ikkeStemplet: ['TEST - Ansatt'] }, error: null }), oppdater_ordre_timer_sesjon: startOk }); app.settDb(db);
     await sandbox.endreStatus('ord_B1', 'paabegynt');
     expect(toasts.join(' ')).not.toContain('ikke stemplet inn');

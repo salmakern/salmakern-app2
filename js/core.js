@@ -361,6 +361,14 @@ function statusInfo(id) { return STATUSER.find(s=>s.id===id) || LEVERANSE_STATUS
 // er KUN for visning, rører aldri selve verdien noe sted den brukes i logikk/sammenligning.
 function rolleVis(rolle) { return rolle ? rolle.charAt(0).toUpperCase() + rolle.slice(1) : ''; }
 const STATUS_SORT = {hentet:0,klar_henting:2,vist_biltilsyn:3,klar_visning:4,ikke_veid:5,paabegynt:6,ikke_paabegynt:7,paa_vei:8, sendt:0,klar_sending:2,under_arbeid:6};
+// Alle bil-statuser fra og med Påbegynt til og med Hentet (altså IKKE "På vei"/"Ikke påbegynt") - brukt av
+// endreStatus() (js/oversikt-kalender.js) til å avgjøre når kravene for å begynne å jobbe på en bil (minst én
+// ansatt meldt på, alle 6 ankomstbilder, Diagnose utført) skal håndheves, uansett hvilken status overgangen
+// kommer FRA. Tettet 2026-11-20 (Henrik): tidligere gjaldt kravene kun fra nøyaktig "Ikke påbegynt", så en bil
+// kunne hoppe forbi sjekken rett fra "På vei" til "Påbegynt" eller lenger, eller fra "Ikke påbegynt" rett forbi
+// "Påbegynt" til en senere status, uten noen kontroll i det hele tatt.
+const PAABEGYNT_ELLER_LENGER_STATUSER = new Set(['paabegynt', 'ikke_veid', 'klar_visning', 'vist_biltilsyn', 'klar_henting', 'hentet']);
+function erPaabegyntEllerLenger(status) { return PAABEGYNT_ELLER_LENGER_STATUSER.has(status); }
 // "Bestilt frakt" er ikke lenger en verdi i ordreStatus-nedtrekkslisten (bedt om av Henrik
 // 2026-09-30: den krevde et manuelt valg som lett ble glemt, og "stjal" plassen til den
 // faktiske statusen). I stedet en uavhengig markering PÅ ordren - samme mønster som

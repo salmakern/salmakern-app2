@@ -514,22 +514,27 @@ describe('statuser: bare På vei, Ikke påbegynt, Påbegynt, Klar for henting og
         expect(toast.join('|')).not.toContain('kan bare ha statusene');
       });
     }
-    it('Påbegynt krever fortsatt en påmeldt ansatt, men ikke et ankomstbilde (kortet finnes ikke i ordren)', async () => {
+    // Disse to testene sjekker kravene fra en IKKE-admins ståsted (settes eksplisitt - resten av filen
+    // kjører som admin, og admin kan fra 2026-11-20 bevisst overstyre kravene, se test/strengere-ordre-krav.test.js).
+    it('Påbegynt krever fortsatt en påmeldt ansatt, men ikke bilder/diagnose (kortene finnes ikke i en «kun ekstrautstyr»-ordre)', async () => {
+      app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt' });
       const a = oppsett('ikke_paabegynt', { ansatte_signert: [] });
       await sandbox.endreStatus(a.o.id, 'paabegynt');
       expect(a.o.ordreStatus).toBe('ikke_paabegynt');
-      expect(a.toast.join('|')).toContain('Minst én ansatt må meldes på');
+      expect(a.toast.join('|')).toContain('minst én ansatt er meldt på ordren');
       const b = oppsett('ikke_paabegynt', { bilder_ankomst: [null, null, null, null, null, null] });
       expect((b.o.bilderAnkomst || []).some(Boolean)).toBe(false);
       await sandbox.endreStatus(b.o.id, 'paabegynt');
       expect(b.o.ordreStatus).toBe('paabegynt');
       expect(b.toast.join('|')).not.toContain('bilde');
+      expect(b.toast.join('|')).not.toContain('diagnose');
     });
-    it('kontroll: en vanlig bil uten ankomstbilde stoppes fortsatt, og en vanlig bil kan settes til Hentet og Klar for visning', async () => {
+    it('kontroll: en vanlig bil uten alle 6 ankomstbilder stoppes fortsatt (skjerpet 2026-11-20), og en vanlig bil kan settes til Hentet og Klar for visning', async () => {
+      app.settMe({ id: 2, navn: 'TEST - Ansatt', rolle: 'ansatt' });
       const a = oppsett('ikke_paabegynt', { kun_ekstrautstyr: false, bilder_ankomst: [null, null, null, null, null, null] });
       await sandbox.endreStatus(a.o.id, 'paabegynt');
       expect(a.o.ordreStatus).toBe('ikke_paabegynt');
-      expect(a.toast.join('|')).toContain('Minst ett bilde fra ankomst');
+      expect(a.toast.join('|')).toContain('alle 6 bilder fra ankomst er tatt');
       const b = oppsett('paabegynt', { kun_ekstrautstyr: false });
       await sandbox.endreStatus(b.o.id, 'klar_visning');
       expect(b.o.ordreStatus).toBe('klar_visning');
