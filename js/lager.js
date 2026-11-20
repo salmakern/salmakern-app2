@@ -1679,6 +1679,9 @@ async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa, ordreId =
 // bestillingen her. Idempotent: en linje som allerede finnes (produktnummer) røres ikke,
 // så et nytt kall (tapt svar, bekreftet på nytt) gjør ingenting ekstra. Lageruttak er
 // bevisst urørt - samme manuelle flyt via "Ekstra utstyr"-oppskriftene som i dag.
+// Mangler rabatt_prosent (ikke et endelig tall), sendes linjen UTEN rabatt-nøkkel (rettet
+// 2026-11-20; før ble den låst til 0 %, som hoppet over både kundens vanlige sats og NULL-
+// sperren i fiken-fakturer). Da får den kundens vanlige kategorisats som en vanlig linje.
 async function leggTilPortalUtstyrLinjer(ordreId) {
   const o = S.ordrer.find(x=>x.id===ordreId); if (!o) return;
   const linjer = Array.isArray(o.portalLinjer) ? o.portalLinjer : [];
@@ -1687,9 +1690,12 @@ async function leggTilPortalUtstyrLinjer(ordreId) {
     oppdaterSkalHaForOppskrift(linje.navn, true, ordreId);
     const finnes = (o.fikenLinjer||[]).some(l=>l.produktnummer===linje.produktnummer);
     if (finnes || !db) continue;
+    const harRabattFraPortalen = typeof linje.rabatt_prosent === 'number' && Number.isFinite(linje.rabatt_prosent);
     const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', {
       p_ordre_id: o.id, p_produktnummer: linje.produktnummer,
-      p_linje: { produktnummer: linje.produktnummer, antall: 1, rabatt: typeof linje.rabatt_prosent === 'number' ? linje.rabatt_prosent : 0 }
+      p_linje: harRabattFraPortalen
+        ? { produktnummer: linje.produktnummer, antall: 1, rabatt: linje.rabatt_prosent }
+        : { produktnummer: linje.produktnummer, antall: 1 }
     });
     if (error) {
       console.error('Kunne ikke legge til fakturalinje fra portal-bestilling:', error.message);

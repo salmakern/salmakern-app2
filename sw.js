@@ -106,7 +106,8 @@
 // v101 - Ordre-siden: «Hengerfeste først» i sorteringen og søk på forhandler.nr
 // v102 - «Kun ekstrautstyr»: rydder de andre stedene (Arkiv, kalenderkort og -linjer, kundehistorikk og PDF-rapport viser ikke lenger det som er skjult i ordren); Hentet skriver ikke til Admin-ark for en kun-ordre, og «Hengerfeste først» regner ikke en kun-ordre som hengerfeste
 // v103 - KGM Rexton: 2400 og 2401 (to varianter av samme ombygging) kan ikke lenger stå på samme faktura; en portalvariant med frosset rabatt vinner over avkrysningen
-const CACHE = 'salmakern-v103';
+// v104 - fakturaSjekk bruker Forhandlerportalens rabatt først (som fiken-fakturer); portal-linje uten rabatt_prosent låses ikke lenger til 0 %
+const CACHE = 'salmakern-v104';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

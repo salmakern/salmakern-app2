@@ -821,20 +821,41 @@ function fakturaSjekk(o) {
   const alias = o.kunde ? (S.fikenKundeAlias||[]).find(a => a.alias === o.kunde) : null;
   if (o.kunde && (S.fikenKundeAlias||[]).length && !alias) {
     leggTil('ukjent_fiken_kunde', 'Ukjent kunde i Fiken ennå - må velges manuelt ved fakturering', 'gul');
-  } else if (alias) {
-    const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
-    const rabattRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
-    if (manglerFrossetRabatt && !rabattRad) {
-      leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
-    } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
-      // Rettet 5.11 (uavhengig gjennomgang fant at lista viste GRØNT for ordre serveren
-      // faktisk avviser 400 på): samme NULL-regel som fiken-fakturer sin sperre (09cf8f2).
-      // Grov tilnærming med vilje - sjekker ikke NØYAKTIG hvilken kategori hver linje faller
-      // i slik serveren gjør (klienten har ikke nødvendigvis Fiken sitt produktnavn
-      // tilgjengelig), så den kan varsle noen ordre som i praksis ikke rammes - det er en
-      // bevisst avveining: heller varsle for mye enn å vise et falskt grønt lys.
-      leggTil('rabatt_kategori_mangler', 'Kundens rabatt er ikke fullstendig satt i Fiken-rabatt (minst én kategori står tomt, ikke 0 %) - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist', 'rod');
+  }
+  // Rabatt-kilde: PORTALEN FØRST når ordren har en forhandler-kontakt og den finnes i
+  // portal_kunde_rabatt (samme presedens som fiken-fakturer sin server-side sjekk, s08-063
+  // fase 2), ellers fiken_kunde_rabatt via Fiken-alias som før. Rettet 2026-11-20: denne
+  // sjekken så tidligere BARE på fiken_kunde_rabatt og kunne derfor vise feil farge for en
+  // portal-ordre (grønt der serveren ville avvist, rødt der den ville godtatt).
+  // kontakt_id er IKKE unik i portal_kunde_rabatt (delte Kontakter-kontakter, f.eks. BOS-gruppen).
+  // Serveren slår opp med .maybeSingle(), som gir null (feil) ved flere rader og da faller
+  // tilbake til fiken_kunde_rabatt - derfor brukes portalraden her bare når NØYAKTIG én treffer.
+  let rabattRad = null, rabattKilde = null;
+  if (o.forhandlerKontaktId) {
+    const portalRader = (S.portalKundeRabatt||[]).filter(r => r.kontakt_id === o.forhandlerKontaktId);
+    if (portalRader.length === 1) {
+      const portalRad = portalRader[0];
+      rabattRad = { rabatt_ombygging: portalRad.rabatt_standard ?? null, rabatt_ekstra_utstyr: portalRad.rabatt_ekstrautstyr ?? null };
+      rabattKilde = 'portal';
     }
+  }
+  if (!rabattRad && alias) {
+    const lokalRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
+    if (lokalRad) { rabattRad = lokalRad; rabattKilde = 'lokal'; }
+  }
+  const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
+  // Uten alias og uten forhandler-kontakt finnes det ingen kilde å slå opp i (gammel PWA uten
+  // lastingen, eller ukjent kunde som alt er varslet over) - da hoppes rabattdelen over som før.
+  if (manglerFrossetRabatt && !rabattRad && (alias || o.forhandlerKontaktId)) {
+    leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
+  } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
+    // Rettet 5.11 (uavhengig gjennomgang fant at lista viste GRØNT for ordre serveren faktisk
+    // avviser 400 på): samme NULL-regel som fiken-fakturer sin sperre (09cf8f2), nå for begge
+    // rabattkildene. Grov tilnærming med vilje (uendret fra 5.11): sjekker ikke nøyaktig hvilken
+    // kategori hver linje faller i slik serveren gjør - varsler heller for mye enn å vise et
+    // falskt grønt lys.
+    const settStedet = rabattKilde === 'portal' ? 'i Forhandlerportalen for denne forhandleren' : 'i Fiken-rabatt';
+    leggTil('rabatt_kategori_mangler', `Kundens rabatt er ikke fullstendig satt ${settStedet} (minst én kategori står tomt, ikke 0 %) - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist`, 'rod');
   }
 
   // «Hentet»-ordre fakturert FØR denne sjekken fantes (s90-20261104-5, avtalt med Henrik:

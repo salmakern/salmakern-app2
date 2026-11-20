@@ -68,11 +68,39 @@ describe('leggTilPortalUtstyrLinjer', () => {
     expect(o.fikenLinjer.map((l) => l.produktnummer)).toEqual(['501', '502']);
   });
 
-  it('mangler rabatt_prosent: sendes som 0, ikke undefined/NaN', async () => {
+  // Rettet 2026-11-20: før ble en linje uten rabatt_prosent låst til rabatt 0, som hoppet over
+  // både kundens vanlige sats og NULL-sperren i fiken-fakturer. Nå sendes linjen UTEN rabatt-nøkkel.
+  it('mangler rabatt_prosent: linjen sendes UTEN rabatt-nøkkel (ikke låst til 0 %)', async () => {
     const o = nyOrdre({ portalLinjer: [{ produktnummer: '503', navn: 'Heldekkende gulv' }] });
     const { sandbox, rpcKall } = nyttMiljo(o);
     await sandbox.leggTilPortalUtstyrLinjer('ord_1');
-    expect(rpcKall[0][1].p_linje.rabatt).toBe(0);
+    expect(rpcKall).toHaveLength(1);
+    expect(Object.prototype.hasOwnProperty.call(rpcKall[0][1].p_linje, 'rabatt')).toBe(false);
+    expect({ ...rpcKall[0][1].p_linje }).toEqual({ produktnummer: '503', antall: 1 });
+  });
+
+  it('rabatt_prosent som ikke er et endelig tall (tekst, NaN, uendelig): ingen rabatt-nøkkel', async () => {
+    const o = nyOrdre({ portalLinjer: [
+      { produktnummer: '503', navn: 'A', rabatt_prosent: '15' },
+      { produktnummer: '504', navn: 'B', rabatt_prosent: NaN },
+      { produktnummer: '505', navn: 'C', rabatt_prosent: Infinity },
+      { produktnummer: '506', navn: 'D', rabatt_prosent: null },
+    ] });
+    const { sandbox, rpcKall } = nyttMiljo(o);
+    await sandbox.leggTilPortalUtstyrLinjer('ord_1');
+    expect(rpcKall).toHaveLength(4);
+    for (const [, args] of rpcKall) expect(Object.prototype.hasOwnProperty.call(args.p_linje, 'rabatt')).toBe(false);
+  });
+
+  it('rabatt_prosent er et tall (også 0): frosset på linjen som før', async () => {
+    const o = nyOrdre({ portalLinjer: [
+      { produktnummer: '503', navn: 'A', rabatt_prosent: 15 },
+      { produktnummer: '504', navn: 'B', rabatt_prosent: 0 },
+    ] });
+    const { sandbox, rpcKall } = nyttMiljo(o);
+    await sandbox.leggTilPortalUtstyrLinjer('ord_1');
+    expect(rpcKall[0][1].p_linje.rabatt).toBe(15);
+    expect(rpcKall[1][1].p_linje.rabatt).toBe(0);
   });
 
   it('linje uten produktnummer eller uten navn: hoppes helt over (ingen RPC, ingen skalHa-tekst)', async () => {

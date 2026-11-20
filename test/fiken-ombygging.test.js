@@ -587,6 +587,104 @@ describe('fakturaSjekk', () => {
     expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(false);
   });
 
+  // Rettet 2026-11-20: fakturaSjekk bruker samme rabattkilde som fiken-fakturer - portal_kunde_rabatt
+  // (via forhandlerKontaktId) FØRST, ellers fiken_kunde_rabatt via alias.
+  describe('rabattkilde: Forhandlerportalen først, som fiken-fakturer', () => {
+    const utenFrossetRabatt = { fikenLinjer: [{ produktnummer: '502', antall: 1, pris: 1670, mva: 'high' }] };
+    const rabattKoder = (sjekk) => sjekk.grunner.filter((g) => g.kode === 'rabatt_kategori_mangler' || g.kode === 'ingen_avtalt_rabatt');
+
+    it('(a) forhandlerKontaktId med komplett portalrad: ingen rabatt-advarsel', () => {
+      const env = nyEnvironment();
+      env.S.portalKundeRabatt = [{ kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: 0 }];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('(a2) portalraden er komplett, men den lokale Fiken-raden har NULL: portalen vinner, ingen advarsel', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: null }];
+      env.S.portalKundeRabatt = [{ kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10 }];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('(b) portalraden har rabatt_ekstrautstyr NULL: rød rabatt_kategori_mangler som nevner Forhandlerportalen', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }]; // lokal komplett: skal IKKE brukes
+      env.S.portalKundeRabatt = [{ kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: null }];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(sjekk.niva).toBe('rod');
+      const g = sjekk.grunner.find((x) => x.kode === 'rabatt_kategori_mangler');
+      expect(g).toBeTruthy();
+      expect(g.tekst).toMatch(/Forhandlerportalen/);
+    });
+
+    it('(b2) lokal Fiken-rad med NULL (ingen portalrad): teksten nevner Fiken-rabatt, ikke portalen', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: null }];
+      env.S.portalKundeRabatt = [{ kontakt_id: 'annen', rabatt_standard: 20, rabatt_ekstrautstyr: 10 }];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      const g = sjekk.grunner.find((x) => x.kode === 'rabatt_kategori_mangler');
+      expect(g.tekst).toMatch(/i Fiken-rabatt/);
+      expect(g.tekst).not.toMatch(/Forhandlerportalen/);
+    });
+
+    it('(c) uten forhandlerKontaktId, med alias og komplett Fiken-rad: ingen advarsel (uendret)', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
+      env.S.portalKundeRabatt = [{ kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: null }];
+      const sjekk = env.fakturaSjekk(basisOrdre(utenFrossetRabatt));
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('(d) uten forhandlerKontaktId, alias uten rabattrad: gul ingen_avtalt_rabatt (som før)', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      const sjekk = env.fakturaSjekk(basisOrdre(utenFrossetRabatt));
+      const g = sjekk.grunner.find((x) => x.kode === 'ingen_avtalt_rabatt');
+      expect(g).toBeTruthy();
+      expect(sjekk.niva).toBe('gul');
+    });
+
+    it('(d2) verken forhandlerKontaktId eller alias: ingen rabatt-advarsel (som før - ingen kilde å slå opp i)', () => {
+      const env = nyEnvironment();
+      const sjekk = env.fakturaSjekk(basisOrdre(utenFrossetRabatt));
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('forhandlerKontaktId uten portalrad faller tilbake på Fiken-raden (NULL der gir rød)', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: null, rabatt_ekstra_utstyr: 10 }];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(sjekk.niva).toBe('rod');
+      expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(true);
+    });
+
+    it('kontakt_id står på FLERE portalrader: brukes ikke (serverens maybeSingle gir null), Fiken-raden gjelder', () => {
+      const env = nyEnvironment();
+      env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
+      env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
+      env.S.portalKundeRabatt = [
+        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: null },
+        { kontakt_id: 'k1', rabatt_standard: 15, rabatt_ekstrautstyr: null },
+      ];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('frosset rabatt på alle linjer: portalens NULL spiller ingen rolle', () => {
+      const env = nyEnvironment();
+      env.S.portalKundeRabatt = [{ kontakt_id: 'k1', rabatt_standard: null, rabatt_ekstrautstyr: null }];
+      const sjekk = env.fakturaSjekk(basisOrdre({ forhandlerKontaktId: 'k1' })); // basisOrdre har rabatt:20
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+  });
+
   it('ordre allerede "hentet": merkes "ikke avstemt", men blir ikke rød av bare det', () => {
     const env = nyEnvironment();
     const sjekk = env.fakturaSjekk(basisOrdre({ ordreStatus: 'hentet' }));
