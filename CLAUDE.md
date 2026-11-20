@@ -478,6 +478,51 @@ Et uavhengig sikkerhets-/kodefunn 5.11 pekte på at `fiken-fakturer` sin idempot
 - **IKKE live-testet mot ekte Fiken** (bevisst): å faktisk trigge et race mot produksjon ville krevd å skape en ekte, parallell dobbel-fakturering-situasjon - for risikabelt og umulig å rydde opp i etterpå (Fiken-kladder/fakturaer kan ikke slettes). Verifisert utelukkende med 8 nye tester mot en falsk Fiken/Supabase (`test/fiken-fakturer-rabatt.test.js`, describe «atomisk reservasjon hindrer dobbel kladd»): normal flyt uendret, tapt reservasjon (vinner ferdig / vinner fortsatt i gang), Fiken avviser, Fiken uten Location-header, nettverksfeil, en frigjøring som ikke rører en annen ekte URL, og en allerede fastlåst sentinel ved kallets start. Hele testsuiten (1342 tester) og lint kjørt grønt før utrulling.
 - Ingen databaseendring (gjenbruker eksisterende `fiken_kladd_url`-kolonne). `sw.js` uendret (ren server-side endring).
 
+## Manglende Fiken-kontaktperson oppdages og løses VED FAKTURERING (skrevet, IKKE utrullet - venter på Henriks ja)
+
+Henrik: en selger fra Forhandlerportalen (ny ELLER en av de ca. 270 eksisterende, synket inn i `innstillinger.kontakter` sine
+`kontaktpersoner` av `hent-selgere-fra-portalen`) uten en tilsvarende kontaktperson registrert hos kunden i Fiken ble tidligere
+bare STILLE hoppet over av `fiken-fakturer` (se kommentaren ved `contactPersonId` der, før) - kladden ble opprettet uten
+kontaktperson, uten at noen fikk vite det. Løst i to deler:
+
+- **`fiken-fakturer` sin `needsKontaktperson`-gren**: finner ingen match på `kontaktpersonNavn` (o.eier) blant kundens
+  `contactPerson`-liste i Fiken, stoppes fakturering FØR den atomiske reservasjonen (samme runde-trip-mønster som den
+  eksisterende `needsBekreftelse` for en ukjent kunde) og svarer `{needsKontaktperson:true, ordreId, kundeNavn,
+  kontaktpersonNavn, contactId, fikenKundeNavn}` i stedet for å fakturere videre. `hoppOverKontaktpersonsjekk:true` er en
+  bevisst unnslippingsluke (admin kan velge å fakturere videre UTEN kontaktperson for akkurat DENNE fakturaen). Svikter selve
+  GET-kallet mot Fiken (Fiken nede), eller mangler `kontaktpersonNavn` helt: uendret oppførsel som før (fakturerer videre
+  uten å stoppe på noe vi ikke klarte å bekrefte).
+- **Ny edge-funksjon `fiken-opprett-kontaktperson`**: oppretter kontaktpersonen hos RIKTIG Fiken-kunde. Resolver kunden SELV
+  (stoler aldri på en contactId fra klienten): `fiken_kunde_alias` FØRST (samme tabell fiken-fakturer bruker), ellers
+  organisasjonsnummer HVIS det gir NØYAKTIG ett treff blant Fiken sine kunder (0 eller flere treff: oppretter ingenting, gir
+  en tydelig liste/begrunnelse tilbake i stedet for å gjette - aldri en gjetning som i `fiken-opprett-produkt`). Et eksakt
+  org.nr-treff lagres som en ny alias (samme tillit som en admins manuelle valg i `needsBekreftelse`-modalen), så senere
+  fakturering av samme kundenavn slipper å spørre på nytt. Finnes kontaktpersonen fra før (case-uavhengig navnematch): IKKE
+  en dublett, svarer at den finnes. Ellers `POST .../contacts/{id}/contactPerson` med navn+e-post (Fiken krever begge).
+  **Sikkerhetsmønster bevisst ulikt `fiken-opprett-produkt`**: den kalles fra Forhandlerportalens SERVER og bruker derfor en
+  delt hemmelighet (`FIKEN_SYNC_SECRET`). Denne kalles derimot direkte fra en innlogget admins NETTLESER i Salmakern-appen
+  (`edgeFetch`) - en delt hemmelighet ville da måttet ligge i klientkoden, synlig for enhver som åpner den. Bruker i stedet
+  SAMME EDGE-AUTH-GATE-mønster som `fiken-fakturer`/`hent-rabatter-fra-portalen` (kallerens egen `current_ansatt()`-sesjon,
+  rolle admin) - lagt til i `test/edge-auth-gate.test.js` sin byte-lik-sjekk.
+- **Klienten** (`js/ordre-detalj.js`): `visFikenKontaktpersonManglerModal()` viser modalen `fikenKontaktpersonMangler`
+  (salmakern.html) med navn/kunde fra serveren og et e-post-forslag hentet LOKALT fra `S.kontakter` via den eksisterende
+  `adminArkFinnKontaktEpost()` (samme oppslag Admin-ark allerede bruker - ingen ny serverrundtur for forslaget). «Opprett
+  kontaktperson i Fiken» kaller den nye funksjonen og prøver fakturering på nytt ved suksess ELLER «finnes allerede»
+  (begge har en `contactPersonId`); «Fortsett uten kontaktperson» prøver på nytt med `hoppOverKontaktpersonsjekk:true`.
+  Gjelder uansett hvilken knapp som startet faktureringen (`fakturerViaFiken` i ordredetaljen OG «Lag kladd i Fiken» på
+  Fakturering-siden - begge går via samme `kallFikenFakturer`), og uansett om selgeren er ny eller en av de ca. 270
+  eksisterende (sjekken kjører på HVER fakturering, ikke bare ved opprettelse).
+- **Ingen migrasjon**: ingen ny tabell/kolonne trengs - `fiken_kunde_alias` eksisterer fra før, og Fiken selv er
+  sannhetskilden for om kontaktpersonen finnes (en live GET hver gang, ingen lokal cache av "finnes/finnes ikke").
+- **Test**: `test/fiken-fakturer-kontaktperson.test.js` (needsKontaktperson-grenen, falsk Fiken/Supabase), `test/fiken-
+  opprett-kontaktperson.test.js` (validering, kundematching inkl. alias/org.nr-ambiguitet, idempotens, selve POST-en) og
+  `test/fiken-kontaktperson-mangler.test.js` (klientsiden: modal, e-post-forslag, retry-flyten, full app-harness). Hele
+  suiten og lint grønt. **IKKE live-testet mot ekte Fiken** (samme forbehold som `fiken-opprett-produkt`: en ekte
+  kontaktperson kan ikke angres/slettes trygt herfra) - selve `POST .../contactPerson`-kontrakten (name+email påkrevd,
+  Location-header med den nye id-en) er bekreftet mot Fiken sin offentlige OpenAPI-spec (tredjeparts-speil, ikke live), ikke
+  mot et ekte kall. `sw.js` CACHE bumpet til v99 i SAMME commit som klientendringen (vanlig rutine) - selve utrullingen er
+  **IKKE gjort ennå**: venter på Henriks eksplisitte ja før `functions deploy fiken-opprett-kontaktperson` og push til main.
+
 ## Importerte biler til portalen (aktive biler i selgernes «Mine bestillinger», etappe 1, skrevet 2026-11-10, UTRULLET 2026-11-16 - portalsiden står på «kun foreslå» (KUN_FORESLA) siden 16.11, ingenting synlig for forhandlere, se under)
 
 Henrik vil at de aktive bilene i appen skal stå i selgernes «Mine bestillinger» i Forhandlerportalen, med status. **Portalen eier alt som lages** (matching mot forhandler via Kontakter-id og org.nr, godkjenning per kunde, oppretting, skjuling, modus AV/KUN_FORESLA/AUTO; se portalens CLAUDE.md). Appen gir bare lesing, og skriver ALDRI til portalen eller til noen ordre i denne jobben:

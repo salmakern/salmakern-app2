@@ -706,6 +706,10 @@ async function settFikenLinje(id, linjeId, felt, val) {
 let fikenFaktureringOrdreId = null;
 let fikenFaktureringKandidater = [];
 let fikenFaktureringBrukRabatt = true;
+// s90-...-fiken-kontaktperson: data fra fiken-fakturer sin needsKontaktperson-gren, brukt av
+// fikenKontaktpersonMangler-modalen (se under) for å vise riktig navn/kunde og for å kalle den
+// nye edge-funksjonen fiken-opprett-kontaktperson med riktig ordreId/navn.
+let fikenKontaktpersonData = null;
 
 async function kallFikenFakturer(id, ekstra) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return 'error';
@@ -727,6 +731,10 @@ async function kallFikenFakturer(id, ekstra) {
       document.getElementById('fikenKundeRabattEkstraUtstyr').checked = false;
       openModal('fikenKundeBekreft');
       return 'needsBekreftelse';
+    }
+    if (data.needsKontaktperson) {
+      visFikenKontaktpersonManglerModal(data);
+      return 'needsKontaktperson';
     }
     if (!res.ok || data.error) {
       const feil = new Error(data.error || ('Fiken svarte ' + res.status));
@@ -922,6 +930,63 @@ async function bekreftFikenKunde() {
     btn.disabled = false; btn.textContent = 'Bekreft og opprett faktura';
     if (status === 'ok') closeModal('fikenKundeBekreft');
   });
+}
+
+// ============================================================
+// Kontaktperson mangler i Fiken (s90-...-fiken-kontaktperson, Henrik: en selger fra
+// Forhandlerportalen - ny ELLER en av de ca. 270 eksisterende - skal oppdages og løses VED
+// FAKTURERING, ikke stille hoppes over). fiken-fakturer sin needsKontaktperson-gren (se der)
+// stopper fakturering og gir oss igjen: ordreId, kundeNavn, kontaktpersonNavn, contactId og
+// fikenKundeNavn. E-post-forslaget hentes her på klienten fra S.kontakter (forhandlerens
+// kontaktpersoner, synket inn fra portalen av hent-selgere-fra-portalen) via
+// adminArkFinnKontaktEpost() - samme oppslag Admin-ark allerede bruker for e-postmottakere.
+// ============================================================
+function visFikenKontaktpersonManglerModal(data) {
+  fikenKontaktpersonData = data;
+  document.getElementById('fikenKpManglerNavn').textContent = data.kontaktpersonNavn || '';
+  document.getElementById('fikenKpManglerKunde').textContent = data.fikenKundeNavn || data.kundeNavn || '';
+  document.getElementById('fikenKpManglerEpost').value = (typeof adminArkFinnKontaktEpost === 'function' ? adminArkFinnKontaktEpost(data.kontaktpersonNavn) : '') || '';
+  document.getElementById('fikenKpManglerErr').textContent = '';
+  openModal('fikenKontaktpersonMangler');
+}
+
+async function opprettFikenKontaktperson() {
+  const data = fikenKontaktpersonData; if (!data) return;
+  const epost = (document.getElementById('fikenKpManglerEpost').value || '').trim();
+  const errEl = document.getElementById('fikenKpManglerErr');
+  if (!epost || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(epost)) { errEl.textContent = 'Skriv en gyldig e-post - Fiken krever e-post for å opprette en kontaktperson'; return; }
+  errEl.textContent = '';
+  const btn = document.getElementById('fikenKpManglerOpprettBtn');
+  btn.disabled = true; btn.textContent = 'Oppretter...';
+  try {
+    const res = await edgeFetch('fiken-opprett-kontaktperson', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordreId: data.ordreId, navn: data.kontaktpersonNavn, epost })
+    });
+    const svar = await res.json();
+    // created===false uten en contactPersonId betyr enten en reell feil (svar.error) eller at
+    // finnFikenKunde() i fiken-opprett-kontaktperson ikke klarte å slå opp riktig Fiken-kunde
+    // (ingen_orgnr/ingen_treff/flere_treff, se svar.reason - sendt med egen 4xx/5xx-status,
+    // derfor sjekket FØR res.ok) - ingen kontaktperson ble opprettet, ingenting å prøve
+    // fakturering mot ennå. created===false MED en contactPersonId betyr at den fantes fra før
+    // (idempotent) - like gyldig å prøve fakturering på nytt mot som en ekte opprettelse.
+    if (svar.created === false && !svar.contactPersonId) { errEl.textContent = svar.reason || svar.error || ('Fiken svarte ' + res.status); return; }
+    if (!res.ok || svar.error) { errEl.textContent = svar.error || ('Fiken svarte ' + res.status); return; }
+    closeModal('fikenKontaktpersonMangler');
+    visToast(svar.created ? `Kontaktperson «${data.kontaktpersonNavn}» opprettet i Fiken` : (svar.reason || 'Kontaktpersonen finnes allerede i Fiken'));
+    await kallFikenFakturer(data.ordreId, {});
+  } catch (e) {
+    errEl.textContent = 'Kunne ikke opprette kontaktpersonen: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Opprett kontaktperson i Fiken';
+  }
+}
+
+function fortsettUtenFikenKontaktperson() {
+  const data = fikenKontaktpersonData; if (!data) return;
+  closeModal('fikenKontaktpersonMangler');
+  kallFikenFakturer(data.ordreId, { hoppOverKontaktpersonsjekk: true });
 }
 
 function toggleFakturert(id) {

@@ -102,7 +102,8 @@
 // v94 - Oversikt: «Klar til fakturering»-kortet fjernet, «Innkommende» flyttet til en knapp på Ordre-siden, «På jobb nå»/«Stemplet inn nå» side om side
 // v97 - Fakturering-siden: biler kun Klar for henting/Hentet (ikke lenger Vist på biltilsynet), leveranser med status Sendt lagt til
 // v98 - «På jobb nå» er nå admin-only (var synlig for alle roller)
-const CACHE = 'salmakern-v98';
+// v99 - manglende Fiken-kontaktperson oppdages og løses ved fakturering (needsKontaktperson, ny modal)
+const CACHE = 'salmakern-v99';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
