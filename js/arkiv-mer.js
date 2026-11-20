@@ -328,7 +328,10 @@ function renderMer() {
         <input type="date" value="${kontaktinfo[a.id]?.fodselsdato||''}" onchange="settAnsattFodselsdato(${a.id},this.value)" title="Fødselsdato - trengs for å skrive kjøreseddel" style="width:auto;padding:5px 8px;font-size:12px">
         <button class="btn sm" onclick="toggleKanForeLonn(${a.id})" title="Timer-tilgang">${a.kanForeLonn===false?'⏱ Timer av':'⏱ Timer på'}</button>
         <button class="btn sm" onclick="adminSettNyPin(${a.id})" title="Sett en ny PIN for denne ansatte, f.eks. ved glemt PIN">🔑 Sett PIN</button>
-        <button class="btn sm" onclick="toggleAnsatt(${a.id})">${a.aktiv?'Deaktiver':'Aktiver'}</button>
+        ${a.aktiv
+          ? `<button class="btn sm" onclick="settAnsattInaktiv(${a.id})" title="Midlertidig - PIN, varsler og en eventuell stempling/ordreklokke røres ikke">Sett inaktiv</button>
+             <button class="btn sm" onclick="avsluttAnsatt(${a.id})" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5" title="Full tilgangssperring i ett steg: stempler ut, stopper ordreklokker, sletter PIN-koden og push-varslene">🔒 Avslutt ansatt</button>`
+          : `<button class="btn sm" onclick="reaktiverAnsattMedNyPin(${a.id})" style="background:#14532d;border-color:#22c55e;color:#86efac">Aktiver (ny PIN)</button>`}
         <button class="btn sm" onclick="slettAnsatt(${a.id})" style="background:#3f0000;border-color:#7f1d1d;color:#fca5a5">Slett</button>
       </div>
     </div></div>`).join('');
