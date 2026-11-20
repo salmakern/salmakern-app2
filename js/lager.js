@@ -60,10 +60,13 @@ function oppdaterLagerVarselBadge() {
   const varer = S.lagervarer||[];
   const lave = varer.filter(erLavBeholdning);
   const modeller = new Set(varer.map(v=>v.modell).filter(Boolean)).size;
+  // Forslag til bestilling (automatisk cron, se migrasjon 20261120090000) - bare admin godkjenner dem, så bare admin trenger å se at noen venter.
+  const forslag = (typeof erLagerAdmin === 'function' && erLagerAdmin()) ? (S.lagerBestillinger||[]).filter(b=>b.status==='forslag').length : 0;
   const deler = [
     `${varer.length} vare${varer.length===1?'':'r'}`,
     modeller ? `${modeller} modell${modeller===1?'':'er'}` : null,
-    lave.length ? `<span style="color:#fca5a5">${lave.length} under minimum</span>` : null
+    lave.length ? `<span style="color:#fca5a5">${lave.length} under minimum</span>` : null,
+    forslag ? `<span style="color:#f59e0b">${forslag} forslag venter godkjenning</span>` : null
   ].filter(Boolean);
   el.innerHTML = deler.join(' · ');
 }

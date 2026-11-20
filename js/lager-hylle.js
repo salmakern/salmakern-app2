@@ -537,20 +537,79 @@ function apneBestillingerModal() {
 }
 function renderBestillingerInnhold() {
   const el = document.getElementById('lagerBestillingerInnhold'); if (!el) return;
+  const forslag = (S.lagerBestillinger || []).filter(b => b.status === 'forslag');
   const apne = (S.lagerBestillinger || []).filter(b => b.status === 'apen');
-  if (!apne.length) { el.innerHTML = '<div class="muted small">Ingen åpne bestillinger.</div>'; return; }
-  const grupper = {};
-  apne.forEach(b => { (grupper[b.leverandor || 'Ukjent leverandør'] = grupper[b.leverandor || 'Ukjent leverandør'] || []).push(b); });
-  el.innerHTML = Object.keys(grupper).sort((a, b) => a.localeCompare(b, 'no')).map(lev => `<div style="margin-bottom:14px">
-    <div style="font-weight:700;margin-bottom:6px">${esc(lev)} <span class="muted small">${grupper[lev].length}</span></div>
-    ${grupper[lev].sort((a, b) => String(a.forventetDato || '9999').localeCompare(String(b.forventetDato || '9999'))).map(b => {
+  // Bryteren for automatiske forslag (cron kl. 06:30, se migrasjon 20261120090000) - admin-only, som
+  // timesatsen og andre innstillinger-bryterne i appen. Selve håndhevingen (bare admin godkjenner/avviser)
+  // er server-side i RPC-ene; dette er bare synligheten av bryteren.
+  const bryterHTML = erLagerAdmin() ? `<label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer">
+      <input type="checkbox" id="lagerForslagAktivSjekk" ${S.lagerForslagAktiv ? 'checked' : ''} onchange="settLagerForslagAktiv(this.checked)" style="width:18px;height:18px;flex-shrink:0">
+      <span class="small">Foreslå automatisk bestilling hver natt kl. 06:30 for varer under minimum MED leverandør satt (aldri uten leverandør, og aldri når det alt finnes en åpen bestilling eller et forslag for varen). Du må godkjenne hvert forslag her før det blir en ekte bestilling.</span></label>` : '';
+  const forslagHTML = forslag.length ? `<div style="margin-bottom:16px">
+    <div style="font-weight:700;margin-bottom:6px">Forslag til bestilling <span class="muted small">${forslag.length}</span></div>
+    ${forslag.map(b => {
       const v = (S.lagervarer || []).find(x => x.id === b.vareId);
-      return `<div class="box" style="margin-bottom:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      return `<div class="box" style="margin-bottom:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-left:3px solid #f59e0b">
         <div style="min-width:0"><div>${esc(v ? v.navn : '(vare slettet)')}</div>
-          <div class="small muted">${b.ukjentAntall ? 'Antall ukjent' : esc(fmtAntall(b.antall)) + ' ' + esc(v ? v.enhet : '')}${b.forventetDato ? ' · forventet ' + esc(lagerDato(b.forventetDato)) : ''}${b.bestiltDato ? ' · bestilt ' + esc(lagerDato(b.bestiltDato)) : ''}${b.kommentar ? ' · ' + esc(b.kommentar) : ''}</div></div>
-        <div style="display:flex;gap:6px"><button class="btn sm red" onclick="apneMottaModal('${b.id}')">Motta</button>
-          ${erLagerAdmin() ? `<button class="btn sm" onclick="kansellerBestilling('${b.id}')" style="color:#fca5a5">Kanseller</button>` : ''}</div></div>`;
-    }).join('')}</div>`).join('');
+          <div class="small muted">Forslag: ${esc(fmtAntall(b.antall))} ${esc(v ? v.enhet : '')}${b.leverandor ? ' hos ' + esc(b.leverandor) : ''}${v ? ' · ' + esc(fmtAntall(v.antall)) + '/' + esc(fmtAntall(v.minAntall)) + ' på lager' : ''}</div></div>
+        ${erLagerAdmin() ? `<div style="display:flex;gap:6px"><button class="btn sm red" onclick="godkjennBestillingsforslag('${b.id}')">Godkjenn</button>
+          <button class="btn sm" onclick="avvisBestillingsforslag('${b.id}')" style="color:#fca5a5">Avvis</button></div>` : '<span class="small muted">Venter på admin</span>'}</div>`;
+    }).join('')}</div>` : '';
+  const apneHTML = (() => {
+    if (!apne.length) return '<div class="muted small">Ingen åpne bestillinger.</div>';
+    const grupper = {};
+    apne.forEach(b => { (grupper[b.leverandor || 'Ukjent leverandør'] = grupper[b.leverandor || 'Ukjent leverandør'] || []).push(b); });
+    return Object.keys(grupper).sort((a, b) => a.localeCompare(b, 'no')).map(lev => `<div style="margin-bottom:14px">
+      <div style="font-weight:700;margin-bottom:6px">${esc(lev)} <span class="muted small">${grupper[lev].length}</span></div>
+      ${grupper[lev].sort((a, b) => String(a.forventetDato || '9999').localeCompare(String(b.forventetDato || '9999'))).map(b => {
+        const v = (S.lagervarer || []).find(x => x.id === b.vareId);
+        return `<div class="box" style="margin-bottom:6px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="min-width:0"><div>${esc(v ? v.navn : '(vare slettet)')}</div>
+            <div class="small muted">${b.ukjentAntall ? 'Antall ukjent' : esc(fmtAntall(b.antall)) + ' ' + esc(v ? v.enhet : '')}${b.forventetDato ? ' · forventet ' + esc(lagerDato(b.forventetDato)) : ''}${b.bestiltDato ? ' · bestilt ' + esc(lagerDato(b.bestiltDato)) : ''}${b.kommentar ? ' · ' + esc(b.kommentar) : ''}</div></div>
+          <div style="display:flex;gap:6px"><button class="btn sm red" onclick="apneMottaModal('${b.id}')">Motta</button>
+            ${erLagerAdmin() ? `<button class="btn sm" onclick="kansellerBestilling('${b.id}')" style="color:#fca5a5">Kanseller</button>` : ''}</div></div>`;
+      }).join('')}</div>`).join('');
+  })();
+  el.innerHTML = bryterHTML + forslagHTML + apneHTML;
+}
+// Admin-bryteren over (ren synlighet - håndhevingen er server-side). Samme målrettede update-mønster som
+// saveGPS()/saveTimesatsKr(): aldri via den generelle saveInnstillinger(), slik at en annen admins nylig
+// lagrede verdi aldri kan overskrives av en utdatert lokal kopi.
+function settLagerForslagAktiv(verdi) {
+  if (!erLagerAdmin()) return;
+  S.lagerForslagAktiv = !!verdi;
+  planleggLocalSpeiling();
+  if (!db) return;
+  ignorerRealtimeInnstillinger = true;
+  clearTimeout(ignorerRealtimeInnstillingerTimer);
+  ignorerRealtimeInnstillingerTimer = setTimeout(() => { ignorerRealtimeInnstillinger = false; }, 10000);
+  db.from('innstillinger').update({ lager_forslag_aktiv: S.lagerForslagAktiv }).eq('id', 1)
+    .then(r => { if (r.error) { console.error('Lagerforslag-bryter-lagring feilet:', r.error.message); visToast('Kunne ikke lagre bryteren: ' + r.error.message); } });
+}
+// Gjør et forslag om til en ekte åpen bestilling (samme virkning som «Registrer bestilling»). Bare admin.
+async function godkjennBestillingsforslag(id) {
+  if (!erLagerAdmin()) return;
+  const b = (S.lagerBestillinger || []).find(x => x.id === id); if (!b || b.status !== 'forslag') return;
+  if (!db) return;
+  const { error } = await db.rpc('lager_godkjenn_bestillingsforslag', { p_id: id, p_ansatt: me ? me.navn : '' });
+  if (error) { visToast('Kunne ikke godkjenne forslaget: ' + error.message); return; }
+  b.status = 'apen'; b.bestiltAv = me ? me.navn : b.bestiltAv; b.bestiltDato = b.bestiltDato || lagerIdag();
+  const v = (S.lagervarer || []).find(x => x.id === b.vareId); if (v) v.bestilt = true;
+  visToast('Bestillingen er godkjent', 'ok');
+  oppdaterLagerSkjermer();
+}
+// Avviser et forslag - det var aldri en ekte bestilling, så raden slettes helt (kommer tilbake neste natt
+// hvis varen fortsatt er under minimum og ingen har registrert en ekte bestilling i mellomtiden). Bare admin.
+async function avvisBestillingsforslag(id) {
+  if (!erLagerAdmin()) return;
+  const b = (S.lagerBestillinger || []).find(x => x.id === id); if (!b || b.status !== 'forslag') return;
+  if (!confirm('Avvise dette forslaget? Det var ikke en ekte bestilling og forsvinner helt.')) return;
+  if (!db) return;
+  const { data, error } = await db.rpc('lager_avvis_bestillingsforslag', { p_id: id });
+  if (error) { visToast('Kunne ikke avvise forslaget: ' + error.message); return; }
+  S.lagerBestillinger = (S.lagerBestillinger || []).filter(x => x.id !== id);
+  const v = (S.lagervarer || []).find(x => x.id === b.vareId); if (v && data) v.bestilt = !!data.bestilt;
+  oppdaterLagerSkjermer();
 }
 function apneRegistrerBestilling(opts = {}) {
   if (!erLagerAdmin()) return;
