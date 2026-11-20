@@ -1720,13 +1720,82 @@ function settAnsattFodselsdato(id, dato) {
   lagreAnsattKontaktinfo(id, naavarende.mobil || '', dato || '');
 }
 
-function toggleAnsatt(id) {
+// Rask, MIDLERTIDIG deaktivering (f.eks. permittering, lang sykmelding) - rører kun aktiv.
+// PIN-koden, push-abonnementene og en eventuell pågående stempling/ordreklokke står urørt.
+// Bruk avsluttAnsatt() i stedet når ansatten faktisk SLUTTER (full tilgangssperring).
+function settAnsattInaktiv(id) {
   const a=S.ansatte.find(x=>x.id===id); if(!a) return;
-  a.aktiv=!a.aktiv;
+  if (!confirm(`Sette ${a.navn} midlertidig inaktiv?\n\nAnsatten kan ikke logge inn før admin aktiverer igjen (krever da en ny PIN). PIN-koden, varsler og en eventuell stempling/ordreklokke røres ikke av denne knappen - bruk «🔒 Avslutt ansatt» i stedet hvis ansatten faktisk slutter.`)) return;
+  a.aktiv = false;
   planleggLocalSpeiling();
-  if(db) db.from('ansatte').update({aktiv:a.aktiv}).eq('id',id)
-    .then(r=>{if(r.error)console.error('Ansatt lagringsfeil:',r.error.message);});
   renderMer();
+  if(db) db.from('ansatte').update({aktiv:false}).eq('id',id).then(r=>{
+    if (r.error) {
+      a.aktiv = true; planleggLocalSpeiling(); renderMer();
+      visToast('Kunne ikke sette ansatt inaktiv: '+r.error.message);
+    }
+  });
+}
+
+// «Aktiver igjen» krever alltid en ny 6-sifret PIN (admin_reaktiver_ansatt, migrasjon
+// 20261120100000_avslutt_ansatt.sql) - en ansatt avsluttet med avsluttAnsatt() har ingen
+// PIN-rad igjen i det hele tatt, og det er enklere og tryggere å alltid kreve en ny PIN ved
+// reaktivering enn å måtte skille på HVORDAN ansatten ble satt inaktiv.
+function reaktiverAnsattMedNyPin(id) {
+  const a=S.ansatte.find(x=>x.id===id); if(!a || !db) return;
+  const pin = prompt(`Aktiver ${a.navn} igjen - sett en ny PIN (6 siffer):`);
+  if (pin === null) return;
+  if (!/^[0-9]{6}$/.test(pin.trim())) { alert('PIN må være nøyaktig 6 siffer'); return; }
+  db.rpc('admin_reaktiver_ansatt', {p_ansatt_id:id, p_ny_pin:pin.trim()}).then(r=>{
+    if (r.error) {
+      visToast(r.error.message.includes('KUN_ADMIN') ? 'Kun admin kan aktivere ansatte'
+        : r.error.message.includes('ANSATT_FINNES_IKKE') ? 'Fant ikke ansatten'
+        : r.error.message.includes('FOR_MANGE_FORSOK') ? 'For mange forsøk på kort tid - prøv igjen om noen minutter'
+        : 'Feil ved aktivering: '+r.error.message);
+      return;
+    }
+    if (r.data === 'PIN_I_BRUK') { alert('Denne PIN-en er allerede i bruk av en annen ansatt'); return; }
+    a.aktiv = true;
+    planleggLocalSpeiling();
+    renderMer();
+    visToast(`${a.navn} er aktivert med ny PIN`, 'ok');
+  });
+}
+
+// Full tilgangssperring i ÉN bekreftet, atomisk operasjon (admin) - går via avslutt_ansatt()
+// (migrasjon 20261120100000_avslutt_ansatt.sql, se CLAUDE.md): stempler ut hvis innstemplet
+// (samme beregning som admin-utstempling, men klokkeslettet er alltid NÅ), stopper åpne
+// ordreklokker, setter aktiv=false, nuller session_token, sletter PIN-raden og push-
+// abonnementene - alt eller ingenting (feiler ett steg, ruller databasen alt tilbake).
+// Timelister, lønn og ordre-logger som allerede peker på ansatten røres ikke.
+async function avsluttAnsatt(id) {
+  if (!me || me.rolle !== 'admin' || !db) return;
+  const a = S.ansatte.find(x=>x.id===id); if (!a) return;
+  if (id === me.id) { alert('Du kan ikke avslutte deg selv - be en annen admin gjøre det.'); return; }
+  if (!confirm(`Avslutte ${a.navn} HELT?\n\nDette gjør, i ett steg:\n- Stempler ut (hvis innstemplet) og stopper åpne ordreklokker\n- Setter ansatten inaktiv\n- Sletter PIN-koden\n- Sletter push-varslene på enhetene\n\nAnsatten kan IKKE logge inn igjen før en admin aktiverer med en helt ny PIN.\n\nTimelister, lønn og ordre-logger beholdes som før.`)) return;
+  try {
+    const { data, error } = await db.rpc('avslutt_ansatt', {p_ansatt_id:id});
+    if (error) {
+      const m = error.message || '';
+      visToast(
+        m.includes('KAN_IKKE_AVSLUTTE_SEG_SELV') ? 'Du kan ikke avslutte deg selv.'
+        : m.includes('KUN_ADMIN') ? 'Kun admin kan avslutte ansatte'
+        : m.includes('ANSATT_FINNES_IKKE') ? 'Fant ikke ansatten (kanskje allerede slettet)'
+        : 'Kunne ikke avslutte ansatt: '+m
+      );
+      return;
+    }
+    a.aktiv = false; a.stempletInnSiden = null;
+    planleggLocalSpeiling();
+    renderMer();
+    if (typeof renderStempletInnNa === 'function') renderStempletInnNa();
+    if (typeof renderPaaJobbNa === 'function') renderPaaJobbNa();
+    visToast(`${a.navn} er avsluttet`
+      + (data?.timeRegistrert ? ' - siste arbeidsøkt registrert' : '')
+      + (data?.ordreklokkerStoppet ? `, ${data.ordreklokkerStoppet} ordreklokke(r) stoppet` : ''), 'ok');
+  } catch (e) {
+    visToast('Kunne ikke avslutte ansatt: '+(e && e.message || 'ukjent feil'));
+  }
 }
 
 function opprettAnsatt() {
