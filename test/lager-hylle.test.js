@@ -673,6 +673,160 @@ describe('bestillinger', () => {
   });
 });
 
+// Forslag til bestilling (automatisk cron kl. 06:30, se migrasjon 20261120090000) - AVSLÅTT som standard
+// (innstillinger.lager_forslag_aktiv). Selve genereringen skjer i databasen (lager_generer_bestillingsforslag,
+// testet mot ekte DB i en rullet-tilbake transaksjon, se supabase/tester/lager_bestillingsforslag_TEST_body.sql);
+// her testes klientens del: bryteren, visningen av forslag, og godkjenn/avvis.
+describe('forslag til bestilling (automatisk, bare admin godkjenner)', () => {
+  beforeEach(() => {
+    S.lagervarer = [vare({ id: 'v1', antall: 2, minAntall: 5, leverandor: 'Norengros' })];
+  });
+
+  it('bryteren vises bare for admin, og speiler S.lagerForslagAktiv (HTML-attributtet checked)', () => {
+    S.lagerForslagAktiv = true;
+    sandbox.apneBestillingerModal();
+    let html = el('lagerBestillingerInnhold').innerHTML;
+    expect(html).toMatch(/id="lagerForslagAktivSjekk" checked/);
+    S.lagerForslagAktiv = false;
+    sandbox.renderBestillingerInnhold();
+    html = el('lagerBestillingerInnhold').innerHTML;
+    expect(html).toMatch(/id="lagerForslagAktivSjekk" (?!checked)/);
+
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    sandbox.apneBestillingerModal();
+    expect(el('lagerBestillingerInnhold').innerHTML).not.toContain('lagerForslagAktivSjekk');
+    app.settMe({ id: 1, navn: 'Admin Test', rolle: 'admin' });
+  });
+
+  it('settLagerForslagAktiv: bare admin, målrettet update på innstillinger (aldri saveInnstillinger)', () => {
+    const f = lagDb(); app.settDb(f.db);
+    sandbox.settLagerForslagAktiv(true);
+    expect(S.lagerForslagAktiv).toBe(true);
+    expect(tabellKall(f.kall, 'innstillinger', 'update')).toEqual([[{ lager_forslag_aktiv: true }]]);
+    sandbox.settLagerForslagAktiv(false);
+    expect(S.lagerForslagAktiv).toBe(false);
+
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    const f2 = lagDb(); app.settDb(f2.db);
+    sandbox.settLagerForslagAktiv(true);
+    expect(S.lagerForslagAktiv).toBe(false); // ingen endring, ikke admin
+    expect(f2.kall).toEqual([]);
+    app.settMe({ id: 1, navn: 'Admin Test', rolle: 'admin' });
+  });
+
+  it('forslag vises med «Godkjenn»/«Avvis» for admin, og «Venter på admin» for en vanlig ansatt', () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag', antall: 3, leverandor: 'Norengros', bestiltAv: '' })];
+    sandbox.apneBestillingerModal();
+    let html = el('lagerBestillingerInnhold').innerHTML;
+    expect(html).toContain('Forslag til bestilling');
+    expect(html).toContain('Gassdemper');
+    expect(html).toContain('hos Norengros');
+    expect(html).toMatch(/godkjennBestillingsforslag\('lbf1'\)/);
+    expect(html).toMatch(/avvisBestillingsforslag\('lbf1'\)/);
+
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    sandbox.apneBestillingerModal();
+    html = el('lagerBestillingerInnhold').innerHTML;
+    expect(html).toContain('Forslag til bestilling');
+    expect(html).toContain('Venter på admin');
+    expect(html).not.toMatch(/godkjennBestillingsforslag/);
+    expect(html).not.toMatch(/avvisBestillingsforslag/);
+    app.settMe({ id: 1, navn: 'Admin Test', rolle: 'admin' });
+  });
+
+  it('ingen forslag: ingen «Forslag til bestilling»-seksjon, og den vanlige «Ingen åpne bestillinger» vises fortsatt', () => {
+    S.lagerBestillinger = [];
+    sandbox.apneBestillingerModal();
+    const html = el('lagerBestillingerInnhold').innerHTML;
+    expect(html).not.toContain('Forslag til bestilling');
+    expect(html).toContain('Ingen åpne bestillinger');
+  });
+
+  it('godkjenn: RPC med p_id/p_ansatt, raden blir apen, varen merkes bestilt, badge og liste oppdateres', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag', antall: 3, bestiltAv: '' })];
+    const f = lagDb({ rpcSvar: { lager_godkjenn_bestillingsforslag: { data: { vareId: 'v1' }, error: null } } }); app.settDb(f.db);
+    await sandbox.godkjennBestillingsforslag('lbf1');
+    expect(rpcKall(f.kall, 'lager_godkjenn_bestillingsforslag')[0].args).toEqual({ p_id: 'lbf1', p_ansatt: 'Admin Test' });
+    expect(S.lagerBestillinger[0]).toMatchObject({ status: 'apen', bestiltAv: 'Admin Test' });
+    expect(S.lagervarer[0].bestilt).toBe(true);
+    expect(toasts.map((t) => t[0]).join('|')).toMatch(/godkjent/);
+  });
+
+  it('godkjenn: feil fra databasen endrer ingenting lokalt', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    const f = lagDb({ rpcSvar: { lager_godkjenn_bestillingsforslag: { data: null, error: { message: 'boom' } } } }); app.settDb(f.db);
+    await sandbox.godkjennBestillingsforslag('lbf1');
+    expect(S.lagerBestillinger[0].status).toBe('forslag');
+    expect(toasts.map((t) => t[0]).join('|')).toMatch(/Kunne ikke godkjenne/);
+  });
+
+  it('godkjenn: bare admin (en vanlig ansatt utløser ingen RPC og endrer ingenting)', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    const f = lagDb(); app.settDb(f.db);
+    await sandbox.godkjennBestillingsforslag('lbf1');
+    expect(f.kall).toEqual([]);
+    expect(S.lagerBestillinger[0].status).toBe('forslag');
+    app.settMe({ id: 1, navn: 'Admin Test', rolle: 'admin' });
+  });
+
+  it('avvis: spør om bekreftelse, RPC med p_id, raden fjernes helt og flagget følger svaret', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    S.lagervarer[0].bestilt = true;
+    const f = lagDb({ rpcSvar: { lager_avvis_bestillingsforslag: { data: { vareId: 'v1', bestilt: false }, error: null } } }); app.settDb(f.db);
+    await sandbox.avvisBestillingsforslag('lbf1');
+    expect(rpcKall(f.kall, 'lager_avvis_bestillingsforslag')[0].args).toEqual({ p_id: 'lbf1' });
+    expect(S.lagerBestillinger).toHaveLength(0);
+    expect(S.lagervarer[0].bestilt).toBe(false);
+  });
+
+  it('avvis: avbrutt bekreftelse gjør ingen RPC-kall', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    sandbox.confirm = () => false;
+    const f = lagDb(); app.settDb(f.db);
+    await sandbox.avvisBestillingsforslag('lbf1');
+    expect(f.kall).toEqual([]);
+    expect(S.lagerBestillinger).toHaveLength(1);
+    sandbox.confirm = () => true;
+  });
+
+  it('avvis: feil fra databasen lar raden stå som forslag', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    const f = lagDb({ rpcSvar: { lager_avvis_bestillingsforslag: { data: null, error: { message: 'boom' } } } }); app.settDb(f.db);
+    await sandbox.avvisBestillingsforslag('lbf1');
+    expect(S.lagerBestillinger).toHaveLength(1);
+    expect(toasts.map((t) => t[0]).join('|')).toMatch(/Kunne ikke avvise/);
+  });
+
+  it('avvis: bare admin (en vanlig ansatt utløser ingen RPC og endrer ingenting)', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    const f = lagDb(); app.settDb(f.db);
+    await sandbox.avvisBestillingsforslag('lbf1');
+    expect(f.kall).toEqual([]);
+    expect(S.lagerBestillinger).toHaveLength(1);
+    app.settMe({ id: 1, navn: 'Admin Test', rolle: 'admin' });
+  });
+
+  it('godkjenn/avvis på en rad som ikke lenger er et forslag: ingen RPC-kall (klienten sjekker status før den kaller)', async () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'apen' })];
+    const f = lagDb(); app.settDb(f.db);
+    await sandbox.godkjennBestillingsforslag('lbf1');
+    await sandbox.avvisBestillingsforslag('lbf1');
+    expect(f.kall).toEqual([]);
+  });
+
+  it('badgen («N forslag venter godkjenning») vises bare for admin', () => {
+    S.lagerBestillinger = [bestilling({ id: 'lbf1', vareId: 'v1', status: 'forslag' })];
+    sandbox.oppdaterLagerVarselBadge();
+    expect(el('lagerVarselBadge').innerHTML).toContain('1 forslag venter godkjenning');
+    app.settMe({ id: 2, navn: 'Ansatt', rolle: 'ansatt' });
+    sandbox.oppdaterLagerVarselBadge();
+    expect(el('lagerVarselBadge').innerHTML).not.toContain('forslag venter godkjenning');
+    app.settMe({ id: 1, navn: 'Admin Test', rolle: 'admin' });
+  });
+});
+
 describe('innlasting og Realtime', () => {
   it('dbToLagervare/dbToLagerHylle/dbToLagerBestilling leser de nye kolonnene og tåler tomme/NULL-verdier', () => {
     expect(sandbox.dbToLagervare({ id: 'v', navn: 'x', hylle_id: 'hy1' }).hylleId).toBe('hy1');

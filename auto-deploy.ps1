@@ -1,59 +1,58 @@
-# Salmaker'n - Auto-deploy til GitHub/Netlify
+# Salmaker'n - Auto-deploy med FileSystemWatcher
 
 $mappe = "C:\Users\GroAnitaMartinsen\OneDrive - Telemark Salmakerverksted\Skrivebord\Claude app"
-$fil = "$mappe\salmakern.html"
-$sjekkIntervall = 15
 
 Write-Host "Salmaker'n auto-deploy startet!" -ForegroundColor Green
-Write-Host "Fil: $fil" -ForegroundColor Cyan
+Write-Host "Mappe: $mappe" -ForegroundColor Cyan
 Write-Host ""
 
-# Sjekk at filen finnes
-if (-not (Test-Path $fil)) {
-    Write-Host "FEIL: Finner ikke filen!" -ForegroundColor Red
-    Write-Host "Sjekk at stien er riktig." -ForegroundColor Red
-    pause
+if (-not (Test-Path $mappe)) {
+    Write-Host "FEIL: Finner ikke mappen!" -ForegroundColor Red
+    Read-Host "Trykk Enter for aa lukke"
     exit
 }
 
-$sistHash = (Get-FileHash $fil -Algorithm MD5).Hash
-$sistStr  = (Get-Item $fil).LastWriteTime
-Write-Host "Fil funnet! Storrelse: $((Get-Item $fil).Length) bytes" -ForegroundColor Green
-Write-Host "Sist endret: $sistStr" -ForegroundColor Gray
-Write-Host "Hash: $sistHash" -ForegroundColor Gray
-Write-Host ""
-Write-Host "Klar. Sjekker hvert $sjekkIntervall sekund..." -ForegroundColor Gray
+try {
+    $watcher = New-Object System.IO.FileSystemWatcher
+    $watcher.Path = $mappe
+    $watcher.Filter = "salmakern.html"
+    $watcher.NotifyFilter = [System.IO.NotifyFilters]::LastWrite
+    $watcher.EnableRaisingEvents = $true
 
-$teller = 0
-while ($true) {
-    Start-Sleep -Seconds $sjekkIntervall
-    $teller++
-    Write-Host "Sjekk nr $teller..." -ForegroundColor DarkGray
+    Write-Host "Venter paa endringer i salmakern.html..." -ForegroundColor Gray
+    Write-Host "(Trykk Ctrl+C for aa stoppe)" -ForegroundColor DarkGray
+    Write-Host ""
 
-    try {
-        $nyHash = (Get-FileHash $fil -Algorithm MD5).Hash
-        $nyStr  = (Get-Item $fil).LastWriteTime
-    } catch {
-        Write-Host "Feil ved lesing: $_" -ForegroundColor Red
-        continue
+    $sisteDeploy = [DateTime]::MinValue
+
+    while ($true) {
+        $endring = $watcher.WaitForChanged([System.IO.WatcherChangeTypes]::Changed, 1000)
+
+        if (-not $endring.TimedOut) {
+            Start-Sleep -Milliseconds 800
+
+            $naa = [DateTime]::Now
+
+            if (($naa - $sisteDeploy).TotalSeconds -lt 5) { continue }
+            $sisteDeploy = $naa
+
+            Write-Host "[$($naa.ToString('HH:mm:ss'))] Endring oppdaget! Deployer..." -ForegroundColor Yellow
+
+            Set-Location $mappe
+            & git add salmakern.html
+            & git commit -m "Oppdatering $($naa.ToString('dd.MM.yyyy HH:mm'))"
+            & git push
+
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[$($naa.ToString('HH:mm:ss'))] Nettsiden er oppdatert!" -ForegroundColor Green
+            } else {
+                Write-Host "FEIL under push - sjekk internett/git" -ForegroundColor Red
+            }
+            Write-Host ""
+        }
     }
-
-    Write-Host "  Hash: $nyHash" -ForegroundColor DarkGray
-    Write-Host "  Tid:  $nyStr" -ForegroundColor DarkGray
-
-    if ($nyHash -ne $sistHash) {
-        $sistHash = $nyHash
-        $naa = [DateTime]::Now
-
-        Write-Host ""
-        Write-Host "[$($naa.ToString('HH:mm:ss'))] Endring oppdaget! Laster opp..." -ForegroundColor Yellow
-
-        Set-Location $mappe
-        & git add -A
-        & git commit -m "Automatisk oppdatering $($naa.ToString('dd.MM.yyyy HH:mm'))"
-        & git push
-
-        Write-Host "Nettsiden er oppdatert!" -ForegroundColor Green
-        Write-Host ""
-    }
+} catch {
+    Write-Host ""
+    Write-Host "FEIL: $_" -ForegroundColor Red
+    Read-Host "Trykk Enter for aa lukke"
 }

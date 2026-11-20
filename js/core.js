@@ -464,7 +464,7 @@ const FOTO_SIDER = {
 };
 
 let db = null;
-let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], biltilsynReisetider:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null, timesatsKr:null};
+let S  = {ansatte:[], ordrer:[], timer:[], flater:[], dagensPIN:'1234', nextId:100, gps:{lat:null,lng:null,radius:300}, beskjeder:[], kontakter:[], utstyrMaler:[], drivstoffSatser:[], biltilsynReisetider:[], moter:[], godkjennerMeldinger:[], hmsAvvik:[], hmsRisikovurderinger:[], hmsStoffkartotek:[], hmsVernerunder:[], hmsVernerundeMal:null, hmsHandbok:null, timesatsKr:null, lagerForslagAktiv:false};
 let me = null;
 // Timeren som håndhever ansatte.okt_maks_minutter klient-side (ren UX - selve håndhevingen
 // skjer server-side i current_ansatt()/hent_innlogget_ansatt() uansett). Satt/fornyet i
@@ -563,6 +563,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     S.kontakter        = S.kontakter        || [];
     S.standardtider    = S.standardtider    || {};
     S.timesatsKr       = S.timesatsKr       ?? null;
+    S.lagerForslagAktiv = !!S.lagerForslagAktiv;
     S.hmsAvvik             = S.hmsAvvik             || [];
     S.hmsRisikovurderinger = S.hmsRisikovurderinger || [];
     S.hmsStoffkartotek     = S.hmsStoffkartotek     || [];
@@ -782,6 +783,7 @@ async function loadFromSupabase() {
     S.kontakter      = sR.data?.kontakter       || [];
     S.standardtider  = sR.data?.standardtider   || {};
     S.timesatsKr     = sR.data?.timesats_kr     ?? null;
+    S.lagerForslagAktiv = !!sR.data?.lager_forslag_aktiv;
   }
   // Sett nextId til høyere enn alle eksisterende ID-er (se beregnNextId() over).
   S.nextId = beregnNextId(S.ansatte, S.timer, S.utstyrMaler);
@@ -1475,6 +1477,7 @@ function subscribeRealtime() {
       if ('kontakter' in row) S.kontakter = row.kontakter || [];
       if ('standardtider' in row) S.standardtider = row.standardtider || {};
       if ('timesats_kr' in row) S.timesatsKr = row.timesats_kr ?? null;
+      if ('lager_forslag_aktiv' in row) { S.lagerForslagAktiv = !!row.lager_forslag_aktiv; if (typeof oppdaterLagerHylleModaler === 'function') oppdaterLagerHylleModaler(); }
       if (me) renderMer();
     })
     .subscribe(async (status, err) => {
@@ -1610,6 +1613,7 @@ function defaultData() {
     dagensPIN: String(Math.floor(1000+Math.random()*9000)),
     gps: {lat:null, lng:null, radius:300},
     timesatsKr: null,
+    lagerForslagAktiv: false,
     beskjeder: [], kontakter: [], hms: [], utstyrMaler: [], drivstoffSatser: [], biltilsynReisetider: []
   };
 }
