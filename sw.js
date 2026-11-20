@@ -107,7 +107,8 @@
 // v102 - «Kun ekstrautstyr»: rydder de andre stedene (Arkiv, kalenderkort og -linjer, kundehistorikk og PDF-rapport viser ikke lenger det som er skjult i ordren); Hentet skriver ikke til Admin-ark for en kun-ordre, og «Hengerfeste først» regner ikke en kun-ordre som hengerfeste
 // v103 - KGM Rexton: 2400 og 2401 (to varianter av samme ombygging) kan ikke lenger stå på samme faktura; en portalvariant med frosset rabatt vinner over avkrysningen
 // v104 - fakturaSjekk bruker Forhandlerportalens rabatt først (som fiken-fakturer); portal-linje uten rabatt_prosent låses ikke lenger til 0 %
-const CACHE = 'salmakern-v104';
+// v105 - Strengere krav for å starte en ordre (gjelder alle hopp til Påbegynt/videre, krever alle 6 ankomstbilder + diagnose, admin kan overstyre); delt stasjonskonto (Booking Salmaker) krever posisjon innenfor verkstedets GPS-radius for å logge inn; lager: automatisk bestillingsforslag (bryter av som standard, ingen synlig endring før Henrik slår den på)
+const CACHE = 'salmakern-v105';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
