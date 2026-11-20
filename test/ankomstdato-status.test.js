@@ -122,9 +122,9 @@ describe('Krever ansatt meldt på før "Ikke påbegynt" → "Påbegynt" (bedt om
   let sandbox, ordre;
   beforeEach(() => {
     sandbox = nyEnvironment();
-    // bilderAnkomst har ett bilde her - denne describe-blokken tester KUN
-    // ansatt-kravet isolert, se egen blokk under for bilde-kravet.
-    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [], bilderAnkomst: ['data:image/png;base64,x'] };
+    // Bilder og diagnose er fullt oppfylt her - denne describe-blokken tester KUN
+    // ansatt-kravet isolert, se egne blokker under for bilde-/diagnose-kravet.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [], bilderAnkomst: Array(6).fill('data:image/png;base64,x'), diagnose: true };
     sandbox._setS({ ordrer: [ordre] });
     settDbUtfall(sandbox, true);
   });
@@ -147,13 +147,17 @@ describe('Krever ansatt meldt på før "Ikke påbegynt" → "Påbegynt" (bedt om
   });
 });
 
-describe('Krever minst ett ankomstbilde før "Ikke påbegynt" → "Påbegynt" (bedt om av Henrik 2026-09-14)', () => {
+// Skjerpet 2026-11-20 (Henrik, valgt av 4 forslag): det holdt tidligere med ETT ankomstbilde -
+// nå kreves ALLE 6, pluss «Diagnose utført» (se endreStatus() i oversikt-kalender.js). Se eget
+// testfil test/strengere-ordre-krav.test.js for selve hullet som ble tettet (kravene gjaldt
+// tidligere KUN fra nøyaktig "Ikke påbegynt"), admin-overstyring og «kun ekstrautstyr»-unntaket.
+describe('Krever ALLE 6 ankomstbilder og «Diagnose utført» før "Ikke påbegynt" → "Påbegynt" (skjerpet 2026-11-20, tidligere holdt det med ett bilde og diagnose ble ikke krevd her)', () => {
   let sandbox, ordre;
   beforeEach(() => {
     sandbox = nyEnvironment();
-    // ansatteSignert har ett medlem her - denne describe-blokken tester KUN
-    // bilde-kravet isolert, se blokken over for ansatt-kravet.
-    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], bilderAnkomst: [null,null,null,null,null,null] };
+    // ansatteSignert og diagnose er fullt oppfylt her - denne describe-blokken tester KUN
+    // bilde-kravet isolert, se blokken under for diagnose-kravet.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], diagnose: true, bilderAnkomst: [null,null,null,null,null,null] };
     sandbox._setS({ ordrer: [ordre] });
     settDbUtfall(sandbox, true);
   });
@@ -164,8 +168,49 @@ describe('Krever minst ett ankomstbilde før "Ikke påbegynt" → "Påbegynt" (b
     expect(sandbox._getS().ordrer[0].endringer.length).toBe(0);
   });
 
-  it('tillater overgangen når minst ett ankomstbilde finnes', async () => {
+  it('blokkerer FORTSATT med bare ett av 6 bilder (den gamle "minst ett"-regelen er erstattet)', async () => {
     ordre.bilderAnkomst = [null,'data:image/png;base64,x',null,null,null,null];
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
+  });
+
+  it('blokkerer med 5 av 6 bilder - det må være ALLE seks', async () => {
+    ordre.bilderAnkomst = ['a','b','c','d','e',null];
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
+  });
+
+  it('tillater overgangen når alle 6 ankomstbilder finnes', async () => {
+    ordre.bilderAnkomst = ['a','b','c','d','e','f'];
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paabegynt');
+  });
+
+  it('påvirker ikke andre statusoverganger (f.eks. til "På vei")', async () => {
+    await sandbox.endreStatus('ord_1', 'paa_vei');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paa_vei');
+  });
+});
+
+describe('Krever «Diagnose utført» før "Ikke påbegynt" → "Påbegynt" (nytt krav 2026-11-20)', () => {
+  let sandbox, ordre;
+  beforeEach(() => {
+    sandbox = nyEnvironment();
+    // ansatteSignert og bilderAnkomst er fullt oppfylt her - denne describe-blokken tester
+    // KUN diagnose-kravet isolert.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], bilderAnkomst: Array(6).fill('data:image/png;base64,x'), diagnose: false };
+    sandbox._setS({ ordrer: [ordre] });
+    settDbUtfall(sandbox, true);
+  });
+
+  it('blokkerer overgangen når diagnose ikke er utført', async () => {
+    await sandbox.endreStatus('ord_1', 'paabegynt');
+    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
+    expect(sandbox._getS().ordrer[0].endringer.length).toBe(0);
+  });
+
+  it('tillater overgangen når diagnose er utført', async () => {
+    ordre.diagnose = true;
     await sandbox.endreStatus('ord_1', 'paabegynt');
     expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paabegynt');
   });

@@ -638,26 +638,42 @@ async function endreStatus(id, nyStatus) {
   const forrigeDatoKlarHenting = o.datoKlarHenting;
   const forrigeAnkomstdato = o.ankomstdato;
   const forrigeEffektivTidFrossen = o.effektivTidFrossen;
-  // Ingen skal kunne begynne å jobbe på en bil uten at det er registrert HVEM som gjør
-  // det - blokkerer derfor akkurat denne overgangen med mindre minst én ansatt allerede
-  // er meldt på. Andre statusoverganger er upåvirket.
-  if (forrigeStatus === 'ikke_paabegynt' && nyStatus === 'paabegynt' && !o.ansatteSignert.length) {
-    visToast('Minst én ansatt må meldes på ordren før den kan settes til Påbegynt.');
-    if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
-    renderAll();
-    if (activeOrdreId===id) buildOrdreDetail();
-    return;
-  }
-  // Samme prinsipp som ansatt-sjekken over: det skal ikke gå an å begynne å jobbe på
-  // bilen før det finnes minst ett bilde fra ankomst (dokumentasjon av tilstand før
-  // ombygging starter). Bedt om av Henrik 2026-09-14.
-  // «Kun ekstrautstyr» (Henrik 2026-11-19) har ikke ankomstbilder i ordren (kortet er borte), så kravet kan ikke oppfylles der.
-  if (forrigeStatus === 'ikke_paabegynt' && nyStatus === 'paabegynt' && !erKunEkstrautstyr(o) && !(o.bilderAnkomst||[]).some(Boolean)) {
-    visToast('Minst ett bilde fra ankomst må tas før ordren kan settes til Påbegynt.');
-    if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
-    renderAll();
-    if (activeOrdreId===id) buildOrdreDetail();
-    return;
+  // Ingen skal kunne begynne å jobbe på en bil uten at det er registrert HVEM som gjør det, og at
+  // tilstanden FØR ombygging er dokumentert (alle 6 ankomstbilder + diagnose) - håndheves nå ved ETHVERT
+  // hopp til Påbegynt eller lenger, uansett hvilken status ordren kommer FRA (tettet 2026-11-20, Henrik:
+  // tidligere gjaldt kravene bare fra nøyaktig "Ikke påbegynt", så en bil kunne hoppe forbi sjekken rett
+  // fra "På vei" til "Påbegynt" eller lenger, eller rett forbi "Påbegynt" til en senere status, uten
+  // noen kontroll). Kravet om ALLE 6 bilder + diagnose er nytt samme dag (Henriks valg av 2 av 4
+  // forslag) - erstatter det tidligere, svakere "minst ett bilde"-kravet, som er en delmengde av det.
+  // Allerede forbi Påbegynt (forrigeStatus er selv Påbegynt-eller-lenger) utløser ALDRI disse kravene
+  // på nytt - de ble sjekket da ordren først gikk inn i den sonen.
+  // «Kun ekstrautstyr» (Henrik 2026-11-19) har verken ankomstbilder eller diagnose i ordren (kortene er
+  // borte), så de to kravene kan ikke oppfylles der - bare ansatt-kravet gjelder for en slik ordre.
+  let kravOverstyrtAvAdmin = false; // sann bare hvis admin bevisst valgte å overstyre et manglende krav under
+  if (erPaabegyntEllerLenger(nyStatus) && !erPaabegyntEllerLenger(forrigeStatus)) {
+    const kun = erKunEkstrautstyr(o);
+    const manglerAnsatt = !o.ansatteSignert.length;
+    const manglerBilder = !kun && !(o.bilderAnkomst||[]).every(Boolean);
+    const manglerDiagnose = !kun && !o.diagnose;
+    if (manglerAnsatt || manglerBilder || manglerDiagnose) {
+      const mangler = [];
+      if (manglerAnsatt) mangler.push('minst én ansatt er meldt på ordren');
+      if (manglerBilder) mangler.push('alle 6 bilder fra ankomst er tatt');
+      if (manglerDiagnose) mangler.push('«Diagnose utført» er krysset av');
+      const lbl = statusInfo(nyStatus).lbl;
+      const erAdmin = me && me.rolle === 'admin';
+      const kravTekst = mangler.length === 1 ? 'dette kravet' : 'disse kravene';
+      // Admin kan overstyre begge kravene, men bare med et bevisst, synlig valg - ikke en stille bakvei
+      // som lar status-nedtrekket bare glippe forbi uten at admin vet at noe ble overstyrt.
+      if (!erAdmin || !confirm('Ordren mangler: ' + mangler.join(', ') + '.\n\nDu overstyrer ' + kravTekst + ' som administrator - fortsett til «' + lbl + '»?')) {
+        if (!erAdmin) visToast('Kan ikke sette ordren til «' + lbl + '» ennå - mangler: ' + mangler.join(', ') + '.');
+        if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
+        renderAll();
+        if (activeOrdreId===id) buildOrdreDetail();
+        return;
+      }
+      kravOverstyrtAvAdmin = true;
+    }
   }
   o.ordreStatus = nyStatus;
   // Ordren arkiveres automatisk når den er hentet - MEN kun hvis den allerede er
@@ -704,7 +720,7 @@ async function endreStatus(id, nyStatus) {
   } else if (forrigeStatus === 'hentet') {
     o.effektivTidFrossen = null;
   }
-  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':''));
+  logChange(o, 'Status endret til: ' + statusInfo(nyStatus).lbl + (skalArkiveres?' (arkivert automatisk)':'') + (kravOverstyrtAvAdmin?' (krav overstyrt av '+(me?.navn||'admin')+')':''));
   if (document.activeElement?.tagName === 'SELECT') document.activeElement.blur();
   planleggLocalSpeiling();
   // Målrettet oppdatering av kun disse feltene - IKKE via den generelle
