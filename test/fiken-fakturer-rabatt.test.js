@@ -150,7 +150,21 @@ function fakeSupabaseKlient(svar) {
               const rad = typeof svarForTabell === 'function'
                 ? svarForTabell(kolonne, verdi)
                 : (svarForTabell ?? { data: null, error: null });
-              return { maybeSingle: async () => rad };
+              return {
+                maybeSingle: async () => rad,
+                // index.ts sin portal_kunde_rabatt-spørring henter nå ALLE rader (ingen
+                // .maybeSingle(), se "BOS-gruppen"-fiksen 20.11) - en ren await på
+                // query-builderen uten .maybeSingle()/.single() gir i ekte supabase-js en
+                // LISTE. Mocken normaliserer derfor rad.data til en liste her: et enkelt
+                // objekt (slik de fleste eksisterende tester for denne og andre tabeller
+                // allerede setter opp svaret, f.eks. { data: {...}, error: null }) pakkes inn
+                // i en ett-elements liste, null/udefinert blir en tom liste, og en liste
+                // testen selv har satt opp (den nye "flere avdelinger"-testen) beholdes som den er.
+                then(resolve, reject) {
+                  const data = Array.isArray(rad.data) ? rad.data : (rad.data == null ? [] : [rad.data]);
+                  return Promise.resolve({ data, error: rad.error ?? null }).then(resolve, reject);
+                },
+              };
             },
             // Støtter kun fiken_priser sitt .not('kategori','is',null)-kall (kategoriMap i
             // index.ts) - ingen av testene her setter svar.fiken_priser, så standard er en
@@ -811,6 +825,144 @@ describe('fiken-fakturer: rabatt fra Forhandlerportalen (portal_kunde_rabatt) ov
   });
 });
 
+// 20.11: kontakt_id er IKKE unik i portal_kunde_rabatt - flere portal-AVDELINGER (egen
+// portal_forhandler_id hver) kan dele samme Salmakern Kontakter-kontakt (f.eks. BOS-gruppen).
+// Produksjonsdata 20.11: 0 av 72 kontakter har i dag mer enn én rad - disse testene dekker en
+// tilstand som IKKE finnes ennå, men som den gamle koden (.maybeSingle()) ville håndtert FEIL
+// og STILLE (null ved >1 rad -> stille fall til fiken_kunde_rabatt) hvis/når den oppstår.
+describe('fiken-fakturer: flere portal-avdelinger (samme kontakt_id) i portal_kunde_rabatt (20.11, BOS-gruppen)', () => {
+  function svarMedOrdre({ forhandlerKontaktId, portalBestillingId, linjer, ekstra = {} }) {
+    return {
+      _manuellOrdre: true,
+      fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      ordrer: {
+        data: {
+          fiken_kladd_url: null, fiken_linjer: linjer,
+          forhandler_kontakt_id: forhandlerKontaktId ?? null,
+          portal_bestilling_id: portalBestillingId ?? null,
+        },
+        error: null,
+      },
+      ...ekstra,
+    };
+  }
+
+  it('flere avdelinger, men ALLE enige om satsene: ingen reell uenighet - bruker den felles satsen, spør aldri portal_bestillinger', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_bos',
+      linjer: [linje('100'), linje('200')],
+      ekstra: {
+        portal_kunde_rabatt: {
+          data: [
+            { orgnr: '111111111', rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null },
+            { orgnr: '222222222', rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null },
+          ],
+          error: null,
+        },
+      },
+    });
+    const api = await last({ svar });
+    const res = await api.kall(standardBody([linje('100'), linje('200')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201);
+    expect(api.draftKall[0].lines[0].discount).toBe(30);
+    expect(api.draftKall[0].lines[1].discount).toBe(15);
+    expect(api.eqKall.some((k) => k.tabell === 'portal_bestillinger')).toBe(false);
+  });
+
+  it('flere avdelinger med ULIKE satser, ordren kom fra en portal-bestilling hvis EGNE org.nr treffer NØYAKTIG én avdeling: bruker DEN avdelingens sats', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_bos',
+      portalBestillingId: 'best_1',
+      linjer: [linje('100')],
+      ekstra: {
+        portal_kunde_rabatt: {
+          data: [
+            { orgnr: '111 111 111', rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null }, // Hamar
+            { orgnr: '222222222', rabatt_standard: 10, rabatt_ekstrautstyr: 5, rabatt_modulsystem: null }, // Gjøvik
+          ],
+          error: null,
+        },
+        // Portalens EGEN, avdelingsspesifikke org.nr for DENNE bestillingen (ikke ordrer.forhandler_orgnr,
+        // som ville vært den delte Kontakter-kontaktens org.nr) - samme siffer som Hamar over, bare uformatert.
+        portal_bestillinger: { data: { forhandler_orgnr: '111111111' }, error: null },
+      },
+    });
+    const api = await last({ svar });
+    const res = await api.kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status, JSON.stringify(body)).toBe(201);
+    expect(api.draftKall[0].lines[0].discount).toBe(30); // Hamar sin sats, ikke Gjøvik sin
+    expect(api.eqKall).toContainEqual({ tabell: 'portal_bestillinger', kolonne: 'portal_bestilling_id', verdi: 'best_1' });
+  });
+
+  it('flere avdelinger med ULIKE satser, VANLIG ordre (ingen portal_bestilling_id): ekte tvetydighet - stopper med 400, faller ALDRI tilbake til fiken_kunde_rabatt', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_bos',
+      linjer: [linje('100')],
+      ekstra: {
+        portal_kunde_rabatt: {
+          data: [
+            { orgnr: '111111111', rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null },
+            { orgnr: '222222222', rabatt_standard: 10, rabatt_ekstrautstyr: 5, rabatt_modulsystem: null },
+          ],
+          error: null,
+        },
+        // Skulle ALDRI bli brukt - en stille fallback hit ville vært nøyaktig den gamle bugen.
+        fiken_kunde_rabatt: { data: { rabatt_ombygging: 99, rabatt_ekstra_utstyr: 99 }, error: null },
+      },
+    });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/flere avdelinger i Forhandlerportalen/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('flere avdelinger med ULIKE satser, portal-bestilling finnes, men org.nr treffer INGEN avdeling: fortsatt tvetydig, stopper', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_bos',
+      portalBestillingId: 'best_2',
+      linjer: [linje('100')],
+      ekstra: {
+        portal_kunde_rabatt: {
+          data: [
+            { orgnr: '111111111', rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null },
+            { orgnr: '222222222', rabatt_standard: 10, rabatt_ekstrautstyr: 5, rabatt_modulsystem: null },
+          ],
+          error: null,
+        },
+        portal_bestillinger: { data: { forhandler_orgnr: '999999999' }, error: null }, // treffer ingen av de to
+      },
+    });
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/flere avdelinger i Forhandlerportalen/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('flere avdelinger med ULIKE satser og brukRabatt:false: INGEN stopp (rabatten brukes uansett ikke på denne fakturaen)', async () => {
+    const svar = svarMedOrdre({
+      forhandlerKontaktId: 'k_bos',
+      linjer: [linje('100')],
+      ekstra: {
+        portal_kunde_rabatt: {
+          data: [
+            { orgnr: '111111111', rabatt_standard: 30, rabatt_ekstrautstyr: 15, rabatt_modulsystem: null },
+            { orgnr: '222222222', rabatt_standard: 10, rabatt_ekstrautstyr: 5, rabatt_modulsystem: null },
+          ],
+          error: null,
+        },
+      },
+    });
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100')], { brukRabatt: false }));
+    expect(l).not.toHaveProperty('discount');
+  });
+});
+
 // fiken_priser.kategori (migrasjon 20261111200000, Henrik 11.11): en eksplisitt,
 // forhåndsbekreftet kategori per produktnummer skal overstyre navnegjetting
 // (erOmbyggingslinje) i BEGGE retninger - produktnavnet alene bestemmer ingenting når en
@@ -969,7 +1121,7 @@ describe('fiken-fakturer: fiken_priser.kategori = modulsystem (migrasjon 2026111
   });
 
   it('portal-spørringen ber om rabatt_modulsystem-kolonnen (ellers ville satsen alltid vært undefined)', () => {
-    expect(fikenFakturerKilde).toMatch(/\.select\('rabatt_standard, rabatt_ekstrautstyr, rabatt_modulsystem'\)/);
+    expect(fikenFakturerKilde).toMatch(/\.select\('orgnr, rabatt_standard, rabatt_ekstrautstyr, rabatt_modulsystem'\)/);
   });
 });
 

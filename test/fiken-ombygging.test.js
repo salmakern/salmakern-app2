@@ -665,7 +665,11 @@ describe('fakturaSjekk', () => {
       expect(sjekk.grunner.some((g) => g.kode === 'rabatt_kategori_mangler')).toBe(true);
     });
 
-    it('kontakt_id står på FLERE portalrader: brukes ikke (serverens maybeSingle gir null), Fiken-raden gjelder', () => {
+    // Rettet 20.11 (flere portal-avdelinger på samme Kontakter-kontakt, f.eks. BOS-gruppen -
+    // kontakt_id er IKKE unik i portal_kunde_rabatt). Tidligere falt klienten stille tilbake til
+    // fiken_kunde_rabatt her (samme bug som serverens .maybeSingle() hadde) - nå varsles en ekte
+    // uenighet mellom avdelingene i stedet for å late som Fiken-raden gjelder.
+    it('kontakt_id står på FLERE portalrader med ULIKE satser: rød "tvetydig"-advarsel, faller ALDRI stille tilbake til Fiken-raden', () => {
       const env = nyEnvironment();
       env.S.fikenKundeAlias = [{ alias: 'Test Kunde AS', fiken_contact_id: 1 }];
       env.S.fikenKundeRabatt = [{ fiken_contact_id: 1, rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }];
@@ -674,6 +678,22 @@ describe('fakturaSjekk', () => {
         { kontakt_id: 'k1', rabatt_standard: 15, rabatt_ekstrautstyr: null },
       ];
       const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(sjekk.niva).toBe('rod');
+      const g = sjekk.grunner.find((x) => x.kode === 'rabatt_portal_tvetydig');
+      expect(g).toBeTruthy();
+      expect(g.tekst).toMatch(/flere avdelinger i Forhandlerportalen/);
+      // Den gamle (feilaktige) oppførselen ville vist ingen av disse to kodene og late som alt var i orden.
+      expect(rabattKoder(sjekk)).toEqual([]);
+    });
+
+    it('kontakt_id står på FLERE portalrader, men ALLE er enige om satsene: ingen reell uenighet - ingen advarsel', () => {
+      const env = nyEnvironment();
+      env.S.portalKundeRabatt = [
+        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: null },
+        { kontakt_id: 'k1', rabatt_standard: 20, rabatt_ekstrautstyr: 10, rabatt_modulsystem: null },
+      ];
+      const sjekk = env.fakturaSjekk(basisOrdre({ ...utenFrossetRabatt, forhandlerKontaktId: 'k1' }));
+      expect(sjekk.grunner.some((g) => g.kode === 'rabatt_portal_tvetydig')).toBe(false);
       expect(rabattKoder(sjekk)).toEqual([]);
     });
 

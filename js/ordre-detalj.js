@@ -827,26 +827,43 @@ function fakturaSjekk(o) {
   // fase 2), ellers fiken_kunde_rabatt via Fiken-alias som før. Rettet 2026-11-20: denne
   // sjekken så tidligere BARE på fiken_kunde_rabatt og kunne derfor vise feil farge for en
   // portal-ordre (grønt der serveren ville avvist, rødt der den ville godtatt).
-  // kontakt_id er IKKE unik i portal_kunde_rabatt (delte Kontakter-kontakter, f.eks. BOS-gruppen).
-  // Serveren slår opp med .maybeSingle(), som gir null (feil) ved flere rader og da faller
-  // tilbake til fiken_kunde_rabatt - derfor brukes portalraden her bare når NØYAKTIG én treffer.
-  let rabattRad = null, rabattKilde = null;
+  // kontakt_id er IKKE unik i portal_kunde_rabatt (delte Kontakter-kontakter, f.eks. BOS-
+  // gruppen) - serveren (fiken-fakturer) løser dette entydig (20.11) ved å bruke en felles
+  // sats når alle avdelingene faktisk er enige, ellers bestillingens EGEN org.nr mot
+  // portal_bestillinger (data denne klientsjekken ikke har lastet). Klienten her er derfor
+  // bevisst LITT strengere enn serveren: den kan vise rødt («tvetydig») i et tilfelle
+  // serveren faktisk klarer å løse via org.nr - aldri omvendt (viser aldri grønt der
+  // serveren ville avvist). Ingen reell forekomst i dag (72 av 72 kontakter er entydige).
+  let rabattRad = null, rabattKilde = null, rabattTvetydig = false;
   if (o.forhandlerKontaktId) {
     const portalRader = (S.portalKundeRabatt||[]).filter(r => r.kontakt_id === o.forhandlerKontaktId);
     if (portalRader.length === 1) {
       const portalRad = portalRader[0];
       rabattRad = { rabatt_ombygging: portalRad.rabatt_standard ?? null, rabatt_ekstra_utstyr: portalRad.rabatt_ekstrautstyr ?? null };
       rabattKilde = 'portal';
+    } else if (portalRader.length > 1) {
+      const forste = portalRader[0];
+      const satserLike = r => (r.rabatt_standard ?? null) === (forste.rabatt_standard ?? null)
+        && (r.rabatt_ekstrautstyr ?? null) === (forste.rabatt_ekstrautstyr ?? null)
+        && (r.rabatt_modulsystem ?? null) === (forste.rabatt_modulsystem ?? null);
+      if (portalRader.every(satserLike)) {
+        rabattRad = { rabatt_ombygging: forste.rabatt_standard ?? null, rabatt_ekstra_utstyr: forste.rabatt_ekstrautstyr ?? null };
+        rabattKilde = 'portal';
+      } else {
+        rabattTvetydig = true;
+      }
     }
   }
-  if (!rabattRad && alias) {
+  if (!rabattRad && !rabattTvetydig && alias) {
     const lokalRad = (S.fikenKundeRabatt||[]).find(r => r.fiken_contact_id === alias.fiken_contact_id);
     if (lokalRad) { rabattRad = lokalRad; rabattKilde = 'lokal'; }
   }
   const manglerFrossetRabatt = (o.fikenLinjer||[]).some(l => typeof l.rabatt !== 'number');
+  if (manglerFrossetRabatt && rabattTvetydig) {
+    leggTil('rabatt_portal_tvetydig', 'Forhandleren har flere avdelinger i Forhandlerportalen med ulik rabatt knyttet til samme kontakt - fakturering med «Bruk kundens avtalte rabatt» huket av vil bli avvist til dette er avklart i portalen', 'rod');
   // Uten alias og uten forhandler-kontakt finnes det ingen kilde å slå opp i (gammel PWA uten
   // lastingen, eller ukjent kunde som alt er varslet over) - da hoppes rabattdelen over som før.
-  if (manglerFrossetRabatt && !rabattRad && (alias || o.forhandlerKontaktId)) {
+  } else if (manglerFrossetRabatt && !rabattRad && (alias || o.forhandlerKontaktId)) {
     leggTil('ingen_avtalt_rabatt', 'Ingen avtalt rabatt registrert for kunden - sjekk om 0 % er riktig', 'gul');
   } else if (manglerFrossetRabatt && rabattRad && (rabattRad.rabatt_ombygging === null || rabattRad.rabatt_ekstra_utstyr === null)) {
     // Rettet 5.11 (uavhengig gjennomgang fant at lista viste GRØNT for ordre serveren faktisk
