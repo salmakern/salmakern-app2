@@ -178,7 +178,10 @@ async function kjorFikenFakturer(body, o) {
       ], 200, { 'Fiken-Api-Page-Count': '1' });
     }
     if (u === `https://api.fiken.no/api/v2/companies/${SLUG}/contacts/${CONTACT_ID}` && method === 'GET') {
-      return json({ contactId: CONTACT_ID, name: 'Skagerrak Bilsenter AS', contactPerson: [] }); // ingen kjent kontaktperson - uendret oppførsel
+      // Kontaktpersonen finnes fra før i denne falske Fiken-kontakten - denne testen dekker
+      // rabatt-/linjekjeden, ikke needsKontaktperson-grenen (se fiken-fakturer-kontaktperson.
+      // test.js for den), så den skal ikke stoppes av et urelatert gap her.
+      return json({ contactId: CONTACT_ID, name: 'Skagerrak Bilsenter AS', contactPerson: [{ contactPersonId: 1, name: 'Andreas Kåsa', email: 'andreas@test.no' }] });
     }
     if (u === `https://api.fiken.no/api/v2/companies/${SLUG}/invoices/drafts` && method === 'POST') {
       draftKropp = JSON.parse(init.body);

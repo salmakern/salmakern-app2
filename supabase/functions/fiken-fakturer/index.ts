@@ -423,16 +423,36 @@ Deno.serve(async (req) => {
     // Kontaktperson (o.eier i appen, kalt "Kontaktperson" i PDF-rapporten) - kobles KUN
     // hvis en person med samme navn allerede finnes registrert på denne Fiken-kontakten.
     // Fiken krever navn+e-post for å OPPRETTE en kontaktperson, og appen har ingen e-post
-    // lagret på "eier" - så vi oppretter aldri en ny, bare bruker en som Henrik har lagt
-    // inn i Fiken fra før (bekreftet at han allerede har gjort dette for flere kunder).
+    // lagret på "eier" - så vi oppretter aldri en ny her, bare bruker en som finnes fra før.
+    //
+    // s90-...-fiken-kontaktperson (bedt om av Henrik): tidligere hoppet dette BARE stille over
+    // uten kontaktperson når ingen match fantes - en selger fra Forhandlerportalen (ny ELLER en
+    // av de ca. 270 eksisterende) uten en tilsvarende Fiken-kontaktperson ble aldri synlig for
+    // noen. Nå er dette et HARDT STOPP (Henriks eksplisitte svar: ingen unnslippingsluke) -
+    // fakturering stanses (samme runde-trip-mønster som needsBekreftelse over for en ukjent
+    // kunde) til kontaktpersonen faktisk er opprettet i Fiken (ny edge-funksjon fiken-opprett-
+    // kontaktperson), og klienten prøver fakturering på nytt automatisk etterpå.
     let contactPersonId: number | undefined
     if (kontaktpersonNavn) {
       const kontaktRes = await fikenFetch(`/companies/${slug}/contacts/${contactId}`)
       if (kontaktRes.ok) {
         const kontakt = await kontaktRes.json()
         const treff = (kontakt.contactPerson || []).find((p: any) => (p.name || '').toLowerCase() === kontaktpersonNavn.toLowerCase())
-        if (treff) contactPersonId = treff.contactPersonId
+        if (treff) {
+          contactPersonId = treff.contactPersonId
+        } else {
+          return jsonSvar({
+            needsKontaktperson: true,
+            ordreId,
+            kundeNavn,
+            kontaktpersonNavn,
+            contactId,
+            fikenKundeNavn: kontakt.name || kundeNavn,
+          })
+        }
       }
+      // kontaktRes.ok === false: kunne ikke sjekke (Fiken nede/feil) - uendret oppførsel, fakturer
+      // videre uten kontaktperson fremfor å blokkere på noe vi ikke klarte å bekrefte.
     }
 
     const idag = norskDato()
