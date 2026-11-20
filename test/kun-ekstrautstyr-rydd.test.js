@@ -379,7 +379,7 @@ describe('sw.js og dokumentasjonen følger endringen', () => {
     const avsnitt = /\*\*Ryddet i de andre stedene \(2026-11-19[\s\S]*?\*\*Test\*\*[^\n]*/.exec(CLAUDE);
     expect(avsnitt, 'CLAUDE.md har avsnittet «Ryddet i de andre stedene»').not.toBeNull();
     expect(avsnitt[0]).toContain(`\`sw.js\` CACHE v${dennesVersjon}`);
-    expect(avsnitt[0]).toContain('IKKE utrullet');
+    expect(avsnitt[0]).toContain('UTRULLET'); // oppdatert 20.11: avsnittet sier nå at rydningen ER utrullet (var "IKKE utrullet" da denne testen ble skrevet, før utleggingen)
   });
 });
 
