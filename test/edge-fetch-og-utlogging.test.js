@@ -48,7 +48,10 @@ function lagFalskDb(opts = {}) {
     rpc: vi.fn(async (navn) => {
       kall.push('rpc:' + navn);
       if (navn === 'logg_ut' && opts.loggUtFeiler) return { data: null, error: { message: 'finnes ikke' } };
-      if (navn === 'logg_inn_med_pin') return { data: [], error: null };
+      if (navn === 'logg_inn_med_pin') {
+        if (opts.loggInnMedPinFeil) return { data: null, error: { message: opts.loggInnMedPinFeil } };
+        return { data: opts.loggInnMedPinSvar ?? [], error: null };
+      }
       if (navn === 'hent_innlogget_ansatt') {
         if (opts.hentInnloggetAnsattFeiler) return { data: null, error: { message: 'nettverksfeil' } };
         return { data: opts.hentInnloggetAnsattSvar ?? [], error: null };
@@ -102,7 +105,10 @@ function nyEnvironment() {
     setTimeout: (f, ms) => unref(f, ms), clearTimeout: (t) => clearTimeout(t),
     setInterval() {}, clearInterval() {},
     fetch: vi.fn(),
-    confirm: vi.fn(() => true)
+    confirm: vi.fn(() => true),
+    // Ingen geolocation som standard (de fleste tester rører den aldri) - tester av
+    // delt-stasjon-GPS-sperren setter navigator.geolocation selv, se eget describe-blokk under.
+    navigator: {}
   };
   vm.createContext(sandbox);
   vm.runInContext(kode, sandbox, { filename: 'core.js' });
@@ -443,6 +449,121 @@ describe('innlogging etter utlogging (tryLogin)', () => {
     await Promise.all([utlogging, innlogging]);
     const rekkefolge = kall.filter(k => ['signOut:local', 'signInAnonymously', 'rpc:logg_inn_med_pin'].includes(k));
     expect(rekkefolge).toEqual(['signOut:local', 'signInAnonymously', 'rpc:logg_inn_med_pin']);
+  });
+});
+
+// GPS-sperre for den delte stasjon-kontoen (er_delt_stasjon, 2026-11-20, se CLAUDE.md "PIN til 6
+// sifre, øktgrense og delt verksted-stasjon"): PIN-en er kjent av hele verkstedet og skal derfor
+// bare virke FRA verkstedet. Verkstedets koordinater (Henrik, målt 2026-11-20 identisk med
+// produksjonens innstillinger.gps_lat/gps_lng): 59.18397, 9.60635.
+const VERKSTED = { lat: 59.18397, lng: 9.60635 };
+const OSLO_LANGT_UNNA = { lat: 59.9139, lng: 10.7522 }; // ca. 95 km unna - garantert utenfor enhver fornuftig radius
+
+function fakeGeo({ lat, lng, feilkode } = {}) {
+  return {
+    getCurrentPosition: vi.fn((ok, feil) => {
+      if (feilkode != null) feil({ code: feilkode });
+      else ok({ coords: { latitude: lat, longitude: lng } });
+    })
+  };
+}
+
+describe('GPS-sperre ved innlogging med den delte stasjon-kontoen (er_delt_stasjon)', () => {
+  let env;
+  const deltKonto = { id: 114, navn: 'Booking Salmaker', rolle: 'ansatt', aktiv: true, kan_fore_lonn: false, er_delt_stasjon: true };
+  const vanligKonto = { id: 17, navn: 'Henrik', rolle: 'admin', aktiv: true, kan_fore_lonn: true, er_delt_stasjon: false };
+
+  beforeEach(() => {
+    env = nyEnvironment();
+    env.sandbox._setPinBuf('123456');
+  });
+
+  it('en VANLIG konto (er_delt_stasjon: false) logges inn uten noen GPS-sjekk i det hele tatt', async () => {
+    const { db } = lagFalskDb({ loggInnMedPinSvar: [vanligKonto] });
+    env.sandbox._setDb(db);
+    env.sandbox.navigator = {}; // ingen geolocation tilgjengelig - skal ikke spille noen rolle for en vanlig konto
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toMatchObject({ id: 17, navn: 'Henrik' });
+    expect(env.elementer.appScreen.style.display).toBe('block');
+    expect(db.rpc.mock.calls.map(c => c[0])).not.toContain('logg_ut'); // ingen tilbakerulling for en vanlig innlogging
+  });
+
+  it('delt stasjon + posisjon på verkstedet (eksisterende GPS-innstilling, S.gps): slipper gjennom', async () => {
+    const { db } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db);
+    env.sandbox._getS().gps = { lat: VERKSTED.lat, lng: VERKSTED.lng, radius: 100 };
+    env.sandbox.navigator = { geolocation: fakeGeo({ lat: VERKSTED.lat, lng: VERKSTED.lng }) };
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toMatchObject({ id: 114, er_delt_stasjon: true });
+    expect(env.elementer.appScreen.style.display).toBe('block');
+  });
+
+  it('delt stasjon + ingen GPS-innstilling satt opp (S.gps tom): faller tilbake på Henriks hardkodede koordinater og slipper gjennom på verkstedet', async () => {
+    const { db } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db);
+    expect(env.sandbox._getS().gps.lat).toBeNull(); // standardtilstand (ingen innlasting kjørt i denne testen)
+    env.sandbox.navigator = { geolocation: fakeGeo({ lat: VERKSTED.lat, lng: VERKSTED.lng }) };
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toMatchObject({ id: 114 });
+  });
+
+  it('delt stasjon + langt unna verkstedet: AVVISES, "me" settes aldri, og tilbakerullingen (logg_ut) kalles FØR feilen vises', async () => {
+    const { db, kall } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db);
+    env.sandbox.navigator = { geolocation: fakeGeo({ lat: OSLO_LANGT_UNNA.lat, lng: OSLO_LANGT_UNNA.lng }) };
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toBeNull();
+    expect(env.elementer.appScreen).toBeUndefined(); // aktiverInnloggetApp() ble aldri kalt
+    expect(env.elementer.pinErr.textContent).toMatch(/kan bare brukes fra verkstedet/);
+    expect(env.elementer.pinErr.textContent).toMatch(/\d+ m unna/);
+    const rekkefolge = kall.filter(k => k === 'rpc:logg_inn_med_pin' || k === 'rpc:logg_ut');
+    expect(rekkefolge).toEqual(['rpc:logg_inn_med_pin', 'rpc:logg_ut']); // rullet tilbake med en gang
+  });
+
+  it('delt stasjon + nektet posisjonstilgang (PERMISSION_DENIED): avvises med en tydelig melding om posisjonstilgang, ikke "Feil PIN"', async () => {
+    const { db } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db);
+    env.sandbox.navigator = { geolocation: fakeGeo({ feilkode: 1 }) };
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toBeNull();
+    expect(env.elementer.pinErr.textContent).toMatch(/posisjonstilgang/);
+    expect(env.elementer.pinErr.textContent).not.toBe('Feil PIN – prøv igjen');
+  });
+
+  it('delt stasjon + posisjon utilgjengelig (kode 2) og tidsavbrudd (kode 3): egne, tydelige meldinger', async () => {
+    const { db: db2 } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db2);
+    env.sandbox.navigator = { geolocation: fakeGeo({ feilkode: 2 }) };
+    await env.sandbox.tryLogin();
+    expect(env.elementer.pinErr.textContent).toMatch(/ikke tilgjengelig akkurat nå/);
+
+    const env2 = nyEnvironment();
+    env2.sandbox._setPinBuf('123456');
+    const { db: db3 } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env2.sandbox._setDb(db3);
+    env2.sandbox.navigator = { geolocation: fakeGeo({ feilkode: 3 }) };
+    await env2.sandbox.tryLogin();
+    expect(env2.elementer.pinErr.textContent).toMatch(/Tidsavbrudd/);
+  });
+
+  it('delt stasjon + nettleseren støtter ikke Geolocation i det hele tatt: avvises uten å kaste', async () => {
+    const { db } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db);
+    env.sandbox.navigator = {}; // ingen .geolocation
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toBeNull();
+    expect(env.elementer.pinErr.textContent).toMatch(/ikke støttes/);
+  });
+
+  it('bruker S.gps sin RADIUS når innstillingen er satt opp (ikke den hardkodede 100 m-reserven)', async () => {
+    const { db } = lagFalskDb({ loggInnMedPinSvar: [deltKonto] });
+    env.sandbox._setDb(db);
+    // 30 m unna verkstedet (ca. 0.00027 grader bredde ≈ 30 m) - utenfor en snevrere 20 m-radius, men innenfor 100 m.
+    env.sandbox._getS().gps = { lat: VERKSTED.lat + 0.00027, lng: VERKSTED.lng, radius: 20 };
+    env.sandbox.navigator = { geolocation: fakeGeo({ lat: VERKSTED.lat, lng: VERKSTED.lng }) };
+    await env.sandbox.tryLogin();
+    expect(env.sandbox._getMe()).toBeNull(); // avvist: 30 m > 20 m-radiusen fra den eksisterende innstillingen
+    expect(env.elementer.pinErr.textContent).toMatch(/maks 20 m/);
   });
 });
 

@@ -1964,6 +1964,70 @@ async function gjenopprettOktFraEksisterendeSesjon() {
   }
 }
 
+// ────────────────────────────────────────────────────────────
+// GPS-SPERRE FOR DEN DELTE STASJON-KONTOEN (er_delt_stasjon, 2026-11-20)
+// ────────────────────────────────────────────────────────────
+// Henrik: PIN-en for den delte verksted-stasjonen ("Booking Salmaker", id 114 - se CLAUDE.md
+// "PIN til 6 sifre, øktgrense og delt verksted-stasjon") er kjent av hele verkstedet og skal
+// derfor bare virke FRA verkstedet. Henrik ga koordinatene 59.18397, 9.60635 direkte.
+//
+// Gjenbruker den EKSISTERENDE GPS-innstillingen (S.gps, satt under Mer → «Sett
+// arbeidsplasslokasjon» - se saveGPS()/haversine()/startTimer() i timer.js, som bruker den til å
+// sjekke posisjon før timeklokka startes): målt direkte mot produksjonsdatabasen 2026-11-20,
+// S.gps.lat/lng er ALLEREDE nøyaktig disse koordinatene (radius 100 m) - ingen ny innstilling å
+// holde synkron med denne. Er den IKKE satt opp (f.eks. et annet/ferskt miljø), faller sjekken
+// tilbake på Henriks koordinater DIREKTE (konstantene under) - denne sperren skal gjelde uansett
+// om den andre innstillingen finnes, aldri falle bort fordi en urelatert innstilling mangler.
+// NB: innstillingen leses her, men ALDRI skrevet til av denne funksjonaliteten - den kan i
+// prinsippet endres senere for timeklokkens formål (f.eks. en annen radius), og denne sperren
+// ville da (bevisst) følge med. Hvis den noensinne pekes til et HELT annet sted for et annet
+// formål, må denne sperren revurderes - ikke forsøkt løst her (ingen tegn til at det er planlagt).
+const DELT_STASJON_GPS_LAT = 59.18397;
+const DELT_STASJON_GPS_LNG = 9.60635;
+const DELT_STASJON_GPS_RADIUS_M = 100;
+
+function deltStasjonGpsMaal() {
+  if (S.gps && S.gps.lat != null && S.gps.lng != null) {
+    return { lat: S.gps.lat, lng: S.gps.lng, radius: S.gps.radius || DELT_STASJON_GPS_RADIUS_M };
+  }
+  return { lat: DELT_STASJON_GPS_LAT, lng: DELT_STASJON_GPS_LNG, radius: DELT_STASJON_GPS_RADIUS_M };
+}
+
+// Egen, lokal kopi av avstandsformelen i haversine() (js/timer.js, samme formel) - core.js kjøres
+// også alene i enkelte tester (se test/edge-fetch-og-utlogging.test.js) og skal ikke avhenge av
+// at timer.js faktisk er lastet inn i samme context.
+function _deltStasjonAvstandMeter(lat1, lng1, lat2, lng2) {
+  const R = 6371000, dL = (lat2-lat1)*Math.PI/180, dG = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dL/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// Sjekker enhetens posisjon mot verkstedet FØR en delt-stasjon-PIN slipper gjennom. I motsetning
+// til timerens GPS-sjekk (som faller tilbake på en manuell PIN-overstyring ved avvik) finnes det
+// her INGEN overstyring - det ER selve PIN-innloggingen vi sperrer, så en posisjon vi ikke kan
+// bekrefte (avvist tilgang, utilgjengelig, tidsavbrudd, ikke støttet) skal ALDRI telle som
+// "innenfor" (fail-closed), ellers kan hele sperren trivielt omgås ved bare å avslå posisjonstilgang.
+function sjekkDeltStasjonGPS() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) {
+      resolve({ ok: false, melding: 'Denne kontoen krever posisjonstilgang, som ikke støttes på denne enheten/nettleseren.' });
+      return;
+    }
+    const maal = deltStasjonGpsMaal();
+    navigator.geolocation.getCurrentPosition(pos => {
+      const dist = _deltStasjonAvstandMeter(pos.coords.latitude, pos.coords.longitude, maal.lat, maal.lng);
+      if (dist <= maal.radius) resolve({ ok: true });
+      else resolve({ ok: false, melding: `Denne kontoen kan bare brukes fra verkstedet. Du er ca. ${Math.round(dist)} m unna (maks ${maal.radius} m).` });
+    }, err => {
+      let melding = 'Kunne ikke bekrefte posisjonen din. Prøv igjen.';
+      if (err && err.code === 1) melding = 'Denne kontoen krever posisjonstilgang. Tillat posisjon for denne siden i nettleserinnstillingene, og prøv igjen.';
+      else if (err && err.code === 2) melding = 'Posisjon ikke tilgjengelig akkurat nå. Sjekk at Stedstjenester/GPS er skrudd på, og prøv igjen.';
+      else if (err && err.code === 3) melding = 'Tidsavbrudd - fant ikke posisjonen din innen 10 sekunder. Prøv igjen, gjerne utendørs eller nær et vindu.';
+      resolve({ ok: false, melding });
+    }, { timeout: 10000, maximumAge: 30000 });
+  });
+}
+
 async function tryLogin() {
   // PIN-sjekken skjer i databasen (logg_inn_med_pin), ikke lokalt mot
   // S.ansatte - PIN-koder lastes ikke ned til nettleseren i det hele tatt.
@@ -1972,6 +2036,7 @@ async function tryLogin() {
   let user = null;
   let forMangeForsok = false;
   let ingenSesjon = false;
+  let deltStasjonGpsFeil = null;
   if (db) {
     try {
       // doLogout() avslutter Auth-sesjonen (se utforLogout) - vent til den er ferdig, ellers
@@ -1987,11 +2052,34 @@ async function tryLogin() {
           if (error.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
           else if (error.message?.includes('IKKE_INNLOGGET')) ingenSesjon = true;
         }
-        else if (data && data.length) user = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
+        else if (data && data.length) {
+          const kandidat = { ...data[0], kanForeLonn: data[0].kan_fore_lonn !== false };
+          if (kandidat.er_delt_stasjon) {
+            // logg_inn_med_pin har ALLEREDE skrevet ansatt_id/rolle/session_token i
+            // raw_app_meta_data på denne enhetens anonyme Auth-bruker (server-side) - men
+            // tokenet i nettleseren er ikke fornyet ennå (det skjer først lenger ned, KUN ved
+            // en vellykket innlogging), så ingenting er synlig lokalt ennå. Består GPS-sjekken
+            // ikke, rulles den server-side skrivingen tilbake med logg_ut() FØR "me" settes og
+            // FØR en ev. senere, naturlig token-fornyelse kunne plukket opp ansatt-rettigheter
+            // uten at noen noensinne besto denne sjekken.
+            const feilEl = document.getElementById('pinErr');
+            if (feilEl) feilEl.textContent = 'Sjekker posisjon …';
+            const gps = await sjekkDeltStasjonGPS();
+            if (gps.ok) {
+              user = kandidat;
+            } else {
+              deltStasjonGpsFeil = gps.melding;
+              try { await db.rpc('logg_ut'); } catch(e) { console.warn('Tilbakerulling av delt-stasjon-innlogging (GPS avvist) feilet:', e); }
+            }
+          } else {
+            user = kandidat;
+          }
+        }
       }
     } catch(e) { console.warn('PIN-sjekk feilet:', e); }
   } else {
-    // Uten tilkobling: fall tilbake på ev. lokalt bufret data (dev/offline)
+    // Uten tilkobling: fall tilbake på ev. lokalt bufret data (dev/offline) - ingen produksjonsflyt
+    // bruker denne grenen (se kommentaren over sikreAnonymSesjon()), så GPS-sperren er bevisst ikke lagt til her.
     user = S.ansatte.find(a => a.pin===pinBuf && a.aktiv) || null;
   }
   if (user) {
@@ -2003,11 +2091,11 @@ async function tryLogin() {
     try { await db.auth.refreshSession(); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
     await fortsettEtterInnlogging();
   } else {
-    document.getElementById('pinErr').textContent = forMangeForsok
+    document.getElementById('pinErr').textContent = deltStasjonGpsFeil || (forMangeForsok
       ? 'For mange feilforsøk – vent noen minutter og prøv igjen'
       : ingenSesjon
         ? 'Kunne ikke starte innlogging – sjekk nettet og prøv igjen'
-        : 'Feil PIN – prøv igjen';
+        : 'Feil PIN – prøv igjen');
     pinBuf = '';
     refreshPinDots();
   }
