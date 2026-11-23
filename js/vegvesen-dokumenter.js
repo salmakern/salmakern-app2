@@ -784,7 +784,11 @@ async function genFabrikantattestPDF(o, endringP, endringVogntog, egenvektUt) {
   tekstLinjer(kol3X, y, [o.typegodkjenning || '']);
   y -= 4*11 + 10;
 
-  page.drawText('FABRIKANT 2', { x: kol1X, y, size: 9, font: fontBold });
+  // Brukt Kjøretøy: en allerede registrert bil får ikke en ny "fabrikant 2" i
+  // typegodkjenningsforstand - det er en OMBYGGING av et kjøretøy som finnes fra før
+  // (Henrik 2026-11-23). Nytt Kjøretøy beholder "FABRIKANT 2" (ekte trinn 2-fabrikant
+  // på en fabrikkny bil).
+  page.drawText(erBrukt ? 'OMBYGGING' : 'FABRIKANT 2', { x: kol1X, y, size: 9, font: fontBold });
   page.drawText('KJØRETØYET', { x: kol2X, y, size: 9, font: fontBold });
   y -= 13;
   tekstLinjer(kol1X, y, ['Telemark Salmakerverksted', 'Bataljonvegen 25', '3734 SKIEN', 'Org. nr. 983 885 713 MVA']);

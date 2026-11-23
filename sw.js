@@ -109,7 +109,8 @@
 // v104 - fakturaSjekk bruker Forhandlerportalens rabatt først (som fiken-fakturer); portal-linje uten rabatt_prosent låses ikke lenger til 0 %
 // v105 - Strengere krav for å starte en ordre (gjelder alle hopp til Påbegynt/videre, krever alle 6 ankomstbilder + diagnose, admin kan overstyre); delt stasjonskonto (Booking Salmaker) krever posisjon innenfor verkstedets GPS-radius for å logge inn; lager: automatisk bestillingsforslag (bryter av som standard, ingen synlig endring før Henrik slår den på)
 // v106 - manglende Fiken-kontaktperson oppdages og løses ved fakturering (needsKontaktperson, ny modal); hardt stopp, ingen unnslippingsluke (Henriks ja, fjernet "Fortsett uten kontaktperson")
-const CACHE = 'salmakern-v106';
+// v107 - Fabrikantattest for Brukt Kjøretøy: «FABRIKANT 2»-raden heter nå «OMBYGGING» (gjelder alle modeller; Nytt Kjøretøy er uendret)
+const CACHE = 'salmakern-v107';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
