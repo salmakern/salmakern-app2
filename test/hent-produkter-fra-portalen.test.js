@@ -18,11 +18,12 @@ const LISTE = {
   modeller: [
     { slug: 'kia-ev9', navn: 'KIA EV9', portal_modell_id: 'm1', varianter: [
       { portal_id: 'v1', navn: 'Standard ombygging', prisgruppe: 'standard', app_rolle: 'ombygging', produktnummer: '500', fiken_nummer: '500', nummer_status: 'ok',
-        tillegg: [{ portal_id: 't1', navn: 'Tillegg for 180 graders stoler', type: 'tillegg', produktnummer: '502', fiken_nummer: '502', nummer_status: 'ok' }] },
-      { portal_id: 'v2', navn: 'Ombygging til personbil', prisgruppe: 'standard', app_rolle: 'personbil', produktnummer: '524', fiken_nummer: '524', nummer_status: 'ok', tillegg: [] },
+        bilde_url: 'https://img.example/ev9-500.jpg', pris_kr: 20310,
+        tillegg: [{ portal_id: 't1', navn: 'Tillegg for 180 graders stoler', type: 'tillegg', produktnummer: '502', fiken_nummer: '502', nummer_status: 'ok', bilde_url: null, pris_kr: null }] },
+      { portal_id: 'v2', navn: 'Ombygging til personbil', prisgruppe: 'standard', app_rolle: 'personbil', produktnummer: '524', fiken_nummer: '524', nummer_status: 'ok', bilde_url: null, pris_kr: null, tillegg: [] },
     ] },
     { slug: 'mercedes-eqv', navn: 'EQV', portal_modell_id: 'm2', varianter: [
-      { portal_id: 'v3', navn: 'Standard', prisgruppe: 'standard', app_rolle: null, produktnummer: '1600-1601', fiken_nummer: null, nummer_status: 'intervall', tillegg: [] },
+      { portal_id: 'v3', navn: 'Standard', prisgruppe: 'standard', app_rolle: null, produktnummer: '1600-1601', fiken_nummer: null, nummer_status: 'intervall', bilde_url: null, pris_kr: null, tillegg: [] },
     ] },
   ],
 };
@@ -49,6 +50,34 @@ describe('lesProduktliste', () => {
   it('varianter uten app_rolle-felt (eldre portal) er lov og gir null', () => {
     const l = kopi(LISTE); delete l.modeller[0].varianter[0].app_rolle;
     expect(lesProduktliste(l).rader[0].app_rolle).toBeNull();
+  });
+  it('bilde_url og pris_kr følger med radene (variant og tillegg)', () => {
+    const r = lesProduktliste(kopi(LISTE));
+    expect(r.rader[0]).toMatchObject({ bilde_url: 'https://img.example/ev9-500.jpg', pris_kr: 20310 });
+    expect(r.rader[1]).toMatchObject({ bilde_url: null, pris_kr: null });
+  });
+  it('mangler bilde_url/pris_kr (eldre portal, additivt i versjon 1) gir null - avviser IKKE svaret', () => {
+    const l = kopi(LISTE);
+    delete l.modeller[0].varianter[0].bilde_url; delete l.modeller[0].varianter[0].pris_kr;
+    delete l.modeller[0].varianter[0].tillegg[0].bilde_url; delete l.modeller[0].varianter[0].tillegg[0].pris_kr;
+    const r = lesProduktliste(l);
+    expect(r).not.toBeNull();
+    expect(r.rader[0]).toMatchObject({ bilde_url: null, pris_kr: null });
+    expect(r.rader[1]).toMatchObject({ bilde_url: null, pris_kr: null });
+  });
+  it('feil type på bilde_url/pris_kr gir null, og avviser IKKE hele svaret (ulikt produktnummer/nummer_status)', () => {
+    const l = kopi(LISTE);
+    l.modeller[0].varianter[0].bilde_url = 12345;
+    l.modeller[0].varianter[0].pris_kr = '20310';
+    const r = lesProduktliste(l);
+    expect(r).not.toBeNull();
+    expect(r.rader[0]).toMatchObject({ bilde_url: null, pris_kr: null });
+  });
+  it('pris_kr 0 eller negativ regnes som ikke satt (null), samme konvensjon som portalsiden', () => {
+    for (const pris of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const l = kopi(LISTE); l.modeller[0].varianter[0].pris_kr = pris;
+      expect(lesProduktliste(l).rader[0].pris_kr, `pris_kr=${pris}`).toBeNull();
+    }
   });
   const brudd = {
     'ok ikke sann': (l) => { l.ok = false; },
@@ -118,6 +147,8 @@ describe('index.ts mot falsk Deno', () => {
     expect(t.kall.portal[0].init.redirect).toBe('error');
     expect(t.kall.rpc[0].navn).toBe('portal_produkter_synk');
     expect(t.kall.rpc[0].args.p).toHaveLength(4);
+    expect(t.kall.rpc[0].args.p[0]).toMatchObject({ portal_id: 'v1', bilde_url: 'https://img.example/ev9-500.jpg', pris_kr: 20310 });
+    expect(t.kall.rpc[0].args.p[1]).toMatchObject({ portal_id: 't1', bilde_url: null, pris_kr: null });
   });
   it('ikke admin (håndhevet): 403, portalen spørres ikke', async () => {
     const t = await last({ rolle: 'ansatt' });

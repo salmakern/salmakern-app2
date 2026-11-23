@@ -11,10 +11,16 @@ const NUMMER = /^[1-9][0-9]{0,9}$/
 export type Rad = {
   portal_id: string; type: 'variant' | 'tillegg' | 'losning'; modell_slug: string; modell_navn: string; variant_portal_id: string | null
   produktnummer: string; fiken_nummer: string | null; nummer_status: string; navn: string; prisgruppe: string | null; app_rolle: string | null
-  velges_nar: string[]
+  velges_nar: string[]; bilde_url: string | null; pris_kr: number | null
 }
 
 const tekst = (v: unknown, maks = 200): string | null => (typeof v === 'string' && [...v].length <= maks ? v : null)
+
+// bilde_url/pris_kr (2026-11-20, additivt i versjon 1, Henriks ønske): KUN til Salmaker'n sin kontroll av at et produkt har bilde+pris
+// satt i portalen - ikke brukt til fakturering. Valgfrie i kontrakten (mangler feltet = null, som en eldre portal uten dem), og lest LØST
+// (feil type = null) i stedet for å avvise hele svaret - i motsetning til produktnummer/nummer_status, som er fakturakritiske.
+const lesBildeUrl = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 && [...v].length <= 2000 ? v : null)
+const lesPrisKr = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null)
 
 // «Velges når» (trinn 3, valgfritt felt): liste med høyst 20 tekster à 1-100 tegn. Mangler feltet (eldre portal) = tom liste. null = ugyldig.
 function velgesNar(v: unknown): string[] | null {
@@ -66,7 +72,7 @@ export function lesProduktliste(data: unknown): { rader: Rad[]; roller: number }
       if (!vn) return null
       sett.add(id)
       antVar++
-      rader.push({ portal_id: id, type: 'variant', modell_slug: slug, modell_navn: navn, variant_portal_id: null, ...nr, navn: tekst(v.navn) ?? '', prisgruppe: tekst(v.prisgruppe, 20), app_rolle: rolle, velges_nar: vn })
+      rader.push({ portal_id: id, type: 'variant', modell_slug: slug, modell_navn: navn, variant_portal_id: null, ...nr, navn: tekst(v.navn) ?? '', prisgruppe: tekst(v.prisgruppe, 20), app_rolle: rolle, velges_nar: vn, bilde_url: lesBildeUrl(v.bilde_url), pris_kr: lesPrisKr(v.pris_kr) })
       for (const t of v.tillegg) {
         if (!ER_OBJEKT(t)) return null
         const tid = tekst(t.portal_id, 64), tnr = nummerFelt(t)
@@ -75,7 +81,7 @@ export function lesProduktliste(data: unknown): { rader: Rad[]; roller: number }
         if (!tvn) return null
         sett.add(tid)
         antTil++
-        rader.push({ portal_id: tid, type: t.type, modell_slug: slug, modell_navn: navn, variant_portal_id: id, ...tnr, navn: tekst(t.navn) ?? '', prisgruppe: null, app_rolle: null, velges_nar: tvn })
+        rader.push({ portal_id: tid, type: t.type, modell_slug: slug, modell_navn: navn, variant_portal_id: id, ...tnr, navn: tekst(t.navn) ?? '', prisgruppe: null, app_rolle: null, velges_nar: tvn, bilde_url: lesBildeUrl(t.bilde_url), pris_kr: lesPrisKr(t.pris_kr) })
       }
     }
   }

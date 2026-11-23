@@ -1,5 +1,7 @@
--- Test av 20261117220000_portal_produkter.sql. ALLTID i en transaksjon som rulles tilbake.
---   (echo "begin;"; cat supabase/migrations/20261117220000_portal_produkter.sql; cat supabase/tester/portal_produkter_TEST_body.sql; echo "rollback;") > "$TEMP/t.sql"
+-- Test av 20261117220000_portal_produkter.sql + 20261117230000_portal_produkter_synk_safeupdate.sql + 20261120100000_portal_produkter_bilde_pris.sql
+-- (bilde_url/pris_kr, T12-T15). ALLTID i en transaksjon som rulles tilbake.
+--   (echo "begin;"; cat supabase/migrations/20261117220000_portal_produkter.sql supabase/migrations/20261117230000_portal_produkter_synk_safeupdate.sql \
+--     supabase/migrations/20261120100000_portal_produkter_bilde_pris.sql; cat supabase/tester/portal_produkter_TEST_body.sql; echo "rollback;") > "$TEMP/t.sql"
 --   npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --yes --file "$TEMP/t.sql"
 create temp table _res (n serial, navn text, ok boolean, info text);
 
@@ -52,6 +54,26 @@ begin
 
   begin perform portal_produkter_synk(v #- '{2,variant_portal_id}'); insert into _res values (default, 'T11 tillegg uten variant avvises', false, 'ingen feil');
   exception when others then insert into _res values (default, 'T11 tillegg uten variant avvises', sqlerrm = 'UGYLDIG_INPUT', sqlerrm); end;
+
+  -- T12-T15: bilde_url/pris_kr (20261120100000, additivt i versjon 1) - KUN til kontroll av at et produkt har bilde+pris i portalen,
+  -- aldri brukt i fakturering. Bygget på den uendrede `v` (deklarert øverst), ikke på tilstanden fra T4/T6-T11.
+  r := portal_produkter_synk(jsonb_set(jsonb_set(v, '{0,bilde_url}', '"https://img.example/ev9-500.jpg"'), '{0,pris_kr}', '20310'));
+  insert into _res values (default, 'T12 gyldig bilde_url/pris_kr lagres og leses tilbake',
+    (select (bilde_url, pris_kr) = ('https://img.example/ev9-500.jpg', 20310) from portal_produkter where portal_id = 'v_TEST_1'), r::text);
+
+  begin perform portal_produkter_synk(jsonb_set(v, '{0,bilde_url}', to_jsonb(repeat('x', 2001))));
+    insert into _res values (default, 'T13 for lang bilde_url avvises', false, 'ingen feil');
+  exception when others then insert into _res values (default, 'T13 for lang bilde_url avvises', sqlerrm = 'UGYLDIG_INPUT', sqlerrm); end;
+
+  begin perform portal_produkter_synk(jsonb_set(v, '{0,pris_kr}', '0'));
+    insert into _res values (default, 'T14 pris_kr 0 avvises (edge-funksjonen sender aldri dette, men databasen er selv vernet)', false, 'ingen feil');
+  exception when others then insert into _res values (default, 'T14 pris_kr 0 avvises', sqlerrm = 'UGYLDIG_INPUT', sqlerrm); end;
+
+  -- `v` mangler bilde_url/pris_kr på alle rader fra før (slik en eldre portalversjon ville gjort): dette er allerede
+  -- dekket implisitt av T1-T11 over, men gjøres eksplisitt her.
+  r := portal_produkter_synk(v);
+  insert into _res values (default, 'T15 uten bilde_url/pris_kr-felt (eldre portal) er lov og gir null - avvises IKKE',
+    (select bilde_url is null and pris_kr is null from portal_produkter where portal_id = 'v_TEST_1'), r::text);
 end;
 $test$;
 
