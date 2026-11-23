@@ -373,12 +373,15 @@ Deno.serve(async (req) => {
     // (ordre uten forhandler_kontakt_id, eller forhandleren finnes ikke i portalen) får en
     // modulsystem-linje 0 %, aldri ombygging-/ekstrautstyr-satsen og aldri en stopp: «ingen
     // rabatt» er nettopp hensikten med kategorien. Samme NULL-sjekk som før gjelder uansett kilde: kun
-    // forhåndsutfylt der historikken/portalen var konsekvent. Mangler HELE raden: aldri avtalt
-    // noe for denne kunden, trygt å anta 0%. Finnes raden, men ÉN av de to kolonnene er NULL:
+    // forhåndsutfylt der historikken/portalen var konsekvent. Finnes raden, men ÉN av de to kolonnene er NULL:
     // noen har satt opp den ENE satsen (f.eks. ombygging) men aldri tatt stilling til den andre
     // (ekstra utstyr) - IKKE det samme som "avtalt 0%", og skal ALDRI stille anta 0% (rettet
     // 5.11, uavhengig sikkerhetsgjennomgang: 68 av 100 rader i fiken_kunde_rabatt hadde NULL i
     // minst én kolonne). Stopper fakturering HELT i stedet for å gjette - se sjekken rett under.
+    // Mangler HELE raden (ingen treff verken i portal_kunde_rabatt eller fiken_kunde_rabatt):
+    // behandles nå IDENTISK med "raden finnes, men kolonnen er NULL" (rettet 23.11, Henriks
+    // eksplisitte ja - yuh1zrw3tm3riggltslm: "aldri avtalt noe for denne kunden" ble tidligere
+    // stille tolket som 0 % her, usynlig bak et mykt gult varsel i appen - nå samme harde stopp.
     let rabattRad: { rabatt_ombygging: number | null; rabatt_ekstra_utstyr: number | null; rabatt_modulsystem?: number | null } | null = null
     let rabattKilde: 'portal' | 'lokal' = 'lokal'
     const tilRabattRad = (r: { rabatt_standard: number | null; rabatt_ekstrautstyr: number | null; rabatt_modulsystem?: number | null }) =>
@@ -453,7 +456,7 @@ Deno.serve(async (req) => {
     // Bare portal-kilden har en modulsystem-sats; lokal kilde (fiken_kunde_rabatt) eller ingen rad = 0 %.
     const rabattModulsystem = rabattSkalBrukes && rabattKilde === 'portal' ? (rabattRad?.rabatt_modulsystem ?? 0) : 0
 
-    if (rabattSkalBrukes && rabattRad) {
+    if (rabattSkalBrukes) {
       const trengerSats = (kategori: LinjeKategori) => linjer.some((l: any) => {
         const erOverstyrtBelop = l.belop !== undefined && l.belop !== null
         const erLaastRabatt = typeof l.rabatt === 'number' && Number.isFinite(l.rabatt)
@@ -461,16 +464,22 @@ Deno.serve(async (req) => {
         const produkt = produktMap.get(String(l.produktnummer))
         return !!produkt && linjeKategori(produkt, kategoriMap, String(l.produktnummer)) === kategori
       })
-      const settStedet = rabattKilde === 'portal' ? 'i Forhandlerportalen for denne forhandleren' : 'i Fiken-rabatt'
-      if (rabattRad.rabatt_ombygging === null && trengerSats('ombygging')) {
+      const settStedet = rabattKilde === 'portal'
+        ? 'i Forhandlerportalen for denne forhandleren'
+        : rabattRad
+          ? 'i Fiken-rabatt'
+          : 'noe sted (verken i Forhandlerportalen eller i Fiken-rabatt - ingen avtalt rabatt funnet for denne kunden)'
+      if ((rabattRad?.rabatt_ombygging ?? null) === null && trengerSats('ombygging')) {
         return jsonSvar({ error: `Kundens ombygging-rabatt er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
       }
-      if (rabattRad.rabatt_ekstra_utstyr === null && trengerSats('ekstra')) {
+      if ((rabattRad?.rabatt_ekstra_utstyr ?? null) === null && trengerSats('ekstra')) {
         return jsonSvar({ error: `Kundens rabatt for ekstra utstyr er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
       }
       // Samme regel for modulsystem, men BARE når portal-raden finnes og har feltet tomt (NULL =
-      // ikke tatt stilling til i portalen). Lokal kilde har ingen slik kolonne: 0 %, ingen stopp.
-      if (rabattKilde === 'portal' && rabattRad.rabatt_modulsystem === null && trengerSats('modulsystem')) {
+      // ikke tatt stilling til i portalen). Lokal kilde (inkl. "ingen rad i det hele tatt") har
+      // ingen slik kolonne/kilde: 0 %, ingen stopp - uendret, Henriks spørsmål 23.11 gjaldt bare
+      // ombygging/ekstra utstyr.
+      if (rabattKilde === 'portal' && rabattRad?.rabatt_modulsystem === null && trengerSats('modulsystem')) {
         return jsonSvar({ error: `Kundens modulsystem-rabatt er ikke satt ${settStedet} (står tomt, ikke 0 %) - sett en verdi (0 hvis ingen rabatt skal gis) før fakturering, eller huk av «Bruk kundens avtalte rabatt».` }, 400)
       }
     }

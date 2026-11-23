@@ -386,9 +386,25 @@ describe('fiken-fakturer: NULL i fiken_kunde_rabatt blokkerer fakturering i sted
     expect(l.discount).toBeUndefined();
   });
 
-  it('ingen rad i fiken_kunde_rabatt i det hele tatt (aldri avtalt noe): fortsatt trygt å anta 0%, IKKE blokkert', async () => {
+  it('ingen rad i fiken_kunde_rabatt i det hele tatt (aldri avtalt noe): 400, samme harde stopp som en NULL-kolonne (rettet 23.11, Henriks ja)', async () => {
     const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } }; // ingen fiken_kunde_rabatt-rad
-    const [l] = await hentLinjer({ svar }, standardBody([linje('100')]));
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/ombygging-rabatt er ikke satt/);
+    expect(draftKall).toHaveLength(0);
+  });
+
+  it('ingen rad i fiken_kunde_rabatt i det hele tatt, men linjen har sin EGEN frosne rabatt: går gjennom (trenger aldri kategori-satsen)', async () => {
+    const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('100', { rabatt: 15 })]));
+    expect(l.discount).toBe(15);
+  });
+
+  it('ingen rad i fiken_kunde_rabatt i det hele tatt, men ingen linje trenger en kategori-sats (bare drivstoff): går gjennom', async () => {
+    const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
+    const [l] = await hentLinjer({ svar }, standardBody([linje('21', { belop: 500 })]));
     expect(l.discount).toBeUndefined();
   });
 
@@ -421,11 +437,14 @@ describe('fiken-fakturer: uten frosset rabatt - uendret kategori-basert oppførs
     expect(l.discount).toBe(8);
   });
 
-  it('ingen rad i fiken_kunde_rabatt: 0% for begge kategorier, ingen discount-felt', async () => {
+  it('ingen rad i fiken_kunde_rabatt: 400 (samme harde stopp som en NULL-kolonne, rettet 23.11)', async () => {
     const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
-    const linjer = await hentLinjer({ svar }, standardBody([linje('100'), linje('200')]));
-    expect(linjer[0]).not.toHaveProperty('discount');
-    expect(linjer[1]).not.toHaveProperty('discount');
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100'), linje('200')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/ombygging-rabatt er ikke satt/); // ombygging-sjekken kommer først
+    expect(draftKall).toHaveLength(0);
   });
 
   it('brukRabatt:false uten frosset rabatt: nuller ut BEGGE kategori-satsene selv om raden har verdier', async () => {
@@ -440,11 +459,11 @@ describe('fiken-fakturer: uten frosset rabatt - uendret kategori-basert oppførs
 });
 
 describe('fiken-fakturer: frosset rabatt=0 gir ingen discount-felt (fakta 3)', () => {
-  // Den andre kodeveien til samme utfall (manglende l.rabatt + kategorisats 0 fordi det ikke
-  // finnes noen fiken_kunde_rabatt-rad) er allerede dekket av "ingen rad i fiken_kunde_rabatt"-
-  // testen i fakta 2-blokken over - en egen test for akkurat den kombinasjonen her var
-  // trivielt sann (ville bestått selv om hele discount-funksjonen ble fjernet) og redundant
-  // med den testen, så den er bevisst ikke duplisert.
+  // Den andre kodeveien til samme utfall (manglende l.rabatt + kategorisats 0 fordi ingen rad
+  // finnes i fiken_kunde_rabatt) finnes ikke lenger - "ingen rad i det hele tatt" gir nå samme
+  // harde 400-stopp som en NULL-kolonne (rettet 23.11, se egen describe over). Den nærmeste
+  // uendrede varianten (en linje som ikke trenger noen kategori-sats, f.eks. drivstoff) er
+  // dekket av "ingen linje trenger en kategori-sats" i samme describe.
   it('frosset rabatt=0 (gyldig "ingen rabatt" fra portalen): ingen discount-felt', async () => {
     const svar = {
       fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
@@ -593,7 +612,12 @@ describe('fiken-fakturer: kjent, akseptert avrundingsforskjell mot portalen (fak
 // En leveranse kan mangle chassis. Klienten sender da `referanse` (merking, reg.nr og chassis det finnes av) som brukes som Ordrereferanse i Fiken.
 // Bil-ordrer sender ingen `referanse` og skal få nøyaktig samme referanse som før.
 describe('fiken-fakturer: ordrereferanse (leveranse vs bil)', () => {
-  const svar = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
+  // rabatt-raden er bare her for å unngå den nye NULL-stoppen (23.11) - selve testen handler om
+  // ordrereferanse/kommentar, ikke rabatt.
+  const svar = {
+    fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+    fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+  };
   async function hentKladd(body) {
     const { kall, draftKall } = await last({ svar });
     const res = await kall(body);
@@ -647,6 +671,9 @@ describe('fiken-fakturer: fakturalinjene leses fra ordrer.fiken_linjer i databas
     const svar = {
       _manuellOrdre: true, // se kall() i last() - hindrer auto-synk fra body.linjer
       fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      // rabatt-raden unngår den nye NULL-stoppen (23.11) - testen handler om body vs. database, ikke
+      // rabatt, så ekstra_utstyr-satsen er bevisst 0 (gir ingen discount-felt, som før denne fiksen).
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 0 }, error: null },
       // Databasen sier: én ekstra-utstyr-linje uten rabatt.
       ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [linje('200')] }, error: null },
     };
@@ -1128,6 +1155,9 @@ describe('fiken-fakturer: atomisk reservasjon hindrer dobbel kladd ved to (neste
     return {
       _manuellOrdre: true,
       fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+      // rabatt-raden unngår den nye NULL-stoppen (23.11) - denne describe-blokken tester
+      // reservasjon/claim-logikk, ikke rabatt.
+      fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
       ordrer: { data: { fiken_kladd_url: null, fiken_linjer: [linje('100')] }, error: null },
       ...over,
     };

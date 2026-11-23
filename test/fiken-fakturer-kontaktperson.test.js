@@ -152,7 +152,12 @@ function standardBody(linjer, overrides = {}) {
   return { ordreId: ORDRE_ID, kundeNavn: 'Test Kunde AS', kontaktpersonNavn: 'Ola Nordmann', linjer, ...overrides };
 }
 
-const ALIAS_FUNNET = { fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null } };
+const ALIAS_FUNNET = {
+  fiken_kunde_alias: { data: { fiken_contact_id: CONTACT_ID }, error: null },
+  // rabatt-raden er bare her for å unngå den nye NULL-stoppen (23.11, yuh1zrw3tm3riggltslm) -
+  // denne testfilen tester kontaktperson-logikk, ikke rabatt.
+  fiken_kunde_rabatt: { data: { rabatt_ombygging: 20, rabatt_ekstra_utstyr: 10 }, error: null },
+};
 
 describe('fiken-fakturer: needsKontaktperson (ny gren)', () => {
   it('kontaktpersonen finnes IKKE hos kunden i Fiken: stopper FØR reservasjonen, ingen kladd-POST, ingen klaim av ordren', async () => {
