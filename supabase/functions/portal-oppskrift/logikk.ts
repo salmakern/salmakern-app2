@@ -16,7 +16,10 @@ export const ID_MAKS = 64
 export const NR_MAKS = 20
 export const NAVN_MAKS = 200
 export const ANTALL_MAKS = 10000
-export const PRISGRUPPER = ['STANDARD', 'EKSTRAUTSTYR', 'MODUL_SYSTEM'] as const
+// PERSONBIL lagt til 2026-11-23 (Forhandlerportalens nye priskategori "Personbil", gren henger/personbil-priskategori
+// i forhandlerportal-app - IKKE merget der ennå). Databasefunksjonen portal_oppskrift_lagre er utvidet samtidig
+// (migrasjon 20261123110000) - hold de to i takt, de to er egentlig den samme allow-listen i to repoer.
+export const PRISGRUPPER = ['STANDARD', 'EKSTRAUTSTYR', 'MODUL_SYSTEM', 'PERSONBIL'] as const
 
 const ER_OBJEKT = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const tekst = (v: unknown, maks: number): string | null => {

@@ -54,6 +54,9 @@ describe('parseForesporsel', () => {
     expect(parseForesporsel({ ...LAGRE, modellNavn: '' })).toEqual({ ok: false, felt: 'modellNavn' });
     expect(parseForesporsel({ ...LAGRE, modellSlug: null }).ok).toBe(true);
   });
+  it('PERSONBIL (priskategori, 2026-11-23) er en gyldig prisgruppe', () => {
+    expect(parseForesporsel({ ...LAGRE, prisgruppe: 'PERSONBIL' })).toMatchObject({ ok: true, input: { prisgruppe: 'PERSONBIL' } });
+  });
   it('deler: liste, høyst 100, gyldig antall og ingen vare to ganger', () => {
     const bad = [
       'x', [{ vareId: 'a' }], [{ vareId: 'a', antall: 0 }], [{ vareId: 'a', antall: -1 }], [{ vareId: 'a', antall: '2' }], [{ vareId: 'a', antall: 10001 }],
