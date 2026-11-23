@@ -945,7 +945,7 @@ describe('fiken-fakturer: flere portal-avdelinger (samme kontakt_id) i portal_ku
     expect(api.draftKall[0].lines[0].discount).toBe(7); // fiken_kunde_rabatt sin sats, ikke en gjetning mellom 30 og 10
   });
 
-  it('flere avdelinger med ULIKE satser, ingen org.nr på ordren og ingen fiken_kunde_rabatt-rad heller: ingen rabatt (0 %), ingen stopp', async () => {
+  it('flere avdelinger med ULIKE satser, ingen org.nr på ordren og ingen fiken_kunde_rabatt-rad heller: 400 (ingen avtalt rabatt funnet noe sted - rettet 23.11, se egen describe for NULL-stoppen)', async () => {
     const svar = svarMedOrdre({
       forhandlerKontaktId: 'k_bos',
       linjer: [linje('100')],
@@ -959,8 +959,12 @@ describe('fiken-fakturer: flere portal-avdelinger (samme kontakt_id) i portal_ku
         },
       },
     });
-    const [l] = await hentLinjer({ svar }, standardBody([linje('100')]));
-    expect(l).not.toHaveProperty('discount');
+    const { kall, draftKall } = await last({ svar });
+    const res = await kall(standardBody([linje('100')]));
+    const body = await res.json();
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/ombygging-rabatt er ikke satt noe sted/);
+    expect(draftKall).toHaveLength(0);
   });
 
   it('flere avdelinger med ULIKE satser og brukRabatt:false: INGEN stopp (rabatten brukes uansett ikke på denne fakturaen)', async () => {
