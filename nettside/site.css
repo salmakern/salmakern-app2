@@ -71,7 +71,7 @@ header.site-header {
 /* Logoen og samarbeidspartneren (Modul-System, 2026-11-09, Henrik: «flytt modul-system-logoen opp ved siden av Salmaker'n-logoen») står side om side til venstre; menyen blir på høyre side. */
 .header-brand { display: flex; align-items: center; gap: 18px; margin-right: auto; min-width: 0; }
 .header-brand .logo-link { margin-right: 0; }
-.header-partner { height: 28px; width: auto; padding-left: 18px; border-left: 1px solid var(--border); flex-shrink: 0; }
+.header-partner { height: 40px; width: auto; padding-left: 18px; border-left: 1px solid var(--border); flex-shrink: 0; } /* 2026-11-24: 28 -> 40 px (Henrik: «gjør modul system logoen større», valgte 44 px i en A/B/C/D-sammenligning, men 43+ px bryter menyen til to rader ved 1280 px bredde - 42 px er grensen, målt; 40 px gir litt margin). Breakpoints under 1120px/720px er UENDRET (24/22 px) - de har alltid hatt nok plass og skal ikke endres. */
 .logo-link img { height: 60px; width: auto; } /* 2026-11-02: 40 -> 60 px (Henrik valgte alternativ B: dagens logo, større). Se justeringer under 1120px og 720px i RESPONSIVE. */
 .main-nav { display: flex; align-items: center; gap: 24px; font-size: 12px; font-weight: 600; letter-spacing: 0.11em; text-transform: uppercase; flex-wrap: wrap; }
 .nav-link { color: var(--text-muted); transition: color 0.18s ease; }
