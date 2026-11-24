@@ -89,12 +89,19 @@ function renderOrdreList() {
     const portalTekst = `Fra portal, ikke bekreftet (${S.ordrer.filter(o => o.status === 'aktiv' && erUbekreftetPortalOrdre(o)).length})`;
     if (portalValg.textContent !== portalTekst) portalValg.textContent = portalTekst;
   }
+  // «Hengerfeste (N)» (Henrik 2026-11-24): filter, ikke bare sortering - viser KUN biler med hengerfeste valgt. Samme regel (medHengerfeste) som sorteringen over.
+  const hengerfesteValg = document.querySelector('#ordreStatusFilter option[value="hengerfeste"]');
+  if (hengerfesteValg) {
+    const hengerfesteTekst = `Hengerfeste (${S.ordrer.filter(o => o.status === 'aktiv' && medHengerfeste(o)).length})`;
+    if (hengerfesteValg.textContent !== hengerfesteTekst) hengerfesteValg.textContent = hengerfesteTekst;
+  }
   const alle = S.ordrer.filter(o => {
     if (o.status !== 'aktiv') return false;
     if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }
     // «Bestilt frakt» er en markering på ordren, ikke en ordreStatus (se core.js), så den kan ikke sammenlignes med ordreStatus.
     else if (statusFilter === 'bestilt_frakt') { if (!erBestiltFraktAktiv(o)) return false; }
     else if (statusFilter === 'leveranse') { if (!erLeveranse(o)) return false; }
+    else if (statusFilter === 'hengerfeste') { if (!medHengerfeste(o)) return false; }
     else if (statusFilter && o.ordreStatus !== statusFilter) return false;
     if (!sokTekst) return true;
     return (o.regnr||'').toLowerCase().includes(sokTekst) ||
