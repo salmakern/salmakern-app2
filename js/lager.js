@@ -1654,7 +1654,14 @@ async function oppdaterFikenLinjeForOppskrift(produktnummer, skalStaa, ordreId =
       p_ordre_id: o.id, p_produktnummer: produktnummer,
       p_linje: skalStaa ? { produktnummer, antall: 1 } : null
     });
-    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    if (error) {
+      // s90-20261104-6: feilen VISES (visFikenLinjeFeil i ordre-detalj.js), og kortet tegnes på nytt fra den lokale lista, som ikke er endret
+      // (den følger bare databasens svar) - skjermen sier dermed aldri at linjen er lagt til eller fjernet når den ikke er det.
+      visFikenLinjeFeil(o, produktnummer, error);
+      const elFeil = document.getElementById('fikenLinjer_'+o.id);
+      if (elFeil) elFeil.innerHTML = fikenLinjerHTML(o);
+      return false;
+    }
     o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
   } else {
     o.fikenLinjer = o.fikenLinjer || [];
