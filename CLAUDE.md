@@ -72,12 +72,12 @@ kryss den av med dato. Tekniske detaljer: «Avslutt ansatt» og «Delt stasjon l
 
 ### C. Rutinemessig
 - **To-trinns innlogging på tjenestekontoene (haster, Henrik gjør det selv; Henger igjen s00-20261116-3).** Kryss av
-  per konto etter hvert som det blir gjort; lagre gjenopprettingskodene i passordbehandleren. Henrik bekreftet 25.11:
-  bare Vercel har 2FA på i dag.
+  per konto etter hvert som det blir gjort; lagre gjenopprettingskodene i passordbehandleren. Vercel, GitHub, Resend
+  og Supabase er på plass (25.11); Domeneshop, Fiken og Microsoft 365 gjenstår.
 
   | Konto | 2FA på | Koder i passordbehandleren | Dato |
   |---|---|---|---|
-  | Supabase | ☐ | ☐ | |
+  | Supabase | ☑ | ☑ | 25.11 |
   | Vercel (må kunne nås uten Microsoft 365: nødutgangen for portalens 2-trinn går via Vercel) | ☑ | ☐ | 25.11 |
   | GitHub | ☑ | ☑ | 25.11 |
   | Resend | ☑ | ☑ | 25.11 |
