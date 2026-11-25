@@ -114,7 +114,8 @@
 // v109 - Diagnose-kravet fra 2026-11-20 er fjernet igjen (Henrik 25.11: «diagnose skal ikke være der») - blokkerer ikke lenger overgangen til Påbegynt. Ansatt-/bildekravet er uendret
 // v110 - Fakturalinjer: en lagring som databasen avviser vises nå som feil, og skjermen rulles tilbake til det som faktisk er lagret (s90-20261104-6)
 // v111 - «Bilen er hentet»-e-posten sendes automatisk ved status Hentet; admin har en reserveknapp i Admin-ark når den ikke gikk ut
-const CACHE = 'salmakern-v111';
+// v112 - Hentet-e-postens avsendernavn er fast «Jan Børre Sigurdsen» (Henrik 25.11), ikke lenger den innloggede ansatte som utløste den
+const CACHE = 'salmakern-v112';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

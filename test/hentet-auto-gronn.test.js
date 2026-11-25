@@ -89,7 +89,7 @@ describe('Hentet-varsel sendes automatisk når status settes til «Hentet» (Hen
     const { epostKall, lagreKall } = sandbox._logg();
     expect(epostKall.length).toBe(1);
     expect(epostKall[0].fn).toBe('send-frakt-epost');
-    expect(epostKall[0].body).toEqual({ type: 'hentet', kontaktpersonEpost: 'ola@example.test', chassisNr: 'WBA12345', fraktselskap: 'Axess', avsenderNavn: 'TEST Admin' });
+    expect(epostKall[0].body).toEqual({ type: 'hentet', kontaktpersonEpost: 'ola@example.test', chassisNr: 'WBA12345', fraktselskap: 'Axess', avsenderNavn: 'Jan Børre Sigurdsen' });
     expect(lagreKall.length).toBe(1);
     expect(lagreKall[0].endringer).toEqual({ hentetVarslet: true });
     expect(lagreKall[0].rad._arkId).toBe('ark_1');
@@ -270,7 +270,7 @@ describe('Admin-ark: reserveknapp «📧 Send hentet-varsel» for admin (2026-11
       expect(confirmTekst).toMatch(/TEST Ola \(ola@example\.test\).*at bilen er hentet/);
       const { epostKall, lagreKall } = sandbox._logg();
       expect(epostKall.length).toBe(1);
-      expect(epostKall[0].body).toEqual({ type: 'hentet', kontaktpersonEpost: 'ola@example.test', chassisNr: 'WBA12345', fraktselskap: 'Axess', avsenderNavn: 'TEST Admin' });
+      expect(epostKall[0].body).toEqual({ type: 'hentet', kontaktpersonEpost: 'ola@example.test', chassisNr: 'WBA12345', fraktselskap: 'Axess', avsenderNavn: 'Jan Børre Sigurdsen' });
       expect(lagreKall.length).toBe(1);
       expect(lagreKall[0].endringer).toEqual({ hentetVarslet: true });
       expect(lagreKall[0].rad._arkId).toBe('ark_1');

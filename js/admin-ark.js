@@ -467,11 +467,17 @@ async function adminArkVarsleHentetAuto(o) {
 
 // Selve e-postkallet, felles for automatikken og reserveknappen (samme innhold begge veier:
 // chassis.nr og hvem som hentet; «Levering av oss» gir fortsatt «på vei til dere»).
+// avsenderNavn er FAST «Jan Børre Sigurdsen» (Henrik 2026-11-25), ulikt de andre frakt-e-postene
+// (adminArkFraktBestill m.fl.) som fortsatt signeres av den innloggede ansatte (me.navn) - denne
+// sendes nå automatisk ved statusendring, uansett hvem som satte bilen til Hentet, så den skal
+// ikke se ut som om en tilfeldig ansatt personlig skrev/sendte den. Samme signatur som Vegvesen-
+// dokumentene (se js/vegvesen-dokumenter.js), som av samme grunn alltid er Jan Børre.
+const HENTET_EPOST_AVSENDER = 'Jan Børre Sigurdsen';
 async function adminArkSendHentetEpost(rad, kontaktEpost) {
   const erLeveringAvOss = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS;
   const utenFraktselskap = erLeveringAvOss || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
   await adminArkKallFraktEpost({ type: erLeveringAvOss ? 'paa_vei' : 'hentet', kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr,
-    fraktselskap: utenFraktselskap ? '' : fraktselskapVisningsnavn(rad.fraktselskap||''), avsenderNavn: me?.navn });
+    fraktselskap: utenFraktselskap ? '' : fraktselskapVisningsnavn(rad.fraktselskap||''), avsenderNavn: HENTET_EPOST_AVSENDER });
 }
 
 // Når skal reserveknappen vises? Bare for admin, bare med chassis.nr, bare når raden ikke er
