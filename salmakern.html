@@ -1330,11 +1330,16 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <div class="box" style="margin-top:10px">
       <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KJØRETØY</div>
+      <div style="margin-bottom:10px">
+        <label for="n_modellvalg">Modell fra katalogen</label>
+        <select id="n_modellvalg" onchange="velgNyOrdreModell(this.value)"></select>
+        <div class="small muted" style="margin-top:4px">Velg modellen her, så fylles Merke og Modell ut. Finnes den ikke i lista, skriv Merke og Modell selv.</div>
+      </div>
       <div class="grid g2">
         <div class="felt-wrap">
           <label>Merke</label>
           <input id="n_merke" autocomplete="off"
-            oninput="renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
+            oninput="nyOrdreModellTekstEndret();renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
             onfocus="visFeltDropdown('n_merke_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_merke_forslag'))">
           <div id="n_merke_forslag" class="felt-dropdown"></div>
         </div>
@@ -1348,7 +1353,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="felt-wrap">
           <label>Modell</label>
           <input id="n_modell" autocomplete="off"
-            oninput="renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
+            oninput="nyOrdreModellTekstEndret();renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
             onfocus="visFeltDropdown('n_modell_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_modell_forslag'))">
           <div id="n_modell_forslag" class="felt-dropdown"></div>
         </div>
