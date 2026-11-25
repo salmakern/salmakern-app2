@@ -72,13 +72,13 @@ kryss den av med dato. Tekniske detaljer: «Avslutt ansatt» og «Delt stasjon l
 
 ### C. Rutinemessig
 - **To-trinns innlogging på tjenestekontoene (haster, Henrik gjør det selv; Henger igjen s00-20261116-3).** Kryss av
-  per konto etter hvert som det blir gjort; lagre gjenopprettingskodene i passordbehandleren. Henrik har slått på 2FA
-  på noen av dem (25.11), men ikke sagt hvilke ennå, så ingen er krysset av her:
+  per konto etter hvert som det blir gjort; lagre gjenopprettingskodene i passordbehandleren. Henrik bekreftet 25.11:
+  bare Vercel har 2FA på i dag.
 
   | Konto | 2FA på | Koder i passordbehandleren | Dato |
   |---|---|---|---|
   | Supabase | ☐ | ☐ | |
-  | Vercel (må kunne nås uten Microsoft 365: nødutgangen for portalens 2-trinn går via Vercel) | ☐ | ☐ | |
+  | Vercel (må kunne nås uten Microsoft 365: nødutgangen for portalens 2-trinn går via Vercel) | ☑ | ☐ | 25.11 |
   | GitHub | ☐ | ☐ | |
   | Resend | ☐ | ☐ | |
   | Domeneshop | ☐ | ☐ | |
@@ -100,7 +100,7 @@ kryss den av med dato. Tekniske detaljer: «Avslutt ansatt» og «Delt stasjon l
 1. **PIN-nødbremsen** er ikke rullet ut. Til da godtar `current_ansatt()` fortsatt 54 gamle innlogginger fra før
    12.11 uten `logget_inn_at` (ingen øktgrense; 15 brukt siste 30 dager). Utrullingen lukker dette.
 2. **post@-kontoen i portalen** har ikke 2-trinn: passord alene og full admin-tilgang (s00-20261113-1, se C).
-3. **2FA på tjenestekontoene:** se tabellen i C; ingenting er bekreftet ennå.
+3. **2FA på tjenestekontoene:** se tabellen i C; bare Vercel er på (25.11), seks gjenstår.
 4. **Godkjenner-PIN-en ved lukking av ordre (`login_med_pin`) gir ut `session_token`** til den som kjenner PIN-en.
    Egen sak (s90-20261125-sessiontoken), ikke rettet.
 5. **E-post i firmaets navn:** DMARC står på `p=none` (falske e-poster i salmaker.as sitt navn avvises ikke), og
