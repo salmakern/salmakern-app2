@@ -79,7 +79,7 @@ kryss den av med dato. Tekniske detaljer: «Avslutt ansatt» og «Delt stasjon l
   |---|---|---|---|
   | Supabase | ☐ | ☐ | |
   | Vercel (må kunne nås uten Microsoft 365: nødutgangen for portalens 2-trinn går via Vercel) | ☑ | ☐ | 25.11 |
-  | GitHub | ☐ | ☐ | |
+  | GitHub | ☑ | ☑ | 25.11 |
   | Resend | ☐ | ☐ | |
   | Domeneshop | ☐ | ☐ | |
   | Fiken | ☐ | ☐ | |
