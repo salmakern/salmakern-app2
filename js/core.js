@@ -384,32 +384,50 @@ const BESTILT_FRAKT_BADGE_FARGE = '#a78bfa';
 // styrer filteret «Bestilt frakt» i Ordre-lista (oversikt-kalender.js), så lista viser
 // akkurat de kortene som har merket.
 function erBestiltFraktAktiv(o) { return !!o.bestiltFrakt && o.ordreStatus !== 'hentet'; }
-function bestiltFraktBadgeHTML(o, offsetCss) {
+// ÉN pille-komponent for alle merkene på ordrekortene (Henrik 2026-11-25, «Alternativ 3: konsolidering uten skjuling» fra designgjennomgangen av
+// «badge-suppa»). Før hadde COC/Fullmakt, PORTAL, KUN EKSTRAUTSTYR, BESTILT FRAKT, flåte, hengerfeste og «utstyr ikke bekreftet» hver sin egen stil
+// (ulike grønnfarger, størrelser og hjørner). Nå: faste toner, fargene ligger BARE i CSS-klassene `.pill.<tone>` i salmakern.html (som resten av appen
+// også bruker), og størrelsen i `.status-pill`. Label og title escapes her (send rå tekst inn). Ukjent tone blir 'neutral'.
+//   ok = grønn, bad = rød, warn = amber, info = blå, neutral = grå, special = lilla (portal bekreftet, kun ekstrautstyr, bestilt frakt)
+const STATUS_PILL_TONER = ['ok', 'bad', 'warn', 'info', 'neutral', 'special'];
+// Egen escaping (ikke esc() fra ordre-detalj.js): core.js lastes alene i flere tester, og pillen skal tåle det.
+function statusPillEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function statusPill(label, tone, opts) {
+  const t = STATUS_PILL_TONER.includes(tone) ? tone : 'neutral';
+  const tittel = opts && opts.title ? ` title="${statusPillEsc(opts.title)}"` : '';
+  return `<span class="pill ${t} status-pill"${tittel}>${statusPillEsc(label)}</span>`;
+}
+// «Bestilt frakt» / «Henteklar DD.MM.YYYY»: en vanlig pille i kortets merke-rad (tone special = lilla, samme familie som BESTILT_FRAKT_BADGE_FARGE).
+// Før 2026-11-25 et hjørnemerke (position:absolute) som i tillegg farget kortets kant lilla; kanten er nå ALLTID statusfargen.
+function bestiltFraktBadgeHTML(o) {
   if (!erBestiltFraktAktiv(o)) return '';
   const tekst = o.henteKlarDato ? `HENTEKLAR ${fmtDatoKort(o.henteKlarDato)}` : 'BESTILT FRAKT';
-  return `<span style="position:absolute;top:-9px;${offsetCss};background:#18181b;padding:0 6px;font-size:10px;font-weight:700;color:${BESTILT_FRAKT_BADGE_FARGE};letter-spacing:.03em">${tekst}</span>`;
+  return statusPill(tekst, 'special', { title: 'Frakt er bestilt' });
+}
+// Prioritert ordre: en liten gul stjerne foran tittelen (før 2026-11-25 et hjørnemerke «PRIORITERT» og gul kant, som ikke kunne skilles fra
+// statusen «Ikke veid» med samme gule kantfarge).
+function prioritertStjerneHTML(o) {
+  return o && o.prioritert ? '<span title="Prioritert" aria-label="Prioritert" style="color:#facc15;margin-right:5px">★</span>' : '';
 }
 // Ordre som kom fra Forhandlerportalen (Bestill-knappen): «PORTAL» (blå) når Salmakerverksted har bekreftet, og «PORTAL · IKKE BEKREFTET» (gul/amber)
-// til en ansatt har sett over chassis.nr og trykket Bekreft i ordredetaljen. Selve merket er KUN visning og står i kortets egen rad (ikke absolutt-
-// posisjonert: hjørnene er opptatt av PRIORITERT og BESTILT FRAKT). `kort` gir bare «PORTAL» (fargen viser fortsatt bekreftet/ikke): brukes i ordredetaljens smale
+// til en ansatt har sett over chassis.nr og trykket Bekreft i ordredetaljen. Selve merket er KUN visning og står i kortets merke-rad (ordreKortMerkerHTML
+// i oversikt-kalender.js). `kort` gir bare «PORTAL» (fargen viser fortsatt bekreftet/ikke): brukes i ordredetaljens smale
 // høyrekolonne, der en lang tekst kunne presse chassis.nr smalere enn 17 tegn på en liten telefon (banneret sier «ikke bekreftet» tydelig der). erUbekreftetPortalOrdre
 // brukes også av filteret «Fra portal, ikke bekreftet».
 function erUbekreftetPortalOrdre(o) { return !!o.portalBestillingId && !o.portalBekreftetAt; }
 function portalBadgeHTML(o, kort) {
   // Trinn 5: en ordre laget av en bestilling på e-post får samme slags merke («E-POST · IKKE BEKREFTET» / «E-POST»).
+  // Tone (2026-11-25, statusPill): ikke bekreftet = warn (amber), bekreftet = special (lilla). To ULIKE toner er nødvendig: i ordredetaljens
+  // korte utgave («PORTAL»/«E-POST») er fargen det eneste som viser om ordren er bekreftet.
   if (!o.portalBestillingId && o.epostBestillingId) {
     const ub = !o.epostBekreftetAt;
-    const st = ub ? 'background:#1c1008;border:1px solid #b45309;color:#fbbf24' : 'background:#172554;border:1px solid #1d4ed8;color:#93c5fd';
-    const t = ub ? 'Bestilt på e-post - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt på e-post' + (o.epostBekreftetAv ? ' - bekreftet av ' + esc(o.epostBekreftetAv) : '');
-    return `<span title="${t}" style="display:inline-flex;align-items:center;${st};border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">${ub && !kort ? 'E-POST · IKKE BEKREFTET' : 'E-POST'}</span>`;
+    const t = ub ? 'Bestilt på e-post - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt på e-post' + (o.epostBekreftetAv ? ' - bekreftet av ' + o.epostBekreftetAv : '');
+    return statusPill(ub && !kort ? 'E-POST · IKKE BEKREFTET' : 'E-POST', ub ? 'warn' : 'special', { title: t });
   }
   if (!o.portalBestillingId) return '';
   const ubekreftet = !o.portalBekreftetAt;
-  const stil = ubekreftet
-    ? 'background:#1c1008;border:1px solid #b45309;color:#fbbf24'
-    : 'background:#172554;border:1px solid #1d4ed8;color:#93c5fd';
-  const tittel = ubekreftet ? 'Bestilt i Forhandlerportalen - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt i Forhandlerportalen' + (o.portalBekreftetAv ? ' - bekreftet av ' + esc(o.portalBekreftetAv) : '');
-  return `<span title="${tittel}" style="display:inline-flex;align-items:center;${stil};border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">${ubekreftet && !kort ? 'PORTAL · IKKE BEKREFTET' : 'PORTAL'}</span>`;
+  const tittel = ubekreftet ? 'Bestilt i Forhandlerportalen - ikke bekreftet av Salmakerverksted ennå' : 'Bestilt i Forhandlerportalen' + (o.portalBekreftetAv ? ' - bekreftet av ' + o.portalBekreftetAv : '');
+  return statusPill(ubekreftet && !kort ? 'PORTAL · IKKE BEKREFTET' : 'PORTAL', ubekreftet ? 'warn' : 'special', { title: tittel });
 }
 // Viser hvem som er meldt på ordren direkte på kortet (Ordre-lista og begge Oversikt-listene) -
 // før dette måtte man åpne ordren for å se hvem, kortet bare lyste grønt (pulseGlow, se ansatte-
@@ -946,7 +964,7 @@ const KUN_EKSTRAUTSTYR_STATUSER = ['paa_vei', 'ikke_paabegynt', 'paabegynt', 'kl
 function statusTillattForOrdre(o, status) { return !erKunEkstrautstyr(o) || KUN_EKSTRAUTSTYR_STATUSER.includes(status); }
 function kunEkstrautstyrBadgeHTML(o) {
   if (!erKunEkstrautstyr(o)) return '';
-  return `<span title="Kun ekstrautstyr - ingen ombygging" style="display:inline-flex;align-items:center;background:#1e1b4b;border:1px solid #6366f1;color:#c7d2fe;border-radius:999px;padding:2px 8px;font-size:10px;font-weight:700;letter-spacing:.03em;white-space:nowrap">KUN EKSTRAUTSTYR</span>`;
+  return statusPill('KUN EKSTRAUTSTYR', 'special', { title: 'Kun ekstrautstyr - ingen ombygging' });
 }
 // Tittelen en leveranse vises med i lister og detalj: merkingen, ellers reg.nr, ellers chassis (minst ett av dem kreves ved opprettelse). Rå tekst: kall esc() ved visning.
 function leveranseTittel(o) {

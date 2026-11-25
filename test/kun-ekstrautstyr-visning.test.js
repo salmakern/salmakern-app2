@@ -14,6 +14,8 @@ import { byggReferanser, vanligRad, medOpptak, ID_VANLIG } from './helpers/kun-v
 // koden på origin/main 8f6f52d FØR visningen ble endret. Testen bygger de samme referansene mot dagens kode og krever byte-lik HTML.
 // Slik lages fixturen på nytt (bare hvis en vanlig ordre bevisst skal se annerledes ut): sjekk ut koden som skal være fasit, kjør
 // `byggReferanser(lastApp(rot))` fra test/helpers/kun-visning-scenarier.js og skriv resultatet som JSON med JSON.stringify(ref, null, 1).
+// Laget på nytt 2026-11-25 (gren henger/ordrekort-badges, Henriks «Alternativ 3» for ordrekortene: én kortbygger, én pille-komponent, samme merker i alle
+// tre listene): BARE nøklene `ordreListe` og `oversikt` endret seg (de andre 15 er byte-like 8f6f52d-utgaven), likt i Europe/Oslo, UTC og America/Los_Angeles.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REFERANSE = JSON.parse(readFileSync(path.join(__dirname, 'fixtures/kun-visning-referanse-vanlig.json'), 'utf8'));

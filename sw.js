@@ -117,7 +117,8 @@
 // v112 - Hentet-e-postens avsendernavn er fast «Jan Børre Sigurdsen» (Henrik 25.11), ikke lenger den innloggede ansatte som utløste den
 // v113 - «+ Ny ordre»: modellvelger fra katalogen (portal_modell_kobling) som setter modellnøkkelen (portal_modell_slug) på ordren; en nøkkel valgt i appen fjernes hvis Merke/Modell endres til noe annet
 // v114 - Standardtider: egen lagring per modell (sett_standardtid, ikke «lagre alt»), og «Hent forslag fra kalkylen» med «Bruk» per modell
-const CACHE = 'salmakern-v114';
+// v115 - Ordrekortene: én kortbygger (ordreKortHTML) og én pille-komponent (statusPill) for alle merker; samme merker i Ordre-lista og begge Oversikt-listene; kant = statusfarge, ★ for prioritert, bestilt frakt som pille, dempet glød
+const CACHE = 'salmakern-v115';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

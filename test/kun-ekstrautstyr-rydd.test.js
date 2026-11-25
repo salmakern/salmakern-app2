@@ -17,6 +17,8 @@ import { byggRyddReferanser, tegnSteder, ryddRader, R_AKTIV, R_VENTER, R_ARKIVER
 // BEVIS for at vanlige bil-ordrer og leveranser er UENDRET: test/fixtures/kun-rydd-referanse-vanlig.json er HTML-en den ekte appen tegnet for de samme stedene FØR endringen
 // (origin/main 9fef219, git archive i en mappe utenfor arbeidstreet, klokka fryst, likt i Europe/Oslo, UTC og America/Los_Angeles). Testen bygger referansen mot dagens kode og krever
 // byte-lik HTML. Lages på nytt (bare hvis en vanlig ordre bevisst skal se annerledes ut) som beskrevet øverst i test/helpers/kun-rydd-scenarier.js.
+// Laget på nytt 2026-11-25 (gren henger/ordrekort-badges, Henriks «Alternativ 3» for ordrekortene): BARE ordreListe_admin/_ansatt og oversikt_admin/_ansatt
+// endret seg (de andre 10 nøklene, også Arkiv, kalender, kundehistorikk og PDF, er byte-like 9fef219-utgaven), likt i Europe/Oslo, UTC og America/Los_Angeles.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REFERANSE = JSON.parse(readFileSync(path.join(__dirname, 'fixtures/kun-rydd-referanse-vanlig.json'), 'utf8'));

@@ -36,7 +36,9 @@ describe('chassis.nr vises helt (ikke avkortet) i ordrekortet og ordredetaljen',
 
   it('raden kan bryte (flex-wrap:wrap) og venstrekolonnen har flex:1 1 0 uten overflow:hidden/min-width:0, så nummerets bredde utløser bruddet', () => {
     expect(liste).toMatch(/display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:8px 12px/);
-    expect(liste).toMatch(/onclick="openOrdre\('\$\{o\.id\}'\)" style="cursor:pointer;flex:1 1 0"/);
+    // ordreKortHTML (2026-11-25): klikket går via `apne` (= openOrdre('<id>') i Ordre-lista)
+    expect(liste).toMatch(/onclick="\$\{apne\}" style="cursor:pointer;flex:1 1 0"/);
+    expect(liste).toContain("const apne = liste ? `openOrdre('${o.id}')`");
     expect(detalj).toMatch(/<div class="row" style="flex-wrap:wrap;align-items:center;gap:8px 12px">\n\s*<div style="flex:1 1 0">/);
   });
 

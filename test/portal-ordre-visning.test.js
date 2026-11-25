@@ -86,17 +86,18 @@ describe('dbToOrdre / ordreToDb: portal-kolonnene leses, men skrives ALDRI av ap
 });
 
 describe('PORTAL-merket', () => {
-  it('ingen merke på vanlige ordre; amber «IKKE BEKREFTET» før bekreftelse; blå «PORTAL» etter', () => {
+  // 2026-11-25 (statusPill, Henriks «Alternativ 3»): fargene ligger nå i CSS-tonene. Ikke bekreftet = tone warn (amber), bekreftet = tone special (lilla; var blå).
+  it('ingen merke på vanlige ordre; amber «IKKE BEKREFTET» (tone warn) før bekreftelse; «PORTAL» (tone special) etter', () => {
     const { sandbox } = nyttMiljo();
     expect(sandbox.portalBadgeHTML({})).toBe('');
     expect(sandbox.portalBadgeHTML({ portalBestillingId: null })).toBe('');
     const ub = sandbox.portalBadgeHTML(portalOrdre());
     expect(ub).toContain('PORTAL · IKKE BEKREFTET');
-    expect(ub).toContain('#fbbf24');
+    expect(ub).toContain('class="pill warn status-pill"');
     const bek = sandbox.portalBadgeHTML(portalOrdre({ portalBekreftetAt: '2026-10-30T18:00:00Z', portalBekreftetAv: 'Ola "Sjefen" <b>' }));
     expect(bek).toContain('>PORTAL<');
     expect(bek).not.toContain('IKKE BEKREFTET');
-    expect(bek).toContain('#93c5fd');
+    expect(bek).toContain('class="pill special status-pill"');
     expect(bek).not.toContain('<b>');            // navnet i title-attributtet er escapet
     expect(bek).toContain('&quot;Sjefen&quot;');
   });
@@ -106,9 +107,9 @@ describe('PORTAL-merket', () => {
     const ub = sandbox.portalBadgeHTML(portalOrdre(), true);
     expect(ub).toContain('>PORTAL<');
     expect(ub).not.toContain('IKKE BEKREFTET');
-    expect(ub).toContain('#fbbf24');
+    expect(ub).toContain('class="pill warn status-pill"');
     const bek = sandbox.portalBadgeHTML(portalOrdre({ portalBekreftetAt: 'x' }), true);
-    expect(bek).toContain('#93c5fd');
+    expect(bek).toContain('class="pill special status-pill"');
     expect(sandbox.portalBadgeHTML({}, true)).toBe('');
   });
 
@@ -348,8 +349,11 @@ describe('Filter og oppsett (kildetekst)', () => {
     // (portal-grenen først, og den vanlige status-sammenligningen sist; «Bestilt frakt»-grenen ligger mellom, se sorter-ordre-bestilt-frakt.test.js)
     expect(liste).toContain("if (statusFilter === 'portal_ubekreftet') { if (!erUbekreftetPortalOrdre(o)) return false; }");
     expect(liste).toContain("else if (statusFilter && o.ordreStatus !== statusFilter) return false;");
-    // merket står på alle tre korttypene (Ordre-lista, Oversikt aktive, Oversikt ventende)
-    expect(liste.match(/portalBadgeHTML\(o\)/g).length).toBe(3);
+    // merket står på alle tre korttypene (Ordre-lista, Oversikt aktive, Oversikt ventende): siden 2026-11-25 via ÉN felles pille-rad
+    // (ordreKortPillerHTML) og ÉN kortbygger (ordreKortHTML) som alle tre listene kaller
+    expect(liste.match(/portalBadgeHTML\(o\)/g).length).toBe(1);
+    expect(liste).toMatch(/function ordreKortPillerHTML\(o\) \{[\s\S]*?portalBadgeHTML\(o\),[\s\S]*?\n\}/);
+    for (const k of ['liste', 'aktiv', 'venter']) expect(liste).toContain(`ordreKortHTML(o, '${k}')`);
   });
 
   it('banneret og merket er koblet inn i ordredetaljen', () => {

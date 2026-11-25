@@ -88,7 +88,8 @@ describe('tvangsflyt', () => {
     expect(sandbox.tvangsflyt(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }))).toEqual([{ lbl: 'Status er Hentet', ok: true }]);
     expect(sandbox.tvangsflyt(bil()).length).toBe(7);
   });
-  it('Tvangsflyt-boksen viser kravet: ikke Hentet gir «0 av 1 krav» (godkjenner kan ikke lukke, admin kan overstyre), Hentet gir «1 av 1 krav» og «Godkjenn og lukk»; kortets stolpe er byttet med merket', () => {
+  // 2026-11-25 (ordrekort «Alternativ 3»): kortets stolpe er den vanlige («0 av 1 krav», som «Tvangsflyt 0/1» i PDF-en); merket står i pille-raden i stedet.
+  it('Tvangsflyt-boksen viser kravet: ikke Hentet gir «0 av 1 krav» (godkjenner kan ikke lukke, admin kan overstyre), Hentet gir «1 av 1 krav» og «Godkjenn og lukk»; kortets stolpe viser det samme kravet', () => {
     const ikkeHentet = bil({ kun_ekstrautstyr: true, ordre_status: 'klar_henting' });
     app.settMe({ id: 1, navn: 'TEST - Godkjenner', rolle: 'godkjenner' });
     let boks = sandbox.tvangsflytBoksHTML(ikkeHentet);
@@ -102,7 +103,10 @@ describe('tvangsflyt', () => {
     boks = sandbox.tvangsflytBoksHTML(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }));
     expect(boks).toContain('1 av 1 krav');
     expect(boks).toMatch(/>Godkjenn og lukk<\/button>/);
-    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).toContain('KUN EKSTRAUTSTYR');
+    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).toContain('0 av 1 krav');
+    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).not.toContain('KUN EKSTRAUTSTYR');
+    expect(sandbox.tvangsflytBarHTML(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }))).toContain('1 av 1 krav');
+    expect(sandbox.ordreKortPillerHTML(ikkeHentet)).toContain('KUN EKSTRAUTSTYR');
     expect(sandbox.tvangsflytBarHTML(bil())).toContain('av 7 krav');
   });
 });
