@@ -1185,8 +1185,9 @@ function saveInnstillinger() {
     id: 1,
     utstyr_maler: S.utstyrMaler||[],
     drivstoff_satser: S.drivstoffSatser||[],
-    biltilsyn_reisetider: S.biltilsynReisetider||[],
-    standardtider: S.standardtider||{}
+    biltilsyn_reisetider: S.biltilsynReisetider||[]
+    // standardtider er fjernet herfra 2026-11-25 (s09-027): skrives bare via sett_standardtid (lagreStandardtid under), én modell om
+    // gangen i databasen, så en utdatert lokal kopi aldri kan skrive over en annen admins standardtid.
   }, {onConflict:'id'}).then(r=>{ if(r.error) console.error('Innstillinger feil:',r.error.message); });
 }
 
@@ -1221,6 +1222,7 @@ async function renderStandardtider() {
       <div style="flex:1;min-width:120px">
         <div style="font-weight:700">${esc(m)}</div>
         <div class="small muted" data-faktisk-snitt>Henter faktisk snitt...</div>
+        ${kalkyleForslagHTML(m)}
       </div>
       <label class="small muted">Ombygging (min)
         <input type="number" min="0" value="${rad.ombygging||''}" style="width:80px;display:block" onchange="settStandardtid('${esc(m).replace(/'/g,"\\'")}','ombygging',this.value)">
@@ -1238,11 +1240,93 @@ async function renderStandardtider() {
     snittEl.textContent = snitt ? `Faktisk snitt: ${fmtTime(snitt.snittMs)} (${snitt.antallBiler} bil${snitt.antallBiler===1?'':'er'})` : 'Ingen ferdigstilte biler med registrert tid ennå';
   });
 }
+// ── Forslag fra kalkylen i portalen (s09-027, 2026-11-25) ──
+// «Hent forslag fra kalkylen» henter kalkulerte ombyggingsminutter per kalkylemodell (edge-funksjonen hent-kalkyle-tider-fra-portalen,
+// bare admin). De holdes bare i minnet på denne siden og vises som forslag på hver modellrad; en standardtid endres først når admin
+// trykker «Bruk» (lagreStandardtid → sett_standardtid). Kalkylemodellen kobles til modellraden via portalens modellnøkkel: radens tekst
+// matches mot FIKEN_OMBYGGING_MODELLER (samme gjenkjenning som fakturering bruker) og gir en nøkkel; bare ÉN kalkylemodell med den
+// nøkkelen og et tall gir et forslag (flere eller ingen: ikke noe forslag, aldri en gjetning). Aldri timer per ansatt.
+const KALKYLE_FORSLAG = { data: null };
+function kalkyleForslagForModell(modellTekst) {
+  const d = KALKYLE_FORSLAG.data;
+  if (!d || !Array.isArray(d.modeller)) return null;
+  const tabell = typeof FIKEN_OMBYGGING_MODELLER !== 'undefined' ? FIKEN_OMBYGGING_MODELLER : [];
+  const rad = tabell.find(r => r.match.test(String(modellTekst || '')));
+  if (!rad || !rad.slug) return null;
+  const treff = d.modeller.filter(k => k && k.portal_modell_slug === rad.slug && Number.isInteger(k.minutter) && k.minutter >= 0);
+  return treff.length === 1 ? treff[0] : null;
+}
+function kalkyleForslagHTML(modellTekst) {
+  const f = kalkyleForslagForModell(modellTekst);
+  if (!f) return '';
+  const naa = Number(((S.standardtider || {})[modellTekst] || {}).ombygging) || 0;
+  const knapp = naa === f.minutter
+    ? '<span class="muted"> · lik standardtiden</span>'
+    : ` <button class="btn sm" style="padding:2px 8px;font-size:11.5px" data-modell="${esc(modellTekst)}" onclick="brukKalkyleStandardtid(this.dataset.modell)">Bruk</button>`;
+  return `<div class="small" style="margin-top:2px;color:#a5b4fc" data-kalkyle-forslag>Kalkyle («${esc(f.kalkyle_navn)}»): ${f.minutter} min (${fmtTime(f.minutter * 60000)})${knapp}</div>`;
+}
+async function hentKalkyleTider() {
+  const knapp = document.getElementById('hentKalkyleTiderBtn');
+  const status = document.getElementById('kalkyleTiderStatus');
+  if (knapp && knapp.disabled) return;
+  if (knapp) { knapp.disabled = true; knapp.textContent = 'Henter...'; }
+  try {
+    const res = await edgeFetch('hent-kalkyle-tider-fra-portalen', { method: 'POST' });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body || body.ok !== true || !Array.isArray(body.modeller)) {
+      if (status) status.textContent = 'Kunne ikke hente fra kalkylen: ' + ((body && body.error) || ('HTTP ' + res.status));
+      return;
+    }
+    KALKYLE_FORSLAG.data = { generert: body.generert, modeller: body.modeller };
+    const antall = alleKjenteModeller().filter(m => kalkyleForslagForModell(m)).length;
+    if (status) status.textContent = `Hentet fra kalkylen (${body.modeller.length} kalkylemodeller, forslag på ${antall} av modellene under). Ingenting er endret før du trykker «Bruk».`;
+    renderStandardtider();
+  } catch (e) {
+    if (status) status.textContent = 'Kunne ikke hente fra kalkylen: ' + ((e && e.message) || 'ukjent feil');
+  } finally {
+    if (knapp) { knapp.disabled = false; knapp.textContent = 'Hent forslag fra kalkylen'; }
+  }
+}
+async function brukKalkyleStandardtid(modellTekst) {
+  const f = kalkyleForslagForModell(modellTekst);
+  if (!f) return false;
+  const naa = Number(((S.standardtider || {})[modellTekst] || {}).ombygging) || 0;
+  if (!confirm(`Sette standardtiden for «${modellTekst}» til ${f.minutter} min (${fmtTime(f.minutter * 60000)}) fra kalkylen «${f.kalkyle_navn}»?` + (naa ? `\nNå: ${naa} min.` : ''))) return false;
+  const ok = await lagreStandardtid(modellTekst, f.minutter);
+  if (ok) visToast(`Standardtid for ${modellTekst} satt til ${fmtTime(f.minutter * 60000)}`);
+  renderStandardtider();
+  return ok;
+}
+
+// Henger igjen s09-027 (2026-11-25): standardtiden lagres med en egen, målrettet rutine (RPC-en sett_standardtid, migrasjon
+// 20261125100000) i stedet for saveInnstillinger(), som skriver HELE utstyrsmalene, drivstoffsatsene og reisetidene fra nettleserens
+// minne (samme feilklasse som dagens_pin-feilen 12.11). Databasen endrer bare nøkkelen for denne ene modellen og sjekker at kalleren
+// er admin, og svaret (alle standardtider, ferske) erstatter den lokale kopien. Bare «ombygging» finnes (Klargjøring er bevisst
+// holdt utenfor, se ordreStandardMs()).
 function settStandardtid(modell, felt, val) {
-  const minutter = Math.max(0, Number(val)||0);
+  if (felt !== 'ombygging') return Promise.resolve(false);
+  return lagreStandardtid(modell, Math.max(0, Math.round(Number(val)||0)));
+}
+async function lagreStandardtid(modell, minutter) {
   S.standardtider = S.standardtider || {};
-  S.standardtider[modell] = { ...(S.standardtider[modell]||{}), [felt]: minutter };
-  saveInnstillinger();
+  const forrige = S.standardtider[modell];
+  S.standardtider[modell] = { ...(forrige||{}), ombygging: minutter };
+  planleggLocalSpeiling();
+  if (!db) return true;
+  ignorerRealtimeInnstillinger = true;
+  clearTimeout(ignorerRealtimeInnstillingerTimer);
+  ignorerRealtimeInnstillingerTimer = setTimeout(()=>{ignorerRealtimeInnstillinger=false;}, 10000);
+  const { data, error } = await db.rpc('sett_standardtid', { p_modell: modell, p_ombygging_min: minutter });
+  if (error) {
+    // Tilbake til det som sto, så skjermen ikke viser en standardtid som ikke er lagret.
+    if (forrige === undefined) delete S.standardtider[modell]; else S.standardtider[modell] = forrige;
+    const kode = String(error.message||'');
+    visToast(kode.includes('KUN_ADMIN') ? 'Bare administrator kan endre standardtider.' : 'Kunne ikke lagre standardtiden: ' + kode);
+    if (document.getElementById('merStandardtiderView')?.style.display === 'block') renderStandardtider();
+    return false;
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data)) S.standardtider = data;
+  return true;
 }
 
 // Timesats (kr/time), brukt til å vise "Bil-effektivitet"-badgens brukte tid som en kostnad
