@@ -1081,6 +1081,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="card" style="margin-top:10px">
           <div class="h">Standardtider (bil-effektivitet)</div>
           <div class="muted small" style="margin-bottom:8px">Forventet Ombygging-tid per modell (Klargjøring telles ikke med, siden det er en ren manuell klokke) - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn sm" id="hentKalkyleTiderBtn" onclick="hentKalkyleTider()">Hent forslag fra kalkylen</button>
+            <span class="small muted" id="kalkyleTiderStatus">Kalkylens timer vises som forslag. Ingenting endres før du trykker «Bruk».</span>
+          </div>
           <div id="standardtiderListe" style="margin-top:10px"></div>
         </div>
       </div>
