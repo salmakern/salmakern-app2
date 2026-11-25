@@ -2107,11 +2107,35 @@ function sf(id, field, val) {
   // rendering, selv om sfOmbygging() (avkrysningsboksene i SAMME kort) allerede gjorde
   // nøyaktig dette ved egen endring (funnet 2026-10-22).
   if (['merke','modell'].includes(field)) {
+    ryddAppModellSlugVedTekstEndring(o);
     const container = document.getElementById('ombyggingBoks_' + id);
     if (container) container.innerHTML = ombyggingBoksHTML(o);
     synkroniserOmbyggingFikenLinjer(o);
   }
   return true;
+}
+// Modellvelgeren i «+ Ny ordre» (s90-20261120-modellvelger): en modellnøkkel valgt i APPEN følger Merke/Modell-teksten. Retter den ansatte
+// Merke/Modell til noe annet enn katalogens tekst (feil modell valgt), fjernes nøkkelen, så fakturering og «Skal på bilen» følger den rettede
+// teksten nøyaktig som for en ordre uten nøkkel (slik det alltid har vært for ordrer laget i appen). En nøkkel fra portalen eller e-post
+// (portal_bestilling_id / epost_bestilling_id satt) røres ALDRI: der er bestillingen fasit, og Ombygging-boksen viser avviket (som før).
+// Målrettet update (save()/ordreToDb skriver aldri kolonnen), bare hvis databasen fortsatt har den samme nøkkelen; ved feil settes den tilbake.
+function ryddAppModellSlugVedTekstEndring(o) {
+  if (!o || !o.portalModellSlug || o.portalBestillingId || o.epostBestillingId) return;
+  const rad = Array.isArray(S.portalModellKobling) ? S.portalModellKobling.find(r => r.portal_modell_slug === o.portalModellSlug) : null;
+  if (!rad) return; // katalogen er ikke lastet: ingenting å sammenligne med, la nøkkelen stå
+  const lik = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  if (lik(o.merke, rad.merke) && lik(o.modell, rad.modell)) return;
+  const gammel = o.portalModellSlug;
+  o.portalModellSlug = null;
+  if (typeof merkLokalOrdreEndring === 'function') merkLokalOrdreEndring(o.id);
+  if (!db) return;
+  db.from('ordrer').update({ portal_modell_slug: null }).eq('id', o.id).eq('portal_modell_slug', gammel).then(r => {
+    if (!r || !r.error) return;
+    if (o.portalModellSlug == null) o.portalModellSlug = gammel;
+    visToast('Kunne ikke fjerne modellnøkkelen etter endret Merke/Modell: ' + r.error.message);
+    const container = document.getElementById('ombyggingBoks_' + o.id);
+    if (container) container.innerHTML = ombyggingBoksHTML(o);
+  });
 }
 // s08-058: synker portal_bestillinger.ident til et rettet chassis.nr (RPC, SECURITY DEFINER
 // - portal_bestillinger kan ikke skrives direkte av en vanlig innlogget ansatt). Oppdaterer

@@ -115,7 +115,8 @@
 // v110 - Fakturalinjer: en lagring som databasen avviser vises nå som feil, og skjermen rulles tilbake til det som faktisk er lagret (s90-20261104-6)
 // v111 - «Bilen er hentet»-e-posten sendes automatisk ved status Hentet; admin har en reserveknapp i Admin-ark når den ikke gikk ut
 // v112 - Hentet-e-postens avsendernavn er fast «Jan Børre Sigurdsen» (Henrik 25.11), ikke lenger den innloggede ansatte som utløste den
-const CACHE = 'salmakern-v112';
+// v113 - «+ Ny ordre»: modellvelger fra katalogen (portal_modell_kobling) som setter modellnøkkelen (portal_modell_slug) på ordren; en nøkkel valgt i appen fjernes hvis Merke/Modell endres til noe annet
+const CACHE = 'salmakern-v113';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
