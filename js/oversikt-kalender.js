@@ -646,27 +646,28 @@ async function endreStatus(id, nyStatus) {
   const forrigeAnkomstdato = o.ankomstdato;
   const forrigeEffektivTidFrossen = o.effektivTidFrossen;
   // Ingen skal kunne begynne å jobbe på en bil uten at det er registrert HVEM som gjør det, og at
-  // tilstanden FØR ombygging er dokumentert (alle 6 ankomstbilder + diagnose) - håndheves nå ved ETHVERT
+  // tilstanden FØR ombygging er dokumentert (alle 6 ankomstbilder) - håndheves ved ETHVERT
   // hopp til Påbegynt eller lenger, uansett hvilken status ordren kommer FRA (tettet 2026-11-20, Henrik:
   // tidligere gjaldt kravene bare fra nøyaktig "Ikke påbegynt", så en bil kunne hoppe forbi sjekken rett
   // fra "På vei" til "Påbegynt" eller lenger, eller rett forbi "Påbegynt" til en senere status, uten
-  // noen kontroll). Kravet om ALLE 6 bilder + diagnose er nytt samme dag (Henriks valg av 2 av 4
-  // forslag) - erstatter det tidligere, svakere "minst ett bilde"-kravet, som er en delmengde av det.
+  // noen kontroll).
+  // Diagnose-kravet (lagt til 2026-11-20) er FJERNET igjen 2026-11-25 (Henrik, etter at en ansatt ble
+  // stoppet av det: «ja diagnose skal ikke være der») - diagnose kan fortsatt krysses av på ordren
+  // (Diagnose-kortet, toggleDiagnose()) og er fortsatt ett av tvangsflyt-kravene for å lukke ordren,
+  // men blokkerer ikke lenger selve overgangen til Påbegynt.
   // Allerede forbi Påbegynt (forrigeStatus er selv Påbegynt-eller-lenger) utløser ALDRI disse kravene
   // på nytt - de ble sjekket da ordren først gikk inn i den sonen.
-  // «Kun ekstrautstyr» (Henrik 2026-11-19) har verken ankomstbilder eller diagnose i ordren (kortene er
-  // borte), så de to kravene kan ikke oppfylles der - bare ansatt-kravet gjelder for en slik ordre.
+  // «Kun ekstrautstyr» (Henrik 2026-11-19) har ingen ankomstbilder i ordren (kortet er borte), så det
+  // kravet kan ikke oppfylles der - bare ansatt-kravet gjelder for en slik ordre.
   let kravOverstyrtAvAdmin = false; // sann bare hvis admin bevisst valgte å overstyre et manglende krav under
   if (erPaabegyntEllerLenger(nyStatus) && !erPaabegyntEllerLenger(forrigeStatus)) {
     const kun = erKunEkstrautstyr(o);
     const manglerAnsatt = !o.ansatteSignert.length;
     const manglerBilder = !kun && !(o.bilderAnkomst||[]).every(Boolean);
-    const manglerDiagnose = !kun && !o.diagnose;
-    if (manglerAnsatt || manglerBilder || manglerDiagnose) {
+    if (manglerAnsatt || manglerBilder) {
       const mangler = [];
       if (manglerAnsatt) mangler.push('minst én ansatt er meldt på ordren');
       if (manglerBilder) mangler.push('alle 6 bilder fra ankomst er tatt');
-      if (manglerDiagnose) mangler.push('«Diagnose utført» er krysset av');
       const lbl = statusInfo(nyStatus).lbl;
       const erAdmin = me && me.rolle === 'admin';
       const kravTekst = mangler.length === 1 ? 'dette kravet' : 'disse kravene';
