@@ -528,6 +528,19 @@ function sjekkOktFortsattGyldig(grunn) {
   return _oktSjekkPagar;
 }
 
+// Kan en «feil PIN» skyldes at PIN-en må byttes etter en nødbrems? Sant mens nødbremsen er aktiv og i 30 dager etter
+// at den ble opphevet. Databasen svarer bevisst likt for feil PIN og PIN som må byttes, så dette er bare et hint i teksten.
+const NODBREMS_PIN_HINT_DAGER = 30;
+async function nodbremsPinBytteKanGjelde() {
+  try {
+    const { data, error } = await db.from('sikkerhet_tilstand').select('nodbrems_aktiv, nodbrems_opphevet_at').eq('id', 1).maybeSingle();
+    if (error || !data) return false;
+    if (data.nodbrems_aktiv) return true;
+    const t = data.nodbrems_opphevet_at ? new Date(data.nodbrems_opphevet_at).getTime() : NaN;
+    return !isNaN(t) && Date.now() - t < NODBREMS_PIN_HINT_DAGER * 86400000;
+  } catch (e) { return false; }
+}
+
 // Er nødbremsen aktiv akkurat nå? (PIN-skjermen; alle med en Auth-sesjon, også en fersk anonym, kan lese raden.)
 async function nodbremsErAktiv() {
   try {

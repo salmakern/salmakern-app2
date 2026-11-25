@@ -1009,7 +1009,15 @@ async function bekreftGodkjenn() {
     if (error?.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
     else if (!error && data && data.length && (data[0].rolle==='godkjenner'||data[0].rolle==='admin')) godkjenner = data[0];
   }
-  if (!godkjenner){document.getElementById('godkjErr').textContent = forMangeForsok ? 'For mange feilforsøk – vent noen minutter og prøv igjen' : 'Feil PIN eller ikke godkjenner';return;}
+  if (!godkjenner){
+    let melding = forMangeForsok ? 'For mange feilforsøk – vent noen minutter og prøv igjen' : 'Feil PIN eller ikke godkjenner';
+    // Etter en nødbrems avviser databasen også en gammel PIN som ikke er byttet ennå (samme svar som feil PIN).
+    if (!forMangeForsok && db && typeof nodbremsPinBytteKanGjelde === 'function' && await nodbremsPinBytteKanGjelde()) {
+      melding += '. Har du ikke satt ny PIN etter at admin stengte innloggingen, må du logge inn selv og sette ny PIN først.';
+    }
+    document.getElementById('godkjErr').textContent = melding;
+    return;
+  }
   const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o) return;
   const btn = document.querySelector('#godkjenn .btn.red');
   if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }

@@ -288,3 +288,38 @@ describe('admin-kortet «Nødbrems» i Mer', () => {
     expect(toasts.at(-1).melding).toMatch(/Kunne ikke oppheve nødbremsen: KUN_ADMIN/);
   });
 });
+
+describe('godkjenner-PIN (bekreftGodkjenn) etter nødbrems', () => {
+  const godkjErr = () => sandbox.document.getElementById('godkjErr');
+  async function kjor(tilstand) {
+    const { db } = lagDb({ rpc: { login_med_pin: { data: [], error: null } }, tilstand });
+    app.settDb(db);
+    app.settMe({ id: 5, navn: 'TEST', rolle: 'ansatt' });
+    sandbox.document.getElementById('godkjPIN').value = '123456';
+    godkjErr().textContent = '';
+    await sandbox.bekreftGodkjenn();
+    return godkjErr().textContent;
+  }
+
+  it('aktiv nødbrems: meldingen sier at man må logge inn og sette ny PIN først', async () => {
+    expect(await kjor({ nodbrems_aktiv: true, nodbrems_opphevet_at: null })).toMatch(/^Feil PIN eller ikke godkjenner\. Har du ikke satt ny PIN.*logge inn selv og sette ny PIN først/);
+  });
+
+  it('opphevet for 2 dager siden: samme hint', async () => {
+    expect(await kjor({ nodbrems_aktiv: false, nodbrems_opphevet_at: new Date(Date.now() - 2 * 86400000).toISOString() })).toMatch(/sette ny PIN først/);
+  });
+
+  it('opphevet for over 30 dager siden, eller aldri brukt: vanlig melding', async () => {
+    expect(await kjor({ nodbrems_aktiv: false, nodbrems_opphevet_at: new Date(Date.now() - 31 * 86400000).toISOString() })).toBe('Feil PIN eller ikke godkjenner');
+    expect(await kjor({ nodbrems_aktiv: false, nodbrems_opphevet_at: null })).toBe('Feil PIN eller ikke godkjenner');
+    expect(await kjor(null)).toBe('Feil PIN eller ikke godkjenner');
+  });
+
+  it('for mange forsøk: uendret melding, uten hint', async () => {
+    const { db } = lagDb({ rpc: { login_med_pin: { data: null, error: { message: 'FOR_MANGE_FORSOK' } } }, tilstand: { nodbrems_aktiv: true } });
+    app.settDb(db);
+    sandbox.document.getElementById('godkjPIN').value = '123456';
+    await sandbox.bekreftGodkjenn();
+    expect(godkjErr().textContent).toBe('For mange feilforsøk – vent noen minutter og prøv igjen');
+  });
+});

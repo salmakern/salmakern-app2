@@ -118,7 +118,8 @@
 // v113 - «+ Ny ordre»: modellvelger fra katalogen (portal_modell_kobling) som setter modellnøkkelen (portal_modell_slug) på ordren; en nøkkel valgt i appen fjernes hvis Merke/Modell endres til noe annet
 // v114 - Standardtider: egen lagring per modell (sett_standardtid, ikke «lagre alt»), og «Hent forslag fra kalkylen» med «Bruk» per modell
 // v115 - Ordrekortene: én kortbygger (ordreKortHTML) og én pille-komponent (statusPill) for alle merker; samme merker i Ordre-lista og begge Oversikt-listene; kant = statusfarge, ★ for prioritert, bestilt frakt som pille, dempet glød
-const CACHE = 'salmakern-v115';
+// v116 - PIN-nødbrems: admin kan stenge all PIN-innlogging og logge ut alle økter (Mer), tvungen ny PIN etter oppheving
+const CACHE = 'salmakern-v116';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
