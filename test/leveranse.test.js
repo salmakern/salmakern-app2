@@ -689,7 +689,8 @@ describe('chassis-koblinger ignorerer leveranser', () => {
   it('Admin-ark, flåter, Mer og «Ny ordre» matcher aldri en leveranse på chassis (statisk vakt over kildekoden)', () => {
     const adminArk = les('js/admin-ark.js');
     const linjer = adminArk.split('\n').filter((l) => /S\.ordrer/.test(l) && /samsvarerChassis\(/.test(l));
-    expect(linjer.length).toBeGreaterThanOrEqual(7);
+    // 6 fra 2026-11-17: den manuelle hentet-knappen (adminArkVarsleHentet) er fjernet; den automatiske tar inn ordren direkte og avviser leveranser selv.
+    expect(linjer.length).toBeGreaterThanOrEqual(6);
     for (const l of linjer) expect(l).toContain('!erLeveranse(');
     expect(les('js/ordre-diverse.js')).toContain("o.status==='aktiv' && !erLeveranse(o) && samsvarerChassis(o.chassis, chassis)");
     expect(les('js/arkiv-mer.js')).toContain('!S.ordrer.some(o => !erLeveranse(o) && !erKunEkstrautstyr(o) && samsvarerChassis(o.chassis, r.chassisNr))'); // + kun ekstrautstyr (2026-11-17)

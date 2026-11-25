@@ -786,22 +786,17 @@ async function endreStatus(id, nyStatus) {
       }
     }
   }
-  // Merker "hentetVarslet" automatisk (grønn kantlinje på Hentet-knappen i Admin-ark) når
-  // status settes til "Hentet" - BEVISST uten å faktisk sende varsel-e-posten (bedt om av
-  // Henrik 2026-10-28, med et klart forbehold gitt: dette betyr at grønn IKKE lenger
-  // garantert betyr "kunden er faktisk varslet" - admin må fortsatt huske å trykke den ekte
-  // Hentet-knappen i Admin-ark for selve e-posten, se adminArkVarsleHentet()).
-  // En «kun ekstrautstyr»-ordre er ikke i Admin-ark (adminArkByggRader hopper over den, og chassis.nr kan være samme som en bil som alt står der): her skal ingen rad opprettes eller merkes.
-  if (nyStatus === 'hentet' && o.chassis && !erKunEkstrautstyr(o) && typeof adminArkLagreFelter === 'function') {
-    const eksisterende = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, o.chassis) && !r.arkivert);
-    if (!eksisterende?.hentetVarslet) {
-      await adminArkLagreFelter({ _arkId: eksisterende?.id||null, chassisNr: o.chassis, _erOrdre: true }, { hentetVarslet: true });
-      const tabRad = (typeof adminArkTable!=='undefined' && adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, o.chassis));
-      if (tabRad) tabRad.update({ hentetVarslet: true });
-    }
-  }
   renderAll();
   if (activeOrdreId===id) buildOrdreDetail();
+  // Sender «Bilen er hentet»-e-posten til kontaktpersonen AUTOMATISK når statusen BYTTES til
+  // Hentet (Henrik, Henger igjen 2026-11-17: knappen i Admin-ark er fjernet). Kjøres etter at
+  // statusen er lagret og vist, så e-postkallet aldri holder igjen skjermen. Sendes bare én
+  // gang per Admin-ark-rad (hentetVarslet), se adminArkVarsleHentetAuto() i admin-ark.js.
+  // (Erstatter 2026-10-28-regelen som merket raden grønn UTEN å sende e-post.)
+  if (nyStatus === 'hentet' && forrigeStatus !== 'hentet' && typeof adminArkVarsleHentetAuto === 'function') {
+    try { await adminArkVarsleHentetAuto(o); }
+    catch (e) { console.error('Hentet-varsel feilet:', e); }
+  }
 }
 
 // Egen SVG-pil for status-nedtrekket (meldt av Henrik 30.10: lang tekst som "Vist på

@@ -113,7 +113,8 @@
 // v108 - Hengerfeste-filter på Ordre-siden; Modul-System-logoen i headeren er større (28 -> 40 px)
 // v109 - Diagnose-kravet fra 2026-11-20 er fjernet igjen (Henrik 25.11: «diagnose skal ikke være der») - blokkerer ikke lenger overgangen til Påbegynt. Ansatt-/bildekravet er uendret
 // v110 - Fakturalinjer: en lagring som databasen avviser vises nå som feil, og skjermen rulles tilbake til det som faktisk er lagret (s90-20261104-6)
-const CACHE = 'salmakern-v110';
+// v111 - «Bilen er hentet»-e-posten sendes automatisk ved status Hentet; admin har en reserveknapp i Admin-ark når den ikke gikk ut
+const CACHE = 'salmakern-v111';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',
