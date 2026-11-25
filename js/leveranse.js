@@ -517,7 +517,8 @@ async function leggFraktPaaFaktura(id) {
   if (l.fraktProduktnr !== nr) lagreLeveranseKolonne(o, { fraktProduktnr: nr }, 'Fiken-produktnr for frakt satt');
   const nrFelt = document.getElementById('levFraktNr_' + id); if (nrFelt) nrFelt.value = nr; // nummeret kan komme fra forrige bruk på denne enheten: feltet viser det som faktisk brukes
   leveranseHuskFraktProduktnr(nr);
-  await oppdaterOrdreFikenLinje(o, nr, { produktnummer: nr, antall: 1, belop: pris });
+  // Ble linjen ikke lagret, har oppdaterOrdreFikenLinje alt vist feilen: ingen logglinje og ingen «lagt på fakturaen» (s90-20261104-6).
+  if (!(await oppdaterOrdreFikenLinje(o, nr, { produktnummer: nr, antall: 1, belop: pris }))) return;
   logChange(o, `Frakt lagt på fakturaen: ${leveranseFmtTall(pris)} kr eks. mva (produkt ${nr})`);
   oppdaterPakkerUtdata(o, false);
   visToast(`Frakt (${leveranseFmtTall(pris)} kr eks. mva) lagt på fakturaen`, 'ok');
