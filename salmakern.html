@@ -423,8 +423,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div id="pinByttSkjerm" style="display:none;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;padding:16px;text-align:center">
   <img src="logoer/logo-transparent.png" alt="Salmaker'n" style="height:60px;object-fit:contain">
   <div style="max-width:320px">
-    <div style="font-weight:700;font-size:17px;margin-bottom:6px">PIN-koden må oppdateres</div>
-    <div class="muted small">Av sikkerhetshensyn bruker vi nå 6-sifrede PIN-koder i stedet for 4. Sett en ny PIN for å fortsette - du bruker den neste gang du logger inn.</div>
+    <div id="pinByttTittel" style="font-weight:700;font-size:17px;margin-bottom:6px">PIN-koden må oppdateres</div>
+    <div id="pinByttTekst" class="muted small">Av sikkerhetshensyn bruker vi nå 6-sifrede PIN-koder i stedet for 4. Sett en ny PIN for å fortsette - du bruker den neste gang du logger inn.</div>
   </div>
   <input id="pinByttNy" type="password" inputmode="numeric" maxlength="6" placeholder="Ny PIN (6 siffer)" style="width:160px;text-align:center;letter-spacing:4px;font-size:18px">
   <button class="btn red" onclick="lagreTvungetPinBytte()">Lagre og fortsett</button>
@@ -880,6 +880,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <!-- ── MER ── -->
     <section id="mer" class="page">
       <div id="merHovedView">
+
+      <!-- Nødbrems (samlet PIN-sperre): bare admin, øverst. Innholdet tegnes av renderNodbremsKort() i js/ansatte-utstyr.js. -->
+      <div class="card" id="merNodbremsKort" style="display:none;border:2px solid #dc2626;margin-bottom:14px"></div>
 
       <div class="mer-seksjon-label" onclick="toggleMerSeksjon(this,'merGruppeDaglig')"><span class="mer-seksjon-chevron">▾</span>Daglig</div>
       <div class="grid g3" id="merGruppeDaglig">

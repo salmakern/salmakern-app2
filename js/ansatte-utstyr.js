@@ -2217,3 +2217,97 @@ async function adminLagreTimer() {
   renderAnsattDetalj();
 }
 
+
+// ────────────────────────────────────────────────────────────
+// NØDBREMS (samlet PIN-sperre, Henger igjen oe3ybyfat1g3ef6dx2rm, migrasjon 20261125200000_pin_nodbrems.sql)
+// ────────────────────────────────────────────────────────────
+// Ett trykk for admin: stenger all PIN-innlogging (admin slipper fortsatt inn) og logger ut ALLE andre økter, også
+// andre administratorer. Selve sperren er i databasen (current_ansatt() avviser alle andre økter med en gang, også
+// gyldige JWT-er); klientene får det med seg via Realtime på sikkerhet_tilstand (sjekkOktFortsattGyldig i core.js).
+// Når den oppheves må alle, også admin, logge inn med sin gamle PIN én gang og sette en ny (bytteskjermen i core.js).
+let sikkerhetTilstand = null;
+let _sikkerhetTilstandHentet = false;
+let _nodbremsPagar = false;
+
+function settSikkerhetTilstand(rad) {
+  sikkerhetTilstand = rad || null;
+  _sikkerhetTilstandHentet = true;
+  renderNodbremsKort();
+}
+
+async function hentSikkerhetTilstand() {
+  if (!db) return null;
+  try {
+    const { data, error } = await db.from('sikkerhet_tilstand').select('*').eq('id', 1).maybeSingle();
+    if (error) { console.warn('Henting av sikkerhet_tilstand feilet:', error.message); return sikkerhetTilstand; }
+    settSikkerhetTilstand(data);
+  } catch (e) { console.warn('Henting av sikkerhet_tilstand feilet:', e && e.message); }
+  return sikkerhetTilstand;
+}
+
+function nodbremsKlokkeslett(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)} kl. ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function renderNodbremsKort() {
+  const el = typeof document !== 'undefined' ? document.getElementById('merNodbremsKort') : null;
+  if (!el) return;
+  if (!me || me.rolle !== 'admin') { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  if (!_sikkerhetTilstandHentet) {
+    el.innerHTML = '<div class="h">Nødbrems <span class="kort-admin-merke">ADMIN</span></div><div class="muted small" style="margin-top:6px">Henter status …</div>';
+    hentSikkerhetTilstand();
+    return;
+  }
+  const st = sikkerhetTilstand || {};
+  if (st.nodbrems_aktiv) {
+    const av = (S.ansatte || []).find(a => a.id === st.nodbrems_av);
+    el.innerHTML = `
+      <div class="h" style="color:#dc2626">NØDBREMS ER AKTIV <span class="kort-admin-merke">ADMIN</span></div>
+      <div class="small" style="margin-top:6px">Trukket ${esc(nodbremsKlokkeslett(st.nodbrems_siden))}${av ? ' av ' + esc(av.navn) : ''}. All PIN-innlogging er stengt (bare admin slipper inn), og alle andre økter er logget ut.</div>
+      <div class="muted small" style="margin-top:6px">Når du opphever den, må alle (også admin) logge inn med sin gamle PIN og sette en ny.</div>
+      <button class="btn red" style="margin-top:10px" onclick="opphevNodbrems()" ${_nodbremsPagar ? 'disabled' : ''}>Opphev nødbrems</button>`;
+  } else {
+    el.innerHTML = `
+      <div class="h">Nødbrems <span class="kort-admin-merke">ADMIN</span></div>
+      <div class="small" style="margin-top:6px">Mistanke om at noen har en PIN de ikke skal ha? Ett trykk stenger all PIN-innlogging (bare admin slipper inn) og logger ut alle andre med en gang, også andre administratorer.</div>
+      <div class="muted small" style="margin-top:6px">Når den oppheves igjen, må alle sette ny PIN første gang de logger inn.</div>
+      <button class="btn red" style="margin-top:10px" onclick="trekkNodbrems()" ${_nodbremsPagar ? 'disabled' : ''}>Trekk nødbrems</button>`;
+  }
+}
+
+async function trekkNodbrems() {
+  if (_nodbremsPagar || !db) return;
+  if (!confirm('Trekke nødbremsen?\n\nAll PIN-innlogging stenges, og ALLE andre blir logget ut med en gang (også andre administratorer). Bare admin kan logge inn til du opphever den.\n\nNår den oppheves må alle sette ny PIN.')) return;
+  _nodbremsPagar = true; renderNodbremsKort();
+  try {
+    const { data, error } = await db.rpc('nodbrems_pa');
+    if (error) { visToast('Kunne ikke trekke nødbremsen: ' + error.message); return; }
+    visToast(data && data.alleredeAktiv ? 'Nødbremsen var allerede aktiv' : 'Nødbremsen er trukket. Alle andre er logget ut.', 'ok');
+  } catch (e) {
+    visToast('Kunne ikke trekke nødbremsen: ' + (e && e.message));
+  } finally {
+    _nodbremsPagar = false;
+    await hentSikkerhetTilstand();
+  }
+}
+
+async function opphevNodbrems() {
+  if (_nodbremsPagar || !db) return;
+  if (!confirm('Oppheve nødbremsen?\n\nPIN-innlogging åpnes igjen. Alle (også admin) må logge inn med sin gamle PIN én gang og sette en ny.')) return;
+  _nodbremsPagar = true; renderNodbremsKort();
+  try {
+    const { error } = await db.rpc('nodbrems_av');
+    if (error) { visToast('Kunne ikke oppheve nødbremsen: ' + error.message); return; }
+    visToast('Nødbremsen er opphevet. Alle må sette ny PIN ved neste innlogging.', 'ok');
+  } catch (e) {
+    visToast('Kunne ikke oppheve nødbremsen: ' + (e && e.message));
+  } finally {
+    _nodbremsPagar = false;
+    await hentSikkerhetTilstand();
+  }
+}

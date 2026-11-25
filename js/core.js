@@ -489,6 +489,52 @@ let me = null;
 // skjer server-side i current_ansatt()/hent_innlogget_ansatt() uansett). Satt/fornyet i
 // aktiverInnloggetApp(), nullstilt i nullstillLokalOkt().
 let _oktUtlopTimer = null;
+// Periodisk sjekk av at økta fortsatt gjelder (nødbrems, se sjekkOktFortsattGyldig).
+let _oktSjekkTimer = null;
+const OKT_SJEKK_INTERVALL_MS = 2 * 60 * 1000;
+let _oktSjekkPagar = null;
+
+// Gjelder økta fortsatt i databasen? Brukes av nødbremsen (migrasjon 20261125200000_pin_nodbrems.sql): Realtime-hendelsen
+// på sikkerhet_tilstand, når fanen kommer tilbake, og ca. hvert 2. minutt. hent_innlogget_ansatt() har nøyaktig samme
+// vilkår som current_ansatt() (som all RLS bruker), så et tomt svar betyr at økta ikke kan gjøre noe lenger. For ikke å
+// logge ut noen ved et uhell («vi blir logget ut hele tiden», 12.11): bare et TOMT svar uten feil teller, aldri en
+// nettverksfeil, og først etter én sesjonsfornyelse og en ny sjekk. Ikke mens PIN-byttet etter nødbrems pågår (da er
+// økta bevisst ugyldig til PIN-en er byttet). Gir true hvis appen logget ut.
+function sjekkOktFortsattGyldig(grunn) {
+  if (_oktSjekkPagar) return _oktSjekkPagar;
+  _oktSjekkPagar = (async () => {
+    if (!db || !me || me.ny_pin_kreves || utloggingPagar) return false;
+    const gjelder = async () => {
+      const { data, error } = await db.rpc('hent_innlogget_ansatt');
+      if (error) return null; // ukjent: aldri logg ut på en feil
+      return Array.isArray(data) && data.length > 0;
+    };
+    try {
+      let ok = await gjelder();
+      if (ok !== false) return false;
+      try { await db.auth.refreshSession(); } catch (e) { /* sjekkes på nytt under uansett */ }
+      if (!me || me.ny_pin_kreves) return false;
+      ok = await gjelder();
+      if (ok !== false || !me) return false;
+      dokLogg('okt_ugyldig', { grunn });
+      visToast(grunn === 'nodbrems' ? 'Admin har stengt innloggingen - du er logget ut' : 'Økten gjelder ikke lenger - logg inn på nytt');
+      doLogout(true);
+      return true;
+    } catch (e) {
+      console.warn('Sjekk av økta feilet:', e && e.message);
+      return false;
+    }
+  })().finally(() => { _oktSjekkPagar = null; });
+  return _oktSjekkPagar;
+}
+
+// Er nødbremsen aktiv akkurat nå? (PIN-skjermen; alle med en Auth-sesjon, også en fersk anonym, kan lese raden.)
+async function nodbremsErAktiv() {
+  try {
+    const { data, error } = await db.from('sikkerhet_tilstand').select('nodbrems_aktiv').eq('id', 1).maybeSingle();
+    return !error && !!data?.nodbrems_aktiv;
+  } catch (e) { return false; }
+}
 // Satt av et klikk på et push-varsel om en bestemt ordre (postMessage fra sw.js) - kan
 // komme inn før innlogging/datahenting er ferdig, derfor mellomlagres den her og
 // hentes ut av apneOrdreFraVarselHvisKlar() når S.ordrer faktisk er klar.
@@ -1227,6 +1273,9 @@ function dbToTimer(r) {
 }
 
 let realtimeChannel = null;
+// Egen kanal for sikkerhet_tilstand (nødbrems), så en feil med den (f.eks. tabellen finnes ikke ennå) aldri kan
+// velte hovedkanalen og dens gjenoppkobling. Den periodiske sjekken (sjekkOktFortsattGyldig) er reserven.
+let sikkerhetChannel = null;
 let realtimeReconnectTimer = null;
 // Persisteres i localStorage (ikke bare denne JS-øktens levetid) - en enhet som
 // restarter/laster appen på nytt midt i en gjenoppkoblings-runde (f.eks. en tablet med
@@ -1299,6 +1348,22 @@ function subscribeRealtime() {
   if (realtimeReconnectTimer) { clearTimeout(realtimeReconnectTimer); realtimeReconnectTimer = null; }
   clearTimeout(realtimeStabilTimer);
   if (realtimeChannel) { try { db.removeChannel(realtimeChannel); } catch(_){} realtimeChannel = null; }
+  if (sikkerhetChannel) { try { db.removeChannel(sikkerhetChannel); } catch(_){} sikkerhetChannel = null; }
+
+  // Nødbrems (samlet PIN-sperre, migrasjon 20261125200000_pin_nodbrems.sql): når en admin trekker den, avviser
+  // databasen alle andre økter med en gang. Her får de det med seg uten å vente på neste handling: hendelsen
+  // utløser en sjekk mot databasen (sjekkOktFortsattGyldig), og appen logger ut bare hvis databasen faktisk sier
+  // at økta ikke gjelder lenger (den som trakk, eller en admin som har logget inn og byttet PIN, blir værende).
+  try {
+    sikkerhetChannel = db.channel('salmakern_sikkerhet')
+      .on('postgres_changes',{event:'*',schema:'public',table:'sikkerhet_tilstand'}, p => {
+        const row = p.new;
+        if (!row || !('nodbrems_aktiv' in row)) return;
+        if (typeof settSikkerhetTilstand === 'function') { try { settSikkerhetTilstand(row); } catch (e) { console.warn('settSikkerhetTilstand:', e && e.message); } }
+        if (row.nodbrems_aktiv && me) sjekkOktFortsattGyldig('nodbrems');
+      })
+      .subscribe((status) => { if (status !== 'SUBSCRIBED') console.warn('Sanntid (sikkerhet):', status); });
+  } catch (e) { console.warn('Sanntid (sikkerhet) feilet:', e && e.message); sikkerhetChannel = null; }
 
   realtimeChannel = db.channel('salmakern_live')
     .on('postgres_changes',{event:'*',schema:'public',table:'ordrer'}, p => {
@@ -1590,6 +1655,7 @@ async function oppdaterApp() {
 document.addEventListener('visibilitychange', async () => {
   dokLogg('synlighet', {tilstand: document.visibilityState});
   if (document.visibilityState === 'visible') {
+    if (me) sjekkOktFortsattGyldig('synlig');
     const pauseMs = Date.now() - sisteVarSynlig;
     if (me && pauseMs > 3 * 60 * 1000) await oppdaterApp(); // refresh bare etter >3 min pause
   } else {
@@ -1851,13 +1917,29 @@ function refreshPinDots() {
 // lyktes når dette kalles (den gamle PIN-en virket) - ingen låses ute, de kan alltid bytte selv
 // herfra (se lagreTvungetPinBytte()).
 async function fortsettEtterInnlogging() {
+  // Etter en nødbrems (migrasjon 20261125200000_pin_nodbrems.sql) må ALLE, også admin, sette ny PIN første gang de
+  // logger inn med den gamle. Databasen håndhever det (current_ansatt() avviser økta til PIN-en er byttet), så
+  // skjermen kan ikke hoppes over; den er bare veien videre. Ingen rolleunntak her.
+  if (me && me.ny_pin_kreves) {
+    visPinByttSkjerm('nodbrems');
+    return;
+  }
   if (me && me.pin_kort && Date.now() >= PIN6_KREVES_FRA) {
     visPinByttSkjerm();
     return;
   }
   await aktiverInnloggetApp();
 }
-function visPinByttSkjerm() {
+function visPinByttSkjerm(grunn) {
+  const tittel = document.getElementById('pinByttTittel');
+  const tekst = document.getElementById('pinByttTekst');
+  if (grunn === 'nodbrems') {
+    if (tittel) tittel.textContent = 'Sett ny PIN';
+    if (tekst) tekst.textContent = 'Admin har stengt og åpnet innloggingen igjen av sikkerhetshensyn. Alle må sette en ny PIN (6 siffer, ikke den samme som før) for å fortsette.';
+  } else {
+    if (tittel) tittel.textContent = 'PIN-koden må oppdateres';
+    if (tekst) tekst.textContent = 'Av sikkerhetshensyn bruker vi nå 6-sifrede PIN-koder i stedet for 4. Sett en ny PIN for å fortsette - du bruker den neste gang du logger inn.';
+  }
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loadingOverlay').style.display = 'none';
@@ -1871,16 +1953,24 @@ async function lagreTvungetPinBytte() {
   const pin = (felt?.value || '').trim();
   if (!/^[0-9]{6}$/.test(pin)) { feilEl.textContent = 'PIN må være nøyaktig 6 siffer'; return; }
   if (!db) return;
-  const { data, error } = await db.rpc('endre_egen_pin', { p_ny_pin: pin });
+  // Etter nødbrems avviser current_ansatt() økta til PIN-en er byttet, så endre_egen_pin virker ikke da: egen RPC.
+  const etterNodbrems = !!(me && me.ny_pin_kreves);
+  const { data, error } = etterNodbrems
+    ? await db.rpc('endre_pin_etter_nodbrems', { p_ny_pin: pin })
+    : await db.rpc('endre_egen_pin', { p_ny_pin: pin });
   if (error) {
     feilEl.textContent = error.message?.includes('FOR_MANGE_FORSOK')
       ? 'For mange forsøk på kort tid - vent noen minutter og prøv igjen'
-      : 'Feil ved lagring: ' + error.message;
+      : error.message?.includes('IKKE_INNLOGGET')
+        ? 'Innloggingen er ikke gyldig lenger - logg inn på nytt'
+        : 'Feil ved lagring: ' + error.message;
     return;
   }
   if (data === 'PIN_I_BRUK') { feilEl.textContent = 'Denne PIN-en er allerede i bruk av en annen ansatt'; return; }
+  if (data === 'SAMME_PIN') { feilEl.textContent = 'Velg en annen PIN enn den du hadde'; return; }
   feilEl.textContent = '';
   me.pin_kort = false;
+  me.ny_pin_kreves = false;
   document.getElementById('loadingOverlay').style.display = 'flex';
   await aktiverInnloggetApp();
 }
@@ -1905,6 +1995,11 @@ async function aktiverInnloggetApp() {
       doLogout();
     }, Math.max(0, msIgjen));
   }
+  // Reserve for nødbremsen hvis Realtime-hendelsen ikke kommer frem: sjekk økta mot databasen ca. hvert 2. minutt.
+  clearInterval(_oktSjekkTimer);
+  _oktSjekkTimer = setInterval(() => {
+    if (me && (typeof document === 'undefined' || document.visibilityState !== 'hidden')) sjekkOktFortsattGyldig('periodisk');
+  }, OKT_SJEKK_INTERVALL_MS);
   document.getElementById('loginScreen').style.display='none';
   // pinByttSkjerm kan mangle i en side der HTML-en er eldre enn skriptene (JAVASCRIPT-H):
   // da skal innloggingen likevel fullføres, ikke stoppe med en blank skjerm.
@@ -2122,6 +2217,13 @@ async function tryLogin() {
     try { await db.auth.refreshSession(); } catch(e) { console.warn('Sesjonsfornyelse feilet:', e); }
     await fortsettEtterInnlogging();
   } else {
+    // Nødbrems: databasen svarer som ved feil PIN (bevisst, se migrasjonen), så her spør vi om den er aktiv.
+    if (!deltStasjonGpsFeil && !forMangeForsok && !ingenSesjon && db && await nodbremsErAktiv()) {
+      document.getElementById('pinErr').textContent = 'Innlogging er midlertidig stengt av admin';
+      pinBuf = '';
+      refreshPinDots();
+      return;
+    }
     document.getElementById('pinErr').textContent = deltStasjonGpsFeil || (forMangeForsok
       ? 'For mange feilforsøk – vent noen minutter og prøv igjen'
       : ingenSesjon
@@ -2189,6 +2291,7 @@ function nullstillLokalOkt() {
   if (timerTick) clearInterval(timerTick);
   timerTick = null; timerStart = null;
   clearTimeout(_oktUtlopTimer); _oktUtlopTimer = null;
+  clearInterval(_oktSjekkTimer); _oktSjekkTimer = null;
   try { sessionStorage.removeItem(OKT_FORTSETTER_NOKKEL); } catch(e) {}
   me = null;
   document.getElementById('appScreen').style.display='none';
@@ -2201,6 +2304,8 @@ function nullstillLokalOkt() {
   clearTimeout(realtimeStabilTimer);
   if (realtimeChannel && db) { try { db.removeChannel(realtimeChannel); } catch(_){} }
   realtimeChannel = null;
+  if (sikkerhetChannel && db) { try { db.removeChannel(sikkerhetChannel); } catch(_){} }
+  sikkerhetChannel = null;
   // Nullstill backoff-telleren for DENNE sideøkten (s00-022 punkt 2) - uten dette kunne en
   // ansatt som logget ut og inn igjen uten å laste siden på nytt arve en gammel
   // realtimeForsteFeil fra FORRIGE innlogging, og sanntiden kunne da feilaktig tro den
