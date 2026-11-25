@@ -27,6 +27,92 @@ Internt PWA-verktøy for Telemark Salmakerverksted: ordrehåndtering, timeregist
 lager, admin-ark og mer. Ren HTML/CSS/JS - ingen byggesteg, ingen rammeverk. Backend er
 Supabase (Postgres + Auth + Storage + Realtime + Edge Functions). Deployes til GitHub Pages.
 
+## Sikkerhetsrutine for Salmaker'n og Forhandlerportalen (v1, 2026-11-25)
+
+Henrik godkjente 25.11 at rutinen ligger her (utkast v0.1 fra sikkerhetsgjennomgangen samme dag, Henger igjen
+oe3ybyfat1g3ef6dx2rm, tilpasset og rettet mot koden). Den er skrevet for et menneske som skal handle, ikke for koden.
+**Hold den oppdatert i samme økt som en endring den beskriver:** når et hull i del D lukkes, flytt det ut; når
+PIN-nødbremsen er rullet ut, skriv om del B fra «kommer» til «slik gjør du»; når en tjenestekonto i del C får 2FA,
+kryss den av med dato. Tekniske detaljer: «Avslutt ansatt» og «Delt stasjon låst til verkstedet» lenger ned, og
+«Filer i Storage», «PIN til 6 sifre ...» og portalens CLAUDE.md («Admin-TOTP», «Sperr bruker»).
+
+### A. Når en ansatt slutter eller får sparken (samme dag, helst før personen går)
+1. **Salmaker'n:** Mer → Ansatte → «🔒 Avslutt ansatt» på personen, og bekreft. Bare admin, og ikke på seg selv.
+   - Skjer i ett steg (alt eller ingenting): stemples ut hvis innstemplet (timen føres med vanlig pauseregel), åpne
+     ordreklokker stoppes, kontoen settes inaktiv, `session_token` nulles, PIN-en og push-varslene slettes.
+   - Databasen avviser personen **med en gang** (`current_ansatt()` krever `aktiv = true`, og den brukes av RLS,
+     edge-funksjonene, Storage og Realtime), også en innlogging som allerede er i gang. Det som IKKE kalles tilbake:
+     det som allerede står på skjermen eller er lagret på enheten (bildecachen), og signerte fil-lenker som alt er
+     utdelt (gjelder i inntil 2 t).
+   - Timeføringer, lønnsgrunnlag, ordrer og logger står urørt.
+   - **«Sett inaktiv» er bare en kort pause** (permisjon, sykmelding): den stenger også ute med en gang, men PIN-en,
+     `session_token` og push-varslene står. Bruk den ikke når noen slutter.
+   - Skal personen tilbake: «Aktiver (ny PIN)», som alltid krever en ny 6-sifret PIN.
+2. **Hadde personen admin- eller godkjennerrolle:** sjekk at ingen annen konto (app, portal, tjenestekonto) står med
+   personens tilgang.
+3. **Kjente personen PIN-en til den delte verkstedkontoen («Booking Salmaker»):** bytt den. Det haster mindre enn
+   punkt 1, siden kontoen bare slipper inn fra verkstedet og logges ut etter 2 timer (se «Delt stasjon låst til
+   verkstedet»; låsen sitter i nettleseren, ikke i databasen).
+4. **Forhandlerportalen** (selgere hos forhandlere): Admin → Forhandlere → Selgere → «Sperr bruker». Tilbud og
+   bestillinger står igjen, og sperringen kan oppheves. «Slett selger» bare når dataene faktisk skal bort.
+5. **Tjenestekontoene** (Supabase, Vercel, GitHub, Resend, Domeneshop, Fiken, Microsoft 365): hadde personen tilgang,
+   fjern den og bytt passord på delte innlogginger.
+6. **Ta igjen nøkler, nettbrett og PC**, og logg ut av Salmaker'n på enheter som blir igjen.
+
+### B. Hvis PIN-er kan ha kommet på avveie
+- **PIN-nødbremsen er bygget og testet, men IKKE rullet ut** (25.11, gren `henger/pin-nodbrems`, venter på Henriks ja).
+  Når den er ute: trykk «Nødbrems» i Mer (rødt kort, bare admin) → all PIN-innlogging stenges, og alle andre logges
+  ut med en gang, også andre administratorer → opphev når det er under kontroll → neste gang hver person logger inn
+  (også admin), må de velge en ny PIN som er ulik den gamle.
+- **Til nødbremsen er ute:** gjelder det én person, sett ny PIN for vedkommende (admin). Gjelder det mange, sett ny
+  PIN for hver. Ved akutt mistanke mot én person: «Avslutt ansatt» (stenger ute med en gang), så «Aktiver (ny PIN)».
+- **Den automatiske sperren:** etter 30 feil PIN-forsøk på 10 minutter, fra alle enheter samlet, er PIN-innloggingen
+  sperret en stund for ALLE, også admin (ingen unntak, Henriks valg 25.11). Klager om at «ingen kommer inn» er trolig
+  den, og den går over av seg selv. Med nødbremsen kommer også et push-varsel til admin når den slår inn.
+
+### C. Rutinemessig
+- **To-trinns innlogging på tjenestekontoene (haster, Henrik gjør det selv; Henger igjen s00-20261116-3).** Kryss av
+  per konto etter hvert som det blir gjort; lagre gjenopprettingskodene i passordbehandleren. Henrik har slått på 2FA
+  på noen av dem (25.11), men ikke sagt hvilke ennå, så ingen er krysset av her:
+
+  | Konto | 2FA på | Koder i passordbehandleren | Dato |
+  |---|---|---|---|
+  | Supabase | ☐ | ☐ | |
+  | Vercel (må kunne nås uten Microsoft 365: nødutgangen for portalens 2-trinn går via Vercel) | ☐ | ☐ | |
+  | GitHub | ☐ | ☐ | |
+  | Resend | ☐ | ☐ | |
+  | Domeneshop | ☐ | ☐ | |
+  | Fiken | ☐ | ☐ | |
+  | Microsoft 365 | ☐ | ☐ | |
+
+- **Portal-administratorene (to kontoer):** 2-trinn (TOTP) med «Krev kode»: Henriks konto ☑ (14.11); post@-kontoen ☐
+  (en annen person, Henger igjen s00-20261113-1: logge inn, Admin → Min konto → 2-trinn med SIN telefon, lagre
+  kodene selv, teste, trykke «Krev kode»). Passord på begge: minst 12 tegn, ikke navn, e-post eller «salmaker».
+- **Hver måned (10 minutter):** gå gjennom Mer → Ansatte (står noen der som ikke jobber her, eller med admin-rolle
+  som ikke skal ha den? **4 aktive admin i appen er riktig antall**, Henrik 25.11); gå gjennom administratorlisten i
+  portalen; les nattens QA-rapporter, særlig innlogging, hemmeligheter og 401/403.
+- **Hver tredje måned:** bytt PIN på den delte verkstedkontoen; se over hvem som har tilgang til tjenestekontoene;
+  sjekk at de som har sluttet står som avsluttet (ingen PIN), ikke bare «Sett inaktiv».
+- **Hele tiden:** del aldri PIN eller passord på SMS, e-post eller lapp; den delte stasjonen brukes bare på verkstedet;
+  si fra med en gang hvis en telefon eller PC med innlogget app blir borte.
+
+### D. Det som IKKE er på plass ennå (per 25.11)
+1. **PIN-nødbremsen** er ikke rullet ut. Til da godtar `current_ansatt()` fortsatt 54 gamle innlogginger fra før
+   12.11 uten `logget_inn_at` (ingen øktgrense; 15 brukt siste 30 dager). Utrullingen lukker dette.
+2. **post@-kontoen i portalen** har ikke 2-trinn: passord alene og full admin-tilgang (s00-20261113-1, se C).
+3. **2FA på tjenestekontoene:** se tabellen i C; ingenting er bekreftet ennå.
+4. **Godkjenner-PIN-en ved lukking av ordre (`login_med_pin`) gir ut `session_token`** til den som kjenner PIN-en.
+   Egen sak (s90-20261125-sessiontoken), ikke rettet.
+5. **E-post i firmaets navn:** DMARC står på `p=none` (falske e-poster i salmaker.as sitt navn avvises ikke), og
+   Microsoft 365 mangler DKIM. Henrik gjør det selv.
+6. **Portalen sender ingen CSP**, fordi `CSP_MODUS` ikke er satt i Vercel.
+7. **Vid tilgang inne i appen:** alle innloggede ansatte kan endre alle ordrer, og endre og slette i `innstillinger`,
+   `flater`, `moter`, `push_abonnement` og lagertabellene. Bare sletting av ordrer er låst til admin.
+8. **Etter en vanlig utlogging** virker et allerede utstedt access-token i inntil 1 time (`ansatte.session_token`
+   endres ikke ved utlogging). Gjelder IKKE «Avslutt ansatt» og «Sett inaktiv», som stenger ute med en gang (se A).
+9. **GPS-låsen på den delte stasjonen sitter bare i nettleseren** (se «Delt stasjon låst til verkstedet»): den
+   stopper vanlig bruk utenfor verkstedet, men ikke en som kjenner PIN-en og kaller databasen direkte.
+
 ## Arkitektur
 
 `salmakern.html` laster 11 script-tagger fra `js/` i denne rekkefølgen:
@@ -337,14 +423,16 @@ Henrik («ja legg det til», 2026-11-04): «Bil-effektivitet»-badgen (ordredeta
 - «Aggregerte tall tilbake» (faktiske timer fra appen til kalkylen, per bil uten ansatte) var allerede gjort 16.11: `portal-timer-fakta`.
 - Vakt: `test/standardtid-egen-rutine.test.js`, `test/hent-kalkyle-tider-fra-portalen.test.js`, `test/edge-auth-gate.test.js`, `test/dagens-pin-isolert.test.js`. `sw.js` CACHE v111.
 
-## Filer i Storage vises via signerte lenker (2026-11-16, trinn 1 av 2 - bøttene er FORTSATT offentlige)
+## Filer i Storage vises via signerte lenker (2026-11-16; trinn 2 gjort 2026-11-25: alle tre bøttene er PRIVATE)
 
-Sikkerhetsgjennomgang 16.11 (Henrik: «Ta filene først»): alle tre bøttene (`bilder` 1990 filer, `ordre-dokumenter` 523, `hms-vedlegg` 3) er `public`, og en fil kunne hentes uten innlogging av den som har lenken (målt: HTTP 200 uten noen innlogging). Adressene er i praksis umulige å gjette og kan ikke listes uten innlogging, men en lenke som er delt eller som en tidligere ansatt har, virker for alltid.
+**Status 25.11:** `bilder`, `ordre-dokumenter` og `hms-vedlegg` har `public = false` (bekreftet med lesende spørring 25.11). En fil kan nå bare hentes med en signert lenke (som krever innlogget ansatt) eller fra enhetens egen bildecache; den lagrede `.../object/public/...`-adressen gir ikke lenger filen. Teksten under beskriver hvordan det var 16.11.
 
-- **Trinn 1 (klienten, denne endringen):** databasen lagrer fortsatt den offentlige adressen (`.../object/public/<bøtte>/<sti>`); den er filens faste NAVN (sletting, `storageFilBrukesAvAndre`, `dokumentSti`) og skal ALDRI byttes med en signert lenke. Alt som VISER eller ÅPNER en fil går gjennom hjelperne i `js/core.js` («SIGNERTE FIL-LENKER»): `filBildeAttr(url)` (`<img>`: plassholder + `data-fil`, byttes når lenken er signert), `filLenkeAttr(url)` (`<a>`: `apneFil` åpner signert lenke; fanen åpnes synkront), `filUrlNaa`/`filSigner` (utskriftsvinduet i `genPDF`, som nå åpner vinduet FØR bildene signeres) og `filHent` (Vegvesen «Skriv ut»). Én `createSignedUrls` per bøtte per rendering; lenken varer 2 t og gjenbrukes i 1,5 t. Feiler signeringen (uten nett, ikke innlogget), brukes den lagrede adressen (virker så lenge bøtta er offentlig, og fra bildecachen etterpå). **Ny `<img>`/`<a>` mot en Storage-fil skal bruke hjelperne** (vakt i testen under feiler på rå `src="${...}"`/`href="${d.url}"`).
+Sikkerhetsgjennomgang 16.11 (Henrik: «Ta filene først»): alle tre bøttene (`bilder` 1990 filer, `ordre-dokumenter` 523, `hms-vedlegg` 3) var `public`, og en fil kunne hentes uten innlogging av den som har lenken (målt: HTTP 200 uten noen innlogging). Adressene er i praksis umulige å gjette og kan ikke listes uten innlogging, men en lenke som er delt eller som en tidligere ansatt har, virker for alltid.
+
+- **Trinn 1 (klienten, denne endringen):** databasen lagrer fortsatt den offentlige adressen (`.../object/public/<bøtte>/<sti>`); den er filens faste NAVN (sletting, `storageFilBrukesAvAndre`, `dokumentSti`) og skal ALDRI byttes med en signert lenke. Alt som VISER eller ÅPNER en fil går gjennom hjelperne i `js/core.js` («SIGNERTE FIL-LENKER»): `filBildeAttr(url)` (`<img>`: plassholder + `data-fil`, byttes når lenken er signert), `filLenkeAttr(url)` (`<a>`: `apneFil` åpner signert lenke; fanen åpnes synkront), `filUrlNaa`/`filSigner` (utskriftsvinduet i `genPDF`, som nå åpner vinduet FØR bildene signeres) og `filHent` (Vegvesen «Skriv ut»). Én `createSignedUrls` per bøtte per rendering; lenken varer 2 t og gjenbrukes i 1,5 t. Feiler signeringen (uten nett, ikke innlogget), brukes den lagrede adressen (virket bare mens bøtta var offentlig; etter 25.11 bare fra bildecachen). **Ny `<img>`/`<a>` mot en Storage-fil skal bruke hjelperne** (vakt i testen under feiler på rå `src="${...}"`/`href="${d.url}"`).
 - **`sw.js` (CACHE v82):** bildecachen bruker filens faste adresse uten token som nøkkel (`bildeCacheNokkel`: offentlig og signert adresse gir samme nøkkel, så et nytt token gir ikke ny nedlasting), henter med CORS og lagrer bare ekte 200-svar (før ble «opaque»-svar lagret usett; et feilsvar fra en privat bøtte ville blitt liggende som om det var bildet). Opplasting/sletting/`authenticated` går forbi.
-- **Trinn 2 (IKKE gjort, krever Henriks ja):** `update storage.buckets set public = false where id in ('bilder','ordre-dokumenter','hms-vedlegg')`. Lese-reglene på `storage.objects` krever allerede innlogget ansatt for alle tre bøttene, så signering virker uten nye regler. Gjøres først når (1) signering er sett virke i den innloggede, utrullede appen (bilder på en ordre, et dokument, Vegvesen «Skriv ut», PDF, HMS-bilde, fullmakt), og (2) klienten har vært ute lenge nok til at åpne faner har oppdatert seg: en fane med gammel kode får ødelagte bilder og dokumentlenker i det øyeblikket bøttene stenges (rettes ved å laste siden på nytt). Rollback: sett `public = true` igjen.
-- **Testet:** `test/fil-signerte-lenker.test.js` (15) og hele suiten; i ekte nettleser mot ekte Storage UTEN innlogging (signering avvist → lagret adresse → bildet lastet gjennom ny sw.js, lagret som `cors`/200 under fast nøkkel). **Ikke testet:** vellykket signering som innlogget ansatt mot ekte Storage (krever PIN-innlogging), og private bøtter.
+- **Trinn 2 (GJORT, bekreftet 25.11: `public = false` på alle tre):** `update storage.buckets set public = false where id in ('bilder','ordre-dokumenter','hms-vedlegg')`. Lese-reglene på `storage.objects` krever innlogget ansatt for alle tre bøttene, så signering virker uten nye regler. En fane med kode fra før 16.11 (uten signering) får ødelagte bilder og dokumentlenker; rettes ved å laste siden på nytt. En signert lenke som alt er utdelt virker ut sin levetid (2 t), også for en ansatt som er avsluttet i mellomtiden. Rollback: sett `public = true` igjen. Ingen migrasjonsfil i repoet for selve endringen.
+- **Testet:** `test/fil-signerte-lenker.test.js` (15) og hele suiten; i ekte nettleser mot ekte Storage UTEN innlogging (signering avvist → lagret adresse → bildet lastet gjennom ny sw.js, lagret som `cors`/200 under fast nøkkel). **Ikke testet (16.11):** vellykket signering som innlogget ansatt mot ekte Storage (krever PIN-innlogging), og private bøtter. Bøttene er private siden 25.11; denne gjennomgangen har ikke selv sett bilder/dokumenter lastes i en innlogget økt etter det.
 
 ## Kort PIN kan ikke finnes, og bare admin kan slette ordrer (2026-11-16, kjørt)
 
@@ -353,6 +441,24 @@ Samme sikkerhetsgjennomgang (Henrik: PIN-ene «er satt nå», og «det er kun ad
 - **`ordrer`: regelen `krever_innlogget_ansatt` (FOR ALL) er delt** i `ordrer_lese`, `ordrer_opprette`, `ordrer_endre` (alle innloggede ansatte, som før) og `ordrer_slette_kun_admin`. Appen viste allerede «Slett ordre»/«Slett leveranse» bare for admin, så ingen flyt er endret; `portal_avvis_ordre` (admin + godkjenner) er SECURITY DEFINER og virker som før. NB: en DELETE som stoppes av RLS gir INGEN feil, bare 0 rader. Det som står under «Bekreft / Avvis (G6)» om at alle ansatte kan slette ordrer direkte, gjelder nå bare ENDRING.
 - **Fortsatt åpent (ikke rørt):** alle innloggede ansatte kan endre alle ordrer, og har full tilgang (også sletting) til `innstillinger`, `flater`, `moter`, `push_abonnement` og lagertabellene.
 - Test: `supabase/tester/pin_seks_sifre_og_ordre_sletting_kun_admin_TEST_body.sql` (11 kontroller i én DO-blokk som alltid ender med en exception, så alt rulles tilbake; kjørt før og etter migrasjonen).
+
+## Avslutt ansatt: full tilgangssperring i ett steg (2026-11-20, UTRULLET, merge `a3d1803`)
+
+Sikkerhetsgjennomgangen fant at den gamle «Deaktiver»-knappen bare satte `ansatte.aktiv = false`: ingen bekreftelse, feil bare i konsollen, og PIN-raden, push-abonnementene og en pågående stempling/ordreklokke ble stående. Henrik: full tilgangssperring, men aldri sletting av `ansatte`-raden (timelister, lønn og ordrelogger peker på den). Brukes i rutinen øverst («Sikkerhetsrutine», del A).
+- **Tre knapper per ansatt** under Mer → Ansatte (`js/arkiv-mer.js`, funksjonene i `js/ansatte-utstyr.js`): «Sett inaktiv» (`settAnsattInaktiv`: midlertidig pause, skriver bare `aktiv = false` direkte; PIN, `session_token`, push og klokker røres ikke), «🔒 Avslutt ansatt» (`avsluttAnsatt`, med bekreftelse og toast ved feil) og, for en inaktiv ansatt, «Aktiver (ny PIN)» (`reaktiverAnsattMedNyPin`).
+- **`avslutt_ansatt(p_ansatt_id)`** (migrasjon `20261120100000_avslutt_ansatt.sql`, SECURITY DEFINER, alt i én transaksjon): krever admin (`KUN_ADMIN`), nekter å avslutte seg selv (`KAN_IKKE_AVSLUTTE_SEG_SELV`; klienten stopper det også), låser raden, og (1) stempler ut hvis innstemplet, med stopptid NÅ og samme pauseregel som admin-utstempling (30 min fra 8 t rå tid), som en `normal`-føring med fast id `tavslutt_<ansatt>_<innstempling i ms>` (`on conflict do nothing`, bare hvis over 0 min), (2) stopper åpne Ombygging-klokker via den eksisterende `stopp_ordreklokker_for_ansatt`, (3) setter `aktiv = false` og `session_token = null`, (4) sletter raden i `ansatte_pin` og (5) sletter `push_abonnement`-radene. Svarer `{ok, navn, timeRegistrert, ordreklokkerStoppet}`. Idempotent: på en allerede inaktiv ansatt gjør den det som gjenstår (nyttig for ansatte deaktivert med den gamle knappen).
+- **`admin_reaktiver_ansatt(p_ansatt_id, p_ny_pin)`**: bare admin, ny PIN må være 6 sifre og ledig (`PIN_I_BRUK`), samme rate-limit som `admin_sett_pin`, skriver PIN og `aktiv = true` i én operasjon. Reaktivering krever derfor ALLTID ny PIN, uansett hvordan ansatten ble satt inaktiv.
+- **Når virker det:** `current_ansatt()` krever `aktiv = true`, så både «Avslutt ansatt» og «Sett inaktiv» stenger ute med en gang for RLS, edge-funksjonene, Storage og Realtime, også en økt som allerede er i gang. Ikke tilbakekalt: det som står på skjermen/i bildecachen og signerte fil-lenker som alt er utdelt (2 t).
+- Begge funksjonene er `grant execute ... to anon, authenticated` (adminsjekken er inni, samme mønster som andre admin-RPC-er). Rollback: `drop function` for begge (står øverst i migrasjonen).
+- Vakt: `test/avslutt-ansatt.test.js` og `supabase/tester/avslutt_ansatt_TEST_body.sql` (rullet tilbake).
+
+## Delt stasjon låst til verkstedet med GPS (2026-11-20, UTRULLET, merge `af629d2`)
+
+PIN-en til den delte verkstedkontoen (`er_delt_stasjon`, id 114 «Booking Salmaker», se «PIN til 6 sifre, øktgrense og delt verksted-stasjon») er kjent av hele verkstedet og virket fra hvilken som helst enhet. Nå slipper `tryLogin()` (`js/core.js`) en slik konto inn bare når enhetens posisjon er innenfor verkstedets radius.
+- **Hvor:** `sjekkDeltStasjonGPS()` / `deltStasjonGpsMaal()` (blokken «GPS-SPERRE FOR DEN DELTE STASJON-KONTOEN» i `core.js`). Målet er den eksisterende arbeidsplass-innstillingen `S.gps` (Mer → «Sett arbeidsplasslokasjon», samme som timeklokka bruker: 59.18397, 9.60635, radius 100 m, kontrollert mot produksjon 20.11); mangler den, brukes de samme koordinatene fra konstantene `DELT_STASJON_GPS_*`. Flyttes arbeidsplass-innstillingen, flytter sperren med.
+- **Fail-closed, uten overstyring** (ulikt timeklokka, som har dagens PIN som reserve): nektet posisjonstilgang, ingen posisjon, tidsavbrudd (10 s) eller ingen geolokasjon i nettleseren gir avslag med en forklarende melding i `#pinErr`. Ved avslag kalles `logg_ut()` FØR `me` settes, siden `logg_inn_med_pin` allerede har skrevet ansatt-claims på enhetens anonyme Auth-bruker.
+- **Begrensninger:** sjekken sitter bare i NETTLESEREN. Databasen vet ikke hvor enheten er, så en som kjenner PIN-en og kaller `logg_inn_med_pin` direkte (eller forfalsker posisjonen) kommer forbi den. Sesjonsgjenoppretting (`gjenopprettOktFraEksisterendeSesjon`) sjekker ikke GPS på nytt: en stasjon som er innlogget, kan lastes på nytt uten ny posisjonssjekk innenfor øktgrensen (2 t for denne kontoen). Vanlige ansattkontoer er urørt.
+- Vakt: describe «GPS-sperre ved innlogging med den delte stasjon-kontoen» i `test/edge-fetch-og-utlogging.test.js`.
 
 ## PDF-eksport
 
