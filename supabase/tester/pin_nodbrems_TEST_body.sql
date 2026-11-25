@@ -270,6 +270,8 @@ begin
   insert into _res(navn, ok, info) values ('N15f når PIN-en er byttet sier funksjonen IKKE_PAKREVD (vanlig bytte går via endre_egen_pin)', v = 'IKKE_PAKREVD', v);
   v := pg_temp._n_godkj(c_fersk3, pin_ny);
   insert into _res(navn, ok, info) values ('N16 login_med_pin for admin virker under nødbrems', v = 'ok:990034', v);
+  v := pg_temp._n_godkj(c_fersk3, pin_x);
+  insert into _res(navn, ok, info) values ('N16b login_med_pin avviser en admin-PIN som må byttes (X har ikke byttet), samme svar som feil PIN', v = 'ingen rad', v);
 
   -- En vanlig ansatt som har en økt etter nødbremsen (kan i praksis ikke skje): får ikke bytte PIN mens den er aktiv.
   c_a_ny := pg_temp._n_c(u[1], 990031, now());
@@ -290,6 +292,18 @@ begin
     v || ' kø ' || v_k0 || '->' || v_k1);
   insert into _res(navn, ok, info) values ('N20 X sin økt (den som trakk) gjelder fortsatt etter opphevingen', pg_temp._n_ca(c_x) = '990033:admin', pg_temp._n_ca(c_x));
   insert into _res(navn, ok, info) values ('N20b økter fra FØR nødbremsen er fortsatt ute etter opphevingen', pg_temp._n_ca(c_a_gml) = 'ingen' and pg_temp._n_ca(c_y_gml) = 'ingen', '');
+
+  -- Godkjenner-PIN etter opphevingen: en PIN som må byttes avvises, og telles som feil forsøk.
+  delete from public.pin_forsok where auth_uid = u[4];
+  select count(*) into v_glob0 from public.pin_global_forsok;
+  v := pg_temp._n_godkj(c_fersk3, pin_b);
+  v2 := pg_temp._n_godkj(c_fersk3, pin_x);
+  select count(*) into v_glob1 from public.pin_global_forsok;
+  insert into _res(navn, ok, info) values ('N20c etter opphevingen: login_med_pin avviser gamle PIN-er som må byttes (godkjenner og admin), telles som feil forsøk',
+    v = 'ingen rad' and v2 = 'ingen rad' and v_glob1 = v_glob0 + 2, v || ' / ' || v2 || ' / global +' || (v_glob1 - v_glob0));
+  v := pg_temp._n_godkj(c_fersk3, pin_ny);
+  insert into _res(navn, ok, info) values ('N20d ... mens en PIN som er byttet etter nødbremsen (Y) godtas', v = 'ok:990034', v);
+  delete from public.pin_forsok where auth_uid = u[4];
 
   -- A logger inn med den GAMLE PIN-en etter opphevingen: må bytte.
   delete from public.pin_forsok where auth_uid = u[1];
@@ -315,6 +329,8 @@ begin
   v := pg_temp._n_innlogg(jsonb_build_object('role','authenticated','sub',u[5]), pin_ny2);
   c_b_ny := pg_temp._n_c(u[5], 990032, now());
   insert into _res(navn, ok, info) values ('N26 ... og B logger inn uten bytte og slipper gjennom', v like 'ok:990032 ny=false%' and pg_temp._n_ca(c_b_ny) = '990032:godkjenner', v);
+  v := pg_temp._n_godkj(c_fersk3, pin_ny2);
+  insert into _res(navn, ok, info) values ('N26b login_med_pin godtar B sin PIN satt av admin etter nødbremsen', v = 'ok:990032', v);
   update public.ansatte_pin set pin_satt_at = null where ansatt_id = 990032;
   v := pg_temp._n_verdi(c_b_ny, 'public.endre_egen_pin(''' || pin_b || ''')');
   v2 := pg_temp._n_verdi(c_b_ny, 'public.endre_pin_etter_nodbrems(''' || pin_b || ''')');

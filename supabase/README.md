@@ -526,7 +526,7 @@ er relevant).
 ## Nødbrems og varsel ved PIN-sperre (2026-11-25, IKKE kjørt)
 
 Migrasjon `migrations/20261125200000_pin_nodbrems.sql`, rollback `rollback-referanser/pin_nodbrems_ROLLBACK.sql`, test `tester/pin_nodbrems_TEST_body.sql`
-(51 kontroller). Full beskrivelse i CLAUDE.md, «Nødbrems og varsel ved PIN-sperre». Rører `current_ansatt`, `hent_innlogget_ansatt`, `logg_inn_med_pin`
+(55 kontroller). Full beskrivelse i CLAUDE.md, «Nødbrems og varsel ved PIN-sperre». Rører `current_ansatt`, `hent_innlogget_ansatt`, `logg_inn_med_pin`
 (drop + create, ny kolonne `ny_pin_kreves`), `login_med_pin`, `endre_egen_pin`, `admin_sett_pin` og `_pin_rate_limit_global_registrer`, så kjør ALLTID
 innloggingstesten sammen med den (31.10-lærdommen):
 

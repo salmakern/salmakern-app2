@@ -280,6 +280,8 @@ as $function$
 declare
   treff ansatte%rowtype;
   v_funnet boolean;
+  v_st sikkerhet_tilstand%rowtype;
+  v_terskel timestamptz;
 begin
   if auth.uid() is null then
     raise exception 'IKKE_INNLOGGET';
@@ -295,9 +297,16 @@ begin
   limit 1;
   v_funnet := found;
 
-  -- NØDBREMS: som i logg_inn_med_pin - bare admin, og ellers samme svar som feil PIN.
-  if not v_funnet or (exists (select 1 from sikkerhet_tilstand where sikkerhet_tilstand.id = 1 and nodbrems_aktiv)
-                   and treff.rolle is distinct from 'admin') then
+  -- NØDBREMS: som i logg_inn_med_pin - bare admin mens den er aktiv. I tillegg (Henrik 25.11: «samme regel begge
+  -- steder») godtas ikke en PIN som må byttes etter nødbremsen (samme terskel som ny_pin_kreves i logg_inn_med_pin),
+  -- heller ikke for admin. Begge gir samme svar som feil PIN og telles som feil forsøk (ikke et PIN-orakel).
+  select * into v_st from sikkerhet_tilstand where sikkerhet_tilstand.id = 1;
+  v_terskel := case when v_st.nodbrems_aktiv then v_st.nodbrems_siden else v_st.ny_pin_kreves_fra end;
+  if not v_funnet
+     or (coalesce(v_st.nodbrems_aktiv, false) and treff.rolle is distinct from 'admin')
+     or exists (select 1 from ansatte_pin p
+                where p.ansatt_id = treff.id
+                  and coalesce(p.pin_satt_at, '-infinity'::timestamptz) < v_terskel) then
     perform public._pin_rate_limit_registrer(false);
     perform public._pin_rate_limit_global_registrer(false);
     return;
