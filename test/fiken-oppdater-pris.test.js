@@ -29,14 +29,26 @@ const PRODUKT_500 = {
   note: 'Et eksisterende notat',
 };
 
+// Slik GET /products/{id} svarer: hele produktet, også felt den gamle koden ikke sendte (stock, costPrice) og de
+// skrivebeskyttede feltene som aldri skal sendes tilbake (s00-20261126-2).
+const PRODUKT_500_FULLT = {
+  ...PRODUKT_500,
+  stock: 3,
+  costPrice: 1234500,
+  createdDate: '2025-01-10',
+  lastModifiedDate: '2026-11-01',
+  unitPricesInForeignCurrency: [],
+};
+
 const tmpFiler = [];
 afterEach(() => { while (tmpFiler.length) { try { unlinkSync(tmpFiler.pop()); } catch { /* allerede borte */ } } });
 
 // Laster hele funksjonen med gitt miljø og falske Fiken-svar; gir { kall(req), putKall } -
 // putKall samler opp hvert PUT-kall mot Fiken (body inkludert), slik at en test kan bekrefte
 // at PUT ALDRI kalles når avviket skal blokkere skrivingen.
-async function last(env) {
+async function last(env, { fulltProdukt = PRODUKT_500_FULLT, getStatus = 200 } = {}) {
   const putKall = [];
+  const getKall = [];
   globalThis.Deno = { env: { get: (k) => env[k] } };
   let handler;
   globalThis.Deno.serve = (fn) => { handler = fn; };
@@ -45,6 +57,10 @@ async function last(env) {
     const json = (b, s = 200, headers = {}) => new Response(JSON.stringify(b), { status: s, headers });
     if (u.includes('/products?') && (!init.method || init.method === 'GET')) {
       return json([PRODUKT_500], 200, { 'Fiken-Api-Page-Count': '1' });
+    }
+    if (u.endsWith(`/products/${PRODUKT_500.productId}`) && (!init.method || init.method === 'GET')) {
+      getKall.push(u);
+      return getStatus === 200 ? json(fulltProdukt) : new Response('feil', { status: getStatus });
     }
     if (u.includes(`/products/${PRODUKT_500.productId}`) && init.method === 'PUT') {
       putKall.push({ url: u, body: JSON.parse(init.body) });
@@ -58,6 +74,7 @@ async function last(env) {
   await import(/* @vite-ignore */ pathToFileURL(fil).href);
   return {
     putKall,
+    getKall,
     kall: (body, headers = {}) =>
       handler(new Request('https://x.supabase.co/functions/v1/fiken-oppdater-pris', {
         method: 'POST',
@@ -128,6 +145,70 @@ describe('fiken-oppdater-pris: avvik-sjekk i hele handleren', () => {
     const { kall, putKall } = await last(BASE_ENV);
     const res = await kall({ productNumber: '500', unitPriceKr: 1, forventetGammelPrisKr: 1 }, { 'x-sync-secret': 'FEIL' });
     expect(res.status).toBe(401);
+    expect(putKall).toHaveLength(0);
+  });
+});
+
+describe('fiken-oppdater-pris: sender hele produktet tilbake (stock/costPrice nulles ikke, s00-20261126-2)', () => {
+  it('henter produktet med GET /products/{id} og sender stock, costPrice og alle andre felt uendret, bare unitPrice byttet', async () => {
+    const { kall, putKall, getKall } = await last(BASE_ENV);
+    const res = await kall({ productNumber: '500', unitPriceKr: 52000 });
+    expect(res.status).toBe(200);
+    expect(getKall).toHaveLength(1);
+    expect(putKall).toHaveLength(1);
+    expect(putKall[0].body).toEqual({
+      name: 'Standard ombygging',
+      unitPrice: 5200000,
+      incomeAccount: '3010',
+      vatType: 'high',
+      active: true,
+      productNumber: '500',
+      note: 'Et eksisterende notat',
+      stock: 3,
+      costPrice: 1234500,
+    });
+  });
+
+  it('skrivebeskyttede felt (productId, createdDate, lastModifiedDate, unitPricesInForeignCurrency) sendes aldri', async () => {
+    const { kall, putKall } = await last(BASE_ENV);
+    await kall({ productNumber: '500', unitPriceKr: 52000 });
+    for (const k of ['productId', 'createdDate', 'lastModifiedDate', 'unitPricesInForeignCurrency']) {
+      expect(putKall[0].body).not.toHaveProperty(k);
+    }
+  });
+
+  it('ukjente felt Fiken legger til senere følger også med uendret', async () => {
+    const { kall, putKall } = await last(BASE_ENV, { fulltProdukt: { ...PRODUKT_500_FULLT, nyttFeltFraFiken: { a: 1 } } });
+    await kall({ productNumber: '500', unitPriceKr: 52000 });
+    expect(putKall[0].body.nyttFeltFraFiken).toEqual({ a: 1 });
+  });
+
+  it('stock/costPrice som er null i Fiken sendes som null (ikke fjernet, ikke 0)', async () => {
+    const { kall, putKall } = await last(BASE_ENV, { fulltProdukt: { ...PRODUKT_500_FULLT, stock: null, costPrice: null } });
+    await kall({ productNumber: '500', unitPriceKr: 52000 });
+    expect(putKall[0].body.stock).toBeNull();
+    expect(putKall[0].body.costPrice).toBeNull();
+  });
+
+  it('GET /products/{id} feiler: 502 og INGEN PUT', async () => {
+    const { kall, putKall } = await last(BASE_ENV, { getStatus: 500 });
+    const res = await kall({ productNumber: '500', unitPriceKr: 52000 });
+    expect(res.status).toBe(502);
+    expect(putKall).toHaveLength(0);
+  });
+
+  it('produktet har fått nytt nummer mellom listen og GET: 409 og INGEN PUT', async () => {
+    const { kall, putKall } = await last(BASE_ENV, { fulltProdukt: { ...PRODUKT_500_FULLT, productNumber: '501' } });
+    const res = await kall({ productNumber: '500', unitPriceKr: 52000 });
+    expect(res.status).toBe(409);
+    expect(putKall).toHaveLength(0);
+  });
+
+  it('avvik-sjekken bruker prisen fra GET (den ferske), ikke fra listen', async () => {
+    const { kall, putKall } = await last(BASE_ENV, { fulltProdukt: { ...PRODUKT_500_FULLT, unitPrice: 6000000 } });
+    const res = await kall({ productNumber: '500', unitPriceKr: 52000, forventetGammelPrisKr: 51500 });
+    expect(res.status).toBe(409);
+    expect((await res.json()).faktiskGammelPrisKr).toBe(60000);
     expect(putKall).toHaveLength(0);
   });
 });

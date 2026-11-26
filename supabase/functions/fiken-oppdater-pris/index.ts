@@ -10,9 +10,10 @@
 // fiken-produkter (rent lese-verktøy).
 //
 // Fiken sin PUT /products/{id} erstatter HELE produktet, ikke en delvis
-// oppdatering - henter derfor alltid det fullstendige produktet først og
-// sender alle feltene tilbake med bare unitPrice endret, slik at
-// navn/konto/mva-type/aktiv-status ikke blir nullstilt ved et uhell.
+// oppdatering - henter derfor alltid det fullstendige produktet først
+// (GET /products/{id}) og sender ALLE skrivbare felt tilbake med bare
+// unitPrice endret (se FULL-PUT under), slik at navn/konto/mva-type/aktiv,
+// notat, lagerantall (stock) og kostpris (costPrice) aldri nullstilles.
 const FIKEN_API_KEY = Deno.env.get('FIKEN_API_KEY')
 const SYNC_SECRET = Deno.env.get('FIKEN_SYNC_SECRET')
 const FIKEN_BASE = 'https://api.fiken.no/api/v2'
@@ -45,6 +46,31 @@ type FikenProduct = {
   productNumber: string
   note?: string
 }
+
+// ── FULL-PUT BEGIN (byte-lik i fiken-oppdater-pris og fiken-endre-produkt; test/fiken-full-put.test.js vokter mot avvik) ──
+// Fikens PUT /products/{id} erstatter HELE produktet: et felt som ikke sendes, blir tomt (OpenAPI: «stock: If not provided, stock value
+// is set to null»). Før 26.11 sendte denne funksjonen bare et utvalg felt, og nullet dermed stock (lagerantall) og costPrice (kostpris) på
+// hvert produkt den endret (Henger igjen s00-20261126-2). Nå hentes det fulle produktet med GET /products/{id} rett før PUT, og ALT som
+// kan skrives sendes tilbake uendret; bare feltene i `endringer` byttes. Samme regel som byggPutBody i fiken-rett-produktnavn.
+const SKRIVEBESKYTTET = ['productId', 'createdDate', 'lastModifiedDate', 'unitPricesInForeignCurrency']
+
+function byggPutBody(produkt: Record<string, unknown>, endringer: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(produkt)) {
+    if (SKRIVEBESKYTTET.includes(k)) continue
+    body[k] = v
+  }
+  return { ...body, ...endringer }
+}
+
+async function hentProdukt(productId: number): Promise<{ ok: true; produkt: Record<string, unknown> } | { ok: false; feil: string }> {
+  const res = await fikenFetch(`/companies/${FIKEN_SLUG}/products/${productId}`)
+  if (!res.ok) return { ok: false, feil: `Fiken GET /products/${productId} svarte ${res.status}: ${await res.text()}` }
+  const produkt = await res.json().catch(() => null)
+  if (!produkt || typeof produkt !== 'object' || Array.isArray(produkt)) return { ok: false, feil: `Fiken GET /products/${productId} ga ikke et produkt` }
+  return { ok: true, produkt }
+}
+// ── FULL-PUT END ──
 
 // ── PRIS-AVVIK-SJEKK BEGIN (test/fiken-pris-avvik.test.js henter ut denne funksjonen og tester den isolert) ──
 // Sammenligner i kroner (ikke øre) - begge sider kan ha blitt avrundet på vei gjennom en UI-visning, så
@@ -99,7 +125,16 @@ Deno.serve(async (req) => {
       return jsonSvar({ synced: false, reason: `Fant ikke produktnummer ${productNumber} i Fiken` }, 404)
     }
 
-    const faktiskGammelPrisKr = found.unitPrice / 100
+    // Det fulle produktet rett før skriving (listen kan mangle felt, og produktet kan være endret siden).
+    const hentet = await hentProdukt(found.productId)
+    if (!hentet.ok) return jsonSvar({ error: hentet.feil }, 502)
+    const fullt = hentet.produkt
+    const gammelOre = fullt.unitPrice
+    if (String(fullt.productNumber ?? '') !== productNumber || typeof gammelOre !== 'number') {
+      return jsonSvar({ synced: false, reason: `Produktet med nummer ${productNumber} ble endret i Fiken mens vi leste det - prøv igjen` }, 409)
+    }
+
+    const faktiskGammelPrisKr = gammelOre / 100
     if (forventetGammelPrisKr !== null && !bekreftAvvik && erPrisAvvik(forventetGammelPrisKr, faktiskGammelPrisKr)) {
       // Skriver INGENTING - produktnummeret kan peke på feil produkt (skrivefeil), eller noen har endret
       // prisen direkte i Fiken siden sist. Kalleren spør brukeren og sender samme kall på nytt med
@@ -110,18 +145,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    const oppdatertProdukt: Record<string, unknown> = {
-      name: found.name,
-      unitPrice: Math.round(unitPriceKr * 100),
-      incomeAccount: found.incomeAccount,
-      vatType: found.vatType,
-      active: found.active,
-      productNumber: found.productNumber,
-    }
-    // Har produktet et notat i Fiken, tas det med (PUT erstatter hele produktet - ellers
-    // ville notatet blitt tomt ved hver prisoppdatering). Samme fiks som fiken-endre-produkt
-    // allerede har (s04-004 i Henger igjen-lista).
-    if (typeof found.note === 'string' && found.note !== '') oppdatertProdukt.note = found.note
+    // Alt annet (navn, konto, mva, aktiv, notat, stock, costPrice ...) sendes tilbake uendret.
+    const oppdatertProdukt = byggPutBody(fullt, { unitPrice: Math.round(unitPriceKr * 100) })
 
     const putRes = await fikenFetch(`/companies/${FIKEN_SLUG}/products/${found.productId}`, {
       method: 'PUT',
