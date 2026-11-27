@@ -194,7 +194,8 @@ describe('synkProduktliste: lager og fakturalinjer', () => {
 
 describe('produktRettelse og visning', () => {
   it('lagrer via RPC (aldri save), bruker svaret og tegner kortet', async () => {
-    const o = bil({ ombygging: { nyttKjoretoy: true } });
+    // «Heldekkende gulv» står alt i «Skal ha etter visning», så synken (27.11) har ingenting å lagre: én save her ville vært rettelsen selv.
+    const o = bil({ ombygging: { nyttKjoretoy: true }, utstyr: { skalHa: 'Heldekkende gulv' } });
     fake.svar.legg_til_ordre_produkt_rettelse = (a) => ({ data: [{ ...a.p_rettelse, av: 'TEST Ansatt', at: '2026-11-18T11:00:00Z' }], error: null });
     let lagret = 0;
     const save = sandbox.save; sandbox.save = () => { lagret++; };
@@ -1010,5 +1011,170 @@ describe('KIA EV9: 180-spørsmål og dørbeskyttere', () => {
       const ren = ombygg({ kunde: 'TEST Kunde AS', fiken_linjer: [{ produktnummer: '500', antall: 1 }] });
       expect(sandbox.fakturaSjekk(ren).grunner.map((g) => g.kode)).not.toContain('oppskrift_id_paa_faktura');
     });
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// «Utstyr - Skal ha etter visning» følger «Skal på bilen» (Henrik 27.11.2026: «navnet på de ulike produktene bli kopiert inn i utstyr skal ha
+// etter visning»). Alle aktive rader unntatt selve ombyggingen (rolle satt), med «× N» når antall > 1. Hånd-tekst røres aldri.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
+  let lagringer, omtegninger, ektSave, ektBuild, ektAktiv;
+  beforeEach(() => {
+    lagringer = 0; omtegninger = 0;
+    ektSave = sandbox.save; ektBuild = sandbox.buildOrdreDetail; ektAktiv = sandbox.document.activeElement;
+    sandbox.save = () => { lagringer++; };
+    sandbox.buildOrdreDetail = () => { omtegninger++; };
+    S.lagerOppskrifter = [...OPPSKRIFTER.map((r) => ({ ...r })), { ...DOR }];
+    S.lagervarer.push({ id: 'vare_T4', navn: 'TEST Dørbeskytter', antall: 10, enhet: 'stk' });
+  });
+  afterEach(() => { sandbox.save = ektSave; sandbox.buildOrdreDetail = ektBuild; sandbox.document.activeElement = ektAktiv; });
+  const synk = (o) => sandbox.synkProduktliste(o);
+  const skalHa = (o) => o.utstyr.skalHa;
+  const UTEN_PANORAMA = { utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: false }] };
+  const medPanorama = () => ({ utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] });
+
+  it('sjekklistepunkt huket av: navnet kommer inn; avhuket igjen (uten rettelse): linjen forsvinner', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '' } });
+    await synk(o);
+    expect(skalHa(o)).toBe('Takluke');
+    expect(o.utstyr.skalHaAuto).toEqual(['Takluke']);
+    expect(lagringer).toBe(1);
+    o.utstyrSjekkliste[0].ok = false;
+    await synk(o);
+    expect(skalHa(o)).toBe('');
+    expect(o.utstyr.skalHaAuto).toEqual([]);
+    expect(lagringer).toBe(2);
+  });
+
+  it('ombyggingsraden (Nytt/Brukt, Personbil) kommer aldri inn; dørbeskyttere (KIA EV9) gjør det', async () => {
+    const o = bil({ ombygging: { nyttKjoretoy: true, personbil: true }, utstyr: { skalHa: '' } });
+    const rader = sandbox.beregnSkalPaaBilen(o).rader;
+    expect(rader.some((r) => r.rolle === 'ombygging')).toBe(true);
+    expect(rader.some((r) => r.rolle === 'personbil')).toBe(true);
+    await synk(o);
+    expect(skalHa(o)).toBe('Dørbeskyttere');
+  });
+
+  it('Lafinto, en bestilt ombyggingsvariant (rolle satt) og en fjernet rad kommer aldri inn', () => {
+    const linjer = sandbox.skalHaOnskedeLinjer([
+      { nr: '2401', navn: 'Lafinto', kilde: 'ombygging', rolle: 'lafinto' },
+      { nr: '500', navn: 'Standard ombygging', kilde: 'bestilling', rolle: 'ombygging' },
+      { nr: '503', navn: 'Heldekkende   gulv', kilde: 'bestilling', rolle: null },
+      { nr: '504', navn: 'Borte', kilde: 'manuell', rolle: null, fjernet: true },
+      { nr: 'x', navn: 'Ombygging uten rolle', kilde: 'ombygging', rolle: null },
+      { nr: '503', navn: 'Heldekkende gulv', kilde: 'manuell', rolle: null },
+    ]);
+    expect(linjer).toEqual(['Heldekkende gulv']);
+  });
+
+  it('rettelse legg_til gir linjen, fjern tar den bort igjen', async () => {
+    const o = bil({ utstyr: { skalHa: '' }, produkt_rettelser: [rett('legg_til', '503', { navn: 'Heldekkende gulv' })] });
+    await synk(o);
+    expect(skalHa(o)).toBe('Heldekkende gulv');
+    o.produktRettelser = [...o.produktRettelser, rett('fjern', '503')];
+    await synk(o);
+    expect(skalHa(o)).toBe('');
+  });
+
+  it('bestilling (portal og e-post) kommer inn, med antall når antall > 1; ombyggingsvarianten i bestillingen gjør det ikke', async () => {
+    const o = bil({ utstyr: { skalHa: '' }, portal_linjer: [
+      { produktnummer: '500', navn: 'Standard ombygging', rabatt_prosent: 20 },
+      { produktnummer: '503', navn: 'Heldekkende gulv', kilde: 'epost', antall: 2 },
+      { produktnummer: '501', navn: 'Takluke', rabatt_prosent: 10 },
+    ] });
+    await synk(o);
+    expect(skalHa(o).split('\n')).toEqual(['Heldekkende gulv × 2', 'Takluke']);
+  });
+
+  it('hånd-tekst forsvinner aldri og endres aldri, heller ikke en hånd-linje med samme tekst som et produkt', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: 'Hengerfeste avtalt\nTakluke\n  Ring kunden  ' } });
+    await synk(o);
+    expect(skalHa(o)).toBe('Hengerfeste avtalt\nTakluke\n  Ring kunden  '); // ingenting endret: «Takluke» sto der for hånd
+    expect(lagringer).toBe(0);
+    o.utstyrSjekkliste[0].ok = false;
+    await synk(o);
+    expect(skalHa(o)).toBe('Hengerfeste avtalt\nTakluke\n  Ring kunden  '); // hånd-linjen blir stående
+    o.produktRettelser = [rett('legg_til', '503', { navn: 'Heldekkende gulv' })];
+    await synk(o);
+    expect(skalHa(o)).toBe('Hengerfeste avtalt\nTakluke\nRing kunden\nHeldekkende gulv');
+    o.produktRettelser = [...o.produktRettelser, rett('fjern', '503')];
+    await synk(o);
+    expect(skalHa(o)).toBe('Hengerfeste avtalt\nTakluke\nRing kunden');
+  });
+
+  it('en automatisk linje som er slettet for hånd legges ikke inn igjen (før produktet har vært borte og kommer tilbake)', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '' } });
+    await synk(o);
+    o.utstyr.skalHa = ''; // slettet i tekstfeltet
+    await synk(o);
+    await synk(o);
+    expect(skalHa(o)).toBe('');
+    o.utstyrSjekkliste[0].ok = false; await synk(o);
+    o.utstyrSjekkliste[0].ok = true; await synk(o);
+    expect(skalHa(o)).toBe('Takluke');
+  });
+
+  it('bekreftelsen nullstilles når synken endrer teksten (og detaljen tegnes på nytt), men ikke når ingenting endret seg', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '', skalHaBekreftet: true } });
+    await synk(o);
+    expect(o.utstyr.skalHaBekreftet).toBe(false);
+    expect(omtegninger).toBe(1);
+    o.utstyr.skalHaBekreftet = true;
+    await synk(o);
+    await synk(o);
+    expect(o.utstyr.skalHaBekreftet).toBe(true);
+    expect(omtegninger).toBe(1);
+    expect(lagringer).toBe(1);
+  });
+
+  it('gjeninntreden: buildOrdreDetail -> renderOrdreLagerbruk -> synkProduktliste finner ingen ny endring (ingen løkke, én lagring)', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: 'For hånd', skalHaBekreftet: true } });
+    let indreRunder = 0;
+    const ektSynkSkalHa = sandbox.synkSkalHaFraProduktliste;
+    sandbox.synkSkalHaFraProduktliste = (...a) => { indreRunder++; return ektSynkSkalHa(...a); };
+    sandbox.buildOrdreDetail = () => { omtegninger++; if (omtegninger > 5) throw new Error('løkke'); sandbox.renderOrdreLagerbruk(); };
+    try {
+      await synk(o);
+      for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    } finally { sandbox.synkSkalHaFraProduktliste = ektSynkSkalHa; }
+    expect(indreRunder).toBe(2); // den ytre runden og runden fra omtegningen
+    expect(omtegninger).toBe(1);
+    expect(lagringer).toBe(1);
+    expect(skalHa(o)).toBe('For hånd\nTakluke');
+    expect(o.utstyr.skalHaBekreftet).toBe(false);
+  });
+
+  it('skriver ikke mens noen står i tekstfeltet (ulagret skriving går ikke tapt), og fyller feltet når det er sluppet', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '' } });
+    sandbox.document.activeElement = sandbox.document.getElementById('skalHaInput_' + o.id);
+    await synk(o);
+    expect(skalHa(o)).toBe('');
+    expect(lagringer).toBe(0);
+    sandbox.document.activeElement = ektAktiv;
+    await synk(o);
+    expect(skalHa(o)).toBe('Takluke');
+    expect(sandbox.document.getElementById('skalHaInput_' + o.id).value).toBe('Takluke');
+  });
+
+  it('en LEVERANSE og en GAMMEL ordre (fra før PRODUKTLISTE_FRA) røres ikke', async () => {
+    sandbox.erNyProduktliste = EKTE_GATE;
+    const gammel = bil({ ...medPanorama(), created_at: '2026-11-10T08:00:00Z', utstyr: { skalHa: 'Gammel tekst' } });
+    await synk(gammel);
+    expect(sandbox.synkSkalHaFraProduktliste(gammel, [{ nr: '501', navn: 'Takluke', kilde: 'sjekkliste' }])).toBe(false);
+    expect(skalHa(gammel)).toBe('Gammel tekst');
+    expect(gammel.utstyr).not.toHaveProperty('skalHaAuto');
+    const lev = bil({ ordretype: 'leveranse', leveranse: { merking: 'TEST' }, utstyr: { skalHa: '' } });
+    await synk(lev);
+    expect(sandbox.synkSkalHaFraProduktliste(lev, [{ nr: '501', navn: 'Takluke', kilde: 'sjekkliste' }])).toBe(false);
+    expect(skalHa(lev)).toBe('');
+    expect(lagringer).toBe(0);
+  });
+
+  it('ingen endring i lista = ingen lagring (vanlig opptegning)', async () => {
+    const o = bil({ ...UTEN_PANORAMA, utstyr: { skalHa: 'Noe' } });
+    await synk(o); await synk(o);
+    expect(lagringer).toBe(0);
+    expect(skalHa(o)).toBe('Noe');
   });
 });

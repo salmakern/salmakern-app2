@@ -248,6 +248,56 @@ function produktlisteManglerDeler(r) {
   return (r.ingredienser || []).filter(i => { const v = (S.lagervarer || []).find(x => x.id === i.vareId); return !v || Number(v.antall) < Number(i.antall); }).length;
 }
 
+// ── Synk: «Utstyr - Skal ha etter visning» (Henrik 27.11.2026) ─────────────────────────────────────────────────────
+// Navnet på hvert aktivt produkt i «Skal på bilen» står som egen linje i o.utstyr.skalHa (fritekstfeltet den som klargjør bilen leser), med
+// «× N» når antall > 1. Ikke selve ombyggingen (en rad med rolle: ombygging/personbil/Lafinto, eller kilde 'ombygging'): samme regel som den
+// gamle avkrysningen (oppdaterSkalHaForOppskrift, «kun Ekstra utstyr»), men uten de gamle per-modell-unntakene. Dørbeskyttere (kilde 'deler') er med.
+// Full avstemming hver gang (synkProduktliste kjører på hver opptegning). o.utstyr.skalHaAuto er linjene automatikken har «tatt»: lagt inn selv
+// mens produktet er på lista. Bare de kan fjernes igjen; alt annet i feltet er skrevet for hånd og røres aldri (en linje som alt sto der for hånd
+// blir aldri tatt, så den fjernes aldri). Sletter noen en automatisk linje for hånd, beholdes den i skalHaAuto og legges ikke inn igjen før
+// produktet har vært borte fra lista og kommer tilbake. Skriver ÉN gang (én save) bare når noe faktisk endret seg, og aldri mens noen står i
+// tekstfeltet (ulagret skriving kunne gått tapt; neste opptegning tar det). Endres teksten mens den er bekreftet, nullstilles bekreftelsen og
+// detaljen tegnes på nytt (samme regel som su()); den nye runden finner ingen endring og skriver ikke igjen.
+const _skalHaLinje = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+function skalHaOnskedeLinjer(rader) {
+  const ut = [];
+  for (const r of rader || []) {
+    if (!r || r.fjernet || r.rolle || r.kilde === 'ombygging') continue;
+    const navn = _skalHaLinje(r.navn);
+    if (!navn) continue;
+    const linje = r.antall > 1 ? `${navn} × ${r.antall}` : navn;
+    if (!ut.includes(linje)) ut.push(linje);
+  }
+  return ut;
+}
+function synkSkalHaFraProduktliste(o, rader) {
+  if (!o || !erNyProduktliste(o) || !o.utstyr || typeof o.utstyr !== 'object') return false;
+  const felt = document.getElementById('skalHaInput_' + o.id);
+  if (felt && document.activeElement === felt) return false;
+  const onsket = skalHaOnskedeLinjer(rader);
+  const forrige = Array.isArray(o.utstyr.skalHaAuto) ? o.utstyr.skalHaAuto.map(_skalHaLinje).filter(Boolean) : [];
+  const linjer = String(o.utstyr.skalHa || '').split('\n').map(l => l.trim()).filter(Boolean);
+  // Automatiske linjer som ikke lenger er på lista fjernes (en hånd-linje med samme tekst står aldri i forrige).
+  const nyeLinjer = linjer.filter(l => !(forrige.includes(l) && !onsket.includes(l)));
+  const auto = [];
+  for (const l of onsket) {
+    if (forrige.includes(l)) { auto.push(l); continue; } // vår fra før (står der, eller er slettet for hånd: legges ikke inn igjen)
+    if (nyeLinjer.includes(l)) continue; // skrevet for hånd: røres ikke
+    nyeLinjer.push(l); auto.push(l);
+  }
+  const nyTekst = nyeLinjer.join('\n');
+  const tekstEndret = nyTekst !== linjer.join('\n');
+  if (!tekstEndret && JSON.stringify(auto) === JSON.stringify(forrige)) return false;
+  const nullstill = tekstEndret && !!o.utstyr.skalHaBekreftet;
+  if (tekstEndret) o.utstyr.skalHa = nyTekst;
+  o.utstyr.skalHaAuto = auto;
+  if (nullstill) o.utstyr.skalHaBekreftet = false;
+  save(o.id);
+  if (felt && tekstEndret) felt.value = nyTekst;
+  if (nullstill && activeOrdreId === o.id) buildOrdreDetail();
+  return true;
+}
+
 // ── Synk: fakturalinjer og lager ────────────────────────────────────────────────────────────────────────────────
 const _produktlisteIGang = new Set();
 // tillatAngre: bare fra en bevisst handling (Rett, sjekkliste, boksene). Fra en vanlig opptegning legges aldri noe tilbake på lager.
@@ -284,6 +334,10 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
   for (const nr of lagtTilForHand) {
     if (!rader.some(r => r.nr === nr)) await oppdaterFikenLinjeForOppskrift(nr, false, o.id);
   }
+  // «Skal ha etter visning» følger lista (se synkSkalHaFraProduktliste over). ETTER fakturalinjene: lagringen er en full save() som også skriver
+  // fiken_linjer fra den lokale kopien, så den skal sendes når RPC-ene over har oppdatert kopien. Regnes ut på nytt her (synkront), ikke fra `rader`
+  // fra toppen: ordren kan ha endret seg mens RPC-ene gikk.
+  try { synkSkalHaFraProduktliste(o, beregnSkalPaaBilen(o).rader); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); }
   // 2) Lager, bare etter ankomst.
   if (!erAnkommet(o) || !db) return;
   const onsket = new Map();

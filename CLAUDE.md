@@ -892,6 +892,29 @@ sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bil
   id-en `ord_<ms>`), og en håndlagt linje ble stående etter «Angre». **Statusbyttet er IKKE kjørt i produksjon**: enhver statusendring på en
   ordre sender et ekte push-varsel (triggeren `ordre-push`), så ankomst-hooken i `endreStatus` er bare dekket av enhetstest. Alle TEST-rader
   slettet etterpå (ordre, oppskrift, vare, ansatt, PIN).
+- **Produktnavnene kopieres inn i «Utstyr - Skal ha etter visning» (2026-11-27, Henrik: «navnet på de ulike produktene bli kopiert inn i utstyr
+  skal ha etter visning»; gren `henger/skal-paa-bilen-skalha`, IKKE utrullet)**: den gamle avkrysningen la alltid navnet på en Ekstra utstyr-oppskrift
+  inn i fritekstfeltet (`oppdaterSkalHaForOppskrift`), men «Skal på bilen» gjorde det ikke. Nå gjør `synkSkalHaFraProduktliste(o, rader)` (js/skal-paa-bilen.js)
+  det, kalt fra `synkProduktliste` (som kjører på hver opptegning og etter hver bevisst handling). **Regel:** hver AKTIV rad (ikke `fjernet`) unntatt
+  selve ombyggingen (rad med `rolle` ombygging/personbil/Lafinto, eller `kilde` 'ombygging'), altså sjekkliste-, bestilling- (portal og e-post),
+  manuell- og deler-rader (dørbeskyttere på EV9); «Navn × N» når antall > 1 (som raden viser). **Bevisst forskjell fra det gamle systemet:** ingen
+  per-modell-unntak (de gamle `*_PUNKT_PRODUKTNUMMER`-koblingene som ikke skulle i feltet), én regel for alle modeller.
+  - **Full avstemming hver gang** mot `o.utstyr.skalHaAuto` (ny nøkkel i den eksisterende jsonb-kolonnen `utstyr`, skrevet av `save()` som resten av
+    `utstyr`; ingen migrasjon): linjene automatikken har lagt inn selv mens produktet står på lista. Bare de fjernes igjen når produktet går ut
+    (f.eks. et sjekklistepunkt som hukes av igjen uten rettelse). **Hånd-tekst røres aldri**, heller ikke en hånd-linje med samme tekst som et produkt
+    (den blir aldri «tatt», så den fjernes aldri). En automatisk linje som noen sletter for hånd beholdes i `skalHaAuto` og legges ikke inn igjen før
+    produktet har vært borte fra lista og kommer tilbake (ellers ville appen kjempet mot den ansatte).
+  - **Skriving:** ÉN `save()` per synk, og bare når teksten eller `skalHaAuto` faktisk endret seg (en vanlig opptegning lagrer ingenting). Kjøres ETTER
+    fakturalinje-RPC-ene i `synkProduktliste` (full `save()` skriver også `fiken_linjer` fra den lokale kopien) og regner lista ut på nytt der.
+    Ingen skriving mens tekstfeltet `skalHaInput_<id>` har fokus (ulagret skriving ville gått tapt; neste opptegning tar det). Endres teksten mens
+    «Utstyr bekreftet klargjort» er på, nullstilles bekreftelsen og detaljen tegnes på nytt (samme regel som `su()`, Henrik 2026-10-08); den nye runden
+    (buildOrdreDetail → renderOrdreLagerbruk → synkProduktliste) finner ingen endring og lagrer ikke igjen (testet).
+  - Gjelder bare `erNyProduktliste(o)`: eldre ordrer og leveranser er urørt (gamle `oppdaterSkalHaForOppskrift` som før). **Ved første opptegning etter
+    utrulling** får hver aktiv ordre med «Skal på bilen» navnene inn (én lagring per ordre som åpnes; ordrer med bekreftet utstyr mister bekreftelsen hvis
+    noe kommer til). **Kjent:** en bekreftet portal-ordre har fra før portal-navnene i feltet (`leggTilPortalUtstyrLinjer`, også ombyggingsvarianten);
+    de regnes som hånd-tekst og blir stående, og en bestilt linje med antall > 1 får i tillegg «Navn × N».
+  - `sw.js` CACHE v109 (v108 er brukt av grenen `henger/monteringsveiledning`). Vakt: describe «Skal ha etter visning» følger «Skal på bilen» i
+    `test/skal-paa-bilen.test.js` (12 tester; 11 feiler mot koden fra før). **Ikke sett i en innlogget nettleser.**
 
 ## «Kun ekstrautstyr (ingen ombygging)» på bil-ordrer (2026-11-17; enklere ordre og fem statuser 2026-11-19; UTRULLET 2026-11-19 sammen med «Hengerfeste først», commit `f0ca5e8`, `sw.js` v101)
 
