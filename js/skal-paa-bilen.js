@@ -253,30 +253,43 @@ function produktlisteManglerDeler(r) {
 // «× N» når antall > 1. Ikke selve ombyggingen (en rad med rolle: ombygging/personbil/Lafinto, eller kilde 'ombygging'): samme regel som den
 // gamle avkrysningen (oppdaterSkalHaForOppskrift, «kun Ekstra utstyr»), men uten de gamle per-modell-unntakene. Dørbeskyttere (kilde 'deler') er med.
 // Full avstemming hver gang (synkProduktliste kjører på hver opptegning). o.utstyr.skalHaAuto er linjene automatikken har «tatt»: lagt inn selv
-// mens produktet er på lista. Bare de kan fjernes igjen; alt annet i feltet er skrevet for hånd og røres aldri (en linje som alt sto der for hånd
-// blir aldri tatt, så den fjernes aldri). Sletter noen en automatisk linje for hånd, beholdes den i skalHaAuto og legges ikke inn igjen før
-// produktet har vært borte fra lista og kommer tilbake. Skriver ÉN gang (én save) bare når noe faktisk endret seg, og aldri mens noen står i
-// tekstfeltet (ulagret skriving kunne gått tapt; neste opptegning tar det). Endres teksten mens den er bekreftet, nullstilles bekreftelsen og
-// detaljen tegnes på nytt (samme regel som su()); den nye runden finner ingen endring og skriver ikke igjen.
+// mens produktet er på lista. Bare de kan fjernes igjen; alt annet i feltet er skrevet for hånd og blir stående (formatet kan likevel bli ryddet:
+// mellomrom i hver linje trimmes og tomme linjer forsvinner når synken skriver feltet, som den gamle oppdaterSkalHaForOppskrift alltid har gjort).
+// En linje som alt sto der for hånd blir aldri tatt, så den fjernes aldri. Sletter noen en automatisk linje for hånd, beholdes den i skalHaAuto og
+// legges ikke inn igjen før produktet har vært borte fra lista og kommer tilbake. Et navn som bare er et tall (et produkt uten navn får nummeret
+// som navn) tas aldri med: hentFikenLinjerFraUtstyr leser tall-linjer i feltet som produktnumre og ville laget en ekstra fakturalinje.
+// Skriving (rettet etter gjennomgangen 27.11): synken kjører ved HVER opptegning, også når noen bare åpner ordren, så den gjør aldri en full save()
+// (den ville skrevet hele den lokale, kanskje utdaterte kopien). I stedet en MÅLRETTET update av bare kolonnen `utstyr` (samme mønster som
+// leveranseSettKalender), og o.utstyr i minnet endres først når skrivingen har lykkes: feiler den, står minnet urørt og neste synk prøver igjen.
+// Aldri mens noen står i tekstfeltet (ulagret skriving kunne gått tapt; neste opptegning tar det). Endres teksten mens den er bekreftet, nullstilles
+// bekreftelsen og detaljen tegnes på nytt (samme regel som su()); den nye runden finner ingen endring og skriver ikke igjen.
+// Høyst én skriving per ordre om gangen (_skalHaIGang): kommer en ny synk mens en skriving pågår, merkes ordren (_skalHaPaaNytt) og én ny runde
+// kjøres med den ferske tilstanden når skrivingen er ferdig. Uten dette kunne to update-er med ulikt innhold gå samtidig og lande i feil rekkefølge.
 const _skalHaLinje = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 function skalHaOnskedeLinjer(rader) {
   const ut = [];
   for (const r of rader || []) {
     if (!r || r.fjernet || r.rolle || r.kilde === 'ombygging') continue;
     const navn = _skalHaLinje(r.navn);
-    if (!navn) continue;
+    if (!navn || /^\d+$/.test(navn)) continue;
     const linje = r.antall > 1 ? `${navn} × ${r.antall}` : navn;
     if (!ut.includes(linje)) ut.push(linje);
   }
   return ut;
 }
-function synkSkalHaFraProduktliste(o, rader) {
+const _skalHaIGang = new Set();
+const _skalHaPaaNytt = new Set();
+const _skalHaFeilVist = new Set();
+// Gir true hvis noe ble lagret. Kaster aldri.
+async function synkSkalHaFraProduktliste(o, rader) {
   if (!o || !erNyProduktliste(o) || !o.utstyr || typeof o.utstyr !== 'object') return false;
+  if (_skalHaIGang.has(o.id)) { _skalHaPaaNytt.add(o.id); return false; }
   const felt = document.getElementById('skalHaInput_' + o.id);
   if (felt && document.activeElement === felt) return false;
   const onsket = skalHaOnskedeLinjer(rader);
   const forrige = Array.isArray(o.utstyr.skalHaAuto) ? o.utstyr.skalHaAuto.map(_skalHaLinje).filter(Boolean) : [];
-  const linjer = String(o.utstyr.skalHa || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const forTekst = String(o.utstyr.skalHa || '');
+  const linjer = forTekst.split('\n').map(l => l.trim()).filter(Boolean);
   // Automatiske linjer som ikke lenger er på lista fjernes (en hånd-linje med samme tekst står aldri i forrige).
   const nyeLinjer = linjer.filter(l => !(forrige.includes(l) && !onsket.includes(l)));
   const auto = [];
@@ -288,14 +301,44 @@ function synkSkalHaFraProduktliste(o, rader) {
   const nyTekst = nyeLinjer.join('\n');
   const tekstEndret = nyTekst !== linjer.join('\n');
   if (!tekstEndret && JSON.stringify(auto) === JSON.stringify(forrige)) return false;
+  if (!db) return false;
   const nullstill = tekstEndret && !!o.utstyr.skalHaBekreftet;
-  if (tekstEndret) o.utstyr.skalHa = nyTekst;
-  o.utstyr.skalHaAuto = auto;
-  if (nullstill) o.utstyr.skalHaBekreftet = false;
-  save(o.id);
-  if (felt && tekstEndret) felt.value = nyTekst;
-  if (nullstill && activeOrdreId === o.id) buildOrdreDetail();
-  return true;
+  const endring = { skalHaAuto: auto };
+  if (tekstEndret) endring.skalHa = nyTekst;
+  if (nullstill) endring.skalHaBekreftet = false;
+  _skalHaIGang.add(o.id);
+  let lagret = false, tegnPaaNytt = false;
+  try {
+    ignorerRealtimeFor.add(o.id);
+    setTimeout(() => ignorerRealtimeFor.delete(o.id), 10000);
+    let error = null;
+    try { ({ error } = await db.from('ordrer').update({ utstyr: { ...o.utstyr, ...endring } }).eq('id', o.id)); } catch (e) { error = e; }
+    if (error) {
+      // Én beskjed per ordre til en skriving lykkes (synken kjører ved hver opptegning, f.eks. uten nett).
+      if (!_skalHaFeilVist.has(o.id)) { _skalHaFeilVist.add(o.id); visToast('Kunne ikke lagre utstyrslista: ' + (error.message || error)); }
+    } else if (String(o.utstyr.skalHa || '') !== forTekst) {
+      // Teksten ble endret lokalt mens skrivingen gikk (den som endret den lagrer selv): ikke skriv over minnet, ta en ny runde etterpå.
+      _skalHaPaaNytt.add(o.id);
+    } else {
+      Object.assign(o.utstyr, endring);
+      lagret = true;
+      _skalHaFeilVist.delete(o.id);
+      const feltNa = document.getElementById('skalHaInput_' + o.id);
+      if (feltNa && tekstEndret && document.activeElement !== feltNa) feltNa.value = nyTekst;
+      tegnPaaNytt = nullstill && activeOrdreId === o.id;
+    }
+  } catch (e) {
+    console.error('synkSkalHaFraProduktliste:', e);
+  } finally {
+    _skalHaIGang.delete(o.id);
+  }
+  // Etter at vernet er fjernet: omtegningen kjører synken igjen (renderOrdreLagerbruk), og den skal finne alt lagret, ikke bli merket for en ny runde.
+  if (tegnPaaNytt) { try { buildOrdreDetail(); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); } }
+  if (_skalHaPaaNytt.delete(o.id)) {
+    const fersk = (S.ordrer || []).find(x => x.id === o.id) || o;
+    try { if (await synkSkalHaFraProduktliste(fersk, beregnSkalPaaBilen(fersk).rader)) lagret = true; } catch (e) { console.error('synkSkalHaFraProduktliste:', e); }
+  }
+  return lagret;
 }
 
 // ── Synk: fakturalinjer og lager ────────────────────────────────────────────────────────────────────────────────
@@ -334,10 +377,9 @@ async function synkProduktliste(o, { tillatAngre = false } = {}) {
   for (const nr of lagtTilForHand) {
     if (!rader.some(r => r.nr === nr)) await oppdaterFikenLinjeForOppskrift(nr, false, o.id);
   }
-  // «Skal ha etter visning» følger lista (se synkSkalHaFraProduktliste over). ETTER fakturalinjene: lagringen er en full save() som også skriver
-  // fiken_linjer fra den lokale kopien, så den skal sendes når RPC-ene over har oppdatert kopien. Regnes ut på nytt her (synkront), ikke fra `rader`
-  // fra toppen: ordren kan ha endret seg mens RPC-ene gikk.
-  try { synkSkalHaFraProduktliste(o, beregnSkalPaaBilen(o).rader); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); }
+  // «Skal ha etter visning» følger lista (se synkSkalHaFraProduktliste over: målrettet update av bare `utstyr`, aldri full save()). Regnes ut på
+  // nytt her, ikke fra `rader` fra toppen: ordren kan ha endret seg mens RPC-ene over gikk.
+  try { await synkSkalHaFraProduktliste(o, beregnSkalPaaBilen(o).rader); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); }
   // 2) Lager, bare etter ankomst.
   if (!erAnkommet(o) || !db) return;
   const onsket = new Map();

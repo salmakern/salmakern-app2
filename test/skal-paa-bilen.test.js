@@ -1019,16 +1019,27 @@ describe('KIA EV9: 180-spørsmål og dørbeskyttere', () => {
 // etter visning»). Alle aktive rader unntatt selve ombyggingen (rolle satt), med «× N» når antall > 1. Hånd-tekst røres aldri.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
-  let lagringer, omtegninger, ektSave, ektBuild, ektAktiv;
+  // Synken skriver med en MÅLRETTET update av bare kolonnen `utstyr` (aldri full save(), gjennomgangen 27.11). `kall` er hver slik update;
+  // `kall.length` er antallet lagringer. `saveKall` skal alltid være 0. `svarUpdate` avgjør svaret (kan være et løfte testen selv løser).
+  let kall, svarUpdate, saveKall, omtegninger, ektSave, ektBuild, ektAktiv, ektToast, toaster;
   beforeEach(() => {
-    lagringer = 0; omtegninger = 0;
-    ektSave = sandbox.save; ektBuild = sandbox.buildOrdreDetail; ektAktiv = sandbox.document.activeElement;
-    sandbox.save = () => { lagringer++; };
+    kall = []; saveKall = 0; omtegninger = 0; toaster = [];
+    svarUpdate = () => ({ data: null, error: null });
+    ektSave = sandbox.save; ektBuild = sandbox.buildOrdreDetail; ektAktiv = sandbox.document.activeElement; ektToast = sandbox.visToast;
+    sandbox.save = () => { saveKall++; };
+    sandbox.visToast = (t) => { toaster.push(t); };
     sandbox.buildOrdreDetail = () => { omtegninger++; };
+    const ektFrom = fake.db.from;
+    fake.db.from = (t) => (t === 'ordrer'
+      ? { update: (p) => ({ eq: (k, v) => { kall.push({ p: JSON.parse(JSON.stringify(p)), k, v }); return Promise.resolve(svarUpdate({ p, k, v })); } }) }
+      : ektFrom(t));
     S.lagerOppskrifter = [...OPPSKRIFTER.map((r) => ({ ...r })), { ...DOR }];
     S.lagervarer.push({ id: 'vare_T4', navn: 'TEST Dørbeskytter', antall: 10, enhet: 'stk' });
   });
-  afterEach(() => { sandbox.save = ektSave; sandbox.buildOrdreDetail = ektBuild; sandbox.document.activeElement = ektAktiv; });
+  afterEach(() => {
+    expect(saveKall).toBe(0); // synken gjør aldri en full save()
+    sandbox.save = ektSave; sandbox.buildOrdreDetail = ektBuild; sandbox.document.activeElement = ektAktiv; sandbox.visToast = ektToast;
+  });
   const synk = (o) => sandbox.synkProduktliste(o);
   const skalHa = (o) => o.utstyr.skalHa;
   const UTEN_PANORAMA = { utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: false }] };
@@ -1039,12 +1050,12 @@ describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
     await synk(o);
     expect(skalHa(o)).toBe('Takluke');
     expect(o.utstyr.skalHaAuto).toEqual(['Takluke']);
-    expect(lagringer).toBe(1);
+    expect(kall.length).toBe(1);
     o.utstyrSjekkliste[0].ok = false;
     await synk(o);
     expect(skalHa(o)).toBe('');
     expect(o.utstyr.skalHaAuto).toEqual([]);
-    expect(lagringer).toBe(2);
+    expect(kall.length).toBe(2);
   });
 
   it('ombyggingsraden (Nytt/Brukt, Personbil) kommer aldri inn; dørbeskyttere (KIA EV9) gjør det', async () => {
@@ -1091,7 +1102,7 @@ describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
     const o = bil({ ...medPanorama(), utstyr: { skalHa: 'Hengerfeste avtalt\nTakluke\n  Ring kunden  ' } });
     await synk(o);
     expect(skalHa(o)).toBe('Hengerfeste avtalt\nTakluke\n  Ring kunden  '); // ingenting endret: «Takluke» sto der for hånd
-    expect(lagringer).toBe(0);
+    expect(kall.length).toBe(0);
     o.utstyrSjekkliste[0].ok = false;
     await synk(o);
     expect(skalHa(o)).toBe('Hengerfeste avtalt\nTakluke\n  Ring kunden  '); // hånd-linjen blir stående
@@ -1125,7 +1136,7 @@ describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
     await synk(o);
     expect(o.utstyr.skalHaBekreftet).toBe(true);
     expect(omtegninger).toBe(1);
-    expect(lagringer).toBe(1);
+    expect(kall.length).toBe(1);
   });
 
   it('gjeninntreden: buildOrdreDetail -> renderOrdreLagerbruk -> synkProduktliste finner ingen ny endring (ingen løkke, én lagring)', async () => {
@@ -1140,7 +1151,7 @@ describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
     } finally { sandbox.synkSkalHaFraProduktliste = ektSynkSkalHa; }
     expect(indreRunder).toBe(2); // den ytre runden og runden fra omtegningen
     expect(omtegninger).toBe(1);
-    expect(lagringer).toBe(1);
+    expect(kall.length).toBe(1);
     expect(skalHa(o)).toBe('For hånd\nTakluke');
     expect(o.utstyr.skalHaBekreftet).toBe(false);
   });
@@ -1150,31 +1161,125 @@ describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
     sandbox.document.activeElement = sandbox.document.getElementById('skalHaInput_' + o.id);
     await synk(o);
     expect(skalHa(o)).toBe('');
-    expect(lagringer).toBe(0);
+    expect(kall.length).toBe(0);
     sandbox.document.activeElement = ektAktiv;
     await synk(o);
     expect(skalHa(o)).toBe('Takluke');
     expect(sandbox.document.getElementById('skalHaInput_' + o.id).value).toBe('Takluke');
   });
 
-  it('en LEVERANSE og en GAMMEL ordre (fra før PRODUKTLISTE_FRA) røres ikke', async () => {
+  it('en LEVERANSE og en GAMMEL ordre (fra før PRODUKTLISTE_FRA) røres ikke (via synkProduktliste, den ekte inngangen)', async () => {
+    // Kontroll: med porten «på» ville samme gamle ordre fått Takluke (beviser at testen under faktisk avhenger av porten).
+    const kontroll = bil({ ...medPanorama(), created_at: '2026-11-10T08:00:00Z', utstyr: { skalHa: 'Gammel tekst' } });
+    await synk(kontroll);
+    expect(skalHa(kontroll)).toBe('Gammel tekst\nTakluke');
+    kall.length = 0;
     sandbox.erNyProduktliste = EKTE_GATE;
     const gammel = bil({ ...medPanorama(), created_at: '2026-11-10T08:00:00Z', utstyr: { skalHa: 'Gammel tekst' } });
     await synk(gammel);
-    expect(sandbox.synkSkalHaFraProduktliste(gammel, [{ nr: '501', navn: 'Takluke', kilde: 'sjekkliste' }])).toBe(false);
     expect(skalHa(gammel)).toBe('Gammel tekst');
     expect(gammel.utstyr).not.toHaveProperty('skalHaAuto');
-    const lev = bil({ ordretype: 'leveranse', leveranse: { merking: 'TEST' }, utstyr: { skalHa: '' } });
+    const lev = bil({ ordretype: 'leveranse', leveranse: { merking: 'TEST' }, utstyr: { skalHa: '' }, utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: true }] });
     await synk(lev);
-    expect(sandbox.synkSkalHaFraProduktliste(lev, [{ nr: '501', navn: 'Takluke', kilde: 'sjekkliste' }])).toBe(false);
     expect(skalHa(lev)).toBe('');
-    expect(lagringer).toBe(0);
+    expect(lev.utstyr).not.toHaveProperty('skalHaAuto');
+    expect(kall.length).toBe(0);
+  });
+
+  it('skriver med en målrettet update av bare `utstyr` på riktig ordre, markert i ignorerRealtimeFor, aldri save()', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: 'For hånd', hengerfeste: 'nei' } });
+    await synk(o);
+    expect(kall).toHaveLength(1);
+    expect(Object.keys(kall[0].p)).toEqual(['utstyr']);
+    expect(kall[0]).toMatchObject({ k: 'id', v: o.id, p: { utstyr: { skalHa: 'For hånd\nTakluke', skalHaAuto: ['Takluke'], hengerfeste: 'nei' } } });
+    expect(app.kjor(`ignorerRealtimeFor.has(${JSON.stringify(o.id)})`)).toBe(true);
+  });
+
+  it('feilet skriving: minnet er urørt, én beskjed, og neste synk prøver igjen (og lykkes)', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '', skalHaBekreftet: true } });
+    svarUpdate = () => ({ data: null, error: { message: 'TEST nettfeil' } });
+    await synk(o);
+    expect(kall).toHaveLength(1);
+    expect(skalHa(o)).toBe('');
+    expect(o.utstyr).not.toHaveProperty('skalHaAuto');
+    expect(o.utstyr.skalHaBekreftet).toBe(true);
+    expect(omtegninger).toBe(0);
+    expect(toaster).toEqual(['Kunne ikke lagre utstyrslista: TEST nettfeil']);
+    await synk(o); // feiler igjen: ingen ny beskjed
+    expect(kall).toHaveLength(2);
+    expect(toaster).toHaveLength(1);
+    svarUpdate = () => ({ data: null, error: null });
+    await synk(o);
+    expect(kall).toHaveLength(3);
+    expect(skalHa(o)).toBe('Takluke');
+    expect(o.utstyr.skalHaAuto).toEqual(['Takluke']);
+    expect(o.utstyr.skalHaBekreftet).toBe(false);
+    expect(omtegninger).toBe(1);
+  });
+
+  it('et unntak fra db stopper ikke resten av synkProduktliste (lagertrekket kjører fortsatt)', async () => {
+    const o = bil({ ...medPanorama(), ordre_status: 'ikke_paabegynt', utstyr: { skalHa: '' } });
+    svarUpdate = () => { throw new Error('TEST kastet'); };
+    await synk(o);
+    expect(skalHa(o)).toBe('');
+    expect(fake.rpc.some((k) => k.navn === 'lager_trekk_oppskrift')).toBe(true);
+  });
+
+  it('to synk-er av samme ordre samtidig: høyst én skriving om gangen, og den siste tilstanden blir lagret til slutt', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '' } });
+    const ventende = []; let iGang = 0; let maks = 0;
+    svarUpdate = () => { iGang++; maks = Math.max(maks, iGang); return new Promise((r) => { ventende.push(() => { iGang--; r({ data: null, error: null }); }); }); };
+    const tikk = async (n) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+    const forste = synk(o);
+    await tikk(3);
+    expect(kall).toHaveLength(1);
+    // Mens den første skrivingen henger: en rettelse legger til 503, og en ny synk kjører.
+    o.produktRettelser = [rett('legg_til', '503', { navn: 'Heldekkende gulv' })];
+    const andre = synk(o);
+    await tikk(3);
+    expect(kall).toHaveLength(1); // den andre sender ikke en update ved siden av (ordren er merket for en ny runde)
+    ventende.shift()();
+    await tikk(5);
+    expect(kall).toHaveLength(2);
+    ventende.shift()();
+    await forste; await andre;
+    expect(maks).toBe(1);
+    expect(kall[1].p.utstyr.skalHa).toBe('Takluke\nHeldekkende gulv');
+    expect(skalHa(o)).toBe('Takluke\nHeldekkende gulv');
+    expect(o.utstyr.skalHaAuto).toEqual(['Takluke', 'Heldekkende gulv']);
+  });
+
+  it('teksten endres lokalt mens skrivingen går: minnet overskrives ikke, og en ny runde tar med den nye teksten', async () => {
+    const o = bil({ ...medPanorama(), utstyr: { skalHa: '' } });
+    const ventende = [];
+    svarUpdate = () => new Promise((r) => { ventende.push(() => r({ data: null, error: null })); });
+    const tikk = async (n) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+    const p = synk(o);
+    await tikk(3);
+    o.utstyr.skalHa = 'Skrevet nå';
+    ventende.shift()();
+    await tikk(5);
+    expect(skalHa(o)).toBe('Skrevet nå'); // ikke overskrevet med 'Takluke' fra første skriving
+    ventende.shift()();
+    await p;
+    expect(kall).toHaveLength(2);
+    expect(skalHa(o)).toBe('Skrevet nå\nTakluke');
+    expect(o.utstyr.skalHaAuto).toEqual(['Takluke']);
+  });
+
+  it('et produkt uten navn (navnet blir produktnummeret) kopieres aldri inn: en tall-linje ville blitt lest som fakturalinje', async () => {
+    expect(sandbox.skalHaOnskedeLinjer([{ nr: '599', navn: '599', kilde: 'manuell' }, { nr: '598', navn: ' 598 ', kilde: 'manuell' }, { nr: '597', navn: '597 Hylle', kilde: 'manuell' }])).toEqual(['597 Hylle']);
+    const o = bil({ utstyr: { skalHa: '' }, produkt_rettelser: [rett('legg_til', '599')] });
+    expect(sandbox.beregnSkalPaaBilen(o).rader.find((r) => r.nr === '599').navn).toBe('599');
+    await synk(o);
+    expect(skalHa(o)).toBe('');
+    expect(kall).toHaveLength(0);
   });
 
   it('ingen endring i lista = ingen lagring (vanlig opptegning)', async () => {
     const o = bil({ ...UTEN_PANORAMA, utstyr: { skalHa: 'Noe' } });
     await synk(o); await synk(o);
-    expect(lagringer).toBe(0);
+    expect(kall.length).toBe(0);
     expect(skalHa(o)).toBe('Noe');
   });
 });

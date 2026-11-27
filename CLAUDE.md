@@ -899,22 +899,31 @@ sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bil
   selve ombyggingen (rad med `rolle` ombygging/personbil/Lafinto, eller `kilde` 'ombygging'), altså sjekkliste-, bestilling- (portal og e-post),
   manuell- og deler-rader (dørbeskyttere på EV9); «Navn × N» når antall > 1 (som raden viser). **Bevisst forskjell fra det gamle systemet:** ingen
   per-modell-unntak (de gamle `*_PUNKT_PRODUKTNUMMER`-koblingene som ikke skulle i feltet), én regel for alle modeller.
-  - **Full avstemming hver gang** mot `o.utstyr.skalHaAuto` (ny nøkkel i den eksisterende jsonb-kolonnen `utstyr`, skrevet av `save()` som resten av
-    `utstyr`; ingen migrasjon): linjene automatikken har lagt inn selv mens produktet står på lista. Bare de fjernes igjen når produktet går ut
-    (f.eks. et sjekklistepunkt som hukes av igjen uten rettelse). **Hånd-tekst røres aldri**, heller ikke en hånd-linje med samme tekst som et produkt
-    (den blir aldri «tatt», så den fjernes aldri). En automatisk linje som noen sletter for hånd beholdes i `skalHaAuto` og legges ikke inn igjen før
+  - **Full avstemming hver gang** mot `o.utstyr.skalHaAuto` (ny nøkkel i den eksisterende jsonb-kolonnen `utstyr`, skrevet av synken selv og ellers av
+    `save()` som resten av `utstyr`; ingen migrasjon): linjene automatikken har lagt inn selv mens produktet står på lista. Bare de fjernes igjen når produktet går ut
+    (f.eks. et sjekklistepunkt som hukes av igjen uten rettelse). **Hånd-tekst blir stående**, også en hånd-linje med samme tekst som et produkt
+    (den blir aldri «tatt», så den fjernes aldri). Formatet kan likevel bli ryddet når synken skriver feltet: mellomrom foran/bak hver linje trimmes og
+    tomme linjer forsvinner (som den gamle `oppdaterSkalHaForOppskrift` alltid har gjort). Et navn som bare er et tall (et produkt uten navn får
+    nummeret som navn) kopieres aldri inn: `hentFikenLinjerFraUtstyr` leser tall-linjer i feltet som produktnumre og ville laget en ekstra fakturalinje. En automatisk linje som noen sletter for hånd beholdes i `skalHaAuto` og legges ikke inn igjen før
     produktet har vært borte fra lista og kommer tilbake (ellers ville appen kjempet mot den ansatte).
-  - **Skriving:** ÉN `save()` per synk, og bare når teksten eller `skalHaAuto` faktisk endret seg (en vanlig opptegning lagrer ingenting). Kjøres ETTER
-    fakturalinje-RPC-ene i `synkProduktliste` (full `save()` skriver også `fiken_linjer` fra den lokale kopien) og regner lista ut på nytt der.
-    Ingen skriving mens tekstfeltet `skalHaInput_<id>` har fokus (ulagret skriving ville gått tapt; neste opptegning tar det). Endres teksten mens
+  - **Skriving (rettet etter gjennomgangen 27.11):** aldri `save()`: synken kjører ved HVER opptegning, også når noen bare åpner ordren, og en full
+    `save()` ville skrevet hele den lokale (kanskje utdaterte) kopien. I stedet en MÅLRETTET `update({ utstyr })` på ordren, med `ignorerRealtimeFor`
+    (samme mønster som `leveranseSettKalender`), og bare når teksten eller `skalHaAuto` faktisk endret seg (en vanlig opptegning lagrer ingenting).
+    `o.utstyr` i minnet endres FØRST når skrivingen har lykkes; feiler den, står minnet urørt, det kommer én beskjed per ordre («Kunne ikke lagre
+    utstyrslista: …»), og neste synk prøver igjen. Høyst én skriving per ordre om gangen (`_skalHaIGang`): en synk som kommer mens en skriving pågår,
+    merker ordren (`_skalHaPaaNytt`), og én ny runde med fersk tilstand kjøres når den første er ferdig. Er teksten endret lokalt mens skrivingen
+    gikk, overskrives minnet ikke (ny runde i stedet). Kjent: `update` sender hele `utstyr`-objektet fra den lokale kopien (de andre nøklene også),
+    så en kollegas samtidige endring av et ANNET utstyrsfelt i samme sekund kan overskrives; det er det samme `save()` alltid har gjort med
+    hele raden, bare smalere. Regnes ut på nytt etter fakturalinje-RPC-ene i `synkProduktliste`. Ingen skriving mens tekstfeltet `skalHaInput_<id>` har fokus (ulagret skriving ville gått tapt; neste opptegning tar det). Endres teksten mens
     «Utstyr bekreftet klargjort» er på, nullstilles bekreftelsen og detaljen tegnes på nytt (samme regel som `su()`, Henrik 2026-10-08); den nye runden
-    (buildOrdreDetail → renderOrdreLagerbruk → synkProduktliste) finner ingen endring og lagrer ikke igjen (testet).
+    (buildOrdreDetail → renderOrdreLagerbruk → synkProduktliste) finner ingen endring og lagrer ikke igjen (testet; omtegningen skjer etter at vernet er fjernet).
   - Gjelder bare `erNyProduktliste(o)`: eldre ordrer og leveranser er urørt (gamle `oppdaterSkalHaForOppskrift` som før). **Ved første opptegning etter
     utrulling** får hver aktiv ordre med «Skal på bilen» navnene inn (én lagring per ordre som åpnes; ordrer med bekreftet utstyr mister bekreftelsen hvis
     noe kommer til). **Kjent:** en bekreftet portal-ordre har fra før portal-navnene i feltet (`leggTilPortalUtstyrLinjer`, også ombyggingsvarianten);
     de regnes som hånd-tekst og blir stående, og en bestilt linje med antall > 1 får i tillegg «Navn × N».
   - `sw.js` CACHE v109 (v108 er brukt av grenen `henger/monteringsveiledning`). Vakt: describe «Skal ha etter visning» følger «Skal på bilen» i
-    `test/skal-paa-bilen.test.js` (12 tester; 11 feiler mot koden fra før). **Ikke sett i en innlogget nettleser.**
+    `test/skal-paa-bilen.test.js` (18 tester; alle feiler mot koden før dette arbeidet, og vernene er mutasjonssjekket: samtidighetsvernet, tall-sperren,
+    «tekst endret under skriving» og feil-grenen fanges hver for seg). **Ikke sett i en innlogget nettleser.**
 
 ## «Kun ekstrautstyr (ingen ombygging)» på bil-ordrer (2026-11-17; enklere ordre og fem statuser 2026-11-19; UTRULLET 2026-11-19 sammen med «Hengerfeste først», commit `f0ca5e8`, `sw.js` v101)
 
