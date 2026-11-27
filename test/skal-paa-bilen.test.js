@@ -1283,3 +1283,116 @@ describe('«Skal ha etter visning» følger «Skal på bilen»', () => {
     expect(skalHa(o)).toBe('Noe');
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// Den målrettede utstyr-skrivingen og save()-køen (_saveKo i core.js) (27.11, den uavhengige gjennomgangen): toggleUtstyrPunkt og sfOmbygging kaller
+// save(id) og RETT etter synkProduktliste i samme synkrone blokk. save() sender raden med den GAMLE utstyr-verdien med en gang; landet den ETTER den
+// målrettede skrivingen, sto den gamle verdien igjen i databasen. Her med den EKTE save()/sendLagring og en falsk database der testen selv bestemmer
+// rekkefølgen svarene lander i, alltid den verste: står både en update og en upsert ute, lander update-en først. Testen sjekker SLUTTRESULTATET i den
+// falske databasen, ikke bare at en ekstra save() ble kalt.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+describe('«Skal ha»-skrivingen koordineres med save()-køen (ingen gammel utstyr-verdi lander sist)', () => {
+  let dbRad, ute, landet, ektToast;
+  const kopi = (x) => JSON.parse(JSON.stringify(x));
+  const tikk = async (n = 5) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
+  beforeEach(() => {
+    ute = []; landet = [];
+    ektToast = sandbox.visToast;
+    const ektFrom = fake.db.from;
+    // Hver forespørsel tar en kopi av innholdet NÅR den sendes (som supabase-js, som serialiserer ved sending), og endrer dbRad først når den lander.
+    const send = (type, utstyr) => new Promise((ok) => { const sendt = kopi(utstyr); ute.push({ type, utstyr: sendt, land: () => { dbRad.utstyr = kopi(sendt); landet.push(type); ok({ data: null, error: null }); } }); });
+    fake.db.from = (t) => (t === 'ordrer'
+      ? {
+        upsert: (p) => send('upsert', p.utstyr),
+        update: (p) => ({ eq: () => send('update', p.utstyr) }),
+      }
+      : ektFrom(t));
+  });
+  // Lander det som fortsatt er ute (en test som feiler midt i skal ikke la en skriving henge og smitte neste test).
+  afterEach(async () => { sandbox.visToast = ektToast; try { await landAlt(); } catch { /* rydding */ } });
+  // Lander alt som er ute, én om gangen, i verste rekkefølge (update før upsert), til ingenting er ute lenger.
+  async function landAlt() {
+    for (let runde = 0; runde < 50; runde++) {
+      await tikk();
+      if (!ute.length) return;
+      const i = ute.findIndex((x) => x.type === 'update');
+      ute.splice(i >= 0 ? i : 0, 1)[0].land();
+    }
+    throw new Error('landet aldri ferdig');
+  }
+  const start = (over) => {
+    const o = bil({ utstyr_sjekkliste: [{ punkt: 'Panorama glasstak', ok: false }], ...over });
+    dbRad = { utstyr: kopi(o.utstyr) };
+    return o;
+  };
+
+  it('toggleUtstyrPunkt (save(id) og så synkProduktliste i samme blokk): databasen ender med den NYE «Skal ha»-teksten', async () => {
+    const o = start({ utstyr: { skalHa: 'For hånd', skalHaBekreftet: true } });
+    sandbox.toggleUtstyrPunkt(o.id, 0); // huker av Panorama glasstak: Takluke kommer på lista
+    expect(ute.map((x) => x.type)).toEqual(['upsert']);
+    expect(ute[0].utstyr.skalHa).toBe('For hånd'); // lagringen bar den gamle verdien
+    await landAlt();
+    expect(o.utstyr.skalHa).toBe('For hånd\nTakluke');
+    expect(dbRad.utstyr.skalHa).toBe('For hånd\nTakluke');
+    expect(dbRad.utstyr.skalHaAuto).toEqual(['Takluke']);
+    expect(dbRad.utstyr.skalHaBekreftet).toBe(false);
+    expect(landet[0]).toBe('upsert'); // den fulle lagringen ble ventet ut før update-en ble sendt
+    expect(landet).toContain('update');
+  });
+
+  it('save(id) og synk i samme synkrone blokk, uten noe annet databasekall imellom: den målrettede skrivingen venter på lagringen', async () => {
+    const o = start({ utstyr: { skalHa: '' }, produkt_rettelser: [rett('legg_til', '503', { navn: 'Heldekkende gulv' })] });
+    // Fakturalinjen for 503 finnes allerede: synkProduktliste har ingen RPC å vente på før «Skal ha»-synken.
+    o.fikenLinjer = [{ id: 'l1', produktnummer: '503', antall: 1 }];
+    const rpcFor = fake.rpc.length;
+    sandbox.save(o.id);
+    const p = sandbox.synkSkalHaFraProduktliste(o, sandbox.beregnSkalPaaBilen(o).rader);
+    expect(ute.map((x) => x.type)).toEqual(['upsert']); // update-en er IKKE sendt ved siden av lagringen
+    expect(ute[0].utstyr.skalHa).toBe(''); // lagringen bar den gamle verdien
+    await landAlt();
+    expect(await p).toBe(true);
+    expect(landet).toEqual(['upsert', 'update']);
+    expect(dbRad.utstyr.skalHa).toBe('Heldekkende gulv');
+    expect(dbRad.utstyr.skalHaAuto).toEqual(['Heldekkende gulv']);
+    expect(fake.rpc.length).toBe(rpcFor);
+  });
+
+  it('save(id) kalt MENS den målrettede skrivingen er ute: én ekstra save() fra minnet retter opp, og databasen ender med den nye verdien', async () => {
+    const o = start({ utstyr: { skalHa: '' }, produkt_rettelser: [rett('legg_til', '503', { navn: 'Heldekkende gulv' })] });
+    o.fikenLinjer = [{ id: 'l1', produktnummer: '503', antall: 1 }];
+    const p = sandbox.synkSkalHaFraProduktliste(o, sandbox.beregnSkalPaaBilen(o).rader);
+    expect(ute.map((x) => x.type)).toEqual(['update']);
+    o.utstyr.hengerfeste = 'hengerfeste';
+    sandbox.save(o.id); // f.eks. et annet utstyrsfelt som lagres: sendes med en gang med den gamle «Skal ha»
+    expect(ute.map((x) => x.type)).toEqual(['update', 'upsert']);
+    expect(ute[1].utstyr.skalHa).toBe('');
+    await landAlt();
+    await p;
+    expect(landet).toEqual(['update', 'upsert', 'upsert']); // den gamle lagringen landet sist av de to, så kom oppryddingen
+    expect(dbRad.utstyr.skalHa).toBe('Heldekkende gulv');
+    expect(dbRad.utstyr.skalHaAuto).toEqual(['Heldekkende gulv']);
+    expect(dbRad.utstyr.hengerfeste).toBe('hengerfeste');
+  });
+
+  it('ingen lagring av ordren i nærheten (det vanlige): bare den målrettede skrivingen, ingen ekstra save()', async () => {
+    const o = start({ utstyr: { skalHa: '' }, produkt_rettelser: [rett('legg_til', '503', { navn: 'Heldekkende gulv' })] });
+    o.fikenLinjer = [{ id: 'l1', produktnummer: '503', antall: 1 }];
+    const p = sandbox.synkSkalHaFraProduktliste(o, sandbox.beregnSkalPaaBilen(o).rader);
+    await landAlt();
+    expect(await p).toBe(true);
+    expect(landet).toEqual(['update']);
+    expect(dbRad.utstyr.skalHa).toBe('Heldekkende gulv');
+  });
+
+  it('teksten endres for hånd (su: save) mens skrivingen er ute: databasen ender med hånd-teksten pluss produktet', async () => {
+    const o = start({ utstyr: { skalHa: '' }, produkt_rettelser: [rett('legg_til', '503', { navn: 'Heldekkende gulv' })] });
+    o.fikenLinjer = [{ id: 'l1', produktnummer: '503', antall: 1 }];
+    const p = sandbox.synkSkalHaFraProduktliste(o, sandbox.beregnSkalPaaBilen(o).rader);
+    sandbox.su(o.id, 'skalHa', 'Skrevet nå');
+    await landAlt();
+    await p;
+    expect(o.utstyr.skalHa).toBe('Skrevet nå\nHeldekkende gulv');
+    expect(dbRad.utstyr.skalHa).toBe('Skrevet nå\nHeldekkende gulv');
+    expect(dbRad.utstyr.skalHaAuto).toEqual(['Heldekkende gulv']);
+  });
+});

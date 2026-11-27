@@ -280,10 +280,36 @@ function skalHaOnskedeLinjer(rader) {
 const _skalHaIGang = new Set();
 const _skalHaPaaNytt = new Set();
 const _skalHaFeilVist = new Set();
+// Koordinering mot save()-køen (_saveKo i core.js; 27.11, funnet i den uavhengige gjennomgangen): toggleUtstyrPunkt og sfOmbygging kaller save(id)
+// og RETT etter synkProduktliste. save() bygger raden med den GAMLE o.utstyr og sender med en gang, og uten koordinering kunne den fulle lagringen
+// lande ETTER den målrettede skrivingen og stille skrive den gamle utstyr-verdien tilbake. Derfor: (1) er en lagring av ordren på vei eller i kø,
+// ventes den ut først, og alt regnes ut på nytt etterpå; (2) ble save() kalt for ordren mens den målrettede skrivingen gikk (telleren `kall`), eller
+// var køen fortsatt opptatt da den startet (en lagring som har hengt i over 30 s), kjøres ÉN save() til etter at minnet er oppdatert: den leser o på
+// nytt når den sendes og legger seg bak de andre i køen, så den riktige verdien lander sist. Ellers (det vanlige) ingen ekstra save().
+const _saveKoFor = (id) => (typeof _saveKo === 'object' && _saveKo ? _saveKo[id] : null) || null;
+const _saveKoOpptatt = (id) => { const st = _saveKoFor(id); return !!(st && (st.pagar || st.ventende)); };
+const _saveKoKall = (id) => { const st = _saveKoFor(id); return st ? (st.kall || 0) : 0; };
+async function _ventPaaSaveKo(id) {
+  for (let i = 0; i < 10 && _saveKoOpptatt(id); i++) {
+    const st = _saveKoFor(id);
+    const p = Promise.resolve(st.ventende || st.pagar).then(() => {}, () => {});
+    let t;
+    await Promise.race([p, new Promise(ok => { t = setTimeout(ok, 30000); })]);
+    clearTimeout(t);
+  }
+}
 // Gir true hvis noe ble lagret. Kaster aldri.
 async function synkSkalHaFraProduktliste(o, rader) {
   if (!o || !erNyProduktliste(o) || !o.utstyr || typeof o.utstyr !== 'object') return false;
   if (_skalHaIGang.has(o.id)) { _skalHaPaaNytt.add(o.id); return false; }
+  if (_saveKoOpptatt(o.id)) {
+    _skalHaIGang.add(o.id);
+    try { await _ventPaaSaveKo(o.id); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); } finally { _skalHaIGang.delete(o.id); }
+    _skalHaPaaNytt.delete(o.id); // runden under bruker uansett den ferske tilstanden
+    o = (S.ordrer || []).find(x => x.id === o.id) || o;
+    if (!erNyProduktliste(o) || !o.utstyr || typeof o.utstyr !== 'object') return false;
+    rader = beregnSkalPaaBilen(o).rader;
+  }
   const felt = document.getElementById('skalHaInput_' + o.id);
   if (felt && document.activeElement === felt) return false;
   const onsket = skalHaOnskedeLinjer(rader);
@@ -307,12 +333,18 @@ async function synkSkalHaFraProduktliste(o, rader) {
   if (tekstEndret) endring.skalHa = nyTekst;
   if (nullstill) endring.skalHaBekreftet = false;
   _skalHaIGang.add(o.id);
-  let lagret = false, tegnPaaNytt = false;
+  let lagret = false, tegnPaaNytt = false, rettOppMedSave = false;
   try {
     ignorerRealtimeFor.add(o.id);
     setTimeout(() => ignorerRealtimeFor.delete(o.id), 10000);
+    // Synkront fram til update-en er sendt: ingen save() kan komme mellom målingen og sendingen.
+    const koOpptattVedStart = _saveKoOpptatt(o.id);
+    const kallVedStart = _saveKoKall(o.id);
     let error = null;
     try { ({ error } = await db.from('ordrer').update({ utstyr: { ...o.utstyr, ...endring } }).eq('id', o.id)); } catch (e) { error = e; }
+    // Skrivingen lyktes, men en full lagring av ordren kan ha landet etter den med en eldre utstyr-verdi: rett opp med én save() fra minnet
+    // (under, etter at minnet er oppdatert). Feilet skrivingen, var det ingenting å overskrive.
+    rettOppMedSave = !error && (koOpptattVedStart || _saveKoKall(o.id) !== kallVedStart);
     if (error) {
       // Én beskjed per ordre til en skriving lykkes (synken kjører ved hver opptegning, f.eks. uten nett).
       if (!_skalHaFeilVist.has(o.id)) { _skalHaFeilVist.add(o.id); visToast('Kunne ikke lagre utstyrslista: ' + (error.message || error)); }
@@ -332,6 +364,8 @@ async function synkSkalHaFraProduktliste(o, rader) {
   } finally {
     _skalHaIGang.delete(o.id);
   }
+  // Minnet er nå fasit (også når teksten ble endret lokalt under skrivingen): save() leser det når den sendes og står sist i køen.
+  if (rettOppMedSave) { try { save(o.id); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); } }
   // Etter at vernet er fjernet: omtegningen kjører synken igjen (renderOrdreLagerbruk), og den skal finne alt lagret, ikke bli merket for en ny runde.
   if (tegnPaaNytt) { try { buildOrdreDetail(); } catch (e) { console.error('synkSkalHaFraProduktliste:', e); } }
   if (_skalHaPaaNytt.delete(o.id)) {

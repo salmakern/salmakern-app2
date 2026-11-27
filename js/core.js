@@ -1721,7 +1721,9 @@ function planleggLocalSpeiling() {
 // ble sendt som to SAMTIDIGE forespørsler, og de kan lande i feil rekkefølge: den ELDSTE sto da igjen i databasen mens skjermen viste den nyeste, uten feilmelding. Målt mot den ekte databasen:
 // 2 av 12 par med 0 ms mellomrom endte med den gamle verdien. Nå sendes én lagring om gangen per ordre; kommer det flere mens én pågår, slås de sammen til ÉN oppfølger som leser den SIST lokale
 // tilstanden når den starter. (Målrettede RPC-er/oppdateringer er egne kall og berøres ikke.)
-const _saveKo = {}; // ordre-id -> { pagar: løftet for lagringen som er på vei, ventende: løftet for oppfølgeren }
+// `kall` telles opp ved hvert save() som skal sende noe (også når det legges i kø): synkSkalHaFraProduktliste (skal-paa-bilen.js) bruker det til å se
+// om en full lagring av ordren ble startet mens dens målrettede `utstyr`-skriving var på vei (2026-11-27).
+const _saveKo = {}; // ordre-id -> { pagar: løftet for lagringen som er på vei, ventende: løftet for oppfølgeren, kall: antall save() }
 function save(ordreId) {
   planleggLocalSpeiling();
   if (!db || !ordreId) return Promise.resolve(null);
@@ -1729,7 +1731,8 @@ function save(ordreId) {
   // Ignorer Realtime-oppdatering for denne ordren i 10 sekunder
   ignorerRealtimeFor.add(ordreId);
   setTimeout(()=>ignorerRealtimeFor.delete(ordreId), 10000);
-  const st = _saveKo[ordreId] || (_saveKo[ordreId] = { pagar: null, ventende: null });
+  const st = _saveKo[ordreId] || (_saveKo[ordreId] = { pagar: null, ventende: null, kall: 0 });
+  st.kall = (st.kall || 0) + 1;
   if (!st.pagar) return sendLagring(ordreId, st);
   // Oppfølgeren starter når den pågående er ferdig (også etter en feil), men senest etter 30 s: en forespørsel som henger (mobilnett) skal ikke stoppe alle senere lagringer av ordren for alltid.
   if (!st.ventende) { const neste = () => { st.ventende = null; return sendLagring(ordreId, st); }; st.ventende = Promise.race([st.pagar, new Promise(ok => setTimeout(ok, 30000))]).then(neste, neste); }

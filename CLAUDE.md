@@ -917,6 +917,12 @@ sjekklista fylles ut; gamle ordrer beholder avkrysningen. Alt i `js/skal-paa-bil
     hele raden, bare smalere. Regnes ut på nytt etter fakturalinje-RPC-ene i `synkProduktliste`. Ingen skriving mens tekstfeltet `skalHaInput_<id>` har fokus (ulagret skriving ville gått tapt; neste opptegning tar det). Endres teksten mens
     «Utstyr bekreftet klargjort» er på, nullstilles bekreftelsen og detaljen tegnes på nytt (samme regel som `su()`, Henrik 2026-10-08); den nye runden
     (buildOrdreDetail → renderOrdreLagerbruk → synkProduktliste) finner ingen endring og lagrer ikke igjen (testet; omtegningen skjer etter at vernet er fjernet).
+  - **Koordinert med `save()`-køen (2026-11-27, andre gjennomgang):** `toggleUtstyrPunkt`/`sfOmbygging` kaller `save(id)` og rett etter `synkProduktliste`,
+    så den fulle lagringen (med den GAMLE `utstyr`) kunne lande etter den målrettede skrivingen og skrive den gamle verdien tilbake. Nå venter synken ut en
+    lagring som er på vei/i kø i `_saveKo` (og regner ut på nytt), og ble `save()` kalt for ordren MENS update-en var ute (ny teller `_saveKo[id].kall` i
+    `core.js`), eller var køen fortsatt opptatt etter 30 s venting, kjøres ÉN `save()` til fra minnet etter at det er oppdatert (står sist i køen). Ellers
+    ingen ekstra `save()`. Å utelate `utstyr` fra `sendLagring` er forkastet (`su()` lagrer «Skal ha» og resten av `utstyr` via `save()`). Vakt: describe
+    «Skal ha»-skrivingen koordineres med save()-køen i `test/skal-paa-bilen.test.js` (ekte `save()`, falsk database som lander svarene i verste rekkefølge).
   - Gjelder bare `erNyProduktliste(o)`: eldre ordrer og leveranser er urørt (gamle `oppdaterSkalHaForOppskrift` som før). **Ved første opptegning etter
     utrulling** får hver aktiv ordre med «Skal på bilen» navnene inn (én lagring per ordre som åpnes; ordrer med bekreftet utstyr mister bekreftelsen hvis
     noe kommer til). **Kjent:** en bekreftet portal-ordre har fra før portal-navnene i feltet (`leggTilPortalUtstyrLinjer`, også ombyggingsvarianten);
