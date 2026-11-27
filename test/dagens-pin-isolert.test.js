@@ -44,13 +44,15 @@ describe('dagens_pin skrives ALDRI av saveInnstillinger() - kun av saveDagensPin
     expect(upsert.rad).toHaveProperty('utstyr_maler');
     expect(upsert.rad).toHaveProperty('drivstoff_satser');
     expect(upsert.rad).toHaveProperty('biltilsyn_reisetider');
-    expect(upsert.rad).toHaveProperty('standardtider');
+    // standardtider skrives ikke lenger her (s09-027, 2026-11-25): egen RPC, se test/standardtid-egen-rutine.test.js.
+    expect(upsert.rad).not.toHaveProperty('standardtider');
   });
 
-  it('en urelatert lagring (f.eks. settStandardtid) skriver aldri dagens_pin', () => {
+  it('en urelatert lagring (f.eks. settStandardtid) skriver aldri dagens_pin (og bruker ikke lenger «lagre alt»)', () => {
+    db.rpc = (navn, args) => { kall.push({ type: 'rpc', navn, args }); return Promise.resolve({ data: null, error: null }); };
     app.kjor("settStandardtid('EV9','ombygging','120')");
-    const upsert = kall.find(k => k.type === 'upsert' && k.tabell === 'innstillinger');
-    expect(upsert.rad).not.toHaveProperty('dagens_pin');
+    expect(kall.some(k => k.type === 'upsert')).toBe(false);
+    expect(kall.find(k => k.type === 'rpc')).toEqual({ type: 'rpc', navn: 'sett_standardtid', args: { p_modell: 'EV9', p_ombygging_min: 120 } });
   });
 
   it('saveDagensPin() gjør et MÅLRETTET update med KUN dagens_pin', () => {

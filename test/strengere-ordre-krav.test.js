@@ -10,12 +10,15 @@ import vm from 'node:vm';
 // status. To ting er rettet samtidig (valgt av Henrik blant 4 forslag):
 //  1) De to kravene gjelder nå ved ETHVERT hopp til "Påbegynt" eller lenger, uansett hvilken status
 //     overgangen kommer FRA.
-//  2) Kravet er skjerpet: ALLE 6 ankomstbilder må være tatt (ikke bare ett), OG «Diagnose utført» må
-//     være krysset av.
-// Admin kan overstyre begge kravene, men bare med et bevisst, synlig valg (en confirm()-dialog som sier
-// nøyaktig hva som mangler) - aldri en stille bakvei. Se endreStatus() i js/oversikt-kalender.js.
+//  2) Kravet er skjerpet: ALLE 6 ankomstbilder må være tatt (ikke bare ett). Samme dag ble også
+//     «Diagnose utført» lagt til som et tredje krav her - men det er FJERNET IGJEN 2026-11-25
+//     (Henrik: «diagnose skal ikke være der», etter at en ansatt ble stoppet av det i praksis).
+//     Diagnose kan fortsatt krysses av på ordren og er fortsatt ett av tvangsflyt-kravene for å
+//     lukke ordren - det er bare denne ene statussjekken det ikke lenger inngår i.
+// Admin kan overstyre de gjenværende kravene, men bare med et bevisst, synlig valg (en confirm()-dialog
+// som sier nøyaktig hva som mangler) - aldri en stille bakvei. Se endreStatus() i js/oversikt-kalender.js.
 //
-// Se også test/ankomstdato-status.test.js (ansatt-/bilde-/diagnose-kravet isolert, fra "Ikke påbegynt")
+// Se også test/ankomstdato-status.test.js (ansatt-/bilde-kravet isolert, fra "Ikke påbegynt")
 // og test/kun-ekstrautstyr-visning.test.js (samspillet med «kun ekstrautstyr»-ordre sin egen statusliste).
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -100,8 +103,8 @@ describe('Kravene gjelder ved ETHVERT hopp til "Påbegynt" eller lenger, uansett
     expect(ordre.ordreStatus).toBe('paabegynt');
   });
 
-  it('Ikke påbegynt → Ikke veid (hopper FORBI Påbegynt, tidligere HELT uten kontroll) blokkeres når diagnose mangler', async () => {
-    await kjor('ikke_paabegynt', 'ikke_veid', { diagnose: false });
+  it('Ikke påbegynt → Ikke veid (hopper FORBI Påbegynt, tidligere HELT uten kontroll) blokkeres når bilder mangler', async () => {
+    await kjor('ikke_paabegynt', 'ikke_veid', { bilderAnkomst: [null,null,null,null,null,null] });
     expect(ordre.ordreStatus).toBe('ikke_paabegynt');
   });
 
@@ -115,13 +118,13 @@ describe('Kravene gjelder ved ETHVERT hopp til "Påbegynt" eller lenger, uansett
     expect(ordre.ordreStatus).toBe('paa_vei');
   });
 
-  it('allerede forbi Påbegynt (Klar for henting → Hentet) krever IKKE ansatt/bilder/diagnose på nytt', async () => {
-    await kjor('klar_henting', 'hentet', { ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null], diagnose: false });
+  it('allerede forbi Påbegynt (Klar for henting → Hentet) krever IKKE ansatt/bilder på nytt', async () => {
+    await kjor('klar_henting', 'hentet', { ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null] });
     expect(ordre.ordreStatus).toBe('hentet');
   });
 
   it('allerede forbi Påbegynt (Vist på biltilsynet → Klar for henting, bakover i rekkefølgen men fortsatt i sonen) krever heller ikke kravene på nytt', async () => {
-    await kjor('vist_biltilsyn', 'klar_henting', { ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null], diagnose: false });
+    await kjor('vist_biltilsyn', 'klar_henting', { ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null] });
     expect(ordre.ordreStatus).toBe('klar_henting');
   });
 
@@ -136,7 +139,7 @@ describe('Kravene gjelder ved ETHVERT hopp til "Påbegynt" eller lenger, uansett
   });
 });
 
-describe('Alle 6 ankomstbilder OG «Diagnose utført» kreves (skjerpet 2026-11-20)', () => {
+describe('Alle 6 ankomstbilder kreves (skjerpet 2026-11-20); diagnose kreves IKKE (fjernet igjen 2026-11-25)', () => {
   let sandbox, ordre;
   beforeEach(() => { sandbox = nyEnvironment(); settDbUtfall(sandbox, true); });
   function kjor(over = {}) {
@@ -149,33 +152,33 @@ describe('Alle 6 ankomstbilder OG «Diagnose utført» kreves (skjerpet 2026-11-
   it('1 av 6 bilder (den gamle "minst ett"-terskelen): fortsatt blokkert', async () => { await kjor({ bilderAnkomst: ['a',null,null,null,null,null] }); expect(ordre.ordreStatus).toBe('ikke_paabegynt'); });
   it('5 av 6 bilder: fortsatt blokkert', async () => { await kjor({ bilderAnkomst: ['a','b','c','d','e',null] }); expect(ordre.ordreStatus).toBe('ikke_paabegynt'); });
   it('6 av 6 bilder: går gjennom', async () => { await kjor({ bilderAnkomst: ['a','b','c','d','e','f'] }); expect(ordre.ordreStatus).toBe('paabegynt'); });
-  it('diagnose ikke utført: blokkert', async () => { await kjor({ diagnose: false }); expect(ordre.ordreStatus).toBe('ikke_paabegynt'); });
+  it('diagnose ikke utført: går gjennom likevel (kravet er fjernet 2026-11-25)', async () => { await kjor({ diagnose: false }); expect(ordre.ordreStatus).toBe('paabegynt'); });
   it('diagnose utført: går gjennom', async () => { await kjor({ diagnose: true }); expect(ordre.ordreStatus).toBe('paabegynt'); });
 
-  it('toasten lister ALLE manglende krav samtidig, ikke bare det første', async () => {
+  it('toasten lister manglende krav samtidig, ikke bare det første - og nevner aldri diagnose', async () => {
     const toasts = []; sandbox.visToast = (m) => toasts.push(m);
     await kjor({ ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null], diagnose: false });
     expect(ordre.ordreStatus).toBe('ikke_paabegynt');
     const t = toasts.join('|');
     expect(t).toContain('minst én ansatt er meldt på ordren');
     expect(t).toContain('alle 6 bilder fra ankomst er tatt');
-    expect(t).toContain('Diagnose utført');
+    expect(t).not.toContain('iagnose');
   });
 });
 
-describe('«Kun ekstrautstyr»: bare ansatt-kravet gjelder (ordren har verken bilder- eller diagnose-kort)', () => {
+describe('«Kun ekstrautstyr»: bare ansatt-kravet gjelder (ordren har ikke noe bilder-kort, og diagnose kreves uansett ikke lenger)', () => {
   let sandbox, ordre;
   beforeEach(() => { sandbox = nyEnvironment(); settDbUtfall(sandbox, true); });
 
   it('blokkeres av manglende ansatt, akkurat som en vanlig bil', async () => {
-    ordre = fullOrdre({ kunEkstrautstyr: true, ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null], diagnose: false });
+    ordre = fullOrdre({ kunEkstrautstyr: true, ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null] });
     sandbox._setS({ ordrer: [ordre] });
     await sandbox.endreStatus('ord_1', 'paabegynt');
     expect(ordre.ordreStatus).toBe('ikke_paabegynt');
   });
 
-  it('går gjennom med ansatt meldt på, selv uten bilder/diagnose (kortene finnes ikke)', async () => {
-    ordre = fullOrdre({ kunEkstrautstyr: true, bilderAnkomst: [null,null,null,null,null,null], diagnose: false });
+  it('går gjennom med ansatt meldt på, selv uten bilder (kortet finnes ikke)', async () => {
+    ordre = fullOrdre({ kunEkstrautstyr: true, bilderAnkomst: [null,null,null,null,null,null] });
     sandbox._setS({ ordrer: [ordre] });
     await sandbox.endreStatus('ord_1', 'paabegynt');
     expect(ordre.ordreStatus).toBe('paabegynt');
@@ -183,7 +186,7 @@ describe('«Kun ekstrautstyr»: bare ansatt-kravet gjelder (ordren har verken bi
 
   it('toasten for en «kun ekstrautstyr»-ordre nevner aldri bilder eller diagnose', async () => {
     const toasts = []; sandbox.visToast = (m) => toasts.push(m);
-    ordre = fullOrdre({ kunEkstrautstyr: true, ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null], diagnose: false });
+    ordre = fullOrdre({ kunEkstrautstyr: true, ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null] });
     sandbox._setS({ ordrer: [ordre] });
     await sandbox.endreStatus('ord_1', 'paabegynt');
     const t = toasts.join('|');
@@ -197,7 +200,7 @@ describe('Admin kan overstyre begge kravene, men bare med et bevisst, synlig val
   let sandbox, ordre;
   beforeEach(() => { sandbox = nyEnvironment(); settDbUtfall(sandbox, true); });
   function settOppMangelfull() {
-    ordre = fullOrdre({ ansatteSignert: [], diagnose: false });
+    ordre = fullOrdre({ ansatteSignert: [], bilderAnkomst: [null,null,null,null,null,null] });
     sandbox._setS({ ordrer: [ordre] });
     sandbox._setMe({ id: 1, navn: 'TEST - Admin', rolle: 'admin' });
   }
@@ -209,7 +212,7 @@ describe('Admin kan overstyre begge kravene, men bare med et bevisst, synlig val
     await sandbox.endreStatus('ord_1', 'paabegynt');
     expect(sporsmal).not.toBeNull();
     expect(sporsmal).toContain('minst én ansatt er meldt på ordren');
-    expect(sporsmal).toContain('Diagnose utført');
+    expect(sporsmal).toContain('alle 6 bilder fra ankomst er tatt');
     expect(ordre.ordreStatus).toBe('paabegynt');
   });
 

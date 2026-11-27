@@ -285,6 +285,49 @@ Deno.serve(async (req) => {
       return new Response('ok', { status: 200, headers: CORS_HEADERS })
     }
 
+    // Samlet PIN-sperre (migrasjon 20261125200000_pin_nodbrems.sql): sendes BARE fra databasen
+    // (_sikkerhet_push) når den automatiske 30-feil-sperren slår inn, og når en admin trekker eller
+    // opphever nødbremsen. Godtas kun som server-kall (riktig x-server-secret), ellers kunne enhver
+    // innlogget ansatt sende falske sikkerhetsvarsler til admin. Går bare til aktive admin-kontoer,
+    // ved nødbrems ikke til den som trakk/opphevet (de vet det allerede). NB: tom deltakerliste
+    // betyr «alle» i sendTilAbonnenter, så den sendes bare når det faktisk finnes mottakere.
+    if (payload.type === 'pin_global_sperre') {
+      let server = false
+      try { server = await erServerKall(req) } catch { server = false }
+      if (!server) {
+        console.log('pin_global_sperre avvist: ikke et server-kall')
+        return new Response('bare server', { status: 403, headers: CORS_HEADERS })
+      }
+      const hendelse = String(payload.hendelse ?? '')
+      const avId = Number.isInteger(payload.avId) ? payload.avId : null
+      const tekster: Record<string, { title: string, body: string }> = {
+        global_sperre: {
+          title: 'PIN-innlogging sperret',
+          body: '30 feil PIN-forsøk på 10 minutter - all PIN-innlogging er sperret i inntil 10 minutter (også for admin).',
+        },
+        nodbrems_pa: { title: 'Nødbrems trukket', body: 'All PIN-innlogging er stengt og alle økter er logget ut.' },
+        nodbrems_av: { title: 'Nødbrems opphevet', body: 'PIN-innlogging er åpnet igjen. Alle må sette ny PIN ved neste innlogging.' },
+      }
+      const tekst = tekster[hendelse]
+      if (!tekst) return new Response('ukjent hendelse', { status: 400, headers: CORS_HEADERS })
+      const { data: adminer, error: adminErr } = await supabase
+        .from('ansatte')
+        .select('id, navn')
+        .eq('rolle', 'admin')
+        .eq('aktiv', true)
+      if (adminErr) console.error('Henting av admin-liste feilet:', adminErr.message)
+      const av = (adminer ?? []).find((a: any) => a.id === avId)
+      const mottakere = (adminer ?? []).map((a: any) => a.id).filter((id: number) => hendelse === 'global_sperre' || id !== avId)
+      if (mottakere.length) {
+        await sendTilAbonnenter(supabase, [{
+          title: tekst.title,
+          body: av ? `${tekst.body} (${av.navn})` : tekst.body,
+          deltakerIder: mottakere,
+        }])
+      }
+      return new Response('ok', { status: 200, headers: CORS_HEADERS })
+    }
+
     // Kalles jevnlig av en cron-jobb (ikke fra klienten) - sjekker selv om noe er i ferd
     // til å skje, istedenfor å få beskjed om det. Kan sende flere ulike varsler i ett kall.
     if (payload.type === 'paaminnelser_sjekk') {

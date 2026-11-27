@@ -110,7 +110,17 @@
 // v105 - Strengere krav for å starte en ordre (gjelder alle hopp til Påbegynt/videre, krever alle 6 ankomstbilder + diagnose, admin kan overstyre); delt stasjonskonto (Booking Salmaker) krever posisjon innenfor verkstedets GPS-radius for å logge inn; lager: automatisk bestillingsforslag (bryter av som standard, ingen synlig endring før Henrik slår den på)
 // v106 - manglende Fiken-kontaktperson oppdages og løses ved fakturering (needsKontaktperson, ny modal); hardt stopp, ingen unnslippingsluke (Henriks ja, fjernet "Fortsett uten kontaktperson")
 // v107 - Fabrikantattest for Brukt Kjøretøy: «FABRIKANT 2»-raden heter nå «OMBYGGING» (gjelder alle modeller; Nytt Kjøretøy er uendret)
-const CACHE = 'salmakern-v109';
+// v108 - Hengerfeste-filter på Ordre-siden; Modul-System-logoen i headeren er større (28 -> 40 px)
+// v109 - Diagnose-kravet fra 2026-11-20 er fjernet igjen (Henrik 25.11: «diagnose skal ikke være der») - blokkerer ikke lenger overgangen til Påbegynt. Ansatt-/bildekravet er uendret
+// v110 - Fakturalinjer: en lagring som databasen avviser vises nå som feil, og skjermen rulles tilbake til det som faktisk er lagret (s90-20261104-6)
+// v111 - «Bilen er hentet»-e-posten sendes automatisk ved status Hentet; admin har en reserveknapp i Admin-ark når den ikke gikk ut
+// v112 - Hentet-e-postens avsendernavn er fast «Jan Børre Sigurdsen» (Henrik 25.11), ikke lenger den innloggede ansatte som utløste den
+// v113 - «+ Ny ordre»: modellvelger fra katalogen (portal_modell_kobling) som setter modellnøkkelen (portal_modell_slug) på ordren; en nøkkel valgt i appen fjernes hvis Merke/Modell endres til noe annet
+// v114 - Standardtider: egen lagring per modell (sett_standardtid, ikke «lagre alt»), og «Hent forslag fra kalkylen» med «Bruk» per modell
+// v115 - Ordrekortene: én kortbygger (ordreKortHTML) og én pille-komponent (statusPill) for alle merker; samme merker i Ordre-lista og begge Oversikt-listene; kant = statusfarge, ★ for prioritert, bestilt frakt som pille, dempet glød
+// v116 - PIN-nødbrems: admin kan stenge all PIN-innlogging og logge ut alle økter (Mer), tvungen ny PIN etter oppheving
+// v117 - «Skal på bilen»: produktnavnene kopieres nå automatisk inn i «Utstyr - Skal ha etter visning» (Henrik 27.11) - målrettet skriving av bare utstyr-kolonnen, koordinert med lagringskøen (_saveKo) så en vanlig lagring ikke kan lande i feil rekkefølge rundt den
+const CACHE = 'salmakern-v117';
 const BILDE_CACHE = 'salmakern-bilder-v1';
 const STATIC = [
   '/manifest.json',

@@ -116,7 +116,8 @@ begin
   end loop;
 
   -- Opprett TEST-ansatte med en ekte admins identitet som autorisasjon (kun lesing av admin-raden)
-  select jsonb_build_object('ansatt_id', id, 'session_token', coalesce(session_token, ''))::text into v_admin_claims
+  -- logget_inn_at er med siden 20261125200000_pin_nodbrems.sql: current_ansatt() godtar ikke lenger en økt uten claimet.
+  select jsonb_build_object('ansatt_id', id, 'session_token', coalesce(session_token, ''), 'logget_inn_at', now()::text)::text into v_admin_claims
   from public.ansatte where aktiv and rolle = 'admin' order by id limit 1;
   perform set_config('request.jwt.claims', v_admin_claims, true);
   perform public.opprett_ansatt(990011, 'TEST - innlogging A', 'ansatt', v_pin_a);
@@ -125,7 +126,7 @@ begin
   perform set_config('request.jwt.claims', '', true);
 
   c_fersk := jsonb_build_object('role', 'authenticated', 'sub', v_anon);
-  c_b := jsonb_build_object('role', 'authenticated', 'sub', v_anon, 'ansatt_id', 990012, 'session_token', 'TEST-tok-B');
+  c_b := jsonb_build_object('role', 'authenticated', 'sub', v_anon, 'ansatt_id', 990012, 'session_token', 'TEST-tok-B', 'logget_inn_at', now()::text);
 
   insert into _res(navn, ok, info) values ('T0 oppsettet: B har en gyldig ansatt-sesjon, en fersk sesjon har ingen', pg_temp._ca(c_b) = '990012:ansatt' and pg_temp._ca(c_fersk) = 'ingen', pg_temp._ca(c_b) || ' / ' || pg_temp._ca(c_fersk));
 
@@ -174,8 +175,8 @@ begin
 
   -- ===== Lengre PIN (6 sifre) og øktgrense (okt_maks_minutter/logget_inn_at) =====
   v := pg_temp._innlogg_detaljer(c_fersk, v_pin_a);
-  insert into _res(navn, ok, info) values ('T7 logg_inn_med_pin: 6-sifret PIN gir pin_kort=false, standard okt_maks_minutter=240, er_delt_stasjon=false',
-    v = 'ok:990011 kort=false okt=240 delt=false', v);
+  insert into _res(navn, ok, info) values ('T7 logg_inn_med_pin: 6-sifret PIN gir pin_kort=false, standard okt_maks_minutter=720 (12 t siden 18.11), er_delt_stasjon=false',
+    v = 'ok:990011 kort=false okt=720 delt=false', v);
 
   -- Legacy 4-sifret PIN kan ikke lenger FINNES i det hele tatt: CHECK-regelen ansatte_pin_seks_sifre
   -- (20261116200000_pin_seks_sifre_og_ordre_sletting_kun_admin.sql, kjørt 16.11) krever nøyaktig 6
@@ -206,15 +207,17 @@ begin
   -- current_ansatt()/hent_innlogget_ansatt(): samme øktgrense-betingelse begge steder.
   select session_token into v_tok from public.ansatte where id = 990011;
   c_gyldig := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok,'logget_inn_at',(now() - interval '1 minute')::text);
-  c_utlopt := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok,'logget_inn_at',(now() - interval '5 hours')::text);
+  c_utlopt := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok,'logget_inn_at',(now() - interval '13 hours')::text);
   c_uten_claim := jsonb_build_object('role','authenticated','sub',v_anon,'ansatt_id',990011,'session_token',v_tok);
 
-  insert into _res(navn, ok, info) values ('T9 current_ansatt(): en fersk (1 min) sesjon, godt innenfor 240 min-grensen, slipper gjennom',
+  insert into _res(navn, ok, info) values ('T9 current_ansatt(): en fersk (1 min) sesjon, godt innenfor 720 min-grensen, slipper gjennom',
     pg_temp._ca(c_gyldig) = '990011:ansatt', pg_temp._ca(c_gyldig));
-  insert into _res(navn, ok, info) values ('T10 current_ansatt(): en 5 timer gammel sesjon (over 240 min-grensen) avvises HELT (ikke bare sesjonsgjenoppretting)',
+  insert into _res(navn, ok, info) values ('T10 current_ansatt(): en 13 timer gammel sesjon (over 720 min-grensen) avvises HELT (ikke bare sesjonsgjenoppretting)',
     pg_temp._ca(c_utlopt) = 'ingen', pg_temp._ca(c_utlopt));
-  insert into _res(navn, ok, info) values ('T11 current_ansatt(): sesjon UTEN logget_inn_at-claim (fra FØR denne migreringen) slipper likevel gjennom - unngår å kaste ut alle eksisterende innlogginger med én gang',
-    pg_temp._ca(c_uten_claim) = '990011:ansatt', pg_temp._ca(c_uten_claim));
+  -- Snudd 25.11 (20261125200000_pin_nodbrems.sql): «manglende claim = ingen grense ennå» (12.11) er avsluttet; en økt uten
+  -- logget_inn_at (54 gamle innlogginger fra før 12.11) avvises nå både her og i hent_innlogget_ansatt().
+  insert into _res(navn, ok, info) values ('T11 current_ansatt(): sesjon UTEN logget_inn_at-claim (fra før 12.11) avvises (nødbrems-migrasjonen 25.11)',
+    pg_temp._ca(c_uten_claim) = 'ingen' and pg_temp._hent(c_uten_claim) = 'ingen', pg_temp._ca(c_uten_claim) || ' / ' || pg_temp._hent(c_uten_claim));
 
   insert into _res(navn, ok, info) values ('T12 hent_innlogget_ansatt(): samme øktgrense - en gyldig sesjon gjenopprettes (med pin_kort=false siden A har en 6-sifret PIN)',
     pg_temp._hent(c_gyldig) = '990011:false', pg_temp._hent(c_gyldig));

@@ -604,10 +604,29 @@ function fikenLinjerHTML(o) {
 // migrasjonen 20261022150000) i stedet for å lese/endre/skrive hele fikenLinjer-arrayet fra
 // nettleserens eget minne - brukt av de PRODUKTNUMMER-keyede skrivingene (drivstoff, "Hent
 // fra Utstyr-boksen").
+// En feilet skriving av en fakturalinje skal VISES for den ansatte, ikke bare logges i konsollen (s90-20261104-6, «svelgede linje-RPC-feil»):
+// før 25.11 sto skjermen med en linje som aldri ble lagret (eller manglet en som fortsatt lå i databasen og ville blitt fakturert).
+// Maks én beskjed per ordre og linje per 15 s: de automatiske synkene (ombygging, drivstoff, Skal på bilen) kan kalle på hvert render, f.eks. uten nett.
+const _fikenLinjeFeilVist = new Map();
+function visFikenLinjeFeil(o, hva, error) {
+  const melding = (error && error.message) || String(error || 'ukjent feil');
+  console.error('Kunne ikke oppdatere fakturalinje:', melding);
+  const nokkel = ((o && o.id) || '') + '|' + (hva || '');
+  const naa = Date.now();
+  if (naa - (_fikenLinjeFeilVist.get(nokkel) || 0) < 15000) return;
+  _fikenLinjeFeilVist.set(nokkel, naa);
+  visToast(`Fakturalinjen${hva ? ' ' + hva : ''} ble IKKE lagret (${melding}). Fakturering-kortet viser det som faktisk er lagret - prøv igjen.`, 'feil');
+}
+// Gir true når linjen er lagret, false når databasen avviste/ikke svarte (da er ingenting endret lokalt).
 async function oppdaterOrdreFikenLinje(o, produktnummer, linje) {
   if (db) {
     const { data, error } = await db.rpc('oppdater_ordre_fiken_linje', { p_ordre_id: o.id, p_produktnummer: produktnummer, p_linje: linje });
-    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    if (error) {
+      visFikenLinjeFeil(o, produktnummer, error);
+      const elFeil = document.getElementById('fikenLinjer_'+o.id);
+      if (elFeil) elFeil.innerHTML = fikenLinjerHTML(o);
+      return false;
+    }
     o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
   } else {
     o.fikenLinjer = o.fikenLinjer || [];
@@ -618,6 +637,7 @@ async function oppdaterOrdreFikenLinje(o, produktnummer, linje) {
   planleggLocalSpeiling();
   const el = document.getElementById('fikenLinjer_'+o.id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
+  return true;
 }
 function nyFikenLinjeId() {
   return 'fl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -627,10 +647,13 @@ function nyFikenLinjeId() {
 // linjeredigeringen (legg til/fjern/rediger felt i Fakturering-kortet). Kan ikke bruke
 // den PRODUKTNUMMER-keyede funksjonen over her, siden en linje kan ha tom/duplikat
 // produktnummer mens den skrives inn (funnet og vurdert 2026-10-22, fikset 2026-10-23).
-async function oppdaterOrdreFikenLinjeVedId(o, linjeId, linje) {
+// Gir true/false som oppdaterOrdreFikenLinje. Kallerne endrer den lokale lista FØR kallet (feltet på skjermen viser alt den nye verdien),
+// så ved false MÅ kalleren rulle sin egen endring tilbake og tegne kortet på nytt. Databasefunksjonen er atomisk: feiler den, er
+// ingenting endret der, så å rulle tilbake akkurat denne ene endringen gir samme tilstand som databasen.
+async function oppdaterOrdreFikenLinjeVedId(o, linjeId, linje, hva) {
   if (db) {
     const { data, error } = await db.rpc('oppdater_ordre_fiken_linje_ved_id', { p_ordre_id: o.id, p_linje_id: linjeId, p_linje: linje });
-    if (error) { console.error('Kunne ikke oppdatere fakturalinje:', error.message); return; }
+    if (error) { visFikenLinjeFeil(o, hva || linjeId, error); return false; }
     o.fikenLinjer = data?.fikenLinjer ?? o.fikenLinjer;
   } else {
     o.fikenLinjer = o.fikenLinjer || [];
@@ -639,13 +662,23 @@ async function oppdaterOrdreFikenLinjeVedId(o, linjeId, linje) {
     else if (idx!==-1) o.fikenLinjer.splice(idx,1);
   }
   planleggLocalSpeiling();
+  return true;
+}
+// Teksten i feilmeldingen for en linje: produktnummeret, ellers «(ny linje)».
+function fikenLinjeNavn(linje) {
+  const nr = String((linje && linje.produktnummer) || '').trim();
+  return nr || '(ny linje)';
 }
 async function leggTilFikenLinje(id) {
   const o = S.ordrer.find(x=>x.id===id); if(!o) return;
   if (!o.fikenLinjer) o.fikenLinjer = [];
   const ny = {id: nyFikenLinjeId(), produktnummer:'', antall:1};
   o.fikenLinjer.push(ny);
-  await oppdaterOrdreFikenLinjeVedId(o, ny.id, ny);
+  if (!(await oppdaterOrdreFikenLinjeVedId(o, ny.id, ny, fikenLinjeNavn(ny)))) {
+    // Ikke lagret: ta den nye linjen bort igjen, ellers står en linje på skjermen som ikke finnes i databasen.
+    const i = (o.fikenLinjer || []).findIndex(l => l && l.id === ny.id);
+    if (i !== -1) o.fikenLinjer.splice(i, 1);
+  }
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
@@ -675,8 +708,11 @@ async function fjernFikenLinje(id, linjeId) {
   const o = S.ordrer.find(x=>x.id===id); if(!o || !o.fikenLinjer) return;
   const idx = o.fikenLinjer.findIndex(l=>l.id===linjeId);
   if (idx===-1) return;
-  o.fikenLinjer.splice(idx, 1);
-  await oppdaterOrdreFikenLinjeVedId(o, linjeId, null);
+  const [fjernet] = o.fikenLinjer.splice(idx, 1);
+  if (!(await oppdaterOrdreFikenLinjeVedId(o, linjeId, null, fikenLinjeNavn(fjernet)))) {
+    // Ikke fjernet i databasen: linjen kommer fortsatt med på fakturaen, så den må synes igjen.
+    if (!(o.fikenLinjer || []).some(l => l && l.id === linjeId)) o.fikenLinjer.splice(Math.min(idx, o.fikenLinjer.length), 0, fjernet);
+  }
   const el = document.getElementById('fikenLinjer_'+id);
   if (el) el.innerHTML = fikenLinjerHTML(o);
 }
@@ -697,8 +733,15 @@ async function settFikenLinje(id, linjeId, felt, val) {
   const linje = o.fikenLinjer.find(l=>l.id===linjeId); if(!linje) return;
   if (felt==='antall') val = Number(val)||1;
   else if (felt==='belop') val = Number(val)||0;
+  const hadde = Object.prototype.hasOwnProperty.call(linje, felt), gammel = linje[felt];
+  const navnFor = fikenLinjeNavn(linje);
   linje[felt] = val;
-  await oppdaterOrdreFikenLinjeVedId(o, linjeId, linje);
+  if (!(await oppdaterOrdreFikenLinjeVedId(o, linjeId, linje, felt === 'produktnummer' ? (String(val||'').trim() || navnFor) : navnFor))) {
+    // Ikke lagret: feltet på skjermen viser den nye verdien, men databasen har den gamle. Sett den gamle tilbake og tegn kortet på nytt.
+    if (hadde) linje[felt] = gammel; else delete linje[felt];
+    const el = document.getElementById('fikenLinjer_'+id);
+    if (el) el.innerHTML = fikenLinjerHTML(o);
+  }
 }
 
 // ============================================================
@@ -2064,11 +2107,35 @@ function sf(id, field, val) {
   // rendering, selv om sfOmbygging() (avkrysningsboksene i SAMME kort) allerede gjorde
   // nøyaktig dette ved egen endring (funnet 2026-10-22).
   if (['merke','modell'].includes(field)) {
+    ryddAppModellSlugVedTekstEndring(o);
     const container = document.getElementById('ombyggingBoks_' + id);
     if (container) container.innerHTML = ombyggingBoksHTML(o);
     synkroniserOmbyggingFikenLinjer(o);
   }
   return true;
+}
+// Modellvelgeren i «+ Ny ordre» (s90-20261120-modellvelger): en modellnøkkel valgt i APPEN følger Merke/Modell-teksten. Retter den ansatte
+// Merke/Modell til noe annet enn katalogens tekst (feil modell valgt), fjernes nøkkelen, så fakturering og «Skal på bilen» følger den rettede
+// teksten nøyaktig som for en ordre uten nøkkel (slik det alltid har vært for ordrer laget i appen). En nøkkel fra portalen eller e-post
+// (portal_bestilling_id / epost_bestilling_id satt) røres ALDRI: der er bestillingen fasit, og Ombygging-boksen viser avviket (som før).
+// Målrettet update (save()/ordreToDb skriver aldri kolonnen), bare hvis databasen fortsatt har den samme nøkkelen; ved feil settes den tilbake.
+function ryddAppModellSlugVedTekstEndring(o) {
+  if (!o || !o.portalModellSlug || o.portalBestillingId || o.epostBestillingId) return;
+  const rad = Array.isArray(S.portalModellKobling) ? S.portalModellKobling.find(r => r.portal_modell_slug === o.portalModellSlug) : null;
+  if (!rad) return; // katalogen er ikke lastet: ingenting å sammenligne med, la nøkkelen stå
+  const lik = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  if (lik(o.merke, rad.merke) && lik(o.modell, rad.modell)) return;
+  const gammel = o.portalModellSlug;
+  o.portalModellSlug = null;
+  if (typeof merkLokalOrdreEndring === 'function') merkLokalOrdreEndring(o.id);
+  if (!db) return;
+  db.from('ordrer').update({ portal_modell_slug: null }).eq('id', o.id).eq('portal_modell_slug', gammel).then(r => {
+    if (!r || !r.error) return;
+    if (o.portalModellSlug == null) o.portalModellSlug = gammel;
+    visToast('Kunne ikke fjerne modellnøkkelen etter endret Merke/Modell: ' + r.error.message);
+    const container = document.getElementById('ombyggingBoks_' + o.id);
+    if (container) container.innerHTML = ombyggingBoksHTML(o);
+  });
 }
 // s08-058: synker portal_bestillinger.ident til et rettet chassis.nr (RPC, SECURITY DEFINER
 // - portal_bestillinger kan ikke skrives direkte av en vanlig innlogget ansatt). Oppdaterer

@@ -32,8 +32,10 @@ const tmpFiler = [];
 afterEach(() => { while (tmpFiler.length) { try { unlinkSync(tmpFiler.pop()); } catch { /* allerede borte */ } } });
 
 // produkter: alle Fiken-produkter som skal "finnes" i den falske produktlisten.
-async function last(produkter) {
+// fullt: hva GET /products/{id} svarer per productId (standard: produktet fra listen + stock/costPrice + skrivebeskyttede felt).
+async function last(produkter, { fullt = {}, getStatus = 200 } = {}) {
   const putKall = [];
+  const getKall = [];
   globalThis.Deno = { env: { get: (k) => ({ FIKEN_API_KEY: 'fake-key', FIKEN_SYNC_SECRET: 'HEMMELIG' }[k]) } };
   let handler;
   globalThis.Deno.serve = (fn) => { handler = fn; };
@@ -44,6 +46,13 @@ async function last(produkter) {
       return json(produkter, 200, { 'Fiken-Api-Page-Count': '1' });
     }
     const putMatch = u.match(/\/products\/(\d+)$/);
+    if (putMatch && (!init.method || init.method === 'GET')) {
+      const id = Number(putMatch[1]);
+      getKall.push(id);
+      if (getStatus !== 200) return new Response('feil', { status: getStatus });
+      const fraListe = produkter.find((p) => p.productId === id);
+      return json(fullt[id] ?? { ...fraListe, stock: 7, costPrice: 99900, createdDate: '2025-01-01', lastModifiedDate: '2026-11-01', unitPricesInForeignCurrency: [] });
+    }
     if (putMatch && init.method === 'PUT') {
       putKall.push({ productId: Number(putMatch[1]), body: JSON.parse(init.body) });
       return json({ ok: true });
@@ -56,6 +65,7 @@ async function last(produkter) {
   await import(/* @vite-ignore */ pathToFileURL(fil).href);
   return {
     putKall,
+    getKall,
     kall: (body) =>
       handler(new Request('https://x.supabase.co/functions/v1/fiken-endre-produkt', {
         method: 'POST',
@@ -137,6 +147,54 @@ describe('fiken-endre-produkt: kollisjon (flere produkter på samme nummer)', ()
     expect(res.status).toBe(409);
     const svar = await res.json();
     expect(svar.reason).toMatch(/matcher 2 av de 3/);
+    expect(putKall).toHaveLength(0);
+  });
+});
+
+describe('fiken-endre-produkt: sender hele produktet tilbake (stock/costPrice nulles ikke, s00-20261126-2)', () => {
+  it('gjør inaktiv: alle felt fra GET følger med uendret, bare active byttes, ingen skrivebeskyttede felt', async () => {
+    const { kall, putKall, getKall } = await last([EV9_OMBYGGING]);
+    const res = await kall({ productNumber: '500', active: false });
+    expect(res.status).toBe(200);
+    expect(getKall).toEqual([500]);
+    expect(putKall[0].body).toEqual({
+      name: 'Standard ombygging', unitPrice: 5150000, incomeAccount: '3010', vatType: 'high',
+      active: false, productNumber: '500', note: 'Et notat', stock: 7, costPrice: 99900,
+    });
+  });
+
+  it('nytt produktnummer: bare productNumber byttes, stock/costPrice uendret', async () => {
+    const { kall, putKall } = await last([EV9_OMBYGGING]);
+    const res = await kall({ productNumber: '500', newProductNumber: '5000' });
+    expect(res.status).toBe(200);
+    expect(putKall[0].body.productNumber).toBe('5000');
+    expect(putKall[0].body.active).toBe(true);
+    expect(putKall[0].body.stock).toBe(7);
+    expect(putKall[0].body.costPrice).toBe(99900);
+  });
+
+  it('kollisjon løst med expectedUnitPriceKr: henter og skriver bare den valgte raden, med dens egne stock/costPrice', async () => {
+    const { kall, putKall, getKall } = await last([OPPBEVARINGSKASSE_GAMMEL, OPPBEVARINGSKASSE_NY], {
+      fullt: { 1002: { ...OPPBEVARINGSKASSE_NY, stock: 2, costPrice: 400000 } },
+    });
+    const res = await kall({ productNumber: '553', active: false, expectedUnitPriceKr: 6900 });
+    expect(res.status).toBe(200);
+    expect(getKall).toEqual([1002]);
+    expect(putKall[0].productId).toBe(1002);
+    expect(putKall[0].body).toMatchObject({ stock: 2, costPrice: 400000, unitPrice: 690000, active: false });
+  });
+
+  it('GET /products/{id} feiler: 502 og INGEN PUT', async () => {
+    const { kall, putKall } = await last([EV9_OMBYGGING], { getStatus: 404 });
+    const res = await kall({ productNumber: '500', active: false });
+    expect(res.status).toBe(502);
+    expect(putKall).toHaveLength(0);
+  });
+
+  it('prisen er endret mellom listen og GET (kan være feil rad ved kollisjon): 409 og INGEN PUT', async () => {
+    const { kall, putKall } = await last([EV9_OMBYGGING], { fullt: { 500: { ...EV9_OMBYGGING, unitPrice: 1 } } });
+    const res = await kall({ productNumber: '500', active: false });
+    expect(res.status).toBe(409);
     expect(putKall).toHaveLength(0);
   });
 });

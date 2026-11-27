@@ -199,6 +199,10 @@ button{cursor:pointer;font-family:Arial,sans-serif}
 .pill.bad{background:#ef444420;color:#fca5a5;border-color:#ef444460}
 .pill.warn{background:#ca8a0420;color:#fde68a;border-color:#ca8a0460}
 .pill.info{background:#2563eb20;color:#93c5fd;border-color:#2563eb60}
+.pill.neutral{background:#3f3f4620;color:#a1a1aa;border-color:#3f3f46}
+.pill.special{background:#7c3aed20;color:#c4b5fd;border-color:#7c3aed70}
+/* Merkene på ordrekortene (statusPill() i js/core.js): én størrelse for alle, fargen fra tonen over */
+.pill.status-pill{margin:0;padding:2px 8px;font-size:10.5px;line-height:14px;font-weight:700;letter-spacing:.02em;white-space:nowrap;box-sizing:border-box}
 
 /* PAGES */
 .page{display:none}.page.active{display:block}
@@ -257,6 +261,9 @@ tr:first-child td{padding-top:8px}
 
 /* CLOCK */
 @keyframes pulseGlow{0%,100%{box-shadow:0 0 26px rgba(34,197,94,.22)}50%{box-shadow:0 0 40px rgba(34,197,94,.38)}}
+/* Ordrekortene (noen meldt på): samme puls, omtrent halv styrke, så en lang liste med mange lysende kort ikke blir påtrengende (2026-11-25).
+   pulseGlow over er urørt (lønnsklokka på Timer-siden og «Ansatte på ordren» i ordredetaljen). */
+@keyframes pulseGlowKort{0%,100%{box-shadow:0 0 12px rgba(34,197,94,.11)}50%{box-shadow:0 0 20px rgba(34,197,94,.2)}}
 /* Admin-ark: frakt automatisk forberedt, venter på ett bekreftelsestrykk (s90-20261104) */
 @keyframes adminArkFraktPuls{0%,100%{box-shadow:0 0 0 rgba(234,179,8,0)}50%{box-shadow:0 0 8px rgba(234,179,8,.7)}}
 
@@ -416,8 +423,8 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 <div id="pinByttSkjerm" style="display:none;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:16px;padding:16px;text-align:center">
   <img src="logoer/logo-transparent.png" alt="Salmaker'n" style="height:60px;object-fit:contain">
   <div style="max-width:320px">
-    <div style="font-weight:700;font-size:17px;margin-bottom:6px">PIN-koden må oppdateres</div>
-    <div class="muted small">Av sikkerhetshensyn bruker vi nå 6-sifrede PIN-koder i stedet for 4. Sett en ny PIN for å fortsette - du bruker den neste gang du logger inn.</div>
+    <div id="pinByttTittel" style="font-weight:700;font-size:17px;margin-bottom:6px">PIN-koden må oppdateres</div>
+    <div id="pinByttTekst" class="muted small">Av sikkerhetshensyn bruker vi nå 6-sifrede PIN-koder i stedet for 4. Sett en ny PIN for å fortsette - du bruker den neste gang du logger inn.</div>
   </div>
   <input id="pinByttNy" type="password" inputmode="numeric" maxlength="6" placeholder="Ny PIN (6 siffer)" style="width:160px;text-align:center;letter-spacing:4px;font-size:18px">
   <button class="btn red" onclick="lagreTvungetPinBytte()">Lagre og fortsett</button>
@@ -556,6 +563,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
             <select id="ordreStatusFilter" onchange="renderOrdreList()" style="width:auto;flex-shrink:0;background:#27272a;color:#f4f4f5;border:1px solid #3f3f46;border-radius:12px;padding:9px 12px;font-size:14px">
               <option value="">Alle statuser</option>
               <option value="portal_ubekreftet">Fra portal, ikke bekreftet (0)</option>
+              <option value="hengerfeste">Hengerfeste (0)</option>
               <option value="paa_vei">På vei</option>
               <option value="ikke_paabegynt">Ikke påbegynt</option>
               <option value="paabegynt">Påbegynt</option>
@@ -873,6 +881,9 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
     <section id="mer" class="page">
       <div id="merHovedView">
 
+      <!-- Nødbrems (samlet PIN-sperre): bare admin, øverst. Innholdet tegnes av renderNodbremsKort() i js/ansatte-utstyr.js. -->
+      <div class="card" id="merNodbremsKort" style="display:none;border:2px solid #dc2626;margin-bottom:14px"></div>
+
       <div class="mer-seksjon-label" onclick="toggleMerSeksjon(this,'merGruppeDaglig')"><span class="mer-seksjon-chevron">▾</span>Daglig</div>
       <div class="grid g3" id="merGruppeDaglig">
         <div class="card" id="merMinProfilKort">
@@ -1080,6 +1091,10 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="card" style="margin-top:10px">
           <div class="h">Standardtider (bil-effektivitet)</div>
           <div class="muted small" style="margin-bottom:8px">Forventet Ombygging-tid per modell (Klargjøring telles ikke med, siden det er en ren manuell klokke) - brukes til å vurdere brukt tid på hver ordre og i effektivitetsoversikten per ansatt under Timer og overtid.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn sm" id="hentKalkyleTiderBtn" onclick="hentKalkyleTider()">Hent forslag fra kalkylen</button>
+            <span class="small muted" id="kalkyleTiderStatus">Kalkylens timer vises som forslag. Ingenting endres før du trykker «Bruk».</span>
+          </div>
           <div id="standardtiderListe" style="margin-top:10px"></div>
         </div>
       </div>
@@ -1329,11 +1344,16 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
 
     <div class="box" style="margin-top:10px">
       <div class="muted small" style="letter-spacing:.8px;margin-bottom:10px">KJØRETØY</div>
+      <div style="margin-bottom:10px">
+        <label for="n_modellvalg">Modell fra katalogen</label>
+        <select id="n_modellvalg" onchange="velgNyOrdreModell(this.value)"></select>
+        <div class="small muted" style="margin-top:4px">Velg modellen her, så fylles Merke og Modell ut. Finnes den ikke i lista, skriv Merke og Modell selv.</div>
+      </div>
       <div class="grid g2">
         <div class="felt-wrap">
           <label>Merke</label>
           <input id="n_merke" autocomplete="off"
-            oninput="renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
+            oninput="nyOrdreModellTekstEndret();renderModellForslag('n_merke','n_modell','n_modell_forslag');renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
             onfocus="visFeltDropdown('n_merke_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_merke_forslag'))">
           <div id="n_merke_forslag" class="felt-dropdown"></div>
         </div>
@@ -1347,7 +1367,7 @@ canvas{border:1px solid #27272a;border-radius:12px;touch-action:none;background:
         <div class="felt-wrap">
           <label>Modell</label>
           <input id="n_modell" autocomplete="off"
-            oninput="renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
+            oninput="nyOrdreModellTekstEndret();renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag')"
             onfocus="visFeltDropdown('n_modell_forslag')" onblur="skjulFeltDropdown(document.getElementById('n_modell_forslag'))">
           <div id="n_modell_forslag" class="felt-dropdown"></div>
         </div>

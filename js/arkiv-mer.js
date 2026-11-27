@@ -281,6 +281,8 @@ function renderMer() {
   // her hver gang renderMer() kjører - ellers ville et lukket admin bare bli tvunget åpent
   // igjen ved neste sanntidsoppdatering.
   document.getElementById('merSeksjonOppsett').style.display = erAdmin ? 'block' : 'none';
+  // Nødbrems (js/ansatte-utstyr.js): eget rødt kort øverst, bare admin.
+  if (typeof renderNodbremsKort === 'function') { try { renderNodbremsKort(); } catch (e) { console.warn('renderNodbremsKort:', e && e.message); } }
 
   if (erAdmin) {
     const pinEl = document.getElementById('dagensPINVal');

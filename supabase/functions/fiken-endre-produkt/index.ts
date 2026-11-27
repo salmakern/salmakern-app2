@@ -5,8 +5,8 @@
 // dette er et SKRIVENDE endepunkt mot det ekte regnskapet.
 //
 // Trygghetsregler:
-// - Endrer BARE det som er bedt om (nytt nummer og/eller aktiv). Navn, pris, konto og mva sendes tilbake uendret (Fikens PUT erstatter hele
-//   produktet, så hele produktet hentes først, som i fiken-oppdater-pris).
+// - Endrer BARE det som er bedt om (nytt nummer og/eller aktiv). Alt annet (navn, pris, konto, mva, notat, stock, costPrice ...) sendes
+//   tilbake uendret: Fikens PUT erstatter hele produktet, så det fulle produktet hentes med GET /products/{id} rett før PUT (FULL-PUT under).
 // - Nytt nummer som allerede finnes i Fiken (også på et inaktivt produkt) avvises med 409. Ukjent produkt gir 404.
 // - Hele produktlisten leses (alle sider) før noe skrives.
 // - Produktet beholder sin interne produkt-id, så historikk (fakturalinjer m.m.) følger med. MERK: andre systemer som slår opp på nummer
@@ -45,6 +45,31 @@ type FikenProduct = {
   productNumber: string
   note?: string
 }
+
+// ── FULL-PUT BEGIN (byte-lik i fiken-oppdater-pris og fiken-endre-produkt; test/fiken-full-put.test.js vokter mot avvik) ──
+// Fikens PUT /products/{id} erstatter HELE produktet: et felt som ikke sendes, blir tomt (OpenAPI: «stock: If not provided, stock value
+// is set to null»). Før 26.11 sendte denne funksjonen bare et utvalg felt, og nullet dermed stock (lagerantall) og costPrice (kostpris) på
+// hvert produkt den endret (Henger igjen s00-20261126-2). Nå hentes det fulle produktet med GET /products/{id} rett før PUT, og ALT som
+// kan skrives sendes tilbake uendret; bare feltene i `endringer` byttes. Samme regel som byggPutBody i fiken-rett-produktnavn.
+const SKRIVEBESKYTTET = ['productId', 'createdDate', 'lastModifiedDate', 'unitPricesInForeignCurrency']
+
+function byggPutBody(produkt: Record<string, unknown>, endringer: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(produkt)) {
+    if (SKRIVEBESKYTTET.includes(k)) continue
+    body[k] = v
+  }
+  return { ...body, ...endringer }
+}
+
+async function hentProdukt(productId: number): Promise<{ ok: true; produkt: Record<string, unknown> } | { ok: false; feil: string }> {
+  const res = await fikenFetch(`/companies/${FIKEN_SLUG}/products/${productId}`)
+  if (!res.ok) return { ok: false, feil: `Fiken GET /products/${productId} svarte ${res.status}: ${await res.text()}` }
+  const produkt = await res.json().catch(() => null)
+  if (!produkt || typeof produkt !== 'object' || Array.isArray(produkt)) return { ok: false, feil: `Fiken GET /products/${productId} ga ikke et produkt` }
+  return { ok: true, produkt }
+}
+// ── FULL-PUT END ──
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
@@ -135,17 +160,19 @@ Deno.serve(async (req) => {
       return jsonSvar({ updated: false, reason: `Produktnummer ${newProductNumber} finnes allerede i Fiken` }, 409)
     }
 
-    // Alt annet sendes tilbake uendret (PUT erstatter hele produktet).
-    const oppdatertProdukt: Record<string, unknown> = {
-      name: found.name,
-      incomeAccount: found.incomeAccount,
-      vatType: found.vatType,
-      active: active !== null ? active : found.active,
-      productNumber: newProductNumber !== null ? newProductNumber : found.productNumber,
+    // Det fulle produktet rett før skriving (listen kan mangle felt, og produktet kan være endret siden).
+    const hentet = await hentProdukt(found.productId)
+    if (!hentet.ok) return jsonSvar({ error: hentet.feil }, 502)
+    const fullt = hentet.produkt
+    if (String(fullt.productNumber ?? '') !== productNumber || fullt.unitPrice !== found.unitPrice) {
+      return jsonSvar({ updated: false, reason: `Produktet med nummer ${productNumber} ble endret i Fiken mens vi leste det - prøv igjen` }, 409)
     }
-    if (typeof found.unitPrice === 'number') oppdatertProdukt.unitPrice = found.unitPrice
-    // Har produktet et notat i Fiken, tas det med (PUT erstatter hele produktet - ellers ville notatet blitt tomt). Feiler Fiken på feltet, skjer ingenting (502).
-    if (typeof found.note === 'string' && found.note !== '') oppdatertProdukt.note = found.note
+
+    // Alt annet sendes tilbake uendret (PUT erstatter hele produktet). Bare nummer og/eller aktiv byttes.
+    const endringer: Record<string, unknown> = {}
+    if (active !== null) endringer.active = active
+    if (newProductNumber !== null) endringer.productNumber = newProductNumber
+    const oppdatertProdukt = byggPutBody(fullt, endringer)
 
     const putRes = await fikenFetch(`/companies/${FIKEN_SLUG}/products/${found.productId}`, {
       method: 'PUT',

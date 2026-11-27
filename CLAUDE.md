@@ -27,6 +27,92 @@ Internt PWA-verktøy for Telemark Salmakerverksted: ordrehåndtering, timeregist
 lager, admin-ark og mer. Ren HTML/CSS/JS - ingen byggesteg, ingen rammeverk. Backend er
 Supabase (Postgres + Auth + Storage + Realtime + Edge Functions). Deployes til GitHub Pages.
 
+## Sikkerhetsrutine for Salmaker'n og Forhandlerportalen (v1, 2026-11-25)
+
+Henrik godkjente 25.11 at rutinen ligger her (utkast v0.1 fra sikkerhetsgjennomgangen samme dag, Henger igjen
+oe3ybyfat1g3ef6dx2rm, tilpasset og rettet mot koden). Den er skrevet for et menneske som skal handle, ikke for koden.
+**Hold den oppdatert i samme økt som en endring den beskriver:** når et hull i del D lukkes, flytt det ut; når
+PIN-nødbremsen er rullet ut, skriv om del B fra «kommer» til «slik gjør du»; når en tjenestekonto i del C får 2FA,
+kryss den av med dato. Tekniske detaljer: «Avslutt ansatt» og «Delt stasjon låst til verkstedet» lenger ned, og
+«Filer i Storage», «PIN til 6 sifre ...» og portalens CLAUDE.md («Admin-TOTP», «Sperr bruker»).
+
+### A. Når en ansatt slutter eller får sparken (samme dag, helst før personen går)
+1. **Salmaker'n:** Mer → Ansatte → «🔒 Avslutt ansatt» på personen, og bekreft. Bare admin, og ikke på seg selv.
+   - Skjer i ett steg (alt eller ingenting): stemples ut hvis innstemplet (timen føres med vanlig pauseregel), åpne
+     ordreklokker stoppes, kontoen settes inaktiv, `session_token` nulles, PIN-en og push-varslene slettes.
+   - Databasen avviser personen **med en gang** (`current_ansatt()` krever `aktiv = true`, og den brukes av RLS,
+     edge-funksjonene, Storage og Realtime), også en innlogging som allerede er i gang. Det som IKKE kalles tilbake:
+     det som allerede står på skjermen eller er lagret på enheten (bildecachen), og signerte fil-lenker som alt er
+     utdelt (gjelder i inntil 2 t).
+   - Timeføringer, lønnsgrunnlag, ordrer og logger står urørt.
+   - **«Sett inaktiv» er bare en kort pause** (permisjon, sykmelding): den stenger også ute med en gang, men PIN-en,
+     `session_token` og push-varslene står. Bruk den ikke når noen slutter.
+   - Skal personen tilbake: «Aktiver (ny PIN)», som alltid krever en ny 6-sifret PIN.
+2. **Hadde personen admin- eller godkjennerrolle:** sjekk at ingen annen konto (app, portal, tjenestekonto) står med
+   personens tilgang.
+3. **Kjente personen PIN-en til den delte verkstedkontoen («Booking Salmaker»):** bytt den. Det haster mindre enn
+   punkt 1, siden kontoen bare slipper inn fra verkstedet og logges ut etter 2 timer (se «Delt stasjon låst til
+   verkstedet»; låsen sitter i nettleseren, ikke i databasen).
+4. **Forhandlerportalen** (selgere hos forhandlere): Admin → Forhandlere → Selgere → «Sperr bruker». Tilbud og
+   bestillinger står igjen, og sperringen kan oppheves. «Slett selger» bare når dataene faktisk skal bort.
+5. **Tjenestekontoene** (Supabase, Vercel, GitHub, Resend, Domeneshop, Fiken, Microsoft 365): hadde personen tilgang,
+   fjern den og bytt passord på delte innlogginger.
+6. **Ta igjen nøkler, nettbrett og PC**, og logg ut av Salmaker'n på enheter som blir igjen.
+
+### B. Hvis PIN-er kan ha kommet på avveie
+- **PIN-nødbremsen er bygget og testet, men IKKE rullet ut** (25.11, gren `henger/pin-nodbrems`, venter på Henriks ja).
+  Når den er ute: trykk «Nødbrems» i Mer (rødt kort, bare admin) → all PIN-innlogging stenges, og alle andre logges
+  ut med en gang, også andre administratorer → opphev når det er under kontroll → neste gang hver person logger inn
+  (også admin), må de velge en ny PIN som er ulik den gamle.
+- **Til nødbremsen er ute:** gjelder det én person, sett ny PIN for vedkommende (admin). Gjelder det mange, sett ny
+  PIN for hver. Ved akutt mistanke mot én person: «Avslutt ansatt» (stenger ute med en gang), så «Aktiver (ny PIN)».
+- **Den automatiske sperren:** etter 30 feil PIN-forsøk på 10 minutter, fra alle enheter samlet, er PIN-innloggingen
+  sperret en stund for ALLE, også admin (ingen unntak, Henriks valg 25.11). Klager om at «ingen kommer inn» er trolig
+  den, og den går over av seg selv. Med nødbremsen kommer også et push-varsel til admin når den slår inn.
+
+### C. Rutinemessig
+- **To-trinns innlogging på tjenestekontoene (haster, Henrik gjør det selv; Henger igjen s00-20261116-3).** Kryss av
+  per konto etter hvert som det blir gjort; lagre gjenopprettingskodene i passordbehandleren. Vercel, GitHub, Resend
+  og Supabase er på plass (25.11); Domeneshop, Fiken og Microsoft 365 gjenstår.
+
+  | Konto | 2FA på | Koder i passordbehandleren | Dato |
+  |---|---|---|---|
+  | Supabase | ☑ | ☑ | 25.11 |
+  | Vercel (må kunne nås uten Microsoft 365: nødutgangen for portalens 2-trinn går via Vercel) | ☑ | ☐ | 25.11 |
+  | GitHub | ☑ | ☑ | 25.11 |
+  | Resend | ☑ | ☑ | 25.11 |
+  | Domeneshop | ☐ | ☐ | |
+  | Fiken | ☐ | ☐ | |
+  | Microsoft 365 | ☐ | ☐ | |
+
+- **Portal-administratorene (to kontoer):** 2-trinn (TOTP) med «Krev kode»: Henriks konto ☑ (14.11); post@-kontoen ☐
+  (en annen person, Henger igjen s00-20261113-1: logge inn, Admin → Min konto → 2-trinn med SIN telefon, lagre
+  kodene selv, teste, trykke «Krev kode»). Passord på begge: minst 12 tegn, ikke navn, e-post eller «salmaker».
+- **Hver måned (10 minutter):** gå gjennom Mer → Ansatte (står noen der som ikke jobber her, eller med admin-rolle
+  som ikke skal ha den? **4 aktive admin i appen er riktig antall**, Henrik 25.11); gå gjennom administratorlisten i
+  portalen; les nattens QA-rapporter, særlig innlogging, hemmeligheter og 401/403.
+- **Hver tredje måned:** bytt PIN på den delte verkstedkontoen; se over hvem som har tilgang til tjenestekontoene;
+  sjekk at de som har sluttet står som avsluttet (ingen PIN), ikke bare «Sett inaktiv».
+- **Hele tiden:** del aldri PIN eller passord på SMS, e-post eller lapp; den delte stasjonen brukes bare på verkstedet;
+  si fra med en gang hvis en telefon eller PC med innlogget app blir borte.
+
+### D. Det som IKKE er på plass ennå (per 25.11)
+1. **PIN-nødbremsen** er ikke rullet ut. Til da godtar `current_ansatt()` fortsatt 54 gamle innlogginger fra før
+   12.11 uten `logget_inn_at` (ingen øktgrense; 15 brukt siste 30 dager). Utrullingen lukker dette.
+2. **post@-kontoen i portalen** har ikke 2-trinn: passord alene og full admin-tilgang (s00-20261113-1, se C).
+3. **2FA på tjenestekontoene:** se tabellen i C; bare Vercel er på (25.11), seks gjenstår.
+4. **Godkjenner-PIN-en ved lukking av ordre (`login_med_pin`) gir ut `session_token`** til den som kjenner PIN-en.
+   Egen sak (s90-20261125-sessiontoken), ikke rettet.
+5. **E-post i firmaets navn:** DMARC står på `p=none` (falske e-poster i salmaker.as sitt navn avvises ikke), og
+   Microsoft 365 mangler DKIM. Henrik gjør det selv.
+6. **Portalen sender ingen CSP**, fordi `CSP_MODUS` ikke er satt i Vercel.
+7. **Vid tilgang inne i appen:** alle innloggede ansatte kan endre alle ordrer, og endre og slette i `innstillinger`,
+   `flater`, `moter`, `push_abonnement` og lagertabellene. Bare sletting av ordrer er låst til admin.
+8. **Etter en vanlig utlogging** virker et allerede utstedt access-token i inntil 1 time (`ansatte.session_token`
+   endres ikke ved utlogging). Gjelder IKKE «Avslutt ansatt» og «Sett inaktiv», som stenger ute med en gang (se A).
+9. **GPS-låsen på den delte stasjonen sitter bare i nettleseren** (se «Delt stasjon låst til verkstedet»): den
+   stopper vanlig bruk utenfor verkstedet, men ikke en som kjenner PIN-en og kaller databasen direkte.
+
 ## Arkitektur
 
 `salmakern.html` laster 11 script-tagger fra `js/` i denne rekkefølgen:
@@ -155,6 +241,8 @@ i `data-paa` (ikke `.checked`) - `kfhVeksleIkkeVarsle()` i `js/admin-ark.js` set
 klikk, uavhengig av nettleserens egen (potensielt forsinkede) rendring av en native checkbox. `sw.js` CACHE v76. Vakt:
 `test/admin-ark-frakt-uten-varsel.test.js` (11 tester, full app-harness; oppdatert til å lese `dataset.paa`).
 
+**«Bilen er hentet»-e-posten sendes automatisk, med reserveknapp for admin (2026-11-17 og 2026-11-25, gren `henger/hentet-auto-epost-v2`, IKKE utrullet)**: Henrik: e-posten til kontaktpersonen (chassis.nr og hvem som hentet) skal gå ut av seg selv når en bil-ordre settes til «Hentet», og den gamle «✔ Hentet»-knappen fjernes. `endreStatus()` kaller `adminArkVarsleHentetAuto(o)` etter vellykket statuslagring ved overgang TIL hentet, uansett hvem som endrer statusen (ingen bekreftelse; sendes bare én gang per Admin-ark-rad; leveranser og «kun ekstrautstyr» får ingen e-post). `hentetVarslet` settes nå BARE etter vellykket sending (den gamle 2026-10-28-regelen som merket raden grønn uten e-post er borte). «Levering av oss» sender fortsatt «på vei til dere», «Hente selv» nevner ikke fraktselskapet. **Reserveknapp (Henriks valg C 25.11):** `send-frakt-epost` slipper bare admin gjennom, og 49 av 133 historiske Hentet-endringer var gjort av vanlige ansatte/godkjennere, så for dem feiler automatikken (beskjeden sier at en administrator kan sende den fra Admin-ark). I Admin-ark (kolonnen Frakt-e-post, bare admin) står da «📧 Send hentet-varsel» i stedet for den røde «Hentet ikke varslet»-lappen (`adminArkVisHentetReserveknapp`: admin, chassis.nr, ikke varslet, og ordren står på Hentet eller raden er en løs rad uten ordre). Knappen (`adminArkVarsleHentetManuelt`) spør først, sender samme e-post (`adminArkSendHentetEpost`, felles med automatikken) og merker raden varslet bare ved suksess; dobbelttrykk gir én e-post. `sw.js` CACHE v110. Vakt: `test/hentet-auto-gronn.test.js` (inkl. den ekte Admin-ark-formatteren via en falsk Tabulator) og «Hentet»-describen i `test/kun-ekstrautstyr.test.js`. Ingen ekte e-post er sendt i testingen; ikke sett i en innlogget nettleser.
+
 **Ordre.vekter kan komme tom fra databasen (2026-11-02, tom Ordre-side for alle)**: `ordrer.vekter` har kolonne-default `'{}'`, og `save()` skriver ikke vekter (s09-005: vekter eies av RPC-ene
 `oppdater_ordre_vekter_felt` m.fl.). Da den første NYE ordren siden 30.10 ble opprettet, kom den inn med `vekter = {}`, `dbToOrdre` beholdt det tomme objektet, `tvangsflyt()` leste `o.vekter.totalvekt.a` og
 kastet, og `renderOrdreList` stoppet midt i lista: «67 ordrer», men ingen kort, for alle brukere. Rettet i to lag: (1) `normaliserVekter()` i `core.js` fyller alltid inn totalvekt/vogntog/foraksel/bakaksel med a/e/v
@@ -273,7 +361,7 @@ Vakt: `test/edge-fetch-og-utlogging.test.js` (`gjenopprettOktFraEksisterendeSesj
 2. **Øktgrense:** ny kolonne `ansatte.okt_maks_minutter` (standard 240 = 4 timer). Håndheves i BÅDE `current_ansatt()` (all RLS) og `hent_innlogget_ansatt()` (sesjonsgjenoppretting) via et nytt JWT-claim `logget_inn_at` (satt av `logg_inn_med_pin`, kopiert inn i JWT-en av `custom_access_token_hook` - samme mønster som `ansatt_id`/`rolle`/`session_token`). **Kritisk sikkerhetsdetalj:** en sesjon UTEN dette claimet (alt logget inn FØR denne migreringen) regnes som «ingen grense ennå», IKKE som utløpt - ellers ville migreringen kastet ut alle aktive ansatte med én gang (samme klasse feil som nesten skjedde med sesjonsgjenoppretting dagen før). Klienten har i tillegg en proaktiv timer (`aktiverInnloggetApp()`, `_oktUtlopTimer`) som kaller `doLogout()` ved fristen for en ryddig opplevelse (varsel + PIN-skjerm) i stedet for at neste handling bare stille feiler - men selve håndhevingen er server-side og uavhengig av at timeren kjører.
 3. **Delt verksted-stasjon:** ny kolonne `ansatte.er_delt_stasjon` (boolean). Satt `true` KUN for id 114 («Booking Salmaker», en etablert konto Henrik allerede bruker til dette - `kan_fore_lonn` var allerede `false`), med `okt_maks_minutter = 120` (2 timer) i stedet for standard 4. Personlige kontoer logges i tillegg ut når appen/fanen faktisk LUKKES (ikke bare lastes på nytt) - et `sessionStorage`-flagg (`OKT_FORTSETTER_NOKKEL`, overlever en reload av SAMME fane, tømmes når fanen faktisk lukkes, ulikt localStorage) sjekkes i `gjenopprettOktFraEksisterendeSesjon()` for alle UNNTATT `er_delt_stasjon`-kontoer - en delt stasjon-PC skal kunne restartes uten å måtte PIN-es inn på nytt, kun den 2-timers grensen gjelder for den.
 
-`login_med_pin` (godkjenner-PIN ved lukking av ordre) er BEVISST urørt - oppretter ingen vedvarende sesjon, så verken `pin_kort` eller øktgrense er relevant der.
+`login_med_pin` (godkjenner-PIN ved lukking av ordre) er BEVISST urørt - oppretter ingen vedvarende sesjon, så verken `pin_kort` eller øktgrense er relevant der. Fra 26.11 (migrasjon `20261126100000_login_med_pin_uten_session_token.sql`, Henrik: «bare fjern sessiontoken») returnerer den heller ikke `session_token` lenger: ren rydding (klienten `bekreftGodkjenn()` leste bare `rolle` og `navn`), ingen endring i hva funksjonen GJØR; `aktiv` og `kan_fore_lonn` står i svaret som før, og nødbrems/ny-PIN-terskel (fra `20261125200000_pin_nodbrems.sql`) er byte-lik. Test: `supabase/tester/login_med_pin_uten_session_token_TEST_body.sql` (rullet tilbake, kjøres sammen med `pin_nodbrems_TEST_body.sql`).
 
 Vakt: `test/edge-fetch-og-utlogging.test.js` (`fortsettEtterInnlogging`, «øktgrense»-beskrivelsen, og `gjenopprettOktFraEksisterendeSesjon` sine nye `er_delt_stasjon`/sessionStorage-tester) og den UTVIDEDE `supabase/tester/ansatte_beskytt_skriving_innlogging_TEST_body.sql` (24 kontroller nå, opp fra 17 - PIN-generering byttet til 6 sifre siden `opprett_ansatt` krever det). **Bekreftet** med denne SQL-testen i en rullet-tilbake transaksjon mot produksjon FØR migreringen ble kjørt for ekte. `sw.js` CACHE v69. **Ikke live-testet i nettleser ennå:** selve sperreskjermen (krever at systemklokka passerer 2026-11-13, eller `PIN6_KREVES_FRA` endres midlertidig for en test) og et reelt 2/4-timers utløp (krever enten å vente eller manipulere `logget_inn_at` direkte i databasen for en TEST-ansatt).
 
@@ -328,14 +416,35 @@ Henrik («ja legg det til», 2026-11-04): «Bil-effektivitet»-badgen (ordredeta
 - `renderBilEffektivitetBadge()` (js/ordre-diverse.js) bruker den frosne verdien direkte (ingen DB-spørring) når den finnes, og viser «Kostnad: X kr (Y kr/t)» når timesats er satt. Uten frysing beregnes tallet live som før.
 - Database kjørt 2026-11-12 (migrasjon `20261112180000_timesats_og_frossen_effektiv_tid.sql`, ren `add column if not exists`, verifisert i rullet-tilbake transaksjon FØR den ekte kjøringen). `sw.js` CACHE v70. Vakt: `test/effektiv-tid-frossen.test.js` (fryse/nullstille/rulle-tilbake i `endreStatus()`) og egen describe i `test/bil-effektivitet.test.js` (frosset verdi + kostnad i selve badgen).
 
-## Filer i Storage vises via signerte lenker (2026-11-16, trinn 1 av 2 - bøttene er FORTSATT offentlige)
+## Standardtid: egen lagring og forslag fra kalkylen (2026-11-25, s09-027, gren `henger/s09-027`, IKKE utrullet)
 
-Sikkerhetsgjennomgang 16.11 (Henrik: «Ta filene først»): alle tre bøttene (`bilder` 1990 filer, `ordre-dokumenter` 523, `hms-vedlegg` 3) er `public`, og en fil kunne hentes uten innlogging av den som har lenken (målt: HTTP 200 uten noen innlogging). Adressene er i praksis umulige å gjette og kan ikke listes uten innlogging, men en lenke som er delt eller som en tidligere ansatt har, virker for alltid.
+- **Egen rutine:** `settStandardtid()` (js/ansatte-utstyr.js) gikk via `saveInnstillinger()` («lagre alt»: utstyrsmaler, drivstoffsatser, reisetider og standardtider fra nettleserens minne, samme feilklasse som dagens_pin 12.11). Nå: `lagreStandardtid()` → RPC `sett_standardtid(p_modell, p_ombygging_min)` (migrasjon `20261125100000_sett_standardtid.sql`): bare admin (sjekket i databasen), endrer bare ÉN modellnøkkel og bare feltet `ombygging` (andre felt beholdes), nøkkelen brukes uendret (ingen trimming), svaret (alle standardtider) erstatter den lokale kopien. Feil gir beskjed og den gamle verdien tilbake. `standardtider` er fjernet fra `saveInnstillinger()`. **Migrasjonen FØR klienten** (ny klient uten funksjonen får feil og lagrer ikke). SQL-test `supabase/tester/sett_standardtid_TEST_body.sql` (19 kontroller, kjørt mot produksjon i rullet-tilbake transaksjon 25.11, alle OK; funksjonen borte etterpå).
+- **Forslag fra kalkylen:** «Hent forslag fra kalkylen» (Mer → Standardtider) kaller edge-funksjonen `hent-kalkyle-tider-fra-portalen` (bare admin, ALLTID håndhevet uansett `EDGE_AUTH_ENFORCE`, hemmeligheten `SALMAKERN_HENT_SECRET`), som henter `GET https://forhandler.salmaker.as/api/salmakern/kalkyle-timer` og validerer strengt (`logikk.ts`; kontrakten står øverst der). Lagrer INGENTING: forslagene ligger bare i minnet på siden (`KALKYLE_FORSLAG`), og en standardtid endres først når admin trykker «Bruk» (bekreftelse, så `lagreStandardtid`). Kobling kalkylemodell → modellrad: radens tekst matches mot `FIKEN_OMBYGGING_MODELLER` (gir portalens modellnøkkel); bare nøyaktig ÉN kalkylemodell med den nøkkelen og et tall gir et forslag. Aldri timer per ansatt. **Portalens endepunkt finnes ikke ennå** (eget repo); til det finnes svarer funksjonen 502 «gir ikke ut standardtider ennå». Hvilke kalkulerte timer som skal telle (bare «Montering» eller alle lønnslinjer, se portalens «Timer mot kalkyle») fører Henrik selv inn i kalkylesiden i portalen (svar 25.11: «dette skal jeg føre inn»); endepunktet gir bare ut det portalen har. Portal-utvikler bygger endepunktet (Henriks ja 25.11).
+- «Aggregerte tall tilbake» (faktiske timer fra appen til kalkylen, per bil uten ansatte) var allerede gjort 16.11: `portal-timer-fakta`.
+- Vakt: `test/standardtid-egen-rutine.test.js`, `test/hent-kalkyle-tider-fra-portalen.test.js`, `test/edge-auth-gate.test.js`, `test/dagens-pin-isolert.test.js`. `sw.js` CACHE v111.
 
-- **Trinn 1 (klienten, denne endringen):** databasen lagrer fortsatt den offentlige adressen (`.../object/public/<bøtte>/<sti>`); den er filens faste NAVN (sletting, `storageFilBrukesAvAndre`, `dokumentSti`) og skal ALDRI byttes med en signert lenke. Alt som VISER eller ÅPNER en fil går gjennom hjelperne i `js/core.js` («SIGNERTE FIL-LENKER»): `filBildeAttr(url)` (`<img>`: plassholder + `data-fil`, byttes når lenken er signert), `filLenkeAttr(url)` (`<a>`: `apneFil` åpner signert lenke; fanen åpnes synkront), `filUrlNaa`/`filSigner` (utskriftsvinduet i `genPDF`, som nå åpner vinduet FØR bildene signeres) og `filHent` (Vegvesen «Skriv ut»). Én `createSignedUrls` per bøtte per rendering; lenken varer 2 t og gjenbrukes i 1,5 t. Feiler signeringen (uten nett, ikke innlogget), brukes den lagrede adressen (virker så lenge bøtta er offentlig, og fra bildecachen etterpå). **Ny `<img>`/`<a>` mot en Storage-fil skal bruke hjelperne** (vakt i testen under feiler på rå `src="${...}"`/`href="${d.url}"`).
+## Filer i Storage vises via signerte lenker (2026-11-16; trinn 2 gjort 2026-11-25: alle tre bøttene er PRIVATE)
+
+**Status 25.11:** `bilder`, `ordre-dokumenter` og `hms-vedlegg` har `public = false` (bekreftet med lesende spørring 25.11). En fil kan nå bare hentes med en signert lenke (som krever innlogget ansatt) eller fra enhetens egen bildecache; den lagrede `.../object/public/...`-adressen gir ikke lenger filen. Teksten under beskriver hvordan det var 16.11.
+
+Sikkerhetsgjennomgang 16.11 (Henrik: «Ta filene først»): alle tre bøttene (`bilder` 1990 filer, `ordre-dokumenter` 523, `hms-vedlegg` 3) var `public`, og en fil kunne hentes uten innlogging av den som har lenken (målt: HTTP 200 uten noen innlogging). Adressene er i praksis umulige å gjette og kan ikke listes uten innlogging, men en lenke som er delt eller som en tidligere ansatt har, virker for alltid.
+
+- **Trinn 1 (klienten, denne endringen):** databasen lagrer fortsatt den offentlige adressen (`.../object/public/<bøtte>/<sti>`); den er filens faste NAVN (sletting, `storageFilBrukesAvAndre`, `dokumentSti`) og skal ALDRI byttes med en signert lenke. Alt som VISER eller ÅPNER en fil går gjennom hjelperne i `js/core.js` («SIGNERTE FIL-LENKER»): `filBildeAttr(url)` (`<img>`: plassholder + `data-fil`, byttes når lenken er signert), `filLenkeAttr(url)` (`<a>`: `apneFil` åpner signert lenke; fanen åpnes synkront), `filUrlNaa`/`filSigner` (utskriftsvinduet i `genPDF`, som nå åpner vinduet FØR bildene signeres) og `filHent` (Vegvesen «Skriv ut»). Én `createSignedUrls` per bøtte per rendering; lenken varer 2 t og gjenbrukes i 1,5 t. Feiler signeringen (uten nett, ikke innlogget), brukes den lagrede adressen (virket bare mens bøtta var offentlig; etter 25.11 bare fra bildecachen). **Ny `<img>`/`<a>` mot en Storage-fil skal bruke hjelperne** (vakt i testen under feiler på rå `src="${...}"`/`href="${d.url}"`).
 - **`sw.js` (CACHE v82):** bildecachen bruker filens faste adresse uten token som nøkkel (`bildeCacheNokkel`: offentlig og signert adresse gir samme nøkkel, så et nytt token gir ikke ny nedlasting), henter med CORS og lagrer bare ekte 200-svar (før ble «opaque»-svar lagret usett; et feilsvar fra en privat bøtte ville blitt liggende som om det var bildet). Opplasting/sletting/`authenticated` går forbi.
-- **Trinn 2 (IKKE gjort, krever Henriks ja):** `update storage.buckets set public = false where id in ('bilder','ordre-dokumenter','hms-vedlegg')`. Lese-reglene på `storage.objects` krever allerede innlogget ansatt for alle tre bøttene, så signering virker uten nye regler. Gjøres først når (1) signering er sett virke i den innloggede, utrullede appen (bilder på en ordre, et dokument, Vegvesen «Skriv ut», PDF, HMS-bilde, fullmakt), og (2) klienten har vært ute lenge nok til at åpne faner har oppdatert seg: en fane med gammel kode får ødelagte bilder og dokumentlenker i det øyeblikket bøttene stenges (rettes ved å laste siden på nytt). Rollback: sett `public = true` igjen.
-- **Testet:** `test/fil-signerte-lenker.test.js` (15) og hele suiten; i ekte nettleser mot ekte Storage UTEN innlogging (signering avvist → lagret adresse → bildet lastet gjennom ny sw.js, lagret som `cors`/200 under fast nøkkel). **Ikke testet:** vellykket signering som innlogget ansatt mot ekte Storage (krever PIN-innlogging), og private bøtter.
+- **Trinn 2 (GJORT, bekreftet 25.11: `public = false` på alle tre):** `update storage.buckets set public = false where id in ('bilder','ordre-dokumenter','hms-vedlegg')`. Lese-reglene på `storage.objects` krever innlogget ansatt for alle tre bøttene, så signering virker uten nye regler. En fane med kode fra før 16.11 (uten signering) får ødelagte bilder og dokumentlenker; rettes ved å laste siden på nytt. En signert lenke som alt er utdelt virker ut sin levetid (2 t), også for en ansatt som er avsluttet i mellomtiden. Rollback: sett `public = true` igjen. Ingen migrasjonsfil i repoet for selve endringen.
+- **Testet:** `test/fil-signerte-lenker.test.js` (15) og hele suiten; i ekte nettleser mot ekte Storage UTEN innlogging (signering avvist → lagret adresse → bildet lastet gjennom ny sw.js, lagret som `cors`/200 under fast nøkkel). **Ikke testet (16.11):** vellykket signering som innlogget ansatt mot ekte Storage (krever PIN-innlogging), og private bøtter. Bøttene er private siden 25.11; denne gjennomgangen har ikke selv sett bilder/dokumenter lastes i en innlogget økt etter det.
+
+## Nødbrems og varsel ved PIN-sperre (samlet PIN-sperre, 2026-11-25, gren `henger/pin-nodbrems`, IKKE utrullet)
+
+Henger igjen oe3ybyfat1g3ef6dx2rm, alle Henriks svar 25.11. Migrasjon `20261125200000_pin_nodbrems.sql` (bygget på de LIVE funksjonsdefinisjonene 25.11; rollback i `supabase/rollback-referanser/pin_nodbrems_ROLLBACK.sql`).
+- **Nødbrems** (admin, rødt kort øverst i Mer, `renderNodbremsKort`/`trekkNodbrems`/`opphevNodbrems` i `js/ansatte-utstyr.js`): RPC `nodbrems_pa()`/`nodbrems_av()` (bare admin) skriver én rad i den nye tabellen `sikkerhet_tilstand` (id=1; alle med en Auth-sesjon kan LESE, ingen kan skrive direkte; i Realtime-publikasjonen). `current_ansatt()` og `hent_innlogget_ansatt()` (identiske vilkår) godtar da bare økter med `logget_inn_at` ETTER `nodbrems_siden`, unntatt økta som trakk den (samme `auth.uid()`, samme ansatt, innlogget før). Alt som bruker `current_ansatt()` (RLS, Realtime, Storage, edge-gaten) stenges med en gang, også andre admin-økter og allerede utstedte JWT-er.
+- **Innlogging mens den er aktiv**: `logg_inn_med_pin`/`login_med_pin` slipper bare admin inn. `login_med_pin` (godkjenner-PIN ved lukking av ordre) avviser i tillegg en PIN som må byttes etter nødbremsen, også for admin og også etter at den er opphevet (Henrik 25.11: samme regel begge steder); samme svar som feil PIN, telles som feil forsøk. Klienten (`bekreftGodkjenn` i `js/ordre-diverse.js`) viser da «Feil PIN eller ikke godkjenner», og mens nødbremsen er aktiv eller i 30 dager etter opphevingen (`nodbremsPinBytteKanGjelde()` i core.js) i tillegg at man må logge inn selv og sette ny PIN først (Henrik 25.11). `sw.js` CACHE v116. Alle andre (riktig ELLER feil PIN) får NØYAKTIG samme svar som feil PIN og telles som feil forsøk. Bevisst IKKE `raise` (specen sa det): en raise ruller tilbake registreringen av forsøket, og da ville forsøk under nødbrems ikke telt i sperrene. Klienten spør `sikkerhet_tilstand` (`nodbremsErAktiv`) og viser «Innlogging er midlertidig stengt av admin».
+- **Ny PIN etter nødbrems, for ALLE (også admin)**: ny kolonne `ansatte_pin.pin_satt_at` (null = fra før migrasjonen; settes av `endre_egen_pin`, `admin_sett_pin`, default på nye rader). Terskelen er `nodbrems_siden` mens den er aktiv, ellers `ny_pin_kreves_fra` (= `nodbrems_siden` når den oppheves). `logg_inn_med_pin` returnerer `ny_pin_kreves` (ny kolonne: funksjonen er droppet og laget på nytt med samme rettigheter). `current_ansatt()` avviser økta til PIN-en er byttet, så bytteskjermen (`#pinByttSkjerm`, ny tekst via `visPinByttSkjerm('nodbrems')`) kan ikke omgås; den lagrer via `endre_pin_etter_nodbrems(p_ny_pin)` (sjekker JWT-claimene selv, krever økt etter nødbremsen, ny PIN ulik den gamle: `SAMME_PIN`, `PIN_I_BRUK`, `IKKE_PAKREVD`; rate-limit som `endre_egen_pin`).
+- **Manglende `logget_inn_at` godtas ikke lenger** (var «ingen grense ennå» siden 12.11). Kaster ut de 54 gamle innloggingene fra før 12.11 i det migrasjonen kjøres (Henriks ja). **Alle eldre SQL-tester i `supabase/tester/` som bygger claims uten `logget_inn_at` feiler etter migrasjonen** hvis de kjøres på nytt; innloggingstesten (og NATT-fila) er oppdatert.
+- **Klienten logger ut**: Realtime på `sikkerhet_tilstand` (nødbrems aktiv), når fanen kommer tilbake, og hvert 2. minutt kjører `sjekkOktFortsattGyldig()` (`js/core.js`), som logger ut (`doLogout(true)`) BARE når `hent_innlogget_ansatt()` gir tomt svar uten feil to ganger (med én `refreshSession` imellom). Aldri på en nettverksfeil, aldri mens bytteskjermen vises.
+- **Varsel**: `_pin_rate_limit_global_registrer(false)` sender (i egen `begin/exception`, kan aldri påvirke innloggingen) ett push via `_sikkerhet_push()` når 30-feil-sperren slår inn, høyst ett per 10 min (atomisk `update ... where global_sperre_varslet_at` eldre enn 10 min). Selve sperren (`_pin_rate_limit_global_sjekk`) er urørt og gjelder fortsatt alle, også admin. `nodbrems_pa/av` varsler de andre adminene. `send-push` har typen `pin_global_sperre` (hendelse `global_sperre`/`nodbrems_pa`/`nodbrems_av`), godtatt BARE som server-kall (`erServerKall`, ellers 403), bare til aktive admin-kontoer.
+- **Utrulling (rekkefølge, som i specen)**: (1) migrasjonen KVELDSTID etter SQL-testen i rullet-tilbake transaksjon (kaster ut de 54 gamle øktene), (2) `functions deploy send-push`, (3) klienten (sw.js CACHE v116). Abonnementet på `sikkerhet_tilstand` ligger i en EGEN Realtime-kanal (`sikkerhetChannel`), så selv om klienten skulle gå ut før migrasjonen kan den aldri velte hovedkanalen. Gammel klient mot ny database: virker, men viser «Feil PIN» under nødbrems og har ingen bytteskjerm (en som må bytte PIN får en tom app til siden er lastet på nytt); det merkes bare etter en nødbrems.
+- **Test**: `supabase/tester/pin_nodbrems_TEST_body.sql` (55 kontroller) + innloggingstesten (24) kjørt mot produksjonen i rullet-tilbake transaksjon 25.11, alle OK, og databasen kontrollert uendret etterpå. `test/nodbrems.test.js` (24) og `test/send-push-pin-sperre.test.js` (6), mutasjonssjekket (12 av 12 drept). **Ikke testet**: i en innlogget nettleser og ekte push-levering.
 
 ## Kort PIN kan ikke finnes, og bare admin kan slette ordrer (2026-11-16, kjørt)
 
@@ -344,6 +453,24 @@ Samme sikkerhetsgjennomgang (Henrik: PIN-ene «er satt nå», og «det er kun ad
 - **`ordrer`: regelen `krever_innlogget_ansatt` (FOR ALL) er delt** i `ordrer_lese`, `ordrer_opprette`, `ordrer_endre` (alle innloggede ansatte, som før) og `ordrer_slette_kun_admin`. Appen viste allerede «Slett ordre»/«Slett leveranse» bare for admin, så ingen flyt er endret; `portal_avvis_ordre` (admin + godkjenner) er SECURITY DEFINER og virker som før. NB: en DELETE som stoppes av RLS gir INGEN feil, bare 0 rader. Det som står under «Bekreft / Avvis (G6)» om at alle ansatte kan slette ordrer direkte, gjelder nå bare ENDRING.
 - **Fortsatt åpent (ikke rørt):** alle innloggede ansatte kan endre alle ordrer, og har full tilgang (også sletting) til `innstillinger`, `flater`, `moter`, `push_abonnement` og lagertabellene.
 - Test: `supabase/tester/pin_seks_sifre_og_ordre_sletting_kun_admin_TEST_body.sql` (11 kontroller i én DO-blokk som alltid ender med en exception, så alt rulles tilbake; kjørt før og etter migrasjonen).
+
+## Avslutt ansatt: full tilgangssperring i ett steg (2026-11-20, UTRULLET, merge `a3d1803`)
+
+Sikkerhetsgjennomgangen fant at den gamle «Deaktiver»-knappen bare satte `ansatte.aktiv = false`: ingen bekreftelse, feil bare i konsollen, og PIN-raden, push-abonnementene og en pågående stempling/ordreklokke ble stående. Henrik: full tilgangssperring, men aldri sletting av `ansatte`-raden (timelister, lønn og ordrelogger peker på den). Brukes i rutinen øverst («Sikkerhetsrutine», del A).
+- **Tre knapper per ansatt** under Mer → Ansatte (`js/arkiv-mer.js`, funksjonene i `js/ansatte-utstyr.js`): «Sett inaktiv» (`settAnsattInaktiv`: midlertidig pause, skriver bare `aktiv = false` direkte; PIN, `session_token`, push og klokker røres ikke), «🔒 Avslutt ansatt» (`avsluttAnsatt`, med bekreftelse og toast ved feil) og, for en inaktiv ansatt, «Aktiver (ny PIN)» (`reaktiverAnsattMedNyPin`).
+- **`avslutt_ansatt(p_ansatt_id)`** (migrasjon `20261120100000_avslutt_ansatt.sql`, SECURITY DEFINER, alt i én transaksjon): krever admin (`KUN_ADMIN`), nekter å avslutte seg selv (`KAN_IKKE_AVSLUTTE_SEG_SELV`; klienten stopper det også), låser raden, og (1) stempler ut hvis innstemplet, med stopptid NÅ og samme pauseregel som admin-utstempling (30 min fra 8 t rå tid), som en `normal`-føring med fast id `tavslutt_<ansatt>_<innstempling i ms>` (`on conflict do nothing`, bare hvis over 0 min), (2) stopper åpne Ombygging-klokker via den eksisterende `stopp_ordreklokker_for_ansatt`, (3) setter `aktiv = false` og `session_token = null`, (4) sletter raden i `ansatte_pin` og (5) sletter `push_abonnement`-radene. Svarer `{ok, navn, timeRegistrert, ordreklokkerStoppet}`. Idempotent: på en allerede inaktiv ansatt gjør den det som gjenstår (nyttig for ansatte deaktivert med den gamle knappen).
+- **`admin_reaktiver_ansatt(p_ansatt_id, p_ny_pin)`**: bare admin, ny PIN må være 6 sifre og ledig (`PIN_I_BRUK`), samme rate-limit som `admin_sett_pin`, skriver PIN og `aktiv = true` i én operasjon. Reaktivering krever derfor ALLTID ny PIN, uansett hvordan ansatten ble satt inaktiv.
+- **Når virker det:** `current_ansatt()` krever `aktiv = true`, så både «Avslutt ansatt» og «Sett inaktiv» stenger ute med en gang for RLS, edge-funksjonene, Storage og Realtime, også en økt som allerede er i gang. Ikke tilbakekalt: det som står på skjermen/i bildecachen og signerte fil-lenker som alt er utdelt (2 t).
+- Begge funksjonene er `grant execute ... to anon, authenticated` (adminsjekken er inni, samme mønster som andre admin-RPC-er). Rollback: `drop function` for begge (står øverst i migrasjonen).
+- Vakt: `test/avslutt-ansatt.test.js` og `supabase/tester/avslutt_ansatt_TEST_body.sql` (rullet tilbake).
+
+## Delt stasjon låst til verkstedet med GPS (2026-11-20, UTRULLET, merge `af629d2`)
+
+PIN-en til den delte verkstedkontoen (`er_delt_stasjon`, id 114 «Booking Salmaker», se «PIN til 6 sifre, øktgrense og delt verksted-stasjon») er kjent av hele verkstedet og virket fra hvilken som helst enhet. Nå slipper `tryLogin()` (`js/core.js`) en slik konto inn bare når enhetens posisjon er innenfor verkstedets radius.
+- **Hvor:** `sjekkDeltStasjonGPS()` / `deltStasjonGpsMaal()` (blokken «GPS-SPERRE FOR DEN DELTE STASJON-KONTOEN» i `core.js`). Målet er den eksisterende arbeidsplass-innstillingen `S.gps` (Mer → «Sett arbeidsplasslokasjon», samme som timeklokka bruker: 59.18397, 9.60635, radius 100 m, kontrollert mot produksjon 20.11); mangler den, brukes de samme koordinatene fra konstantene `DELT_STASJON_GPS_*`. Flyttes arbeidsplass-innstillingen, flytter sperren med.
+- **Fail-closed, uten overstyring** (ulikt timeklokka, som har dagens PIN som reserve): nektet posisjonstilgang, ingen posisjon, tidsavbrudd (10 s) eller ingen geolokasjon i nettleseren gir avslag med en forklarende melding i `#pinErr`. Ved avslag kalles `logg_ut()` FØR `me` settes, siden `logg_inn_med_pin` allerede har skrevet ansatt-claims på enhetens anonyme Auth-bruker.
+- **Begrensninger:** sjekken sitter bare i NETTLESEREN. Databasen vet ikke hvor enheten er, så en som kjenner PIN-en og kaller `logg_inn_med_pin` direkte (eller forfalsker posisjonen) kommer forbi den. Sesjonsgjenoppretting (`gjenopprettOktFraEksisterendeSesjon`) sjekker ikke GPS på nytt: en stasjon som er innlogget, kan lastes på nytt uten ny posisjonssjekk innenfor øktgrensen (2 t for denne kontoen). Vanlige ansattkontoer er urørt.
+- Vakt: describe «GPS-sperre ved innlogging med den delte stasjon-kontoen» i `test/edge-fetch-og-utlogging.test.js`.
 
 ## PDF-eksport
 
@@ -559,6 +686,14 @@ Forhandlerportalens kalkyleside (`/admin/kalkyle`) sammenligner kalkulerte timer
 - **`pagaar_ombygging` og `pagaar_klargjoring` er uavhengige (ingen samlet `pagaar`)**: opprydningen `stopp_forlatte_ordreklokker` rører aldri Klargjøring, så en glemt åpen Klargjøring-klokke kunne ellers holdt en hentet bil utenfor portalens snitt for alltid. `hentet_dato` leses fra siste logglinje «Status endret til: Hentet» i `ordrer.endringer` (formatet `D.M.YYYY, HH:MM:SS` i enhetens lokaltid, sett i ekte data 16.11), ellers fra `effektiv_tid_frossen.frossetVed` (UTC, regnes om til norsk dato), ellers null.
 - **Utrulling (gjort 16.11 kl. 15:32-15:34 etter Henriks ja, i denne rekkefølgen):** SQL-test i rullet-tilbake transaksjon, så migrasjon, så `npx supabase functions deploy portal-timer-fakta --project-ref qoqpenbfdxeduylxirwk --use-api --yes`, så røyktest uten hemmelighet (401). Ingen endring i `js/*.js` eller `sw.js`. **`db query --read-only` kan ikke kalle funksjonen** (rollen mangler `execute`); kall den som eier (`--yes`, bare SELECT) eller via edge-funksjonen.
 - **Test:** `test/portal-timer-fakta.test.js` (56 tester, i `npm test`) og `supabase/tester/portal_timer_fakta_TEST_body.sql` (76 sjekker; kjørt mot PGlite og mot den ekte databasen 16.11 i en rullet-tilbake transaksjon, alle OK). QA-oppgaven `salmakern-booking-daglig-qa` har punkt 43.
+
+## Diagnose-kravet for å starte en ordre er fjernet igjen (2026-11-25)
+
+Kravet lagt til 2026-11-20 (se `sw.js` v105: minst én ansatt meldt på, alle 6 ankomstbilder OG «Diagnose utført» krysset av, før en ordre kan settes til Påbegynt eller lenger) stoppet en ansatt i praksis 25.11 («vi får ikke satt en bil på påbegynt ... må tatt diagnose først»). Henrik: «ja diagnose skal ikke være der». `endreStatus()` i `js/oversikt-kalender.js` sjekker ikke lenger `o.diagnose` - bare ansatt- og bildekravet gjelder fortsatt (uendret). Diagnose kan fortsatt krysses av på ordren (Diagnose-kortet, `toggleDiagnose()` i `js/ordre-detalj.js`, urørt) og er fortsatt ett av `tvangsflyt()`-kravene for å lukke ordren - det er bare DENNE ene statusovergangs-sjekken det ikke lenger inngår i. `sw.js` CACHE v109. Test: `test/strengere-ordre-krav.test.js` og `test/ankomstdato-status.test.js` (oppdatert, de gamle diagnose-blokkerer-testene er fjernet/erstattet). QA: punkt 54.
+
+## Hentet-e-postens avsender er fast «Jan Børre Sigurdsen» (2026-11-25)
+
+Da «Bilen er hentet»-varselet ble gjort automatisk (2026-11-17, se avsnittet om Admin-ark/Frakt-e-post og `adminArkVarsleHentetAuto()`), sendte det fortsatt `avsenderNavn: me?.navn` - altså navnet til hvilken som helst ansatt som tilfeldigvis utløste statusendringen til Hentet, selv om de aldri bevisst trykket noen knapp for å sende e-posten. Henrik 25.11: «men det skal bli sendt fra Jan Børre Sigurdsen». `adminArkSendHentetEpost()` i `js/admin-ark.js` (felles for automatikken OG reserveknappen `adminArkVarsleHentetManuelt`) bruker nå en fast konstant `HENTET_EPOST_AVSENDER = 'Jan Børre Sigurdsen'` i stedet for `me?.navn` - samme signatur-navn som Vegvesen-dokumentene (`js/vegvesen-dokumenter.js`, «Innehaver»/«Teknisk leder»), og av samme grunn: e-posten skal ikke se ut som om en tilfeldig ansatt personlig skrev/sendte den. De ANDRE frakt-e-postene (`adminArkFraktBestill` m.fl.) er BEVISST uendret - de sendes fortsatt av en bevisst admin-handling og signeres av den innloggede ansatte. `sw.js` CACHE v112. Test: `test/hentet-auto-gronn.test.js` (oppdatert). QA: punkt 56.
 
 ## Daglig automatisk QA-gjennomgang
 
@@ -791,6 +926,20 @@ samme måte når booking-verktøyet endres.
 Se kritisk på visuelle endringer ved faktisk visningsstørrelse/bakgrunn før de vises frem som
 ferdige. Ved subjektive designvalg (f.eks. hvilken logofil/størrelse) - vis flere reelle
 alternativer side ved side og la Henrik velge, ikke bestem selv.
+
+## Modellvelger i «+ Ny ordre» (2026-11-25, s90-20261120-modellvelger, gren `henger/modellvelger`, IKKE utrullet)
+
+Bare 2 av 85 aktive bil-ordrer hadde modellnøkkel (`ordrer.portal_modell_slug`) 25.11: de fra portal/e-post. Nå har «+ Ny ordre» nedtrekket «Modell fra katalogen» (`#n_modellvalg`, fylt fra `S.portalModellKobling` = `portal_modell_kobling`, 14 rader; kolonnen har fremmednøkkel dit). Valg fyller Merke/Modell med katalogens tekst; ID BUZZ kort/lang skilles med siste ledd i nøkkelen. Nøkkelen lagres i insert-en (`opprettOrdre`) BARE når Merke/Modell fortsatt er katalogens tekst (`nyOrdreValgtModellSlug`, uavhengig av store/små bokstaver og mellomrom i endene); fritekst gir ingen nøkkel, som før. `ordreToDb`/`save()` skriver fortsatt aldri kolonnen. **En nøkkel valgt i appen følger teksten:** endres Merke/Modell i ordredetaljen til noe annet (`sf()` → `ryddAppModellSlugVedTekstEndring`), fjernes den med en målrettet update (bare hvis databasen har samme nøkkel; tilbake lokalt ved feil), så fakturering følger den rettede teksten som før. Portal-/e-postordrer (`portal_bestilling_id`/`epost_bestilling_id`) røres aldri. **Fakturering uendret:** nøkkel + katalogtekst gir samme Fiken-numre (`finnFikenOmbyggingModell`/`ombyggingNummerFor`) og samme «Skal på bilen»-produkter (`produktlisteModell`) som teksten alene, bevist for alle 14 katalograder med portalens produkter 25.11 (`test/fixtures/portal-produkter-slug-2026-11-25.json`). Det kan endre seg hvis portalen gir ID BUZZ lang egne roller/produkter (da får en lang-ordre dem, som en portalordre alt gjør). Ingen databaseendring. Vakt: `test/modellvelger-ny-ordre.test.js` (32). `sw.js` CACHE v110. Sett som statisk forhåndsvisning ved 375 px, ikke innlogget.
+
+## Ordrekortene: én kortbygger og én pille-komponent (2026-11-25, gren `henger/ordrekort-badges`, IKKE utrullet)
+
+Henrik valgte «Alternativ 3: konsolidering uten skjuling» fra designgjennomgangen av «badge-suppa» (Henger igjen hrqzan51zwe7fxbvm5ct), og at alle tre listene skal vise SAMME merker. Ren visning: ingen databaseendring, ingen endring i NÅR et merke vises eller hva som kan trykkes.
+- **`ordreKortHTML(o, kontekst)`** (`js/oversikt-kalender.js`) bygger bil-kortet i Ordre-lista (`'liste'`), Oversikt «Aktive» (`'aktiv'`) og «Ventende» (`'venter'`). Før var det tre håndskrevne kopier som hadde drevet fra hverandre (Oversikt manglet COC/Fullmakt, hengerfeste og tvangsflyt-stolpen). Felles: ramme, ★, merke-blokken (`ordreKortMerkerHTML`: pille-raden `ordreKortPillerHTML`, tvangsflyt-stolpen rett under, hengerfeste sist), ansatte-chips og «+ Meld meg på». Bare tittel og detaljer er per kontekst; Vedtak/Fakturert står fortsatt bare i Ordre-lista. Leveranser har fortsatt `leveranseKortHTML`. **Nytt merke på kortene → legg det i `ordreKortPillerHTML`, ikke i én liste.**
+- **`statusPill(label, tone, opts)`** (`js/core.js`): toner `ok`/`bad`/`warn`/`info`/`neutral`/`special`; fargene ligger bare i `.pill.<tone>` i salmakern.html (`neutral` og `special` er nye), størrelsen i `.pill.status-pill`. Escaper selv (egen `statusPillEsc`, core.js lastes alene i tester). Brukes av COC/Fullmakt (`dokStatusPillHTML`; `dokStatusFarge` gjelder nå bare nedtrekket i ordredetaljen), PORTAL/E-POST (warn før bekreftelse, special etter: fargen er eneste skille i ordredetaljens korte utgave), KUN EKSTRAUTSTYR (special), bestilt frakt (special), flåte (info/neutral), «Utstyr ikke bekreftet» og Hengerfeste (warn).
+- **Kanten er alltid statusfargen** (før gul for prioritert, som ikke kunne skilles fra «Ikke veid», og lilla for bestilt frakt). Prioritert er en ★ foran tittelen (`prioritertStjerneHTML`), bestilt frakt/henteklar en vanlig pille: ingen hjørnemerker igjen.
+- **Glød**: kortene bruker `pulseGlowKort` (omtrent halv styrke). `pulseGlow` er urørt (lønnsklokka og «Ansatte på ordren»).
+- **«Kun ekstrautstyr»**: merket står i pille-raden, og kortet har nå den vanlige tvangsflyt-stolpen («0 av 1 krav», som PDF-en) i stedet for merket på stolpens plass.
+- Referansene `test/fixtures/kun-visning-referanse-vanlig.json` og `kun-rydd-referanse-vanlig.json` er laget på nytt: bare nøklene for Ordre-lista og Oversikt endret seg (alle andre byte-like), likt i tre tidssoner. Vakt: `test/ordrekort-merker.test.js` (18; 16 feiler mot koden fra før). `sw.js` CACHE v115. Sett som statisk forhåndsvisning med appens CSS ved 1280 og 375 px (ingen sidelengs rulling), ikke innlogget.
 
 ## Ordre-siden: «Hengerfeste først» og søk på forhandler.nr (2026-11-19, UTRULLET samme dag sammen med «Kun ekstrautstyr», commit `f0ca5e8`; prøvd innlogget mot ekte data: sortering og søk virker)
 

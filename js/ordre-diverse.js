@@ -772,6 +772,7 @@ function apneNyOrdreModal() {
   oppdaterNyOrdreStatusFelt();
   oppdaterNyOrdreKunFelt();
   document.getElementById('n_farge').innerHTML = fargeSelectOptions('');
+  renderNyOrdreModellValg();
   document.getElementById('n_merke_forslag').innerHTML = feltForslagHTML('n_merke', merkeForslag());
   renderModellForslag('n_merke','n_modell','n_modell_forslag');
   renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');
@@ -835,6 +836,10 @@ function opprettOrdre() {
   ny.chassis = chassis;
   ny._localAt = Date.now();
   ny.kunEkstrautstyr = kunNy;
+  // Modellvelgeren (s90-20261120-modellvelger): modellnøkkelen fra katalogen, bare når Merke/Modell fortsatt er nøyaktig katalogens tekst
+  // (se nyOrdreValgtModellSlug). ordreToDb skriver aldri portal_modell_slug, så den legges til i insert-en under.
+  const modellSlug = nyOrdreValgtModellSlug();
+  ny.portalModellSlug = modellSlug;
   // Samme oppslag som autoFyllForhandlerNr()/autoFyllForhandlerOrgnr() bruker på
   // detaljsiden - uten dette sto Forhandler.nr/Org.nr alltid tomt på en fersk ordre inntil
   // Forhandler-feltet ble rørt på nytt.
@@ -851,7 +856,7 @@ function opprettOrdre() {
   const fullmakt = ny.kunEkstrautstyr ? null : finnForhandlerFullmakt(ny.kunde);
   if (fullmakt) ny.dokumenter = [{ navn: fullmakt.navn, url: fullmakt.url, lastetOppAv: 'Automatisk (forhandlerfullmakt)', dato: new Date().toISOString() }];
   S.ordrer.push(ny);
-  if (db) db.from('ordrer').insert({ ...ordreToDb(ny), ...(ny.kunEkstrautstyr ? { kun_ekstrautstyr: true } : {}) }).then(r=>{
+  if (db) db.from('ordrer').insert({ ...ordreToDb(ny), ...(ny.kunEkstrautstyr ? { kun_ekstrautstyr: true } : {}), ...(modellSlug ? { portal_modell_slug: modellSlug } : {}) }).then(r=>{
     if (r.error) { console.error(r.error.message); if (ny.kunEkstrautstyr) visToast('Kunne ikke opprette ordren: ' + r.error.message); return; }
     if (ny.dokumenter && ny.dokumenter.length) db.from('ordrer').update({dokumenter:ny.dokumenter}).eq('id', id)
       .then(r2=>{if(r2.error) console.error('Fullmakt-auto-vedlegg feilet:', r2.error.message);});
@@ -874,6 +879,8 @@ function opprettOrdre() {
   if (statusFelt) statusFelt.value = 'ikke_paabegynt';
   const kunFelt = document.getElementById('n_kunEkstrautstyr');
   if (kunFelt) kunFelt.checked = false;
+  const modellValg = document.getElementById('n_modellvalg');
+  if (modellValg) modellValg.value = '';
   oppdaterNyOrdreStatusFelt();
   oppdaterNyOrdreKunFelt();
   openOrdre(id);
@@ -892,6 +899,57 @@ function oppdaterNyOrdreStatusFelt() {
 function oppdaterNyOrdreKunFelt() {
   const kun = !!document.getElementById('n_kunEkstrautstyr')?.checked;
   ['n_felt_type', 'n_felt_variant', 'n_felt_farge', 'n_felt_versjon'].forEach(i => { const el = document.getElementById(i); if (el) el.style.display = kun ? 'none' : ''; });
+}
+
+// ── Modellvelger i «+ Ny ordre» (s90-20261120-modellvelger, 2026-11-25) ──
+// Bare 2 av 77 aktive bil-ordrer hadde en modellnøkkel (ordrer.portal_modell_slug) 20.11: de som kom fra portalen/e-post. Her velger den ansatte
+// modellen fra katalogen (S.portalModellKobling, samme tabell portal_koble_bestilling bruker; kolonnen har fremmednøkkel dit), og Merke/Modell
+// fylles med katalogens tekst. Fritekst er reserven: velges ingenting, eller endres Merke/Modell etterpå, lagres ingen nøkkel (som før).
+// Fakturering: med nøkkel bruker finnFikenOmbyggingModell/kanoniskMerkeModell katalogens tekst og slug, men siden teksten er NØYAKTIG katalogens,
+// gir det samme Fiken-numre som fritekst (bevist for alle katalograder i test/modellvelger-ny-ordre.test.js).
+function nyOrdreModellValg() {
+  const rader = (Array.isArray(S.portalModellKobling) ? S.portalModellKobling : [])
+    .filter(r => r && typeof r.portal_modell_slug === 'string' && r.portal_modell_slug && String(r.merke || '').trim() && String(r.modell || '').trim());
+  const nokkel = r => `${String(r.merke).trim()} ${String(r.modell).trim()}`.toLowerCase();
+  const antall = {};
+  rader.forEach(r => { antall[nokkel(r)] = (antall[nokkel(r)] || 0) + 1; });
+  return rader.map(r => {
+    const merke = String(r.merke).trim(), modell = String(r.modell).trim();
+    // To katalograder med samme tekst (ID BUZZ kort/lang): skilles med siste ledd i nøkkelen.
+    const etikett = `${merke} ${modell}` + (antall[nokkel(r)] > 1 ? ` (${r.portal_modell_slug.split('-').pop()})` : '');
+    return { slug: r.portal_modell_slug, merke, modell, etikett };
+  }).sort((a, b) => a.etikett.localeCompare(b.etikett, 'no'));
+}
+function renderNyOrdreModellValg() {
+  const el = document.getElementById('n_modellvalg'); if (!el) return;
+  el.innerHTML = '<option value="">– Velg modell –</option>'
+    + nyOrdreModellValg().map(m => `<option value="${esc(m.slug)}">${esc(m.etikett)}</option>`).join('');
+  el.value = '';
+}
+function velgNyOrdreModell(slug) {
+  const m = nyOrdreModellValg().find(x => x.slug === slug);
+  if (!m) return; // «skriv selv»: feltene røres ikke
+  document.getElementById('n_merke').value = m.merke;
+  document.getElementById('n_modell').value = m.modell;
+  // Samme forslag som når man skriver i feltene selv.
+  renderModellForslag('n_merke','n_modell','n_modell_forslag');
+  renderTypeForslag('n_merke','n_modell','n_type','n_type_forslag');
+  renderVariantForslag('n_merke','n_modell','n_type','n_variant','n_variant_forslag');
+  renderVersjonForslag('n_merke','n_modell','n_type','n_versjon','n_versjon_forslag');
+  renderForhandlerForslag('n_merke','n_modell','n_kunde','n_kunde_forslag');
+}
+// Den valgte nøkkelen, men bare når Merke og Modell fortsatt er katalogens tekst (uten forskjell på store/små bokstaver og mellomrom i endene).
+function nyOrdreValgtModellSlug() {
+  const slug = document.getElementById('n_modellvalg')?.value || '';
+  const m = slug ? nyOrdreModellValg().find(x => x.slug === slug) : null;
+  if (!m) return null;
+  const lik = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  return lik(document.getElementById('n_merke')?.value, m.merke) && lik(document.getElementById('n_modell')?.value, m.modell) ? m.slug : null;
+}
+// Skriver den ansatte noe annet i Merke/Modell etter å ha valgt en modell, nullstilles valget, så skjemaet ikke sier noe annet enn det som lagres.
+function nyOrdreModellTekstEndret() {
+  const el = document.getElementById('n_modellvalg');
+  if (el && el.value && !nyOrdreValgtModellSlug()) el.value = '';
 }
 
 // ════════════════════════════════════════════════════
@@ -951,7 +1009,15 @@ async function bekreftGodkjenn() {
     if (error?.message?.includes('FOR_MANGE_FORSOK')) forMangeForsok = true;
     else if (!error && data && data.length && (data[0].rolle==='godkjenner'||data[0].rolle==='admin')) godkjenner = data[0];
   }
-  if (!godkjenner){document.getElementById('godkjErr').textContent = forMangeForsok ? 'For mange feilforsøk – vent noen minutter og prøv igjen' : 'Feil PIN eller ikke godkjenner';return;}
+  if (!godkjenner){
+    let melding = forMangeForsok ? 'For mange feilforsøk – vent noen minutter og prøv igjen' : 'Feil PIN eller ikke godkjenner';
+    // Etter en nødbrems avviser databasen også en gammel PIN som ikke er byttet ennå (samme svar som feil PIN).
+    if (!forMangeForsok && db && typeof nodbremsPinBytteKanGjelde === 'function' && await nodbremsPinBytteKanGjelde()) {
+      melding += '. Har du ikke satt ny PIN etter at admin stengte innloggingen, må du logge inn selv og sette ny PIN først.';
+    }
+    document.getElementById('godkjErr').textContent = melding;
+    return;
+  }
   const o=S.ordrer.find(x=>x.id===activeOrdreId); if(!o) return;
   const btn = document.querySelector('#godkjenn .btn.red');
   if (btn) { btn.disabled = true; btn.textContent = 'Lagrer...'; }

@@ -106,4 +106,13 @@ describe('bestiltFraktBadgeHTML() - kort-merket som erstatter "Bestilt frakt"-st
     const html = env.bestiltFraktBadgeHTML({ bestiltFrakt: true, henteKlarDato: '2026-10-05' }, 'right:12px');
     expect(html).toContain('HENTEKLAR 05.10.2026');
   });
+
+  // Henrik 2026-11-25 («Alternativ 3»): ikke lenger et hjørnemerke, men en vanlig pille (lilla tone special) i kortets merke-rad.
+  it('er en vanlig pille (statusPill, tone special), ikke et absolutt-posisjonert hjørnemerke', () => {
+    const env = nyEnvironment();
+    const html = env.bestiltFraktBadgeHTML({ bestiltFrakt: true, henteKlarDato: '' });
+    expect(html).toContain('class="pill special status-pill"');
+    expect(html).not.toContain('position:absolute');
+    expect(env.bestiltFraktBadgeHTML({ bestiltFrakt: true, ordreStatus: 'hentet' })).toBe('');
+  });
 });

@@ -88,7 +88,8 @@ describe('tvangsflyt', () => {
     expect(sandbox.tvangsflyt(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }))).toEqual([{ lbl: 'Status er Hentet', ok: true }]);
     expect(sandbox.tvangsflyt(bil()).length).toBe(7);
   });
-  it('Tvangsflyt-boksen viser kravet: ikke Hentet gir «0 av 1 krav» (godkjenner kan ikke lukke, admin kan overstyre), Hentet gir «1 av 1 krav» og «Godkjenn og lukk»; kortets stolpe er byttet med merket', () => {
+  // 2026-11-25 (ordrekort «Alternativ 3»): kortets stolpe er den vanlige («0 av 1 krav», som «Tvangsflyt 0/1» i PDF-en); merket står i pille-raden i stedet.
+  it('Tvangsflyt-boksen viser kravet: ikke Hentet gir «0 av 1 krav» (godkjenner kan ikke lukke, admin kan overstyre), Hentet gir «1 av 1 krav» og «Godkjenn og lukk»; kortets stolpe viser det samme kravet', () => {
     const ikkeHentet = bil({ kun_ekstrautstyr: true, ordre_status: 'klar_henting' });
     app.settMe({ id: 1, navn: 'TEST - Godkjenner', rolle: 'godkjenner' });
     let boks = sandbox.tvangsflytBoksHTML(ikkeHentet);
@@ -102,7 +103,10 @@ describe('tvangsflyt', () => {
     boks = sandbox.tvangsflytBoksHTML(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }));
     expect(boks).toContain('1 av 1 krav');
     expect(boks).toMatch(/>Godkjenn og lukk<\/button>/);
-    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).toContain('KUN EKSTRAUTSTYR');
+    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).toContain('0 av 1 krav');
+    expect(sandbox.tvangsflytBarHTML(ikkeHentet)).not.toContain('KUN EKSTRAUTSTYR');
+    expect(sandbox.tvangsflytBarHTML(bil({ kun_ekstrautstyr: true, ordre_status: 'hentet' }))).toContain('1 av 1 krav');
+    expect(sandbox.ordreKortPillerHTML(ikkeHentet)).toContain('KUN EKSTRAUTSTYR');
     expect(sandbox.tvangsflytBarHTML(bil())).toContain('av 7 krav');
   });
 });
@@ -239,12 +243,19 @@ describe('Hentet: en kun-ordre skriver aldri til Admin-ark (hentetVarslet), en v
   afterEach(() => { Object.assign(sandbox, ORIG); });
   const arkKall = (kall) => kall.filter((k) => k.tabell === 'admin_ark');
   const arkSkriv = (kall, metode) => arkKall(kall).flatMap((k) => k.kall.filter(([m]) => m === metode).map(([, a]) => a[0]));
-  async function settHentet({ kun, medArkRad }) {
+  // Fra 2026-11-17/25 sendes «Bilen er hentet»-e-posten automatisk, og hentetVarslet settes BARE etter vellykket sending
+  // (før ble raden merket uten e-post). Kontrollene for en vanlig bil har derfor en kontaktperson med e-post og en falsk edgeFetch.
+  const ORIG_EDGE = sandbox.edgeFetch;
+  let epostKall;
+  async function settHentet({ kun, medArkRad, medEpost = true }) {
     const { db, kall } = lagDb(); app.settDb(db);
-    const o = bil({ chassis: CHASSIS, ordre_status: 'klar_henting', kun_ekstrautstyr: kun }); S.ordrer = [o];
+    epostKall = [];
+    sandbox.edgeFetch = async (fn, init) => { epostKall.push({ fn, body: JSON.parse(init.body) }); return { ok: true, text: async () => 'ok' }; };
+    S.kontakter = [{ id: 'k_TEST', navn: 'TEST Kunde AS', type: 'Forhandler', kontaktpersoner: [{ id: 'kp_TEST', navn: 'TEST Kari', epost: 'kari@example.test' }] }];
+    const o = bil({ chassis: CHASSIS, ordre_status: 'klar_henting', kun_ekstrautstyr: kun, eier: medEpost ? 'TEST Kari' : 'TEST Ukjent' }); S.ordrer = [o];
     // _db: raden finnes i databasen (som en rad fra dbToAdminArkRad), så skrivingen er en update av bare det endrede feltet.
     S.adminArk = medArkRad ? [{ id: 'ark_TEST_H1', chassisNr: CHASSIS, aar: AAR, arkivert: false, hentetVarslet: false, _db: true }] : [];
-    await sandbox.endreStatus(o.id, 'hentet');
+    try { await sandbox.endreStatus(o.id, 'hentet'); } finally { sandbox.edgeFetch = ORIG_EDGE; }
     return { o, kall };
   }
   it('kun-ordre uten Admin-ark-rad: statusen settes, men ingen rad opprettes, ingen skriving til admin_ark og ingen ukoblet rad i Helsesjekk', async () => {
@@ -262,16 +273,29 @@ describe('Hentet: en kun-ordre skriver aldri til Admin-ark (hentetVarslet), en v
     expect(S.adminArk).toHaveLength(1);
     expect(S.adminArk[0].hentetVarslet).toBe(false);
   });
-  it('kontroll: en vanlig bil uten rad får en ny Admin-ark-rad med hentet_varslet (som før)', async () => {
+  it('en kun-ordre sender heller ingen hentet-e-post', async () => {
+    await settHentet({ kun: true, medArkRad: true });
+    expect(epostKall).toEqual([]);
+  });
+  it('kontroll: en vanlig bil der e-posten ikke kan sendes (ingen e-post i Kontakter): ingen merking i Admin-ark', async () => {
+    const { kall } = await settHentet({ kun: false, medArkRad: true, medEpost: false });
+    expect(epostKall).toEqual([]);
+    expect(arkKall(kall)).toEqual([]);
+    expect(S.adminArk[0].hentetVarslet).toBe(false);
+  });
+  it('kontroll: en vanlig bil uten rad får e-posten og en ny Admin-ark-rad med hentet_varslet', async () => {
     const { kall } = await settHentet({ kun: false, medArkRad: false });
+    expect(epostKall).toHaveLength(1);
     const upsert = arkSkriv(kall, 'upsert');
     expect(upsert).toHaveLength(1);
     expect(upsert[0]).toMatchObject({ chassis_nr: CHASSIS, hentet_varslet: true });
     expect(S.adminArk).toHaveLength(1);
     expect(S.adminArk[0].hentetVarslet).toBe(true);
   });
-  it('kontroll: en vanlig bil med en eksisterende rad får bare hentet_varslet oppdatert på den raden (som før)', async () => {
+  it('kontroll: en vanlig bil med en eksisterende rad får e-posten, og bare hentet_varslet oppdatert på den raden', async () => {
     const { kall } = await settHentet({ kun: false, medArkRad: true });
+    expect(epostKall).toHaveLength(1);
+    expect(epostKall[0].body).toMatchObject({ type: 'hentet', kontaktpersonEpost: 'kari@example.test', chassisNr: CHASSIS });
     expect(arkSkriv(kall, 'update')).toEqual([{ hentet_varslet: true }]);
     expect(arkSkriv(kall, 'upsert')).toEqual([]);
     expect(S.adminArk[0].hentetVarslet).toBe(true);

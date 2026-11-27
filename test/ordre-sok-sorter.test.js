@@ -158,3 +158,67 @@ describe('Ordre-siden: søk på forhandler.nr', () => {
     expect(html).toMatch(/id="ordreSok"[^>]*placeholder="[^"]*forhandler\.nr/);
   });
 });
+
+describe('Ordre-siden: filter «Hengerfeste» (Henrik 2026-11-24)', () => {
+  beforeEach(() => {
+    S.ordrer = [
+      bil('ord_TFILT1', A, '2026-11-01'),
+      bil('ord_TFILT2', B, '2026-11-02', { hengerfeste: 'hengerfeste' }),
+      bil('ord_TFILT3', C, '2026-11-03'),
+      bil('ord_TFILT4', D, '2026-11-04', { hengerfeste: 'hengerfeste' }),
+    ];
+  });
+
+  it('viser bare bilene med hengerfeste, i vanlig rekkefølge innenfor filteret', () => {
+    el('ordreStatusFilter').value = 'hengerfeste';
+    expect(rekkefolge(tegn(), [A, B, C, D])).toEqual([B, D]);
+  });
+
+  it('kan kombineres med sortering og søk', () => {
+    el('ordreStatusFilter').value = 'hengerfeste';
+    el('ordreSorterValg').value = 'nyest';
+    expect(rekkefolge(tegn(), [A, B, C, D])).toEqual([D, B]);
+    el('ordreSok').value = 'testsortb';
+    expect(rekkefolge(tegn(), [A, B, C, D])).toEqual([B]);
+  });
+
+  it('en «kun ekstrautstyr»-ordre med en gammel hengerfeste-verdi i dataene vises ikke i filteret (samme regel som sorteringen)', () => {
+    const K = 'TESTFILTK0000000K';
+    S.ordrer.push(bil('ord_TFILT5', K, '2026-11-05', { hengerfeste: 'hengerfeste' }, { kun_ekstrautstyr: true }));
+    el('ordreStatusFilter').value = 'hengerfeste';
+    expect(rekkefolge(tegn(), [A, B, C, D, K])).toEqual([B, D]);
+  });
+
+  it('en bil uten utstyr-objekt kaster ikke og telles som uten hengerfeste', () => {
+    S.ordrer.find((o) => o.id === 'ord_TFILT1').utstyr = null;
+    el('ordreStatusFilter').value = 'hengerfeste';
+    const h = tegn();
+    expect(h).not.toContain('Ordren kan ikke vises');
+    expect(rekkefolge(h, [A, B, C, D])).toEqual([B, D]);
+  });
+
+  it('ingen treff på filteret alene gir «Ingen aktive ordrer», og sammen med søk gir «Ingen ordrer matcher søket»', () => {
+    S.ordrer = [bil('ord_TFILT1', A, '2026-11-01')];
+    el('ordreStatusFilter').value = 'hengerfeste';
+    expect(tegn()).toContain('Ingen aktive ordrer');
+    el('ordreSok').value = 'testsorta';
+    expect(tegn()).toContain('Ingen ordrer matcher søket');
+  });
+
+  it('tallet i valget holdes oppdatert og teller bare aktive biler med hengerfeste (ikke kun-ekstrautstyr)', () => {
+    tegn();
+    const tekst = () => sandbox.document.querySelector('#ordreStatusFilter option[value="hengerfeste"]').textContent;
+    expect(tekst()).toBe('Hengerfeste (2)');
+    S.ordrer.find((o) => o.id === 'ord_TFILT3').utstyr.hengerfeste = 'hengerfeste';
+    tegn();
+    expect(tekst()).toBe('Hengerfeste (3)');
+    S.ordrer.find((o) => o.id === 'ord_TFILT2').status = 'arkivert';
+    tegn();
+    expect(tekst()).toBe('Hengerfeste (2)');
+  });
+
+  it('valget finnes i nedtrekket i salmakern.html', () => {
+    const filter = html.slice(html.indexOf('id="ordreStatusFilter"'));
+    expect(filter.slice(0, filter.indexOf('</select>'))).toContain('<option value="hengerfeste">Hengerfeste (0)</option>');
+  });
+});

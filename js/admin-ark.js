@@ -418,26 +418,106 @@ async function adminArkSendFraktBestilling() {
 // chassis. nr"). Når fraktselskap er "Levering av oss" sendes i stedet et "på vei til
 // dere"-varsel (bedt om av Henrik 2026-09-27) - samme knapp/trigger-punkt (henting), bare
 // annen ordlyd siden Salmakern selv kjører bilen ut i stedet for at et fraktselskap henter.
-// Markerer hentetVarslet ved suksess (bedt om av Henrik 2026-09-30) - det ER det knappen
-// betyr, samme "automatisk ved suksess"-mønster som bestiltFrakt på "Bestill" allerede
-// bruker. Driver den røde/grønne kantlinjen på selve knappen, se _fraktKnapper-kolonnen.
-async function adminArkVarsleHentet(chassisNr) {
+// Markerer hentetVarslet ved suksess (bedt om av Henrik 2026-09-30) - det ER det feltet
+// betyr. Driver den røde/grønne «Hentet varslet»-haken i Admin-ark.
+//
+// AUTOMATISK fra 2026-11-17 (Henger igjen, Henrik: «når en ordre endrer status til hentet
+// så skal det automatisk sendes ut en mail ... så da skal den knappen som sender ut denne i
+// admin skal bli fjernet»): kalles av endreStatus() (js/oversikt-kalender.js) når en
+// BIL-ordre settes til «Hentet», ikke lenger fra en knapp. Innholdet er det samme som
+// knappen sendte: chassis.nr og hvem som hentet (fraktselskapet). Ingen bekreftelsesdialog.
+// - Sendes bare én gang per Admin-ark-rad: står hentetVarslet allerede, sendes ingenting
+//   (statusen kan flippe frem og tilbake uten at kontaktpersonen får flere e-poster).
+// - hentetVarslet settes BARE etter vellykket sending (før 17.11 ble den satt grønn ved
+//   statusendringen uten e-post). Rød betyr altså igjen «kontaktpersonen er ikke varslet».
+// - «Hente selv»: «hentet av Hente selv» ga ingen mening, så fraktselskapet utelates der.
+// - Feiler noe (ingen e-post i Kontakter, nettverk, rolle), blir statusendringen stående og
+//   det vises en beskjed; e-posten sendes ikke på nytt av seg selv.
+//
+// RESERVEKNAPP FOR ADMIN (Henrik 2026-11-25, alternativ C): send-frakt-epost slipper bare
+// admin gjennom, og nesten 4 av 10 Hentet-endringer gjøres av vanlige ansatte/godkjennere.
+// For dem feiler den automatiske e-posten på serveren. Automatikken prøver likevel alltid
+// først (uansett rolle); står raden «ikke varslet» etterpå, ser admin knappen
+// «📧 Send hentet-varsel» i Admin-ark (adminArkVarsleHentetManuelt under).
+// En «kun ekstrautstyr»-ordre er ikke i Admin-ark og får ingen e-post (som før 25.11 der den
+// heller ikke ble merket).
+async function adminArkVarsleHentetAuto(o) {
+  if (!o || erLeveranse(o) || erKunEkstrautstyr(o) || !o.chassis) return false;
+  const ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, o.chassis) && !r.arkivert);
+  if (ark?.hentetVarslet) return false;
+  const rad = adminArkHentRadData(o.chassis);
+  const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
+  const reserve = me?.rolle === 'admin' ? ' Send den med «📧 Send hentet-varsel» i Admin-ark.' : ' En administrator kan sende den fra Admin-ark.';
+  if (!kontaktEpost) {
+    visToast(`Hentet-varsel ikke sendt: fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter.` + reserve);
+    return false;
+  }
+  try {
+    await adminArkSendHentetEpost(rad, kontaktEpost);
+  } catch (e) {
+    visToast('Hentet-varsel ikke sendt: ' + e.message + '.' + reserve);
+    return false;
+  }
+  visToast('Hentet-varsel sendt til ' + rad.kontaktperson, 'ok');
+  await adminArkLagreFelter({ _arkId: ark?.id||null, chassisNr: o.chassis, _erOrdre: true }, { hentetVarslet: true });
+  const tabRad = (typeof adminArkTable!=='undefined' && adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, o.chassis));
+  if (tabRad) tabRad.update({ hentetVarslet: true });
+  return true;
+}
+
+// Selve e-postkallet, felles for automatikken og reserveknappen (samme innhold begge veier:
+// chassis.nr og hvem som hentet; «Levering av oss» gir fortsatt «på vei til dere»).
+// avsenderNavn er FAST «Jan Børre Sigurdsen» (Henrik 2026-11-25), ulikt de andre frakt-e-postene
+// (adminArkFraktBestill m.fl.) som fortsatt signeres av den innloggede ansatte (me.navn) - denne
+// sendes nå automatisk ved statusendring, uansett hvem som satte bilen til Hentet, så den skal
+// ikke se ut som om en tilfeldig ansatt personlig skrev/sendte den. Samme signatur som Vegvesen-
+// dokumentene (se js/vegvesen-dokumenter.js), som av samme grunn alltid er Jan Børre.
+const HENTET_EPOST_AVSENDER = 'Jan Børre Sigurdsen';
+async function adminArkSendHentetEpost(rad, kontaktEpost) {
+  const erLeveringAvOss = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS;
+  const utenFraktselskap = erLeveringAvOss || rad.fraktselskap === FRAKTSELSKAP_HENTE_SELV;
+  await adminArkKallFraktEpost({ type: erLeveringAvOss ? 'paa_vei' : 'hentet', kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr,
+    fraktselskap: utenFraktselskap ? '' : fraktselskapVisningsnavn(rad.fraktselskap||''), avsenderNavn: HENTET_EPOST_AVSENDER });
+}
+
+// Når skal reserveknappen vises? Bare for admin, bare med chassis.nr, bare når raden ikke er
+// varslet, og bare når bilen faktisk er hentet: en rad koblet til en bil-ordre må ha status
+// Hentet (før det sender automatikken selv). En løs rad uten ordre har ingen status og ingen
+// automatikk, så der vises knappen alltid når den ikke er varslet (som den gamle knappen).
+function adminArkVisHentetReserveknapp(rad) {
+  if (!(me && me.rolle === 'admin') || !rad || !rad.chassisNr || rad.hentetVarslet) return false;
+  return !rad._erOrdre || rad._ordreStatus === 'hentet';
+}
+
+// Reserveknappen (admin): sender hentet-varselet manuelt i etterkant, med bekreftelse, og
+// merker raden varslet BARE etter vellykket sending (samme regel som automatikken).
+let _adminArkHentetSender = false;
+async function adminArkVarsleHentetManuelt(chassisNr) {
+  if (!(me && me.rolle === 'admin')) { visToast('Bare administrator kan sende hentet-varselet'); return false; }
+  if (!chassisNr || _adminArkHentetSender) return false;
+  const ark = (S.adminArk||[]).find(r => samsvarerChassis(r.chassisNr, chassisNr) && !r.arkivert);
+  if (ark?.hentetVarslet) { visToast('Kontaktpersonen er allerede varslet'); return false; }
   const rad = adminArkHentRadData(chassisNr);
   const kontaktEpost = adminArkFinnKontaktEpost(rad.kontaktperson);
-  if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return; }
-  const erLeveringAvOss = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS;
-  const type = erLeveringAvOss ? 'paa_vei' : 'hentet';
-  const sporsmal = erLeveringAvOss ? 'at bilen er på vei til dere' : 'at bilen er hentet';
-  if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om ${sporsmal}?`)) return;
+  if (!kontaktEpost) { visToast(`Fant ingen e-post for "${rad.kontaktperson||'kontaktpersonen'}" i Kontakter - legg den til under Mer → Kontakter`); return false; }
+  const sporsmal = rad.fraktselskap === FRAKTSELSKAP_LEVERING_AV_OSS ? 'at bilen er på vei til dere' : 'at bilen er hentet';
+  if (!confirm(`Varsle ${rad.kontaktperson} (${kontaktEpost}) om ${sporsmal}?`)) return false;
+  _adminArkHentetSender = true;
   try {
-    await adminArkKallFraktEpost({ type, kontaktpersonEpost:kontaktEpost, chassisNr: rad.chassisNr, fraktselskap: erLeveringAvOss ? '' : fraktselskapVisningsnavn(rad.fraktselskap||''), avsenderNavn: me?.navn });
-    visToast('Varsel sendt til ' + rad.kontaktperson, 'ok');
-    const tabRad = (adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
-    const radData = tabRad ? tabRad.getData() : { _arkId: null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&!erKunEkstrautstyr(x)&&samsvarerChassis(x.chassis,chassisNr)) };
+    try {
+      await adminArkSendHentetEpost(rad, kontaktEpost);
+    } catch (e) {
+      visToast('Kunne ikke sende varsel: ' + e.message);
+      return false;
+    }
+    visToast('Hentet-varsel sendt til ' + rad.kontaktperson, 'ok');
+    const tabRad = (typeof adminArkTable!=='undefined' && adminArkTable?.getRows()||[]).find(r => samsvarerChassis(r.getData().chassisNr, chassisNr));
+    const radData = tabRad ? tabRad.getData() : { _arkId: ark?.id||null, chassisNr, _erOrdre: !!S.ordrer.find(x=>!erLeveranse(x)&&!erKunEkstrautstyr(x)&&samsvarerChassis(x.chassis,chassisNr)) };
     await adminArkLagreFelter(radData, { hentetVarslet: true });
     if (tabRad) tabRad.update({ hentetVarslet: true });
-  } catch (e) {
-    visToast('Kunne ikke sende varsel: ' + e.message);
+    return true;
+  } finally {
+    _adminArkHentetSender = false;
   }
 }
 
@@ -1368,7 +1448,9 @@ function renderAdminArk(scrollTilBunn) {
     {title:'Bestilt frakt', field:'bestiltFrakt', minWidth:85, headerSort:false, hozAlign:'center', formatter: adminArkTickFormatter, editor: kanRedigere ? 'tickCross' : false, editorParams:{crossElement:false}, rowHandle:true},
     // Sender ekte e-post til eksterne mottakere (fraktselskap/kontaktperson) - kun
     // admin kan trykke disse, og alltid med en bekreftelsesdialog før sending (se
-    // adminArkFraktBestill/adminArkVarsleHentet) siden det ikke kan angres.
+    // adminArkFraktBestill) siden det ikke kan angres. Hentet-varselet sendes automatisk ved
+    // status Hentet (2026-11-17) og vises som en rød/grønn merkelapp; gikk det ikke ut, får
+    // admin en reserveknapp i stedet for den røde lappen (2026-11-25, adminArkVisHentetReserveknapp).
     {title:'Frakt-e-post', field:'_fraktKnapper', minWidth:150, headerSort:false, hozAlign:'center', editable:false, rowHandle:true,
       formatter: cell => {
         if (!(me && me.rolle==='admin')) return '';
@@ -1390,7 +1472,7 @@ function renderAdminArk(scrollTilBunn) {
         // egen knapp - klikket er identisk med "Bestill" ellers.
         const erForberedtVenterBekreft = !!rad.fraktForberedtAt && !rad.bestiltFrakt;
         const bestillTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Ingen bestilling nødvendig - Salmakern leverer selv' : (!rad.fraktselskap ? 'Velg fraktselskap først' : erForberedtVenterBekreft ? 'Automatisk forberedt da ordren ble Klar for henting - trykk for å bekrefte og sende' : (erHenterSelv ? 'Varsle kontaktperson om at bilen er klar for henting' : 'Send fraktbestilling på e-post')));
-        const hentetTitel = manglerChassis ? 'Krever chassis.nr' : (erLeveringAvOss ? 'Varsle kontaktperson om at bilen er på vei til dere' : 'Varsle kontaktperson om at bilen er hentet');
+        const hentetTitel = rad.hentetVarslet ? 'Kontaktpersonen er varslet om at bilen er hentet' : 'Ikke varslet ennå - e-posten sendes automatisk når ordren settes til Hentet';
         // Rødt rundt knappen før den er trykket, grønt etter - bedt om av Henrik
         // 2026-09-30, samme farger som resten av appen bruker for av/på-tilstander
         // (STATUSER sine egne grønn/rød-par i core.js). Gult (puls) i stedet for rødt når
@@ -1399,7 +1481,9 @@ function renderAdminArk(scrollTilBunn) {
         const bestillStil = erForberedtVenterBekreft ? 'border-color:#eab308;color:#fde047;animation:adminArkFraktPuls 1.6s ease-in-out infinite' : knappFarge(rad.bestiltFrakt);
         return `<div style="display:flex;gap:4px;justify-content:center">
           <button class="btn sm" style="padding:3px 7px;font-size:11px;${bestillStil}" ${bestillDisabled?'disabled':''} onclick="adminArkFraktBestill('${chassis}')" title="${bestillTitel}">${erForberedtVenterBekreft?'📧 Bekreft bestilling':'📧 Bestill'}</button>
-          <button class="btn sm" style="padding:3px 7px;font-size:11px;${knappFarge(rad.hentetVarslet)}" ${manglerChassis?'disabled':''} onclick="adminArkVarsleHentet('${chassis}')" title="${hentetTitel}">✔ Hentet</button>
+          ${adminArkVisHentetReserveknapp(rad)
+            ? `<button class="btn sm" style="padding:3px 7px;font-size:11px;${knappFarge(false)}" onclick="adminArkVarsleHentetManuelt('${chassis}')" title="Ikke varslet: den automatiske e-posten gikk ikke ut (f.eks. fordi statusen ble satt av en som ikke er admin). Trykk for å sende den nå.">📧 Send hentet-varsel</button>`
+            : `<span style="padding:3px 7px;font-size:11px;border:1px solid;border-radius:8px;${knappFarge(rad.hentetVarslet)}" title="${hentetTitel}">${rad.hentetVarslet?'✔ Hentet varslet':'Hentet ikke varslet'}</span>`}
         </div>`;
       }},
     {title:'Merknader', field:'merknader', width: adminArkMaalBredde(data,'merknader','Merknader',90), headerSort:false, hozAlign:'left', editor: kanRedigere ? 'input' : false, rowHandle:true},

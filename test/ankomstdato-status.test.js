@@ -148,16 +148,18 @@ describe('Krever ansatt meldt på før "Ikke påbegynt" → "Påbegynt" (bedt om
 });
 
 // Skjerpet 2026-11-20 (Henrik, valgt av 4 forslag): det holdt tidligere med ETT ankomstbilde -
-// nå kreves ALLE 6, pluss «Diagnose utført» (se endreStatus() i oversikt-kalender.js). Se eget
-// testfil test/strengere-ordre-krav.test.js for selve hullet som ble tettet (kravene gjaldt
-// tidligere KUN fra nøyaktig "Ikke påbegynt"), admin-overstyring og «kun ekstrautstyr»-unntaket.
-describe('Krever ALLE 6 ankomstbilder og «Diagnose utført» før "Ikke påbegynt" → "Påbegynt" (skjerpet 2026-11-20, tidligere holdt det med ett bilde og diagnose ble ikke krevd her)', () => {
+// nå kreves ALLE 6 (se endreStatus() i oversikt-kalender.js). Se eget testfil
+// test/strengere-ordre-krav.test.js for selve hullet som ble tettet (kravene gjaldt tidligere
+// KUN fra nøyaktig "Ikke påbegynt"), admin-overstyring og «kun ekstrautstyr»-unntaket.
+// (Kravet om «Diagnose utført» var med i samme 2026-11-20-endring, men ble fjernet igjen
+// 2026-11-25 - Henrik: «diagnose skal ikke være der». Egen describe-blokk som testet det er
+// derfor fjernet herfra.)
+describe('Krever ALLE 6 ankomstbilder før "Ikke påbegynt" → "Påbegynt" (skjerpet 2026-11-20, tidligere holdt det med ett bilde)', () => {
   let sandbox, ordre;
   beforeEach(() => {
     sandbox = nyEnvironment();
-    // ansatteSignert og diagnose er fullt oppfylt her - denne describe-blokken tester KUN
-    // bilde-kravet isolert, se blokken under for diagnose-kravet.
-    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], diagnose: true, bilderAnkomst: [null,null,null,null,null,null] };
+    // ansatteSignert er fullt oppfylt her - denne describe-blokken tester KUN bilde-kravet isolert.
+    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], bilderAnkomst: [null,null,null,null,null,null] };
     sandbox._setS({ ordrer: [ordre] });
     settDbUtfall(sandbox, true);
   });
@@ -192,32 +194,19 @@ describe('Krever ALLE 6 ankomstbilder og «Diagnose utført» før "Ikke påbegy
   });
 });
 
-describe('Krever «Diagnose utført» før "Ikke påbegynt" → "Påbegynt" (nytt krav 2026-11-20)', () => {
-  let sandbox, ordre;
-  beforeEach(() => {
-    sandbox = nyEnvironment();
-    // ansatteSignert og bilderAnkomst er fullt oppfylt her - denne describe-blokken tester
-    // KUN diagnose-kravet isolert.
-    ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], bilderAnkomst: Array(6).fill('data:image/png;base64,x'), diagnose: false };
+// Diagnose-kravet («Krever «Diagnose utført» før "Ikke påbegynt" → "Påbegynt"», nytt 2026-11-20)
+// er fjernet igjen 2026-11-25 (Henrik: «diagnose skal ikke være der») - se endreStatus() i
+// oversikt-kalender.js. Diagnose kan fortsatt krysses av på ordren og er fortsatt ett av
+// tvangsflyt-kravene for å lukke den, men blokkerer ikke lenger overgangen til Påbegynt, så
+// describe-blokken som testet den gamle blokkeringen er fjernet herfra.
+describe('diagnose blokkerer IKKE lenger "Ikke påbegynt" → "Påbegynt" (kravet fjernet 2026-11-25)', () => {
+  it('tillater overgangen selv om diagnose ikke er utført', async () => {
+    const sandbox = nyEnvironment();
+    const ordre = { id: 'ord_1', ordreStatus: 'ikke_paabegynt', status: 'aktiv', ankomstdato: '2026-08-20', endringer: [], godkjent: false, ansatteSignert: [{id:1, navn:'Test Testesen', tid:'09:00'}], bilderAnkomst: Array(6).fill('data:image/png;base64,x'), diagnose: false };
     sandbox._setS({ ordrer: [ordre] });
     settDbUtfall(sandbox, true);
-  });
-
-  it('blokkerer overgangen når diagnose ikke er utført', async () => {
-    await sandbox.endreStatus('ord_1', 'paabegynt');
-    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('ikke_paabegynt');
-    expect(sandbox._getS().ordrer[0].endringer.length).toBe(0);
-  });
-
-  it('tillater overgangen når diagnose er utført', async () => {
-    ordre.diagnose = true;
     await sandbox.endreStatus('ord_1', 'paabegynt');
     expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paabegynt');
-  });
-
-  it('påvirker ikke andre statusoverganger (f.eks. til "På vei")', async () => {
-    await sandbox.endreStatus('ord_1', 'paa_vei');
-    expect(sandbox._getS().ordrer[0].ordreStatus).toBe('paa_vei');
   });
 });
 

@@ -522,3 +522,15 @@ så dette kommer i tillegg) og valgte bevisst å IKKE aktivere PITR - daglige ba
 for en virksomhet i denne størrelsen. Ikke ta opp igjen med mindre noe endrer seg
 (f.eks. mye høyere transaksjonsvolum, eller et konkret hendelse som gjør at det plutselig
 er relevant).
+
+## Nødbrems og varsel ved PIN-sperre (2026-11-25, IKKE kjørt)
+
+Migrasjon `migrations/20261125200000_pin_nodbrems.sql`, rollback `rollback-referanser/pin_nodbrems_ROLLBACK.sql`, test `tester/pin_nodbrems_TEST_body.sql`
+(55 kontroller). Full beskrivelse i CLAUDE.md, «Nødbrems og varsel ved PIN-sperre». Rører `current_ansatt`, `hent_innlogget_ansatt`, `logg_inn_med_pin`
+(drop + create, ny kolonne `ny_pin_kreves`), `login_med_pin`, `endre_egen_pin`, `admin_sett_pin` og `_pin_rate_limit_global_registrer`, så kjør ALLTID
+innloggingstesten sammen med den (31.10-lærdommen):
+
+    ( echo "begin;"; echo "set local lock_timeout = '4s';"; cat supabase/migrations/20261125200000_pin_nodbrems.sql;       cat supabase/tester/ansatte_beskytt_skriving_innlogging_TEST_body.sql | sed 's/create temp table _res /create temp table _res2 /; s/_res(navn/_res2(navn/g; s/from _res order/from _res2 order/';       cat supabase/tester/pin_nodbrems_TEST_body.sql; echo "rollback;" ) > "$TEMP/t.sql"
+    bash C:/w/med-las.sh npx supabase db query --linked --project-ref qoqpenbfdxeduylxirwk --yes --file "$TEMP/t.sql"
+
+(`-o json` viser bare siste resultatsett; kjør innloggingstesten sist for å se den.) Etterpå: `to_regclass('public.sikkerhet_tilstand')` skal være null.
